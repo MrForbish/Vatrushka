@@ -1,0 +1,31 @@
+{
+  email {$ACME_EMAIL:admin@example.com}
+  servers {
+    protocols h1 h2 h3
+  }
+}
+
+{$DOMAIN} {
+  encode zstd gzip
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    X-Frame-Options "DENY"
+    Referrer-Policy "no-referrer"
+    -Server
+  }
+  reverse_proxy api:3000
+  log {
+    output stdout
+    format json
+  }
+}
+
+# Used only with infra/livekit/docker-compose.self-hosted.yml.
+{$LIVEKIT_DOMAIN:livekit.invalid} {
+  reverse_proxy host.docker.internal:7880
+  log {
+    output stdout
+    format json
+  }
+}

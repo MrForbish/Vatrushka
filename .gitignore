@@ -1,0 +1,16 @@
+node_modules/
+dist/
+out/
+coverage/
+release/
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.log
+*.local
+apps/desktop/build/icon.ico
+apps/desktop/build/icon.png
+apps/desktop/.e2e-user-data*/
+.DS_Store
+Thumbs.db

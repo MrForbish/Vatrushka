@@ -1,0 +1,43 @@
+{
+  "name": "vatrushka",
+  "version": "0.1.0",
+  "private": true,
+  "description": "«Ватрушка» — настольные голосовые комнаты",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=22.12.0",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "dev": "concurrently -k -n api,desktop -c blue,magenta \"npm run dev:api\" \"npm run dev:desktop\"",
+    "dev:api": "npm run dev -w @vatrushka/api",
+    "dev:desktop": "npm run dev -w @vatrushka/desktop",
+    "build": "npm run build -w @vatrushka/shared && npm run build -w @vatrushka/api && npm run build -w @vatrushka/desktop",
+    "build:api": "npm run build -w @vatrushka/api",
+    "build:desktop": "npm run build -w @vatrushka/desktop",
+    "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File infra/scripts/generate-icons.ps1 && npm run package:win -w @vatrushka/desktop",
+    "lint": "eslint . --max-warnings 0",
+    "typecheck": "npm run build -w @vatrushka/shared && npm run typecheck --workspaces --if-present",
+    "test": "npm run build -w @vatrushka/shared && npm run test:unit && npm run test:api && npm run test:renderer",
+    "test:unit": "npm run test -w @vatrushka/shared",
+    "test:api": "npm run test -w @vatrushka/api",
+    "test:renderer": "npm run test -w @vatrushka/desktop",
+    "test:e2e": "npm run test:e2e -w @vatrushka/desktop",
+    "db:generate": "npm run db:generate -w @vatrushka/api",
+    "db:migrate": "npm run db:migrate -w @vatrushka/api",
+    "db:studio": "npm run db:studio -w @vatrushka/api"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.1.1",
+    "concurrently": "10.0.3",
+    "eslint": "10.7.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.64.0",
+    "vitest": "4.1.10"
+  }
+}

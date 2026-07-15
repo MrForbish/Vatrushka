@@ -1,0 +1,14 @@
+name: vatrushka-livekit
+
+services:
+  livekit:
+    image: livekit/livekit-server:v1.13.1
+    command: ["--config", "/etc/livekit.yaml"]
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+      - /etc/letsencrypt/live/${TURN_DOMAIN}:/certs:ro
+    logging:
+      driver: json-file
+      options: { max-size: "20m", max-file: "3" }
