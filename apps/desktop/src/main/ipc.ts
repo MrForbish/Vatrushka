@@ -48,12 +48,13 @@ async function listSources(): Promise<DesktopSourceInfo[]> {
   const sources = await desktopCapturer.getSources({
     types: ['screen', 'window'],
     thumbnailSize: { width: 320, height: 180 },
-    fetchWindowIcons: false,
+    fetchWindowIcons: true,
   });
   return sources.map((source) => ({
     id: source.id,
     name: source.name.slice(0, 200),
     thumbnailDataUrl: source.thumbnail.toDataURL(),
+    ...(source.appIcon && !source.appIcon.isEmpty() ? { appIconDataUrl: source.appIcon.toDataURL() } : {}),
     type: sourceType(source.id),
   }));
 }

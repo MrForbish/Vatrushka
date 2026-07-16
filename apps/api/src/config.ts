@@ -26,8 +26,10 @@ const envSchema = z
     PUBLIC_API_URL: z.url().default('http://localhost:3000'),
     APP_NAME: z.string().min(1).default(APP_NAME),
     APP_PROTOCOL: z.string().regex(/^[a-z][a-z0-9+.-]+$/).default(APP_PROTOCOL),
+    PLATFORM_OWNER_EMAIL: z.string().trim().toLowerCase().email().optional().or(z.literal('')),
     DATABASE_URL: z.string().min(1).default('postgresql://vatrushka:vatrushka@localhost:5432/vatrushka'),
     ACCESS_TOKEN_SECRET: z.string().min(32).default('development-access-secret-change-me-now'),
+    CREDENTIAL_ENCRYPTION_KEY: z.string().min(32).default('development-credential-key-change-now'),
     ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(ACCESS_TOKEN_TTL_SECONDS),
     REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
     OTP_PEPPER: z.string().min(32).default('development-otp-pepper-change-me-now'),
@@ -60,6 +62,7 @@ const envSchema = z
       const required: Array<keyof typeof env> = [
         'DATABASE_URL',
         'ACCESS_TOKEN_SECRET',
+        'CREDENTIAL_ENCRYPTION_KEY',
         'OTP_PEPPER',
         'SMTP_HOST',
         'SMTP_FROM_EMAIL',
@@ -71,7 +74,7 @@ const envSchema = z
       for (const key of required) {
         if (!env[key]) context.addIssue({ code: 'custom', path: [key], message: `${key} is required in production` });
       }
-      if (env.ACCESS_TOKEN_SECRET.startsWith('development-') || env.OTP_PEPPER.startsWith('development-')) {
+      if (env.ACCESS_TOKEN_SECRET.startsWith('development-') || env.CREDENTIAL_ENCRYPTION_KEY.startsWith('development-') || env.OTP_PEPPER.startsWith('development-')) {
         context.addIssue({ code: 'custom', message: 'Development secrets are forbidden in production' });
       }
       if (env.DEV_FIXED_OTP) context.addIssue({ code: 'custom', path: ['DEV_FIXED_OTP'], message: 'DEV_FIXED_OTP is forbidden in production' });

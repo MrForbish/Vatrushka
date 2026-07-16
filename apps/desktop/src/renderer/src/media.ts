@@ -10,7 +10,7 @@ import {
   type RoomOptions,
 } from 'livekit-client';
 
-import type { LocalSettings, RoomConnection } from '@vatrushka/shared';
+import type { LocalSettings, PlatformRole, RoomConnection } from '@vatrushka/shared';
 
 import type { ApiClient } from './api.js';
 
@@ -23,6 +23,7 @@ export interface ParticipantView {
   isMuted: boolean;
   isSpeaking: boolean;
   isScreenSharing: boolean;
+  platformRole: PlatformRole;
   connectionQuality: string;
 }
 
@@ -33,6 +34,10 @@ export interface MediaSnapshot {
   isScreenSharing: boolean;
   screenTrack: RemoteTrack | LocalTrack | null;
   screenSharerName: string | null;
+  screenShareIsLocal: boolean;
+  hasScreenShareAudio: boolean;
+  screenShareAudioMuted: boolean;
+  screenShareAudioVolume: number;
   canPlayAudio: boolean;
   error: string | null;
 }
@@ -44,6 +49,10 @@ const initialSnapshot: MediaSnapshot = {
   isScreenSharing: false,
   screenTrack: null,
   screenSharerName: null,
+  screenShareIsLocal: false,
+  hasScreenShareAudio: false,
+  screenShareAudioMuted: false,
+  screenShareAudioVolume: 1,
   canPlayAudio: true,
   error: null,
 };
@@ -53,6 +62,8 @@ export class MediaSession {
   private connection: RoomConnection | null = null;
   private heartbeat: ReturnType<typeof setInterval> | null = null;
   private snapshot: MediaSnapshot = initialSnapshot;
+  private screenShareAudioVolume = 1;
+  private screenShareAudioMuted = false;
   private readonly listeners = new Set<() => void>();
 
   constructor(private readonly api: ApiClient) {}
@@ -67,6 +78,8 @@ export class MediaSession {
   async connect(connection: RoomConnection, settings: LocalSettings): Promise<void> {
     await this.disconnect(false);
     this.connection = connection;
+    this.screenShareAudioVolume = settings.volume;
+    this.screenShareAudioMuted = false;
     const options: RoomOptions = {
       adaptiveStream: true,
       dynacast: true,
@@ -92,6 +105,10 @@ export class MediaSession {
       await room.connect(connection.livekitUrl, connection.livekitToken, { autoSubscribe: true });
       this.refreshSnapshot();
       try {
+        if (connection.canSpeak === false) {
+          this.refreshSnapshot();
+          return;
+        }
         await room.localParticipant.setMicrophoneEnabled(true, {
           echoCancellation: true,
           noiseSuppression: true,
@@ -126,12 +143,35 @@ export class MediaSession {
     if (!switched) throw new Error('Не удалось выбрать устройство вывода');
   }
 
+  setScreenShareAudioVolume(volume: number): void {
+    this.screenShareAudioVolume = Math.max(0, Math.min(1, volume));
+    if (this.screenShareAudioVolume > 0) this.screenShareAudioMuted = false;
+    this.applyScreenShareAudioPreferences();
+    this.patch({
+      screenShareAudioVolume: this.screenShareAudioVolume,
+      screenShareAudioMuted: this.screenShareAudioMuted,
+    });
+  }
+
+  setScreenShareAudioMuted(muted: boolean): void {
+    this.screenShareAudioMuted = muted;
+    this.applyScreenShareAudioPreferences();
+    this.patch({ screenShareAudioMuted: muted });
+  }
+
   async startScreenShare(includeAudio: boolean): Promise<void> {
     if (!this.room || !this.connection) throw new Error('Комната не подключена');
     await this.room.localParticipant.setScreenShareEnabled(
       true,
       {
-        audio: includeAudio,
+        audio: includeAudio
+          ? {
+              restrictOwnAudio: true,
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            }
+          : false,
         video: true,
         resolution: { width: 1920, height: 1080, frameRate: 30 },
         contentHint: 'detail',
@@ -206,7 +246,9 @@ export class MediaSession {
         if (track.kind === Track.Kind.Audio) {
           const element = track.attach();
           element.dataset.vatrushkaAudio = publication.trackSid;
+          element.dataset.vatrushkaAudioSource = publication.source;
           document.body.appendChild(element);
+          if (publication.source === Track.Source.ScreenShareAudio) this.applyScreenShareAudioPreferences();
         }
         if (publication.source === Track.Source.ScreenShare && this.snapshot.screenTrack && this.snapshot.screenTrack !== track) {
           console.error('Multiple active screen-share video tracks detected');
@@ -235,6 +277,7 @@ export class MediaSession {
       isMuted: !participant.isMicrophoneEnabled,
       isSpeaking: participant.isSpeaking,
       isScreenSharing: participant.isScreenShareEnabled,
+      platformRole: participantPlatformRole(participant),
       connectionQuality: connectionQualityLabel(participant.connectionQuality),
     }));
 
@@ -245,6 +288,8 @@ export class MediaSession {
     );
     if (screenCandidates.length > 1) console.error('Multiple active screen-share tracks detected; displaying the first');
     const firstScreen = screenCandidates[0];
+    const screenAudioPublication = firstScreen?.participant.getTrackPublication(Track.Source.ScreenShareAudio);
+    const screenShareIsLocal = firstScreen?.participant === room.localParticipant;
     this.snapshot = {
       ...this.snapshot,
       connectionState: room.state,
@@ -253,6 +298,10 @@ export class MediaSession {
       isScreenSharing: room.localParticipant.isScreenShareEnabled,
       screenTrack: firstScreen?.track ?? null,
       screenSharerName: firstScreen?.participant.name || null,
+      screenShareIsLocal,
+      hasScreenShareAudio: Boolean(!screenShareIsLocal && screenAudioPublication?.track),
+      screenShareAudioMuted: this.screenShareAudioMuted,
+      screenShareAudioVolume: this.screenShareAudioVolume,
       canPlayAudio: room.canPlaybackAudio,
     };
     this.emit();
@@ -275,6 +324,13 @@ export class MediaSession {
     this.heartbeat = null;
   }
 
+  private applyScreenShareAudioPreferences(): void {
+    const volume = this.screenShareAudioMuted ? 0 : this.screenShareAudioVolume;
+    for (const participant of this.room?.remoteParticipants.values() ?? []) {
+      participant.setVolume(volume, Track.Source.ScreenShareAudio);
+    }
+  }
+
   private patch(update: Partial<MediaSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...update };
     this.emit();
@@ -290,6 +346,16 @@ function connectionQualityLabel(quality: ConnectionQuality): string {
   if (quality === ConnectionQuality.Good) return 'Хорошее';
   if (quality === ConnectionQuality.Poor) return 'Слабое';
   return 'Определяется';
+}
+
+function participantPlatformRole(participant: Participant): PlatformRole {
+  try {
+    const value = JSON.parse(participant.metadata || '{}') as { platformRole?: unknown };
+    if (value.platformRole === 'owner' || value.platformRole === 'admin') return value.platformRole;
+  } catch {
+    // LiveKit metadata is untrusted and an invalid value has no visual privileges.
+  }
+  return 'member';
 }
 
 function deviceErrorMessage(error: unknown): string {

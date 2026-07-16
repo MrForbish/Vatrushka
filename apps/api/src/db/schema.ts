@@ -1,4 +1,6 @@
-import { boolean, index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+
+import type { PlatformRole, ServerChannelType, ServerPermission } from '@vatrushka/shared';
 
 export const users = pgTable(
   'users',
@@ -6,6 +8,11 @@ export const users = pgTable(
     id: uuid('id').primaryKey(),
     email: text('email').notNull(),
     displayName: text('display_name'),
+    platformRole: text('platform_role').$type<PlatformRole>().notNull().default('member'),
+    passwordHash: text('password_hash'),
+    emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
+    totpSecretEncrypted: text('totp_secret_encrypted'),
+    twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
@@ -19,6 +26,7 @@ export const authCodes = pgTable(
     email: text('email').notNull(),
     codeHash: text('code_hash').notNull(),
     purpose: text('purpose').notNull(),
+    credentialHash: text('credential_hash'),
     attempts: integer('attempts').notNull().default(0),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     consumedAt: timestamp('consumed_at', { withTimezone: true }),
@@ -47,6 +55,95 @@ export const sessions = pgTable(
     index('sessions_family_id_idx').on(table.tokenFamilyId),
     index('sessions_expires_at_idx').on(table.expiresAt),
   ],
+);
+
+export const servers = pgTable(
+  'servers',
+  {
+    id: uuid('id').primaryKey(),
+    name: text('name').notNull(),
+    inviteCode: text('invite_code').notNull(),
+    ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [uniqueIndex('servers_invite_code_unique').on(table.inviteCode), index('servers_owner_idx').on(table.ownerUserId)],
+);
+
+export const serverMembers = pgTable(
+  'server_members',
+  {
+    serverId: uuid('server_id').notNull().references(() => servers.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    joinedAt: timestamp('joined_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.serverId, table.userId] }), index('server_members_user_idx').on(table.userId)],
+);
+
+export const serverRoles = pgTable(
+  'server_roles',
+  {
+    id: uuid('id').primaryKey(),
+    serverId: uuid('server_id').notNull().references(() => servers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    color: text('color').notNull(),
+    position: integer('position').notNull(),
+    isDefault: boolean('is_default').notNull().default(false),
+    permissions: jsonb('permissions').$type<ServerPermission[]>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('server_roles_server_position_idx').on(table.serverId, table.position)],
+);
+
+export const serverMemberRoles = pgTable(
+  'server_member_roles',
+  {
+    serverId: uuid('server_id').notNull().references(() => servers.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    roleId: uuid('role_id').notNull().references(() => serverRoles.id, { onDelete: 'cascade' }),
+  },
+  (table) => [primaryKey({ columns: [table.serverId, table.userId, table.roleId] }), index('server_member_roles_role_idx').on(table.roleId)],
+);
+
+export const serverChannels = pgTable(
+  'server_channels',
+  {
+    id: uuid('id').primaryKey(),
+    serverId: uuid('server_id').notNull().references(() => servers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    type: text('type').$type<ServerChannelType>().notNull(),
+    position: integer('position').notNull(),
+    livekitRoomName: text('livekit_room_name'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('server_channels_server_position_idx').on(table.serverId, table.position), uniqueIndex('server_channels_livekit_name_unique').on(table.livekitRoomName)],
+);
+
+export const textMessages = pgTable(
+  'text_messages',
+  {
+    id: uuid('id').primaryKey(),
+    channelId: uuid('channel_id').notNull().references(() => serverChannels.id, { onDelete: 'cascade' }),
+    authorUserId: uuid('author_user_id').notNull().references(() => users.id),
+    content: text('content').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+  },
+  (table) => [index('text_messages_channel_created_idx').on(table.channelId, table.createdAt)],
+);
+
+export const channelScreenShareLeases = pgTable(
+  'channel_screen_share_leases',
+  {
+    channelId: uuid('channel_id').notNull().references(() => serverChannels.id, { onDelete: 'cascade' }),
+    participantIdentity: text('participant_identity').notNull(),
+    participantDisplayName: text('participant_display_name').notNull(),
+    acquiredAt: timestamp('acquired_at', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.channelId] }), index('channel_screen_share_lease_expires_idx').on(table.expiresAt)],
 );
 
 export const rooms = pgTable(

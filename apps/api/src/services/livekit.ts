@@ -23,7 +23,11 @@ export class LiveKitMediaService implements MediaService {
       departureTimeout: 60,
       metadata: JSON.stringify({ appRoomId: options.id, ownerUserId: options.ownerUserId }),
     };
-    await this.rooms.createRoom(roomOptions);
+    try {
+      await this.rooms.createRoom(roomOptions);
+    } catch (error) {
+      if (!(error instanceof Error) || !/already exists/iu.test(error.message)) throw error;
+    }
   }
 
   async deleteRoom(roomName: string): Promise<void> {
@@ -51,7 +55,18 @@ export class LiveKitMediaService implements MediaService {
     await this.rooms.removeParticipant(roomName, identity);
   }
 
+  async participantIdentities(roomName: string): Promise<string[]> {
+    try {
+      return (await this.rooms.listParticipants(roomName)).map((participant) => participant.identity);
+    } catch (error) {
+      if (error instanceof Error && /not found/iu.test(error.message)) return [];
+      throw error;
+    }
+  }
+
   async issueToken(options: MediaTokenOptions): Promise<string> {
+    const canPublishMicrophone = options.canPublishMicrophone ?? true;
+    const canPublishScreen = options.canPublishScreen ?? true;
     const token = new AccessToken(this.config.LIVEKIT_API_KEY, this.config.LIVEKIT_API_SECRET, {
       identity: options.identity,
       name: options.displayName,
@@ -61,10 +76,13 @@ export class LiveKitMediaService implements MediaService {
     token.addGrant({
       room: options.roomName,
       roomJoin: true,
-      canPublish: true,
+      canPublish: canPublishMicrophone || canPublishScreen,
       canSubscribe: true,
       canPublishData: false,
-      canPublishSources: [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO],
+      canPublishSources: [
+        ...(canPublishMicrophone ? [TrackSource.MICROPHONE] : []),
+        ...(canPublishScreen ? [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO] : []),
+      ],
     });
     return token.toJwt();
   }

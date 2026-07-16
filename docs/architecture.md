@@ -8,12 +8,13 @@ Fastify — единственный компонент, имеющий PostgreS
 
 ## Потоки
 
-1. Email → `request-code` → HMAC OTP в PostgreSQL → SMTP.
-2. OTP → user/session → access JWT + rotating opaque refresh.
-3. Create/join → room state check → LiveKit room/token.
+1. Registration/password → HMAC OTP или TOTP → user/session → access JWT + rotating opaque refresh.
+2. Create/join quick room → room state check → LiveKit room/token.
+3. Create/join server → membership → channels/roles/messages in PostgreSQL.
 4. Voice/screen tracks идут напрямую между desktop и LiveKit, не через Fastify.
 5. Screen claim → PostgreSQL transaction/row lock → capture picker → publication → heartbeat.
 6. Подписанный LiveKit webhook освобождает lease после ухода participant или unpublish.
+7. Permission aggregation = default role + assigned roles; владелец сервера и platform owner/admin имеют полный набор. `SPEAK`/`STREAM` транслируются в LiveKit grants.
 
 ## Консистентность
 
@@ -22,6 +23,7 @@ Fastify — единственный компонент, имеющий PostgreS
 - Refresh rotation и reuse detection выполняются под row lock.
 - Lease блокирует room row и lease row в одной транзакции.
 - Room close сначала фиксируется в БД, отзывает гостей/lease, затем удаляет LiveKit room.
+- Сервер, его каналы, роли и членство создаются одной транзакцией. Удаление канала каскадно удаляет сообщения и channel lease.
 
 ## Packages
 

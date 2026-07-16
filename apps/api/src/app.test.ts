@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 
 import { AccessToken } from 'livekit-server-sdk';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -59,6 +59,26 @@ async function login(email = 'anna@example.com', displayName = 'Anna'): Promise<
   });
   expect(profile.statusCode).toBe(200);
   return { accessToken: auth.accessToken, refreshToken: auth.refreshToken, userId: auth.user.id };
+}
+
+function totp(secret: string, timestampMs: number): string {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = 0;
+  let accumulator = 0;
+  const bytes: number[] = [];
+  for (const character of secret) {
+    accumulator = (accumulator << 5) | alphabet.indexOf(character);
+    bits += 5;
+    if (bits >= 8) {
+      bytes.push((accumulator >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  const counter = Buffer.alloc(8);
+  counter.writeBigUInt64BE(BigInt(Math.floor(timestampMs / 30_000)));
+  const digest = createHmac('sha1', Buffer.from(bytes)).update(counter).digest();
+  const offset = (digest.at(-1) ?? 0) & 0x0f;
+  return ((digest.readUInt32BE(offset) & 0x7fff_ffff) % 1_000_000).toString().padStart(6, '0');
 }
 
 async function createRoom(accessToken: string): Promise<{
@@ -152,6 +172,92 @@ describe('authentication API', () => {
     const refresh = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/refresh`, payload: { refreshToken: auth.refreshToken } });
     expect(refresh.statusCode).toBe(401);
   });
+
+  it('registers with a password and requires a second factor for password login', async () => {
+    const email = 'password@example.com';
+    const password = 'secure-vatrushka-42';
+    const requested = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/register/request-code`,
+      payload: { email, password },
+    });
+    expect(requested.statusCode).toBe(200);
+    const storedCode = [...context.store.authCodes.values()][0];
+    expect(storedCode?.credentialHash).toMatch(/^scrypt\$/u);
+    expect(storedCode?.credentialHash).not.toContain(password);
+
+    const registered = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/register/verify-code`,
+      payload: { email, code: '123456', deviceName: 'Windows Desktop' },
+    });
+    expect(registered.statusCode).toBe(200);
+    expect(registered.json<{ user: { hasPassword: boolean } }>().user.hasPassword).toBe(true);
+
+    const legacyLogin = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/request-code`, payload: { email } });
+    expect(legacyLogin.statusCode).toBe(409);
+    expect(legacyLogin.json<{ code: string }>().code).toBe('PASSWORD_REQUIRED');
+
+    context.clock.now = new Date(context.clock.now.getTime() + 61_000);
+    const challenge = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/begin`,
+      payload: { email, password, factor: 'auto' },
+    });
+    expect(challenge.statusCode).toBe(200);
+    expect(challenge.json<{ factor: string }>().factor).toBe('email');
+
+    const completed = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/complete`,
+      payload: { email, password, code: '123456', factor: 'email', deviceName: 'Windows Desktop' },
+    });
+    expect(completed.statusCode).toBe(200);
+    expect(completed.json<{ isNewUser: boolean }>().isNewUser).toBe(false);
+  });
+
+  it('enables TOTP and uses it for subsequent password login', async () => {
+    const email = 'totp@example.com';
+    const password = 'secure-vatrushka-73';
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/request-code`, payload: { email, password } });
+    const registered = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/register/verify-code`,
+      payload: { email, code: '123456', deviceName: 'Windows Desktop' },
+    });
+    const accessToken = registered.json<{ accessToken: string }>().accessToken;
+    const setup = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/me/2fa/setup`,
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
+    expect(setup.statusCode).toBe(200);
+    const secret = setup.json<{ secret: string }>().secret;
+    const code = totp(secret, context.clock.now.getTime());
+    const enabled = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/me/2fa/enable`,
+      headers: { authorization: `Bearer ${accessToken}` },
+      payload: { code },
+    });
+    expect(enabled.statusCode).toBe(200);
+    expect(enabled.json<{ twoFactorEnabled: boolean }>().twoFactorEnabled).toBe(true);
+
+    const challenge = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/begin`,
+      payload: { email, password, factor: 'auto' },
+    });
+    expect(challenge.statusCode).toBe(200);
+    expect(challenge.json<{ factor: string }>().factor).toBe('totp');
+
+    const completed = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/complete`,
+      payload: { email, password, code, factor: 'totp', deviceName: 'Windows Desktop' },
+    });
+    expect(completed.statusCode).toBe(200);
+  });
 });
 
 describe('rooms API', () => {
@@ -210,6 +316,126 @@ describe('rooms API', () => {
       headers: { authorization: `Bearer ${owner.accessToken}` },
     });
     expect(kicked.statusCode).toBe(204);
+  });
+});
+
+describe('servers, channels, messages, and roles API', () => {
+  it('creates a server with default channels and lets another user join by invite', async () => {
+    const owner = await login('community-owner@example.com', 'Owner');
+    const created = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/servers`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { name: 'Тёплая компания' },
+    });
+    expect(created.statusCode).toBe(201);
+    const server = created.json<{ id: string; inviteCode: string; channels: Array<{ name: string; type: string }>; permissions: string[] }>();
+    expect(server.inviteCode).toMatch(/^[A-Z2-9]{8}$/u);
+    expect(server.channels).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'общий', type: 'text' }),
+      expect.objectContaining({ name: 'Голосовой', type: 'voice' }),
+    ]));
+    expect(server.permissions).toContain('MANAGE_ROLES');
+
+    const member = await login('community-member@example.com', 'Member');
+    const joined = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/servers/join`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      payload: { inviteCode: server.inviteCode },
+    });
+    expect(joined.statusCode).toBe(200);
+    expect(joined.json<{ memberCount: number; permissions: string[] }>().memberCount).toBe(2);
+    expect(joined.json<{ permissions: string[] }>().permissions).toContain('SEND_MESSAGES');
+
+    const list = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(list.statusCode).toBe(200);
+    expect(list.json<Array<{ id: string }>>()).toEqual([expect.objectContaining({ id: server.id })]);
+
+    const kicked = await context.app.inject({
+      method: 'DELETE',
+      url: `${API_PREFIX}/servers/${server.id}/members/${member.userId}`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(kicked.statusCode).toBe(204);
+    const afterKick = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(afterKick.json()).toEqual([]);
+  });
+
+  it('persists text messages and enforces role permissions', async () => {
+    const owner = await login('role-owner@example.com', 'Owner');
+    const member = await login('role-member@example.com', 'Member');
+    const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Редакция' } });
+    const server = created.json<{ id: string; inviteCode: string; channels: Array<{ id: string; type: string }>; roles: Array<{ id: string; isDefault: boolean }> }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/join`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { inviteCode: server.inviteCode } });
+    const textChannel = server.channels.find((channel) => channel.type === 'text');
+    const defaultRole = server.roles.find((role) => role.isDefault);
+    if (!textChannel || !defaultRole) throw new Error('Missing default server graph');
+
+    const deniedManagement = await context.app.inject({
+      method: 'POST', url: `${API_PREFIX}/servers/${server.id}/channels`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { name: 'секреты', type: 'text' },
+    });
+    expect(deniedManagement.statusCode).toBe(403);
+
+    const restricted = await context.app.inject({
+      method: 'PATCH',
+      url: `${API_PREFIX}/servers/${server.id}/roles/${defaultRole.id}`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] },
+    });
+    expect(restricted.statusCode).toBe(200);
+
+    const deniedMessage = await context.app.inject({
+      method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { content: 'Пока нельзя' },
+    });
+    expect(deniedMessage.statusCode).toBe(403);
+
+    const roleResponse = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/servers/${server.id}/roles`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { name: 'Автор', color: '#47a878', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'SEND_MESSAGES'] },
+    });
+    expect(roleResponse.statusCode).toBe(201);
+    const roleId = roleResponse.json<{ id: string }>().id;
+    const assigned = await context.app.inject({
+      method: 'PUT',
+      url: `${API_PREFIX}/servers/${server.id}/members/${member.userId}/roles`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { roleIds: [roleId] },
+    });
+    expect(assigned.statusCode).toBe(204);
+
+    const sent = await context.app.inject({
+      method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { content: 'Теперь можно писать' },
+    });
+    expect(sent.statusCode).toBe(201);
+    expect(sent.json<{ authorDisplayName: string }>().authorDisplayName).toBe('Member');
+    const messages = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(messages.statusCode).toBe(200);
+    expect(messages.json<Array<{ content: string }>>()).toEqual([expect.objectContaining({ content: 'Теперь можно писать' })]);
+  });
+
+  it('connects to a persistent voice channel and coordinates screen sharing', async () => {
+    const owner = await login('voice-owner@example.com', 'Owner');
+    const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Эфирная' } });
+    const voice = created.json<{ channels: Array<{ id: string; type: string }> }>().channels.find((channel) => channel.type === 'voice');
+    if (!voice) throw new Error('Missing voice channel');
+    const connected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/connect`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    expect(connected.statusCode).toBe(200);
+    const connection = connected.json<{ contextType: string; participantIdentity: string }>();
+    expect(connection.contextType).toBe('channel');
+    const channel = context.store.serverChannels.get(voice.id);
+    if (!channel?.livekitRoomName) throw new Error('Missing LiveKit channel room');
+    context.media.connect(channel.livekitRoomName, connection.participantIdentity);
+    const claimed = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/channels/${voice.id}/screen-share/claim`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { participantIdentity: connection.participantIdentity },
+    });
+    expect(claimed.statusCode).toBe(200);
+    expect(context.store.channelLeases.has(voice.id)).toBe(true);
   });
 });
 
@@ -283,5 +509,15 @@ describe('screen-share lease and webhooks', () => {
     });
     expect(accepted.statusCode).toBe(204);
     expect(context.store.leases.has(room.roomId)).toBe(false);
+  });
+
+  it('accepts LiveKit webhook content type before verifying its signature', async () => {
+    const rejected = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/webhooks/livekit`,
+      headers: { authorization: 'invalid', 'content-type': 'application/webhook+json' },
+      payload: JSON.stringify({ event: 'participant_left' }),
+    });
+    expect(rejected.statusCode).toBe(401);
   });
 });

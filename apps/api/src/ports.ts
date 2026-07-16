@@ -7,17 +7,34 @@ import type {
   RoomRecord,
   SessionRecord,
   UserRecord,
+  ServerGraph,
+  ServerRecord,
+  ServerWithMemberCount,
+  ServerMemberRecord,
+  ServerMemberProfile,
+  ServerRoleRecord,
+  ServerChannelRecord,
+  TextMessageRecord,
+  TextMessageWithAuthor,
+  ChannelLeaseRecord,
 } from './domain.js';
+import type { PlatformRole } from '@vatrushka/shared';
 
 export interface DataStore {
   healthCheck(): Promise<void>;
   replaceAuthCode(code: AuthCodeRecord): Promise<void>;
   findLatestAuthCode(email: string): Promise<AuthCodeRecord | null>;
+  findLatestAuthCodeForPurpose(email: string, purpose: AuthCodeRecord['purpose']): Promise<AuthCodeRecord | null>;
   incrementAuthCodeAttempts(id: string): Promise<number>;
   consumeAuthCode(id: string, at: Date): Promise<boolean>;
   getOrCreateUser(email: string, now: Date): Promise<{ user: UserRecord; isNewUser: boolean }>;
   findUserById(id: string): Promise<UserRecord | null>;
+  findUserByEmail(email: string): Promise<UserRecord | null>;
+  createUserWithPassword(email: string, passwordHash: string, now: Date): Promise<UserRecord | null>;
   updateDisplayName(id: string, displayName: string, now: Date): Promise<UserRecord | null>;
+  updatePassword(id: string, passwordHash: string, now: Date): Promise<UserRecord | null>;
+  updateTwoFactor(id: string, secretEncrypted: string | null, enabled: boolean, now: Date): Promise<UserRecord | null>;
+  setPlatformRoleByEmail(email: string, role: PlatformRole, now: Date): Promise<UserRecord | null>;
   createSession(session: SessionRecord): Promise<void>;
   rotateSession(tokenHash: string, replacement: SessionRecord, now: Date): Promise<RefreshRotation>;
   revokeSessionByHash(tokenHash: string, now: Date): Promise<void>;
@@ -43,6 +60,33 @@ export interface DataStore {
   releaseLease(roomId: string, participantIdentity: string): Promise<boolean>;
   releaseLeaseByParticipant(participantIdentity: string): Promise<void>;
   releaseLeaseByRoom(roomId: string): Promise<void>;
+  createServerGraph(graph: ServerGraph): Promise<boolean>;
+  listServersForUser(userId: string): Promise<ServerWithMemberCount[]>;
+  findServerById(id: string): Promise<ServerRecord | null>;
+  findServerByInviteCode(inviteCode: string): Promise<ServerRecord | null>;
+  findServerMember(serverId: string, userId: string): Promise<ServerMemberRecord | null>;
+  addServerMember(member: ServerMemberRecord): Promise<boolean>;
+  removeServerMember(serverId: string, userId: string): Promise<boolean>;
+  listServerMembers(serverId: string): Promise<ServerMemberProfile[]>;
+  listServerRoles(serverId: string): Promise<ServerRoleRecord[]>;
+  listMemberRoleIds(serverId: string, userId: string): Promise<string[]>;
+  listAllMemberRoles(serverId: string): Promise<Array<{ userId: string; roleId: string }>>;
+  createServerRole(role: ServerRoleRecord): Promise<void>;
+  updateServerRole(id: string, values: Partial<Pick<ServerRoleRecord, 'name' | 'color' | 'permissions'>>, now: Date): Promise<ServerRoleRecord | null>;
+  assignMemberRoles(serverId: string, userId: string, roleIds: string[]): Promise<void>;
+  listServerChannels(serverId: string): Promise<ServerChannelRecord[]>;
+  findServerChannel(id: string): Promise<ServerChannelRecord | null>;
+  createServerChannel(channel: ServerChannelRecord): Promise<void>;
+  deleteServerChannel(id: string): Promise<boolean>;
+  listTextMessages(channelId: string, before: Date | null, limit: number): Promise<TextMessageWithAuthor[]>;
+  findTextMessage(id: string): Promise<TextMessageRecord | null>;
+  createTextMessage(message: TextMessageRecord): Promise<void>;
+  updateTextMessage(id: string, content: string, now: Date): Promise<TextMessageRecord | null>;
+  deleteTextMessage(id: string): Promise<boolean>;
+  claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }>;
+  heartbeatChannelLease(channelId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<ChannelLeaseRecord | null>;
+  releaseChannelLease(channelId: string, participantIdentity: string): Promise<boolean>;
+  releaseChannelLeaseByParticipant(participantIdentity: string): Promise<void>;
 }
 
 export interface Mailer {
@@ -61,6 +105,8 @@ export interface MediaTokenOptions {
   identity: string;
   displayName: string;
   metadata: Record<string, string>;
+  canPublishMicrophone?: boolean;
+  canPublishScreen?: boolean;
 }
 
 export interface MediaService {
@@ -69,6 +115,7 @@ export interface MediaService {
   participantCount(roomName: string): Promise<number>;
   participantExists(roomName: string, identity: string): Promise<boolean>;
   removeParticipant(roomName: string, identity: string): Promise<void>;
+  participantIdentities(roomName: string): Promise<string[]>;
   issueToken(options: MediaTokenOptions): Promise<string>;
   healthCheck(): Promise<void>;
 }

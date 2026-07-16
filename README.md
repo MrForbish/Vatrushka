@@ -1,6 +1,6 @@
 # Ватрушка
 
-«Ватрушка» — рабочий MVP настольного приложения для временных голосовых комнат на Windows 10/11 x64. Пользователь входит по одноразовому email-коду, создаёт комнату до пяти человек, приглашает зарегистрированных пользователей или гостей, разговаривает через LiveKit и может показать монитор либо отдельное окно. Камеры, чат, запись, файлы и постоянные каналы намеренно отсутствуют.
+«Ватрушка» — настольное приложение для общения на Windows 10/11 x64. Помимо быстрых голосовых комнат до пяти человек, в нём есть постоянные серверы, текстовые и голосовые каналы, история сообщений, роли и права. Регистрация поддерживает пароль с подтверждением по email, вход — email-код или пароль со вторым фактором email/TOTP. В голосе доступны выбор аудиоустройств и демонстрация монитора либо окна с управляемым системным звуком.
 
 ## Архитектура
 
@@ -22,9 +22,10 @@
 - npm workspaces: `apps/desktop`, `apps/api`, `packages/shared`, `packages/config`.
 - Desktop: Electron 43, React 19, electron-vite, LiveKit JS SDK, Zod.
 - API: Node.js, Fastify 5, PostgreSQL, Drizzle ORM, Nodemailer, LiveKit Server SDK.
-- Авторизация: access JWT на 15 минут; opaque refresh token на 30 дней с rotation/reuse detection.
+- Авторизация: scrypt-пароль, email/TOTP 2FA, access JWT на 15 минут; opaque refresh token на 30 дней с rotation/reuse detection.
 - Медиа: LiveKit Cloud по умолчанию; self-hosted меняется только значениями `LIVEKIT_*`.
 - Единственная демонстрация обеспечивается транзакционной lease в PostgreSQL, а не только UI.
+- Серверы хранят постоянное членство, каналы, сообщения и роли; право `SPEAK`/`STREAM` ограничивается также grant-ами LiveKit-токена.
 
 Подробности: [архитектура](docs/architecture.md), [аутентификация](docs/auth.md), [медиа](docs/media.md), [безопасность](docs/security.md).
 
@@ -89,7 +90,7 @@ docs/                   operating and design documentation
 
    API: `http://localhost:3000`; Swagger: `http://localhost:3000/docs` (только не-production).
 
-5. Введите любой email. В development используется код `123456`; письмо также появится в Mailpit на `http://localhost:8025`.
+5. Зарегистрируйте аккаунт с паролем либо используйте вход по email для legacy-аккаунта. В development используется код `123456`; письмо также появится в Mailpit на `http://localhost:8025`.
 
 Без Docker можно запустить PostgreSQL любым способом и поменять `DATABASE_URL`. Production flow не содержит in-memory заглушек; `MemoryStore`, `FakeMailer` и `FakeMediaService` импортируются только тестами.
 
@@ -146,9 +147,9 @@ Self-hosted режим описан в [docs/self-hosted-livekit.md](docs/self-h
 
 ## Как развернуть на своём сервере
 
-На сервере хостятся API, PostgreSQL и TLS reverse proxy. Electron-клиент не превращается в веб-сайт: его нужно собрать с адресом API и раздать пользователям как `.exe`. Для первого production-развёртывания проще использовать LiveKit Cloud, а на своём VPS держать только API и PostgreSQL.
+На сервере хостятся API, PostgreSQL и TLS reverse proxy. Electron-клиент не превращается в веб-сайт: его нужно собрать с адресом API и раздать пользователям как `.exe`. LiveKit можно держать на том же VPS по self-hosted runbook либо использовать облачный проект.
 
-Понадобятся Ubuntu 22.04/24.04, Docker Engine с Compose v2, домен вроде `api.example.com`, SMTP и проект LiveKit Cloud.
+Понадобятся Ubuntu 22.04/24.04, Docker Engine с Compose v2, домены API/LiveKit/TURN, SMTP и self-hosted LiveKit либо облачный проект.
 
 На Ubuntu VM:
 
@@ -178,9 +179,9 @@ API наружу не публикуется напрямую; доступен 
 | Группа | Переменные |
 |---|---|
 | Process | `NODE_ENV`, `HOST`, `PORT`, `LOG_LEVEL`, `PUBLIC_API_URL` |
-| Product | `APP_NAME`, `APP_PROTOCOL` |
+| Product | `APP_NAME`, `APP_PROTOCOL`, `PLATFORM_OWNER_EMAIL` |
 | Database | `DATABASE_URL`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` |
-| Tokens | `ACCESS_TOKEN_SECRET`, `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS` |
+| Tokens | `ACCESS_TOKEN_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`, `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS` |
 | OTP | `OTP_PEPPER`, `OTP_TTL_SECONDS`, `OTP_RESEND_SECONDS`, `DEV_FIXED_OTP` |
 | SMTP | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` |
 | LiveKit | `LIVEKIT_URL`, `LIVEKIT_HTTP_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
@@ -208,16 +209,16 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 
 ### Системный звук
 
-- В MVP loopback capture включается только на Windows и только если отмечен checkbox.
+- Loopback capture включается только на Windows и только если отмечен checkbox. Клиент запрашивает исключение собственного аудио, чтобы голоса участников не дублировались в трансляции.
 - Некоторые защищённые приложения и DRM-контент не отдают изображение/звук.
 - Если источник не поддерживает аудио, показ видео продолжится без системного звука.
 
 ## Существенные допущения и ограничения
 
-- LiveKit Cloud — основной production режим. Self-hosted single-node рассчитан только на несколько малых комнат.
+- Production поддерживает LiveKit Cloud и self-hosted single-node; текущий сервер проекта использует self-hosted режим.
 - Истечение 12-часовой комнаты проверяется при каждом API-доступе; LiveKit дополнительно закрывает пустые комнаты. Отдельный scheduler для массовой уборки не нужен при MVP-нагрузке.
 - Исключение удаляет текущего LiveKit participant. Постоянного ban list в требованиях нет.
-- Уровень громкости зарезервирован в local settings schema, но отдельный UI slider не обязателен.
+- Зритель может отдельно выключать и регулировать громкость звука демонстрации; значение сохраняется локально.
 - Реальные SMTP delivery, LiveKit Cloud/WebRTC через NAT, Windows microphone/loopback/display capture требуют внешних credentials и устройств и не заменяются unit-тестами.
 - E2E не захватывает реальный микрофон/экран. Оно проверяет Electron shell, sandbox/preload allowlist и deep link.
 - Нет code signing, auto-update, E2EE, recording, telemetry и tray mode.
@@ -231,3 +232,4 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 - [Self-hosted LiveKit](docs/self-hosted-livekit.md)
 - [Security](docs/security.md)
 - [Testing](docs/testing.md)
+- [vNext roadmap](docs/vnext-roadmap.md)

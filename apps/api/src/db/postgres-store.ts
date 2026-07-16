@@ -1,8 +1,9 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, lt, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 
 import { decideScreenShareLease, expiresAt, isExpired } from '@vatrushka/shared';
+import type { PlatformRole } from '@vatrushka/shared';
 
 import type {
   AuthCodeRecord,
@@ -13,6 +14,16 @@ import type {
   RoomRecord,
   SessionRecord,
   UserRecord,
+  ServerGraph,
+  ServerRecord,
+  ServerWithMemberCount,
+  ServerMemberRecord,
+  ServerMemberProfile,
+  ServerRoleRecord,
+  ServerChannelRecord,
+  TextMessageRecord,
+  TextMessageWithAuthor,
+  ChannelLeaseRecord,
 } from '../domain.js';
 import type { DataStore } from '../ports.js';
 import * as schema from './schema.js';
@@ -54,6 +65,16 @@ export class PostgresStore implements DataStore {
     return (row as AuthCodeRecord | undefined) ?? null;
   }
 
+  async findLatestAuthCodeForPurpose(email: string, purpose: AuthCodeRecord['purpose']): Promise<AuthCodeRecord | null> {
+    const [row] = await this.db
+      .select()
+      .from(schema.authCodes)
+      .where(and(eq(schema.authCodes.email, email), eq(schema.authCodes.purpose, purpose)))
+      .orderBy(desc(schema.authCodes.createdAt))
+      .limit(1);
+    return (row as AuthCodeRecord | undefined) ?? null;
+  }
+
   async incrementAuthCodeAttempts(id: string): Promise<number> {
     const [row] = await this.db
       .update(schema.authCodes)
@@ -90,11 +111,60 @@ export class PostgresStore implements DataStore {
     return row ?? null;
   }
 
+  async findUserByEmail(email: string): Promise<UserRecord | null> {
+    const [row] = await this.db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
+    return row ?? null;
+  }
+
+  async createUserWithPassword(email: string, passwordHash: string, now: Date): Promise<UserRecord | null> {
+    const [row] = await this.db
+      .insert(schema.users)
+      .values({
+        id: crypto.randomUUID(),
+        email,
+        displayName: null,
+        passwordHash,
+        emailVerifiedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing({ target: schema.users.email })
+      .returning();
+    return row ?? null;
+  }
+
   async updateDisplayName(id: string, displayName: string, now: Date): Promise<UserRecord | null> {
     const [row] = await this.db
       .update(schema.users)
       .set({ displayName, updatedAt: now })
       .where(eq(schema.users.id, id))
+      .returning();
+    return row ?? null;
+  }
+
+  async updatePassword(id: string, passwordHash: string, now: Date): Promise<UserRecord | null> {
+    const [row] = await this.db
+      .update(schema.users)
+      .set({ passwordHash, emailVerifiedAt: now, updatedAt: now })
+      .where(eq(schema.users.id, id))
+      .returning();
+    return row ?? null;
+  }
+
+  async updateTwoFactor(id: string, secretEncrypted: string | null, enabled: boolean, now: Date): Promise<UserRecord | null> {
+    const [row] = await this.db
+      .update(schema.users)
+      .set({ totpSecretEncrypted: secretEncrypted, twoFactorEnabled: enabled, updatedAt: now })
+      .where(eq(schema.users.id, id))
+      .returning();
+    return row ?? null;
+  }
+
+  async setPlatformRoleByEmail(email: string, role: PlatformRole, now: Date): Promise<UserRecord | null> {
+    const [row] = await this.db
+      .update(schema.users)
+      .set({ platformRole: role, updatedAt: now })
+      .where(eq(schema.users.email, email))
       .returning();
     return row ?? null;
   }
@@ -289,6 +359,177 @@ export class PostgresStore implements DataStore {
 
   async releaseLeaseByRoom(roomId: string): Promise<void> {
     await this.db.delete(schema.screenShareLeases).where(eq(schema.screenShareLeases.roomId, roomId));
+  }
+
+  async createServerGraph(graph: ServerGraph): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      const inserted = await tx.insert(schema.servers).values(graph.server).onConflictDoNothing().returning({ id: schema.servers.id });
+      if (inserted.length === 0) return false;
+      await tx.insert(schema.serverMembers).values(graph.members);
+      await tx.insert(schema.serverRoles).values(graph.roles);
+      if (graph.memberRoles.length > 0) await tx.insert(schema.serverMemberRoles).values(graph.memberRoles);
+      await tx.insert(schema.serverChannels).values(graph.channels);
+      return true;
+    });
+  }
+
+  async listServersForUser(userId: string): Promise<ServerWithMemberCount[]> {
+    const rows = await this.db
+      .select({
+        server: schema.servers,
+        memberCount: sql<number>`(select count(*)::int from ${schema.serverMembers} counted where counted.server_id = ${schema.servers.id})`,
+      })
+      .from(schema.servers)
+      .innerJoin(schema.serverMembers, and(eq(schema.serverMembers.serverId, schema.servers.id), eq(schema.serverMembers.userId, userId)))
+      .orderBy(asc(schema.servers.createdAt));
+    return rows.map(({ server, memberCount }) => ({ ...server, memberCount: Number(memberCount) }));
+  }
+
+  async findServerById(id: string): Promise<ServerRecord | null> {
+    const [row] = await this.db.select().from(schema.servers).where(eq(schema.servers.id, id)).limit(1);
+    return row ?? null;
+  }
+
+  async findServerByInviteCode(inviteCode: string): Promise<ServerRecord | null> {
+    const [row] = await this.db.select().from(schema.servers).where(eq(schema.servers.inviteCode, inviteCode)).limit(1);
+    return row ?? null;
+  }
+
+  async findServerMember(serverId: string, userId: string): Promise<ServerMemberRecord | null> {
+    const [row] = await this.db.select().from(schema.serverMembers).where(and(eq(schema.serverMembers.serverId, serverId), eq(schema.serverMembers.userId, userId))).limit(1);
+    return row ?? null;
+  }
+
+  async addServerMember(member: ServerMemberRecord): Promise<boolean> {
+    const rows = await this.db.insert(schema.serverMembers).values(member).onConflictDoNothing().returning({ userId: schema.serverMembers.userId });
+    return rows.length === 1;
+  }
+
+  async removeServerMember(serverId: string, userId: string): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      await tx.delete(schema.serverMemberRoles).where(and(eq(schema.serverMemberRoles.serverId, serverId), eq(schema.serverMemberRoles.userId, userId)));
+      const rows = await tx.delete(schema.serverMembers).where(and(eq(schema.serverMembers.serverId, serverId), eq(schema.serverMembers.userId, userId))).returning({ userId: schema.serverMembers.userId });
+      return rows.length === 1;
+    });
+  }
+
+  async listServerMembers(serverId: string): Promise<ServerMemberProfile[]> {
+    const rows = await this.db
+      .select({ member: schema.serverMembers, displayName: schema.users.displayName, platformRole: schema.users.platformRole })
+      .from(schema.serverMembers)
+      .innerJoin(schema.users, eq(schema.users.id, schema.serverMembers.userId))
+      .where(eq(schema.serverMembers.serverId, serverId))
+      .orderBy(asc(schema.serverMembers.joinedAt));
+    return rows.map(({ member, displayName, platformRole }) => ({ ...member, displayName, platformRole }));
+  }
+
+  async listServerRoles(serverId: string): Promise<ServerRoleRecord[]> {
+    return this.db.select().from(schema.serverRoles).where(eq(schema.serverRoles.serverId, serverId)).orderBy(asc(schema.serverRoles.position));
+  }
+
+  async listMemberRoleIds(serverId: string, userId: string): Promise<string[]> {
+    const rows = await this.db.select({ roleId: schema.serverMemberRoles.roleId }).from(schema.serverMemberRoles).where(and(eq(schema.serverMemberRoles.serverId, serverId), eq(schema.serverMemberRoles.userId, userId)));
+    return rows.map((row) => row.roleId);
+  }
+
+  async listAllMemberRoles(serverId: string): Promise<Array<{ userId: string; roleId: string }>> {
+    return this.db.select({ userId: schema.serverMemberRoles.userId, roleId: schema.serverMemberRoles.roleId }).from(schema.serverMemberRoles).where(eq(schema.serverMemberRoles.serverId, serverId));
+  }
+
+  async createServerRole(role: ServerRoleRecord): Promise<void> {
+    await this.db.insert(schema.serverRoles).values(role);
+  }
+
+  async updateServerRole(id: string, values: Partial<Pick<ServerRoleRecord, 'name' | 'color' | 'permissions'>>, now: Date): Promise<ServerRoleRecord | null> {
+    const [row] = await this.db.update(schema.serverRoles).set({ ...values, updatedAt: now }).where(eq(schema.serverRoles.id, id)).returning();
+    return row ?? null;
+  }
+
+  async assignMemberRoles(serverId: string, userId: string, roleIds: string[]): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.delete(schema.serverMemberRoles).where(and(eq(schema.serverMemberRoles.serverId, serverId), eq(schema.serverMemberRoles.userId, userId)));
+      if (roleIds.length > 0) await tx.insert(schema.serverMemberRoles).values(roleIds.map((roleId) => ({ serverId, userId, roleId })));
+    });
+  }
+
+  async listServerChannels(serverId: string): Promise<ServerChannelRecord[]> {
+    return this.db.select().from(schema.serverChannels).where(eq(schema.serverChannels.serverId, serverId)).orderBy(asc(schema.serverChannels.position));
+  }
+
+  async findServerChannel(id: string): Promise<ServerChannelRecord | null> {
+    const [row] = await this.db.select().from(schema.serverChannels).where(eq(schema.serverChannels.id, id)).limit(1);
+    return row ?? null;
+  }
+
+  async createServerChannel(channel: ServerChannelRecord): Promise<void> {
+    await this.db.insert(schema.serverChannels).values(channel);
+  }
+
+  async deleteServerChannel(id: string): Promise<boolean> {
+    const rows = await this.db.delete(schema.serverChannels).where(eq(schema.serverChannels.id, id)).returning({ id: schema.serverChannels.id });
+    return rows.length === 1;
+  }
+
+  async listTextMessages(channelId: string, before: Date | null, limit: number): Promise<TextMessageWithAuthor[]> {
+    const where = before
+      ? and(eq(schema.textMessages.channelId, channelId), lt(schema.textMessages.createdAt, before))
+      : eq(schema.textMessages.channelId, channelId);
+    const rows = await this.db
+      .select({ message: schema.textMessages, displayName: schema.users.displayName, platformRole: schema.users.platformRole })
+      .from(schema.textMessages)
+      .innerJoin(schema.users, eq(schema.users.id, schema.textMessages.authorUserId))
+      .where(where)
+      .orderBy(desc(schema.textMessages.createdAt))
+      .limit(limit);
+    return rows.reverse().map(({ message, displayName, platformRole }) => ({ ...message, displayName, platformRole }));
+  }
+
+  async findTextMessage(id: string): Promise<TextMessageRecord | null> {
+    const [row] = await this.db.select().from(schema.textMessages).where(eq(schema.textMessages.id, id)).limit(1);
+    return row ?? null;
+  }
+
+  async createTextMessage(message: TextMessageRecord): Promise<void> {
+    await this.db.insert(schema.textMessages).values(message);
+  }
+
+  async updateTextMessage(id: string, content: string, now: Date): Promise<TextMessageRecord | null> {
+    const [row] = await this.db.update(schema.textMessages).set({ content, editedAt: now }).where(eq(schema.textMessages.id, id)).returning();
+    return row ?? null;
+  }
+
+  async deleteTextMessage(id: string): Promise<boolean> {
+    const rows = await this.db.delete(schema.textMessages).where(eq(schema.textMessages.id, id)).returning({ id: schema.textMessages.id });
+    return rows.length === 1;
+  }
+
+  async claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }> {
+    return this.db.transaction(async (tx) => {
+      await tx.select({ id: schema.serverChannels.id }).from(schema.serverChannels).where(eq(schema.serverChannels.id, channelId)).for('update');
+      const [current] = await tx.select().from(schema.channelScreenShareLeases).where(eq(schema.channelScreenShareLeases.channelId, channelId)).limit(1).for('update');
+      const decision = decideScreenShareLease(current ?? null, participantIdentity, participantDisplayName, now, leaseSeconds);
+      if (!decision.ok) return { status: 'busy', lease: { channelId, ...decision.current } };
+      const lease: ChannelLeaseRecord = { channelId, ...decision.lease };
+      await tx.insert(schema.channelScreenShareLeases).values(lease).onConflictDoUpdate({
+        target: schema.channelScreenShareLeases.channelId,
+        set: { participantIdentity: lease.participantIdentity, participantDisplayName: lease.participantDisplayName, acquiredAt: lease.acquiredAt, expiresAt: lease.expiresAt },
+      });
+      return { status: 'ok', lease };
+    });
+  }
+
+  async heartbeatChannelLease(channelId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<ChannelLeaseRecord | null> {
+    const [row] = await this.db.update(schema.channelScreenShareLeases).set({ expiresAt: expiresAt(now, leaseSeconds) }).where(and(eq(schema.channelScreenShareLeases.channelId, channelId), eq(schema.channelScreenShareLeases.participantIdentity, participantIdentity))).returning();
+    return row ?? null;
+  }
+
+  async releaseChannelLease(channelId: string, participantIdentity: string): Promise<boolean> {
+    const rows = await this.db.delete(schema.channelScreenShareLeases).where(and(eq(schema.channelScreenShareLeases.channelId, channelId), eq(schema.channelScreenShareLeases.participantIdentity, participantIdentity))).returning({ channelId: schema.channelScreenShareLeases.channelId });
+    return rows.length === 1;
+  }
+
+  async releaseChannelLeaseByParticipant(participantIdentity: string): Promise<void> {
+    await this.db.delete(schema.channelScreenShareLeases).where(eq(schema.channelScreenShareLeases.participantIdentity, participantIdentity));
   }
 }
 

@@ -17,7 +17,7 @@ export class FakeMediaService implements MediaService {
 
   async createRoom(options: MediaRoomOptions): Promise<void> {
     if (!this.available) throw new Error('LiveKit unavailable');
-    this.rooms.set(options.name, new Set());
+    if (!this.rooms.has(options.name)) this.rooms.set(options.name, new Set());
   }
 
   async deleteRoom(roomName: string): Promise<void> {
@@ -35,6 +35,10 @@ export class FakeMediaService implements MediaService {
   async removeParticipant(roomName: string, identity: string): Promise<void> {
     const participants = this.rooms.get(roomName);
     if (!participants?.delete(identity)) throw new Error('participant not found');
+  }
+
+  async participantIdentities(roomName: string): Promise<string[]> {
+    return [...(this.rooms.get(roomName) ?? [])];
   }
 
   async issueToken(options: MediaTokenOptions): Promise<string> {

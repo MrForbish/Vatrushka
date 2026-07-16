@@ -16,16 +16,32 @@ import { z, ZodError } from 'zod';
 
 import {
   API_PREFIX,
+  beginPasswordLoginSchema,
+  completePasswordLoginSchema,
+  createChannelSchema,
+  createMessageSchema,
+  createRoleSchema,
+  createServerSchema,
   createApiError,
   errorMessages,
   guestJoinSchema,
+  joinServerSchema,
+  messageQuerySchema,
   refreshSchema,
+  requestRegistrationSchema,
   requestCodeSchema,
   roomCodeSchema,
   roomLockSchema,
   screenShareActionSchema,
+  serverPermissions,
+  setPasswordSchema,
+  twoFactorCodeSchema,
   updateProfileSchema,
+  updateMessageSchema,
+  updateRoleSchema,
+  assignMemberRolesSchema,
   verifyCodeSchema,
+  verifyRegistrationSchema,
 } from '@vatrushka/shared';
 
 import { AppError } from './app-error.js';
@@ -36,6 +52,12 @@ const roomIdParams = z.object({ roomId: z.uuid() });
 const roomCodeParams = z.object({ code: roomCodeSchema });
 const participantParams = z.object({ roomId: z.uuid(), participantIdentity: z.string().min(3).max(200) });
 const tokenBody = z.object({ participantIdentity: z.string().min(3).max(200) }).strict();
+const serverIdParams = z.object({ serverId: z.uuid() });
+const channelIdParams = z.object({ channelId: z.uuid() });
+const serverRoleParams = z.object({ serverId: z.uuid(), roleId: z.uuid() });
+const serverMemberParams = z.object({ serverId: z.uuid(), userId: z.uuid() });
+const messageIdParams = z.object({ messageId: z.uuid() });
+const channelParticipantParams = z.object({ channelId: z.uuid(), participantIdentity: z.string().min(3).max(200) });
 
 const errorResponseSchema = z.object({
   code: z.string(),
@@ -44,7 +66,21 @@ const errorResponseSchema = z.object({
   requestId: z.string(),
 });
 
-const publicUserSchema = z.object({ id: z.string(), email: z.string(), displayName: z.string().nullable() });
+const publicUserSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  displayName: z.string().nullable(),
+  platformRole: z.enum(['member', 'admin', 'owner']),
+  hasPassword: z.boolean(),
+  twoFactorEnabled: z.boolean(),
+});
+const authResponseSchema = z.object({
+  accessToken: z.string(),
+  refreshToken: z.string(),
+  expiresIn: z.number(),
+  user: publicUserSchema,
+  isNewUser: z.boolean(),
+});
 const connectionSchema = z.object({
   roomId: z.string(),
   ownerUserId: z.string(),
@@ -54,8 +90,20 @@ const connectionSchema = z.object({
   participantIdentity: z.string(),
   participantDisplayName: z.string(),
   isOwner: z.boolean(),
+  contextType: z.enum(['room', 'channel']).optional(),
+  serverId: z.string().optional(),
+  channelId: z.string().optional(),
+  canSpeak: z.boolean().optional(),
+  canStream: z.boolean().optional(),
   guestSessionToken: z.string().optional(),
 });
+const permissionSchema = z.enum(serverPermissions);
+const serverRoleResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), color: z.string(), position: z.number(), isDefault: z.boolean(), permissions: z.array(permissionSchema) });
+const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number() });
+const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema) });
+const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteCode: z.string(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
+const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
+const textMessageResponseSchema = z.object({ id: z.string(), channelId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), authorPlatformRole: z.enum(['member', 'admin', 'owner']), content: z.string(), createdAt: z.string(), editedAt: z.string().nullable() });
 
 export interface BuildAppOptions {
   config: AppConfig;
@@ -79,6 +127,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
               paths: [
                 'req.headers.authorization',
                 'req.body.code',
+                'req.body.password',
                 'req.body.refreshToken',
                 'refreshToken',
                 'accessToken',
@@ -96,13 +145,16 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+  app.addContentTypeParser('application/webhook+json', { parseAs: 'string' }, (_request, body, done) => {
+    done(null, body);
+  });
 
   await app.register(cors, {
     origin(origin, callback) {
       const allowed = config.CORS_ALLOWED_ORIGINS.split(',').map((value) => value.trim()).filter(Boolean);
       callback(null, !origin || origin === 'null' || (config.NODE_ENV !== 'production' && origin.startsWith('http://localhost:')) || allowed.includes(origin));
     },
-    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Authorization', 'Content-Type'],
   });
   await app.register(rateLimit, { global: false, max: 60, timeWindow: '1 minute', ban: 2 });
@@ -180,11 +232,39 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       tags: ['auth'],
       body: verifyCodeSchema,
       response: {
-        200: z.object({ accessToken: z.string(), refreshToken: z.string(), expiresIn: z.number(), user: publicUserSchema, isNewUser: z.boolean() }),
+        200: authResponseSchema,
         ...routeErrors(),
       },
     },
   }, async (request) => service.verifyCode(request.body.email, request.body.code, request.body.deviceName));
+
+  api.post(`${API_PREFIX}/auth/register/request-code`, {
+    config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
+    schema: {
+      tags: ['auth'],
+      body: requestRegistrationSchema,
+      response: { 200: z.object({ status: z.literal('CODE_SENT'), retryAfterSeconds: z.number() }), ...routeErrors() },
+    },
+  }, async (request) => service.requestRegistration(request.body.email, request.body.password));
+
+  api.post(`${API_PREFIX}/auth/register/verify-code`, {
+    config: { rateLimit: { max: 15, timeWindow: '10 minutes' } },
+    schema: { tags: ['auth'], body: verifyRegistrationSchema, response: { 200: authResponseSchema, ...routeErrors() } },
+  }, async (request) => service.verifyRegistration(request.body.email, request.body.code, request.body.deviceName));
+
+  api.post(`${API_PREFIX}/auth/password/begin`, {
+    config: { rateLimit: { max: 10, timeWindow: '10 minutes' } },
+    schema: {
+      tags: ['auth'],
+      body: beginPasswordLoginSchema,
+      response: { 200: z.object({ status: z.literal('SECOND_FACTOR_REQUIRED'), factor: z.enum(['email', 'totp']), retryAfterSeconds: z.number() }), ...routeErrors() },
+    },
+  }, async (request) => service.beginPasswordLogin(request.body.email, request.body.password, request.body.factor));
+
+  api.post(`${API_PREFIX}/auth/password/complete`, {
+    config: { rateLimit: { max: 15, timeWindow: '10 minutes' } },
+    schema: { tags: ['auth'], body: completePasswordLoginSchema, response: { 200: authResponseSchema, ...routeErrors() } },
+  }, async (request) => service.completePasswordLogin(request.body.email, request.body.password, request.body.code, request.body.factor, request.body.deviceName));
 
   api.post(`${API_PREFIX}/auth/refresh`, {
     config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
@@ -209,6 +289,117 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   api.patch(`${API_PREFIX}/me`, {
     schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: updateProfileSchema, response: { 200: publicUserSchema, ...routeErrors() } },
   }, async (request) => service.updateMe(request.headers.authorization, request.body.displayName));
+
+  api.post(`${API_PREFIX}/me/password/request-code`, {
+    config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], response: { 200: z.object({ status: z.literal('CODE_SENT'), retryAfterSeconds: z.number() }), ...routeErrors() } },
+  }, async (request) => service.requestPasswordSetup(request.headers.authorization));
+
+  api.put(`${API_PREFIX}/me/password`, {
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: setPasswordSchema, response: { 200: publicUserSchema, ...routeErrors() } },
+  }, async (request) => service.setPassword(request.headers.authorization, request.body.code, request.body.password));
+
+  api.post(`${API_PREFIX}/me/2fa/setup`, {
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], response: { 200: z.object({ secret: z.string(), otpauthUri: z.string() }), ...routeErrors() } },
+  }, async (request) => service.beginTwoFactorSetup(request.headers.authorization));
+
+  api.post(`${API_PREFIX}/me/2fa/enable`, {
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: twoFactorCodeSchema, response: { 200: publicUserSchema, ...routeErrors() } },
+  }, async (request) => service.enableTwoFactor(request.headers.authorization, request.body.code));
+
+  api.delete(`${API_PREFIX}/me/2fa`, {
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: twoFactorCodeSchema, response: { 200: publicUserSchema, ...routeErrors() } },
+  }, async (request) => service.disableTwoFactor(request.headers.authorization, request.body.code));
+
+  api.get(`${API_PREFIX}/servers`, {
+    schema: { tags: ['servers'], security: [{ bearerAuth: [] }], response: { 200: z.array(serverSummaryResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listServers(request.headers.authorization));
+
+  api.post(`${API_PREFIX}/servers`, {
+    schema: { tags: ['servers'], security: [{ bearerAuth: [] }], body: createServerSchema, response: { 201: serverDetailResponseSchema, ...routeErrors() } },
+  }, async (request, reply) => reply.status(201).send(await service.createServer(request.headers.authorization, request.body.name)));
+
+  api.post(`${API_PREFIX}/servers/join`, {
+    schema: { tags: ['servers'], security: [{ bearerAuth: [] }], body: joinServerSchema, response: { 200: serverDetailResponseSchema, ...routeErrors() } },
+  }, async (request) => service.joinServer(request.headers.authorization, request.body.inviteCode));
+
+  api.get(`${API_PREFIX}/servers/:serverId`, {
+    schema: { tags: ['servers'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: serverDetailResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getServer(request.headers.authorization, request.params.serverId));
+
+  api.post(`${API_PREFIX}/servers/:serverId/channels`, {
+    schema: { tags: ['channels'], security: [{ bearerAuth: [] }], params: serverIdParams, body: createChannelSchema, response: { 201: serverChannelResponseSchema, ...routeErrors() } },
+  }, async (request, reply) => reply.status(201).send(await service.createServerChannel(request.headers.authorization, request.params.serverId, request.body.name, request.body.type)));
+
+  api.delete(`${API_PREFIX}/channels/:channelId`, {
+    schema: { tags: ['channels'], security: [{ bearerAuth: [] }], params: channelIdParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.deleteServerChannel(request.headers.authorization, request.params.channelId);
+    return reply.status(204).send(null);
+  });
+
+  api.post(`${API_PREFIX}/servers/:serverId/roles`, {
+    schema: { tags: ['roles'], security: [{ bearerAuth: [] }], params: serverIdParams, body: createRoleSchema, response: { 201: serverRoleResponseSchema, ...routeErrors() } },
+  }, async (request, reply) => reply.status(201).send(await service.createServerRole(request.headers.authorization, request.params.serverId, request.body.name, request.body.color, request.body.permissions)));
+
+  api.patch(`${API_PREFIX}/servers/:serverId/roles/:roleId`, {
+    schema: { tags: ['roles'], security: [{ bearerAuth: [] }], params: serverRoleParams, body: updateRoleSchema, response: { 200: serverRoleResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateServerRole(request.headers.authorization, request.params.serverId, request.params.roleId, request.body));
+
+  api.put(`${API_PREFIX}/servers/:serverId/members/:userId/roles`, {
+    schema: { tags: ['roles'], security: [{ bearerAuth: [] }], params: serverMemberParams, body: assignMemberRolesSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.assignServerMemberRoles(request.headers.authorization, request.params.serverId, request.params.userId, request.body.roleIds);
+    return reply.status(204).send(null);
+  });
+
+  api.delete(`${API_PREFIX}/servers/:serverId/members/:userId`, {
+    schema: { tags: ['servers'], security: [{ bearerAuth: [] }], params: serverMemberParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.kickServerMember(request.headers.authorization, request.params.serverId, request.params.userId);
+    return reply.status(204).send(null);
+  });
+
+  api.get(`${API_PREFIX}/channels/:channelId/messages`, {
+    schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: channelIdParams, querystring: messageQuerySchema, response: { 200: z.array(textMessageResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listMessages(request.headers.authorization, request.params.channelId, request.query.before, request.query.limit));
+
+  api.post(`${API_PREFIX}/channels/:channelId/messages`, {
+    schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: channelIdParams, body: createMessageSchema, response: { 201: textMessageResponseSchema, ...routeErrors() } },
+  }, async (request, reply) => reply.status(201).send(await service.createMessage(request.headers.authorization, request.params.channelId, request.body.content)));
+
+  api.patch(`${API_PREFIX}/messages/:messageId`, {
+    schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: messageIdParams, body: updateMessageSchema, response: { 200: textMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateMessage(request.headers.authorization, request.params.messageId, request.body.content));
+
+  api.delete(`${API_PREFIX}/messages/:messageId`, {
+    schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: messageIdParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.deleteMessage(request.headers.authorization, request.params.messageId);
+    return reply.status(204).send(null);
+  });
+
+  api.post(`${API_PREFIX}/channels/:channelId/connect`, {
+    schema: { tags: ['channels'], security: [{ bearerAuth: [] }], params: channelIdParams, response: { 200: connectionSchema, ...routeErrors() } },
+  }, async (request) => service.connectVoiceChannel(request.headers.authorization, request.params.channelId));
+
+  api.delete(`${API_PREFIX}/channels/:channelId/participants/:participantIdentity`, {
+    schema: { tags: ['channels'], security: [{ bearerAuth: [] }], params: channelParticipantParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.kickChannelParticipant(request.headers.authorization, request.params.channelId, request.params.participantIdentity);
+    return reply.status(204).send(null);
+  });
+
+  for (const action of ['claim', 'heartbeat', 'release'] as const) {
+    api.post(`${API_PREFIX}/channels/:channelId/screen-share/${action}`, {
+      schema: { tags: ['screen-share'], security: [{ bearerAuth: [] }], params: channelIdParams, body: screenShareActionSchema, response: { 200: action === 'release' ? z.object({ released: z.literal(true) }) : z.object({ expiresAt: z.string() }), ...routeErrors() } },
+    }, async (request) => {
+      if (action === 'claim') return service.claimChannelScreenShare(request.headers.authorization, request.params.channelId, request.body.participantIdentity);
+      if (action === 'heartbeat') return service.heartbeatChannelScreenShare(request.headers.authorization, request.params.channelId, request.body.participantIdentity);
+      await service.releaseChannelScreenShare(request.headers.authorization, request.params.channelId, request.body.participantIdentity);
+      return { released: true as const };
+    });
+  }
 
   api.post(`${API_PREFIX}/rooms`, {
     schema: { tags: ['rooms'], security: [{ bearerAuth: [] }], response: { 201: connectionSchema, ...routeErrors() } },
@@ -275,7 +466,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     config: { rawBody: true },
     schema: { tags: ['webhooks'] },
   }, async (request, reply) => {
-    const raw = (request as typeof request & { rawBody?: string }).rawBody;
+    const webhookRequest = request as typeof request & { rawBody?: string; body?: unknown };
+    const raw = typeof webhookRequest.body === 'string' ? webhookRequest.body : webhookRequest.rawBody;
     const authorization = request.headers.authorization;
     if (!raw || !authorization) throw new AppError('UNAUTHORIZED', 401);
     let event;

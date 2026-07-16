@@ -1,22 +1,28 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
+import QRCode from 'qrcode';
 
-import { displayNameSchema, roomCodeSchema, type DesktopSourceInfo, type LocalSettings, type PublicUser, type RoomConnection } from '@vatrushka/shared';
+import { channelNameSchema, displayNameSchema, messageContentSchema, passwordSchema, roleNameSchema, roomCodeSchema, serverInviteCodeSchema, serverNameSchema, type DesktopSourceInfo, type LocalSettings, type PublicUser, type RoomConnection, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type TwoFactorSetup } from '@vatrushka/shared';
 
 import { apiClient, ClientError } from './api.js';
-import { AuthPanel, GuestJoinPanel, HomePanel, InvitePanel, ProfilePanel, RoomView, SourcePicker } from './components.js';
+import { AuthPanel, GuestJoinPanel, HomePanel, InvitePanel, ProfilePanel, RoomView, SecurityPanel, ServerView, SourcePicker } from './components.js';
 import { MediaSession } from './media.js';
 
-type Screen = 'boot' | 'auth' | 'profile' | 'home' | 'invite' | 'guest' | 'room';
+type Screen = 'boot' | 'auth' | 'profile' | 'home' | 'server' | 'invite' | 'guest' | 'room';
 const media = new MediaSession(apiClient);
 
 export default function App(): ReactNode {
   const [screen, setScreen] = useState<Screen>('boot');
   const [user, setUser] = useState<PublicUser | null>(null);
   const userRef = useRef<PublicUser | null>(null);
-  const [authStage, setAuthStage] = useState<'email' | 'otp'>('email');
+  const [authMode, setAuthMode] = useState<'password' | 'email' | 'register'>('password');
+  const [authStage, setAuthStage] = useState<'credentials' | 'otp'>('credentials');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
+  const [password, setPasswordValue] = useState('');
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
+  const [secondFactor, setSecondFactor] = useState<'email' | 'totp'>('email');
+  const [totpAvailable, setTotpAvailable] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [guestName, setGuestName] = useState('');
   const [roomCode, setRoomCode] = useState('');
@@ -33,6 +39,20 @@ export default function App(): ReactNode {
   const [locked, setLocked] = useState(false);
   const [sources, setSources] = useState<DesktopSourceInfo[] | null>(null);
   const [includeAudio, setIncludeAudio] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [servers, setServers] = useState<ServerSummary[]>([]);
+  const [serverDetail, setServerDetail] = useState<ServerDetail | null>(null);
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<TextMessage[]>([]);
+  const [messageDraft, setMessageDraft] = useState('');
+  const [serverName, setServerName] = useState('');
+  const [serverInvite, setServerInvite] = useState('');
+  const [securityStage, setSecurityStage] = useState<'overview' | 'password' | 'totp-enable' | 'totp-disable'>('overview');
+  const [securityCode, setSecurityCode] = useState('');
+  const [securityPassword, setSecurityPassword] = useState('');
+  const [securityPasswordConfirmation, setSecurityPasswordConfirmation] = useState('');
+  const [twoFactorSetup, setTwoFactorSetup] = useState<TwoFactorSetup | null>(null);
+  const [twoFactorQr, setTwoFactorQr] = useState<string | null>(null);
   const mediaSnapshot = useSyncExternalStore(media.subscribe, media.getSnapshot, media.getSnapshot);
 
   const updateUser = (next: PublicUser | null): void => {
@@ -40,12 +60,17 @@ export default function App(): ReactNode {
     setUser(next);
   };
 
-  const refreshDevices = useCallback(async (): Promise<void> => {
+  const refreshDevices = useCallback(async (requestPermission = false): Promise<void> => {
+    let permissionStream: MediaStream | null = null;
     try {
+      if (requestPermission) permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const all = await navigator.mediaDevices.enumerateDevices();
       setDevices({ inputs: all.filter((device) => device.kind === 'audioinput'), outputs: all.filter((device) => device.kind === 'audiooutput') });
-    } catch {
+    } catch (caught) {
+      if (requestPermission) throw new Error('Не удалось получить доступ к аудиоустройствам. Проверьте разрешение на микрофон в Windows.', { cause: caught });
       setDevices({ inputs: [], outputs: [] });
+    } finally {
+      permissionStream?.getTracks().forEach((track) => track.stop());
     }
   }, []);
 
@@ -88,6 +113,26 @@ export default function App(): ReactNode {
     return () => clearInterval(timer);
   }, [retrySeconds]);
 
+  useEffect(() => {
+    if (!user || (screen !== 'home' && screen !== 'server')) return;
+    let active = true;
+    void apiClient.listServers().then((items) => { if (active) setServers(items); }).catch((caught) => { if (active) setError(userMessage(caught)); });
+    return () => { active = false; };
+  }, [screen, user]);
+
+  useEffect(() => {
+    if (screen !== 'server' || !serverDetail || !activeChannelId) return;
+    const channel = serverDetail.channels.find((candidate) => candidate.id === activeChannelId);
+    if (channel?.type !== 'text') return;
+    let active = true;
+    const refresh = (): void => {
+      void apiClient.listMessages(channel.id).then((items) => { if (active) setMessages(items); }).catch((caught) => { if (active) setError(userMessage(caught)); });
+    };
+    refresh();
+    const timer = setInterval(refresh, 3_000);
+    return () => { active = false; clearInterval(timer); };
+  }, [screen, serverDetail, activeChannelId]);
+
   const run = async (action: () => Promise<void>): Promise<void> => {
     setBusy(true);
     setError(null);
@@ -102,7 +147,22 @@ export default function App(): ReactNode {
 
   const requestCode = (): void => {
     void run(async () => {
-      const response = await apiClient.requestCode(email);
+      let response: { retryAfterSeconds: number };
+      if (authMode === 'register') {
+        const validPassword = passwordSchema.parse(password);
+        if (validPassword !== passwordConfirmation) throw new Error('Пароли не совпадают');
+        response = await apiClient.requestRegistration(email, validPassword);
+        setSecondFactor('email');
+      } else if (authMode === 'password') {
+        const validPassword = passwordSchema.parse(password);
+        const challenge = await apiClient.beginPasswordLogin(email, validPassword, authStage === 'otp' ? secondFactor : 'auto');
+        response = challenge;
+        setSecondFactor(challenge.factor);
+        setTotpAvailable(challenge.factor === 'totp');
+      } else {
+        response = await apiClient.requestCode(email);
+        setSecondFactor('email');
+      }
       setRetrySeconds(response.retryAfterSeconds);
       setAuthStage('otp');
     });
@@ -110,10 +170,73 @@ export default function App(): ReactNode {
 
   const verifyCode = (): void => {
     void run(async () => {
-      const response = await apiClient.verifyCode(email, otp);
+      const response = authMode === 'register'
+        ? await apiClient.verifyRegistration(email, otp)
+        : authMode === 'password'
+          ? await apiClient.completePasswordLogin(email, password, otp, secondFactor)
+          : await apiClient.verifyCode(email, otp);
       updateUser(response.user);
       if (!response.user.displayName) setScreen('profile');
       else setScreen(pendingCode ? 'invite' : 'home');
+    });
+  };
+
+  const switchPasswordFactor = (factor: 'email' | 'totp'): void => {
+    void run(async () => {
+      const challenge = await apiClient.beginPasswordLogin(email, password, factor);
+      setSecondFactor(challenge.factor);
+      setRetrySeconds(challenge.retryAfterSeconds);
+      setOtp('');
+    });
+  };
+
+  const resetSecurity = (): void => {
+    setSecurityStage('overview');
+    setSecurityCode('');
+    setSecurityPassword('');
+    setSecurityPasswordConfirmation('');
+    setTwoFactorSetup(null);
+    setTwoFactorQr(null);
+    setError(null);
+  };
+
+  const startPasswordSetup = (): void => {
+    void run(async () => {
+      const response = await apiClient.requestPasswordSetup();
+      setRetrySeconds(response.retryAfterSeconds);
+      setSecurityStage('password');
+    });
+  };
+
+  const savePassword = (): void => {
+    void run(async () => {
+      const validPassword = passwordSchema.parse(securityPassword);
+      if (validPassword !== securityPasswordConfirmation) throw new Error('Пароли не совпадают');
+      updateUser(await apiClient.setPassword(securityCode, validPassword));
+      resetSecurity();
+    });
+  };
+
+  const startTwoFactorSetup = (): void => {
+    void run(async () => {
+      const setup = await apiClient.beginTwoFactorSetup();
+      setTwoFactorSetup(setup);
+      setTwoFactorQr(await QRCode.toDataURL(setup.otpauthUri, { width: 220, margin: 1, color: { dark: '#1b1110', light: '#fff8f0' } }));
+      setSecurityStage('totp-enable');
+    });
+  };
+
+  const enableTwoFactor = (): void => {
+    void run(async () => {
+      updateUser(await apiClient.enableTwoFactor(securityCode));
+      resetSecurity();
+    });
+  };
+
+  const disableTwoFactor = (): void => {
+    void run(async () => {
+      updateUser(await apiClient.disableTwoFactor(securityCode));
+      resetSecurity();
     });
   };
 
@@ -126,11 +249,109 @@ export default function App(): ReactNode {
     });
   };
 
+  const openServer = (serverId: string): void => {
+    void run(async () => {
+      const detail = await apiClient.getServer(serverId);
+      setServerDetail(detail);
+      setActiveChannelId(detail.channels.find((channel) => channel.type === 'text')?.id ?? detail.channels[0]?.id ?? null);
+      setMessages([]);
+      setScreen('server');
+    });
+  };
+
+  const refreshServer = async (): Promise<ServerDetail> => {
+    if (!serverDetail) throw new Error('Сервер не выбран');
+    const detail = await apiClient.getServer(serverDetail.id);
+    setServerDetail(detail);
+    setServers(await apiClient.listServers());
+    return detail;
+  };
+
+  const createServer = (): void => {
+    void run(async () => {
+      const detail = await apiClient.createServer(serverNameSchema.parse(serverName));
+      setServerDetail(detail);
+      setActiveChannelId(detail.channels.find((channel) => channel.type === 'text')?.id ?? detail.channels[0]?.id ?? null);
+      setServerName('');
+      setServers(await apiClient.listServers());
+      setScreen('server');
+    });
+  };
+
+  const joinServer = (): void => {
+    void run(async () => {
+      const detail = await apiClient.joinServer(serverInviteCodeSchema.parse(serverInvite));
+      setServerDetail(detail);
+      setActiveChannelId(detail.channels.find((channel) => channel.type === 'text')?.id ?? detail.channels[0]?.id ?? null);
+      setServerInvite('');
+      setServers(await apiClient.listServers());
+      setScreen('server');
+    });
+  };
+
+  const sendMessage = (): void => {
+    void run(async () => {
+      if (!activeChannelId) return;
+      const content = messageContentSchema.parse(messageDraft);
+      const sent = await apiClient.createMessage(activeChannelId, content);
+      setMessageDraft('');
+      setMessages((current) => [...current.filter((message) => message.id !== sent.id), sent]);
+    });
+  };
+
+  const deleteMessage = (messageId: string): void => {
+    void run(async () => {
+      await apiClient.deleteMessage(messageId);
+      setMessages((current) => current.filter((message) => message.id !== messageId));
+    });
+  };
+
+  const createCommunityChannel = (name: string, type: 'text' | 'voice'): void => {
+    void run(async () => {
+      if (!serverDetail) return;
+      const channel = await apiClient.createServerChannel(serverDetail.id, channelNameSchema.parse(name), type);
+      const detail = await refreshServer();
+      setActiveChannelId(detail.channels.some((candidate) => candidate.id === channel.id) ? channel.id : activeChannelId);
+    });
+  };
+
+  const deleteCommunityChannel = (channelId: string): void => {
+    void run(async () => {
+      await apiClient.deleteServerChannel(channelId);
+      const detail = await refreshServer();
+      if (activeChannelId === channelId) setActiveChannelId(detail.channels[0]?.id ?? null);
+    });
+  };
+
+  const createCommunityRole = (name: string, color: string, permissions: ServerPermission[]): void => {
+    void run(async () => {
+      if (!serverDetail) return;
+      await apiClient.createServerRole(serverDetail.id, roleNameSchema.parse(name), color, permissions);
+      await refreshServer();
+    });
+  };
+
+  const assignCommunityRoles = (userId: string, roleIds: string[]): void => {
+    void run(async () => {
+      if (!serverDetail) return;
+      await apiClient.assignServerMemberRoles(serverDetail.id, userId, roleIds);
+      await refreshServer();
+    });
+  };
+
+  const kickCommunityMember = (userId: string): void => {
+    void run(async () => {
+      if (!serverDetail) return;
+      await apiClient.kickServerMember(serverDetail.id, userId);
+      await refreshServer();
+    });
+  };
+
   const enterRoom = async (room: RoomConnection): Promise<void> => {
     await media.connect(room, settings);
     setConnection(room);
     setRoomCode(room.code);
-    const nextSettings = { ...settings, lastRoomCode: room.code };
+    const nextSettings = room.contextType === 'channel' ? { ...settings } : { ...settings, lastRoomCode: room.code };
     setSettings(nextSettings);
     await window.desktop.updateLocalSettings(nextSettings);
     setScreen('room');
@@ -138,6 +359,7 @@ export default function App(): ReactNode {
   };
 
   const createRoom = (): void => { void run(async () => enterRoom(await apiClient.createRoom())); };
+  const connectVoiceChannel = (channelId: string): void => { void run(async () => enterRoom(await apiClient.connectVoiceChannel(channelId))); };
   const joinRoom = (code = roomCode): void => {
     void run(async () => {
       const normalized = roomCodeSchema.parse(code);
@@ -158,9 +380,10 @@ export default function App(): ReactNode {
 
   const leaveRoom = (): void => {
     void run(async () => {
+      const returnToServer = connection?.contextType === 'channel' && serverDetail;
       await media.disconnect();
       setConnection(null);
-      setScreen(userRef.current ? 'home' : 'auth');
+      setScreen(returnToServer ? 'server' : userRef.current ? 'home' : 'auth');
     });
   };
 
@@ -170,7 +393,9 @@ export default function App(): ReactNode {
       await apiClient.logout();
       updateUser(null);
       setConnection(null);
-      setAuthStage('email');
+      setServerDetail(null);
+      setServers([]);
+      setAuthStage('credentials');
       setOtp('');
       setScreen('auth');
     });
@@ -185,6 +410,13 @@ export default function App(): ReactNode {
     if (screen === 'room') {
       void run(() => key === 'microphoneDeviceId' ? media.switchMicrophone(value) : media.switchOutput(value));
     }
+  };
+
+  const setScreenShareVolume = (value: number): void => {
+    const next = { ...settings, volume: value };
+    setSettings(next);
+    media.setScreenShareAudioVolume(value);
+    void window.desktop.updateLocalSettings(next);
   };
 
   const showSourcePicker = (): void => {
@@ -229,17 +461,20 @@ export default function App(): ReactNode {
 
   const copyInvite = (): void => {
     if (!connection) return;
-    const text = `Присоединяйтесь к голосовой комнате «Ватрушка»\nКод: ${connection.code}\nСсылка: vatrushka://join/${connection.code}\nОткройте ссылку в приложении или введите код вручную.`;
+    const text = connection.contextType === 'channel'
+      ? `Присоединяйтесь к серверу «${serverDetail?.name ?? 'Ватрушка'}»\nКод приглашения: ${connection.code}\nОткройте «Ватрушку» и введите этот код в разделе серверов.`
+      : `Присоединяйтесь к голосовой комнате «Ватрушка»\nКод: ${connection.code}\nСсылка: vatrushka://join/${connection.code}\nОткройте ссылку в приложении или введите код вручную.`;
     void window.desktop.copyToClipboard(text);
   };
 
   if (screen === 'boot') return <main className="bootScreen"><div className="pulseLogo"><span /></div><span>Подключаем «Ватрушку»…</span></main>;
-  if (screen === 'auth') return <AuthPanel stage={authStage} email={email} code={otp} retrySeconds={retrySeconds} busy={busy} error={error} onEmailChange={setEmail} onCodeChange={setOtp} onRequest={requestCode} onVerify={verifyCode} onBack={() => { setAuthStage('email'); setError(null); }} />;
+  if (screen === 'auth') return <AuthPanel mode={authMode} stage={authStage} factor={secondFactor} totpAvailable={totpAvailable} email={email} code={otp} password={password} passwordConfirmation={passwordConfirmation} retrySeconds={retrySeconds} busy={busy} error={error} onMode={(mode) => { setAuthMode(mode); setAuthStage('credentials'); setOtp(''); setError(null); }} onEmailChange={setEmail} onCodeChange={setOtp} onPasswordChange={setPasswordValue} onPasswordConfirmationChange={setPasswordConfirmation} onRequest={requestCode} onVerify={verifyCode} onFactor={switchPasswordFactor} onBack={() => { setAuthStage('credentials'); setOtp(''); setError(null); }} />;
   if (screen === 'profile') return <ProfilePanel value={displayName} busy={busy} error={error} onChange={setDisplayName} onSave={saveProfile} />;
   if (screen === 'invite' && pendingCode) return <InvitePanel code={pendingCode} authenticated={Boolean(user)} error={error} busy={busy} onJoin={() => joinRoom(pendingCode)} onLogin={() => setScreen('auth')} onGuest={() => setScreen('guest')} onBack={() => setScreen(user ? 'home' : 'auth')} />;
   if (screen === 'guest' && pendingCode) return <GuestJoinPanel code={pendingCode} name={guestName} busy={busy} error={error} onName={setGuestName} onJoin={joinGuest} onBack={() => setScreen('invite')} />;
-  if (screen === 'home' && user) return <HomePanel user={user} version={version} roomCode={roomCode} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} onRoomCode={setRoomCode} onCreate={createRoom} onJoin={() => joinRoom()} onLogout={logout} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} />;
-  if (screen === 'room' && connection) return <><RoomView connection={connection} snapshot={mediaSnapshot} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} locked={locked} busy={busy} error={error} onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))} onShare={showSourcePicker} onCopy={copyInvite} onLeave={leaveRoom} onLock={() => void run(async () => { const result = await apiClient.setRoomLock(connection.roomId, !locked); setLocked(result.isLocked); })} onClose={() => void run(async () => { await apiClient.closeRoom(connection.roomId); await media.disconnect(false); setConnection(null); setScreen('home'); })} onKick={(identity) => void run(() => apiClient.kickParticipant(connection.roomId, identity))} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onStartAudio={() => void media.startAudio()} />{sources && <SourcePicker sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}</>;
+  if (screen === 'home' && user) return <><HomePanel user={user} version={version} roomCode={roomCode} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} servers={servers} serverName={serverName} serverInvite={serverInvite} onRoomCode={setRoomCode} onCreate={createRoom} onJoin={() => joinRoom()} onLogout={logout} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onOpenServer={openServer} />{securityOpen && <SecurityPanel user={user} stage={securityStage} code={securityCode} password={securityPassword} passwordConfirmation={securityPasswordConfirmation} setup={twoFactorSetup} qrDataUrl={twoFactorQr} busy={busy} error={error} onCode={setSecurityCode} onPassword={setSecurityPassword} onPasswordConfirmation={setSecurityPasswordConfirmation} onStartPassword={startPasswordSetup} onSavePassword={savePassword} onStartTwoFactor={startTwoFactorSetup} onEnableTwoFactor={enableTwoFactor} onAskDisable={() => { setSecurityCode(''); setSecurityStage('totp-disable'); }} onDisableTwoFactor={disableTwoFactor} onBack={resetSecurity} onClose={() => { resetSecurity(); setSecurityOpen(false); }} />}</>;
+  if (screen === 'server' && user && serverDetail) return <ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} busy={busy} error={error} onBack={() => setScreen('home')} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onDeleteMessage={deleteMessage} onConnectVoice={connectVoiceChannel} onCopyInvite={() => void window.desktop.copyToClipboard(`Присоединяйтесь к серверу «${serverDetail.name}»\nКод приглашения: ${serverDetail.inviteCode}`)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onAssignRoles={assignCommunityRoles} onKickMember={kickCommunityMember} />;
+  if (screen === 'room' && connection) return <><RoomView connection={connection} snapshot={mediaSnapshot} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} locked={locked} busy={busy} error={error} onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))} onShare={showSourcePicker} onCopy={copyInvite} onLeave={leaveRoom} onLock={() => void run(async () => { const result = await apiClient.setRoomLock(connection.roomId, !locked); setLocked(result.isLocked); })} onClose={() => void run(async () => { await apiClient.closeRoom(connection.roomId); await media.disconnect(false); setConnection(null); setScreen('home'); })} onKick={(identity) => void run(() => apiClient.kickMediaParticipant(connection, identity))} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onStartAudio={() => void media.startAudio()} onScreenAudioMute={() => media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)} onScreenAudioVolume={setScreenShareVolume} />{sources && <SourcePicker sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}</>;
   return <main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>;
 }
 

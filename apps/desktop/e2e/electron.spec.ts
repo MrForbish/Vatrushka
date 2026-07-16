@@ -18,7 +18,7 @@ test.afterEach(async () => {
 test('launches the secure auth shell with an allowlisted preload API', async () => {
   application = await electron.launch({ args: ['.', '--user-data-dir=.e2e-user-data'], cwd: process.cwd(), env: electronEnvironment() });
   const window = await application.firstWindow();
-  await expect(window.getByRole('heading', { name: 'Войдите без пароля' })).toBeVisible();
+  await expect(window.getByRole('heading', { name: 'С возвращением' })).toBeVisible();
   await expect(window.getByLabel('Email')).toBeVisible();
 
   expect(await window.evaluate(() => typeof (window as unknown as { require?: unknown }).require)).toBe('undefined');

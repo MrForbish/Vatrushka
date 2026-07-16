@@ -2,9 +2,17 @@ import {
   API_PREFIX,
   type ApiErrorBody,
   type AuthResponse,
+  type PasswordLoginChallenge,
   type PublicRoom,
   type PublicUser,
   type RoomConnection,
+  type ServerChannel,
+  type ServerDetail,
+  type ServerPermission,
+  type ServerRole,
+  type ServerSummary,
+  type TextMessage,
+  type TwoFactorSetup,
 } from '@vatrushka/shared';
 
 const apiBase = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '')}${API_PREFIX}`;
@@ -62,6 +70,58 @@ export class ApiClient {
     return response;
   }
 
+  requestRegistration(email: string, password: string): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
+    return this.request('/auth/register/request-code', { method: 'POST', body: { email, password } });
+  }
+
+  async verifyRegistration(email: string, code: string): Promise<AuthResponse> {
+    const response = await this.request<AuthResponse>('/auth/register/verify-code', {
+      method: 'POST',
+      body: { email, code, deviceName: await this.deviceName() },
+    });
+    await this.acceptAuth(response);
+    return response;
+  }
+
+  beginPasswordLogin(email: string, password: string, factor: 'auto' | 'email' | 'totp' = 'auto'): Promise<PasswordLoginChallenge> {
+    return this.request('/auth/password/begin', { method: 'POST', body: { email, password, factor } });
+  }
+
+  async completePasswordLogin(email: string, password: string, code: string, factor: 'email' | 'totp'): Promise<AuthResponse> {
+    const response = await this.request<AuthResponse>('/auth/password/complete', {
+      method: 'POST',
+      body: { email, password, code, factor, deviceName: await this.deviceName() },
+    });
+    await this.acceptAuth(response);
+    return response;
+  }
+
+  requestPasswordSetup(): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
+    return this.request('/me/password/request-code', { method: 'POST', auth: true });
+  }
+
+  async setPassword(code: string, password: string): Promise<PublicUser> {
+    const user = await this.request<PublicUser>('/me/password', { method: 'PUT', body: { code, password }, auth: true });
+    this.user = user;
+    return user;
+  }
+
+  beginTwoFactorSetup(): Promise<TwoFactorSetup> {
+    return this.request('/me/2fa/setup', { method: 'POST', auth: true });
+  }
+
+  async enableTwoFactor(code: string): Promise<PublicUser> {
+    const user = await this.request<PublicUser>('/me/2fa/enable', { method: 'POST', body: { code }, auth: true });
+    this.user = user;
+    return user;
+  }
+
+  async disableTwoFactor(code: string): Promise<PublicUser> {
+    const user = await this.request<PublicUser>('/me/2fa', { method: 'DELETE', body: { code }, auth: true });
+    this.user = user;
+    return user;
+  }
+
   async updateProfile(displayName: string): Promise<PublicUser> {
     const user = await this.request<PublicUser>('/me', { method: 'PATCH', body: { displayName }, auth: true });
     this.user = user;
@@ -75,6 +135,62 @@ export class ApiClient {
     } finally {
       await this.clearSession();
     }
+  }
+
+  listServers(): Promise<ServerSummary[]> {
+    return this.request('/servers', { auth: true });
+  }
+
+  createServer(name: string): Promise<ServerDetail> {
+    return this.request('/servers', { method: 'POST', body: { name }, auth: true });
+  }
+
+  joinServer(inviteCode: string): Promise<ServerDetail> {
+    return this.request('/servers/join', { method: 'POST', body: { inviteCode }, auth: true });
+  }
+
+  getServer(serverId: string): Promise<ServerDetail> {
+    return this.request(`/servers/${serverId}`, { auth: true });
+  }
+
+  createServerChannel(serverId: string, name: string, type: 'text' | 'voice'): Promise<ServerChannel> {
+    return this.request(`/servers/${serverId}/channels`, { method: 'POST', body: { name, type }, auth: true });
+  }
+
+  async deleteServerChannel(channelId: string): Promise<void> {
+    await this.request(`/channels/${channelId}`, { method: 'DELETE', auth: true });
+  }
+
+  createServerRole(serverId: string, name: string, color: string, permissions: ServerPermission[]): Promise<ServerRole> {
+    return this.request(`/servers/${serverId}/roles`, { method: 'POST', body: { name, color, permissions }, auth: true });
+  }
+
+  updateServerRole(serverId: string, roleId: string, values: Partial<Pick<ServerRole, 'name' | 'color' | 'permissions'>>): Promise<ServerRole> {
+    return this.request(`/servers/${serverId}/roles/${roleId}`, { method: 'PATCH', body: values, auth: true });
+  }
+
+  async assignServerMemberRoles(serverId: string, userId: string, roleIds: string[]): Promise<void> {
+    await this.request(`/servers/${serverId}/members/${userId}/roles`, { method: 'PUT', body: { roleIds }, auth: true });
+  }
+
+  async kickServerMember(serverId: string, userId: string): Promise<void> {
+    await this.request(`/servers/${serverId}/members/${userId}`, { method: 'DELETE', auth: true });
+  }
+
+  listMessages(channelId: string): Promise<TextMessage[]> {
+    return this.request(`/channels/${channelId}/messages?limit=100`, { auth: true });
+  }
+
+  createMessage(channelId: string, content: string): Promise<TextMessage> {
+    return this.request(`/channels/${channelId}/messages`, { method: 'POST', body: { content }, auth: true });
+  }
+
+  async deleteMessage(messageId: string): Promise<void> {
+    await this.request(`/messages/${messageId}`, { method: 'DELETE', auth: true });
+  }
+
+  connectVoiceChannel(channelId: string): Promise<RoomConnection> {
+    return this.request(`/channels/${channelId}/connect`, { method: 'POST', auth: true });
   }
 
   createRoom(): Promise<RoomConnection> {
@@ -105,6 +221,11 @@ export class ApiClient {
     await this.request(`/rooms/${roomId}/participants/${encodeURIComponent(participantIdentity)}`, { method: 'DELETE', auth: true });
   }
 
+  async kickMediaParticipant(connection: RoomConnection, participantIdentity: string): Promise<void> {
+    const resource = connection.contextType === 'channel' ? 'channels' : 'rooms';
+    await this.request(`/${resource}/${connection.roomId}/participants/${encodeURIComponent(participantIdentity)}`, { method: 'DELETE', auth: true });
+  }
+
   claimScreenShare(connection: RoomConnection): Promise<{ expiresAt: string }> {
     return this.roomAction(connection, 'claim');
   }
@@ -118,7 +239,8 @@ export class ApiClient {
   }
 
   private roomAction(connection: RoomConnection, action: 'claim' | 'heartbeat' | 'release'): Promise<{ expiresAt: string }> {
-    return this.request(`/rooms/${connection.roomId}/screen-share/${action}`, {
+    const resource = connection.contextType === 'channel' ? 'channels' : 'rooms';
+    return this.request(`/${resource}/${connection.roomId}/screen-share/${action}`, {
       method: 'POST',
       body: { participantIdentity: connection.participantIdentity },
       ...(connection.guestSessionToken ? { guestToken: connection.guestSessionToken } : { auth: true }),
@@ -156,6 +278,10 @@ export class ApiClient {
     this.refreshToken = null;
     this.user = null;
     await window.desktop.clearRefreshToken();
+  }
+
+  private async deviceName(): Promise<string> {
+    return `Ватрушка · ${await window.desktop.getPlatform()} Desktop`;
   }
 
   private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {

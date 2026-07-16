@@ -27,7 +27,7 @@ export class SmtpMailer implements Mailer {
     await this.transporter.sendMail({
       from: { name: this.config.SMTP_FROM_NAME, address: this.config.SMTP_FROM_EMAIL },
       to: email,
-      subject: `${appName}: код входа`,
+      subject: `${appName}: код подтверждения`,
       text: `${appName}\n\nВаш одноразовый код: ${code}\nКод действует ${expiresInMinutes} минут.\n\nЕсли вы не запрашивали код, проигнорируйте письмо.`,
       html: `<main style="font-family:system-ui,sans-serif;max-width:520px;margin:auto;color:#172033"><h1>${escapeHtml(appName)}</h1><p>Ваш одноразовый код:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>Код действует ${expiresInMinutes} минут.</p><p style="color:#667085">Если вы не запрашивали код, проигнорируйте письмо.</p></main>`,
     });

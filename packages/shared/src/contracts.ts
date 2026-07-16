@@ -1,9 +1,97 @@
 import type { LocalSettings } from './schemas.js';
 
+export type PlatformRole = 'member' | 'admin' | 'owner';
+
+export const serverPermissions = [
+  'VIEW_SERVER',
+  'MANAGE_SERVER',
+  'MANAGE_CHANNELS',
+  'MANAGE_ROLES',
+  'CREATE_INVITES',
+  'KICK_MEMBERS',
+  'VIEW_CHANNEL',
+  'SEND_MESSAGES',
+  'MANAGE_MESSAGES',
+  'CONNECT_VOICE',
+  'SPEAK',
+  'STREAM',
+  'MUTE_MEMBERS',
+] as const;
+
+export type ServerPermission = (typeof serverPermissions)[number];
+export type ServerChannelType = 'text' | 'voice';
+
+export interface ServerSummary {
+  id: string;
+  name: string;
+  inviteCode: string;
+  ownerUserId: string;
+  memberCount: number;
+  createdAt: string;
+}
+
+export interface ServerChannel {
+  id: string;
+  serverId: string;
+  name: string;
+  type: ServerChannelType;
+  position: number;
+}
+
+export interface ServerRole {
+  id: string;
+  serverId: string;
+  name: string;
+  color: string;
+  position: number;
+  isDefault: boolean;
+  permissions: ServerPermission[];
+}
+
+export interface ServerMember {
+  userId: string;
+  displayName: string;
+  platformRole: PlatformRole;
+  joinedAt: string;
+  roles: ServerRole[];
+}
+
+export interface ServerDetail extends ServerSummary {
+  channels: ServerChannel[];
+  roles: ServerRole[];
+  members: ServerMember[];
+  permissions: ServerPermission[];
+}
+
+export interface TextMessage {
+  id: string;
+  channelId: string;
+  authorUserId: string;
+  authorDisplayName: string;
+  authorPlatformRole: PlatformRole;
+  content: string;
+  createdAt: string;
+  editedAt: string | null;
+}
+
 export interface PublicUser {
   id: string;
   email: string;
   displayName: string | null;
+  platformRole: PlatformRole;
+  hasPassword: boolean;
+  twoFactorEnabled: boolean;
+}
+
+export interface PasswordLoginChallenge {
+  status: 'SECOND_FACTOR_REQUIRED';
+  factor: 'email' | 'totp';
+  retryAfterSeconds: number;
+}
+
+export interface TwoFactorSetup {
+  secret: string;
+  otpauthUri: string;
 }
 
 export interface AuthResponse {
@@ -33,6 +121,11 @@ export interface RoomConnection {
   participantIdentity: string;
   participantDisplayName: string;
   isOwner: boolean;
+  contextType?: 'room' | 'channel';
+  serverId?: string;
+  channelId?: string;
+  canSpeak?: boolean;
+  canStream?: boolean;
   guestSessionToken?: string;
 }
 
@@ -40,6 +133,7 @@ export interface DesktopSourceInfo {
   id: string;
   name: string;
   thumbnailDataUrl: string;
+  appIconDataUrl?: string;
   type: 'screen' | 'window';
 }
 

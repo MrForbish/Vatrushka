@@ -7,6 +7,9 @@ import { SmtpMailer } from './services/mailer.js';
 
 const config = loadConfig();
 const database = createPostgresStore(config.DATABASE_URL);
+if (config.PLATFORM_OWNER_EMAIL) {
+  await database.store.setPlatformRoleByEmail(config.PLATFORM_OWNER_EMAIL, 'owner', new Date());
+}
 const service = new VatrushkaService({
   config,
   store: database.store,
