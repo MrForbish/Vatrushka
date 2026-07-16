@@ -47,17 +47,21 @@ export function WorkspaceCard({ active = false, onSelect, workspace }: Workspace
 export interface WorkspaceLibraryProps {
   workspaces: WorkspaceNavigationItem[];
   activeWorkspaceId?: string;
+  directActive?: boolean;
+  directUnreadCount?: number;
   onSelect: (id: string) => void;
   onHome: () => void;
+  onDirectMessages?: () => void;
   onCreate: () => void;
   onJoin: () => void;
 }
 
-export function WorkspaceLibrary({ activeWorkspaceId, onCreate, onHome, onJoin, onSelect, workspaces }: WorkspaceLibraryProps): React.JSX.Element {
+export function WorkspaceLibrary({ activeWorkspaceId, directActive = false, directUnreadCount = 0, onCreate, onDirectMessages, onHome, onJoin, onSelect, workspaces }: WorkspaceLibraryProps): React.JSX.Element {
   return (
     <aside aria-label="Библиотека серверов" className="vui-workspace-library">
       <div className="vui-workspace-library__brand"><span aria-hidden="true">В</span><strong>Ватрушка</strong></div>
       <button className="vui-workspace-library__home" onClick={onHome} type="button"><Icon name="home" size={18} /><span>Главная</span></button>
+      {onDirectMessages === undefined ? null : <button aria-current={directActive ? 'page' : undefined} className="vui-workspace-library__home" data-active={directActive || undefined} onClick={onDirectMessages} type="button"><Icon name="message" size={18} /><span>Личные сообщения</span>{directUnreadCount === 0 ? null : <Badge tone="danger">{directUnreadCount > 99 ? '99+' : directUnreadCount}</Badge>}</button>}
       <div className="vui-workspace-library__heading"><span>Серверы</span><Badge>{workspaces.length}</Badge></div>
       <nav aria-label="Список серверов" className="vui-workspace-library__list">
         {workspaces.map((workspace) => <WorkspaceCard active={workspace.id === activeWorkspaceId} key={workspace.id} onSelect={onSelect} workspace={workspace} />)}

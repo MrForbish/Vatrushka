@@ -2,6 +2,9 @@ import {
   API_PREFIX,
   type ApiErrorBody,
   type AuthResponse,
+  type DirectConversationSummary,
+  type DirectMessage,
+  type DirectMessageCandidate,
   type PasswordLoginChallenge,
   type PublicRoom,
   type PublicUser,
@@ -221,6 +224,56 @@ export class ApiClient {
 
   downloadMessageAttachment(attachmentId: string): Promise<Blob> {
     return this.request(`/attachments/${attachmentId}/content`, { auth: true, responseType: 'blob' });
+  }
+
+  listDirectConversations(): Promise<DirectConversationSummary[]> {
+    return this.request('/direct-conversations', { auth: true });
+  }
+
+  listDirectMessageCandidates(): Promise<DirectMessageCandidate[]> {
+    return this.request('/direct-conversations/candidates', { auth: true });
+  }
+
+  createDirectConversation(participantUserId: string): Promise<DirectConversationSummary> {
+    return this.request('/direct-conversations', { method: 'POST', body: { userId: participantUserId }, auth: true });
+  }
+
+  listDirectMessages(conversationId: string): Promise<DirectMessage[]> {
+    return this.request(`/direct-conversations/${conversationId}/messages?limit=100`, { auth: true });
+  }
+
+  createDirectMessage(conversationId: string, content: string, replyToMessageId?: string): Promise<DirectMessage> {
+    return this.request(`/direct-conversations/${conversationId}/messages`, { method: 'POST', body: { content, ...(replyToMessageId === undefined ? {} : { replyToMessageId }) }, auth: true });
+  }
+
+  updateDirectMessage(messageId: string, content: string): Promise<DirectMessage> {
+    return this.request(`/direct-messages/${messageId}`, { method: 'PATCH', body: { content }, auth: true });
+  }
+
+  setDirectMessageReaction(messageId: string, emoji: string, active: boolean): Promise<DirectMessage> {
+    return this.request(`/direct-messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: active ? 'PUT' : 'DELETE', auth: true });
+  }
+
+  async markDirectConversationRead(conversationId: string, messageId: string): Promise<void> {
+    await this.request(`/direct-conversations/${conversationId}/read`, { method: 'PUT', body: { messageId }, auth: true });
+  }
+
+  async deleteDirectMessage(messageId: string): Promise<void> {
+    await this.request(`/direct-messages/${messageId}`, { method: 'DELETE', auth: true });
+  }
+
+  uploadDirectMessageAttachment(messageId: string, file: File): Promise<DirectMessage> {
+    const formData = new FormData();
+    formData.set('file', file, file.name);
+    return this.request(`/direct-messages/${messageId}/attachments`, { method: 'POST', formData, auth: true });
+  }
+
+  deleteDirectMessageAttachment(attachmentId: string): Promise<DirectMessage> {
+    return this.request(`/direct-attachments/${attachmentId}`, { method: 'DELETE', auth: true });
+  }
+
+  downloadDirectMessageAttachment(attachmentId: string): Promise<Blob> {
+    return this.request(`/direct-attachments/${attachmentId}/content`, { auth: true, responseType: 'blob' });
   }
 
   connectVoiceChannel(channelId: string): Promise<RoomConnection> {

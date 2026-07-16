@@ -2,14 +2,15 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from '
 import type { ReactNode } from 'react';
 import QRCode from 'qrcode';
 
-import { channelNameSchema, displayNameSchema, messageContentSchema, passwordSchema, roleNameSchema, roomCodeSchema, serverInviteCodeSchema, serverNameSchema, type DesktopSourceInfo, type LocalSettings, type PublicUser, type RoomConnection, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type TwoFactorSetup } from '@vatrushka/shared';
+import { channelNameSchema, displayNameSchema, messageContentSchema, passwordSchema, roleNameSchema, roomCodeSchema, serverInviteCodeSchema, serverNameSchema, type DesktopSourceInfo, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type LocalSettings, type PublicUser, type RoomConnection, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type TwoFactorSetup } from '@vatrushka/shared';
 
 import { apiClient, ClientError } from './api.js';
 import { AuthPanel, GuestJoinPanel, HomePanel, InvitePanel, ProfilePanel, RoomView, SecurityPanel, SourcePicker } from './components.js';
+import { DirectMessagesView } from './features/direct-messages/index.js';
 import { ServerView } from './features/servers/index.js';
 import { MediaSession } from './media.js';
 
-type Screen = 'boot' | 'auth' | 'profile' | 'home' | 'server' | 'invite' | 'guest' | 'room';
+type Screen = 'boot' | 'auth' | 'profile' | 'home' | 'server' | 'direct' | 'invite' | 'guest' | 'room';
 const media = new MediaSession(apiClient);
 
 export default function App(): ReactNode {
@@ -46,6 +47,11 @@ export default function App(): ReactNode {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [messages, setMessages] = useState<TextMessage[]>([]);
   const [messageDraft, setMessageDraft] = useState('');
+  const [directConversations, setDirectConversations] = useState<DirectConversationSummary[]>([]);
+  const [directCandidates, setDirectCandidates] = useState<DirectMessageCandidate[]>([]);
+  const [activeDirectConversationId, setActiveDirectConversationId] = useState<string | null>(null);
+  const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
+  const [directMessageDraft, setDirectMessageDraft] = useState('');
   const [serverName, setServerName] = useState('');
   const [serverInvite, setServerInvite] = useState('');
   const [securityStage, setSecurityStage] = useState<'overview' | 'password' | 'totp-enable' | 'totp-disable'>('overview');
@@ -119,14 +125,14 @@ export default function App(): ReactNode {
   }, [retrySeconds]);
 
   useEffect(() => {
-    if (!user || (screen !== 'home' && screen !== 'server')) return;
+    if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
     let active = true;
     void apiClient.listServers().then((items) => { if (active) setServers(items); }).catch((caught) => { if (active) setError(userMessage(caught)); });
     return () => { active = false; };
   }, [screen, user]);
 
   useEffect(() => {
-    if (!user || (screen !== 'home' && screen !== 'server')) return;
+    if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
     if (notificationUserRef.current !== user.id) {
       notificationUserRef.current = user.id;
       notificationCursorRef.current = null;
@@ -177,6 +183,48 @@ export default function App(): ReactNode {
       setScreen('server');
     }).catch((caught) => setError(userMessage(caught)));
   }), []);
+
+  useEffect(() => {
+    if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
+    let active = true;
+    const refresh = (): void => {
+      void apiClient.listDirectConversations().then((items) => {
+        if (!active) return;
+        setDirectConversations(items);
+        if (screen === 'direct') setActiveDirectConversationId((current) => current !== null && items.some((conversation) => conversation.id === current) ? current : items[0]?.id ?? null);
+      }).catch((caught) => { if (active) setError(userMessage(caught)); });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 5_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [screen, user]);
+
+  useEffect(() => {
+    if (!user || screen !== 'direct') return;
+    let active = true;
+    void apiClient.listDirectMessageCandidates().then((items) => { if (active) setDirectCandidates(items); }).catch((caught) => { if (active) setError(userMessage(caught)); });
+    return () => { active = false; };
+  }, [screen, user]);
+
+  useEffect(() => {
+    if (screen !== 'direct' || activeDirectConversationId === null) return;
+    let active = true;
+    const conversationId = activeDirectConversationId;
+    const refresh = (): void => {
+      void apiClient.listDirectMessages(conversationId).then((items) => {
+        if (!active) return;
+        setDirectMessages((current) => [...items, ...current.filter((message) => message.id.startsWith('optimistic_'))]);
+        const latest = items.at(-1);
+        if (latest) {
+          void apiClient.markDirectConversationRead(conversationId, latest.id).catch((caught) => { if (active) setError(userMessage(caught)); });
+          setDirectConversations((current) => current.map((conversation) => conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation));
+        }
+      }).catch((caught) => { if (active) setError(userMessage(caught)); });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 3_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [screen, activeDirectConversationId]);
 
   useEffect(() => {
     if (screen !== 'server' || !serverDetail || !activeChannelId) return;
@@ -325,6 +373,35 @@ export default function App(): ReactNode {
     });
   };
 
+  const openDirectMessages = (): void => {
+    void run(async () => {
+      const [conversations, candidates] = await Promise.all([apiClient.listDirectConversations(), apiClient.listDirectMessageCandidates()]);
+      setDirectConversations(conversations);
+      setDirectCandidates(candidates);
+      setActiveDirectConversationId((current) => current !== null && conversations.some((conversation) => conversation.id === current) ? current : conversations[0]?.id ?? null);
+      setDirectMessages([]);
+      setDirectMessageDraft('');
+      setScreen('direct');
+    });
+  };
+
+  const selectDirectConversation = (conversationId: string): void => {
+    setActiveDirectConversationId(conversationId);
+    setDirectMessages([]);
+    setDirectMessageDraft('');
+    setError(null);
+  };
+
+  const createDirectConversation = (participantUserId: string): void => {
+    void run(async () => {
+      const conversation = await apiClient.createDirectConversation(participantUserId);
+      setDirectConversations((current) => [conversation, ...current.filter((item) => item.id !== conversation.id)]);
+      setActiveDirectConversationId(conversation.id);
+      setDirectMessages([]);
+      setDirectMessageDraft('');
+    });
+  };
+
   const refreshServer = async (): Promise<ServerDetail> => {
     if (!serverDetail) throw new Error('Сервер не выбран');
     const detail = await apiClient.getServer(serverDetail.id);
@@ -440,6 +517,94 @@ export default function App(): ReactNode {
     });
   };
 
+  const sendDirectMessage = (replyToMessageId?: string, files: File[] = []): void => {
+    void run(async () => {
+      if (activeDirectConversationId === null || !user) return;
+      const content = messageContentSchema.parse(directMessageDraft);
+      const conversationId = activeDirectConversationId;
+      const optimisticId = `optimistic_${crypto.randomUUID()}`;
+      const replyTarget = replyToMessageId === undefined ? null : directMessages.find((message) => message.id === replyToMessageId) ?? null;
+      const optimistic: DirectMessage = {
+        id: optimisticId,
+        conversationId,
+        authorUserId: user.id,
+        authorDisplayName: user.displayName ?? user.email.split('@')[0] ?? 'Пользователь',
+        authorPlatformRole: user.platformRole,
+        content,
+        replyTo: replyTarget === null ? null : { messageId: replyTarget.id, authorUserId: replyTarget.authorUserId, authorDisplayName: replyTarget.authorDisplayName, content: replyTarget.content },
+        reactions: [],
+        attachments: files.map((file) => ({ id: `optimistic_${crypto.randomUUID()}`, messageId: optimisticId, fileName: file.name, mimeType: file.type, size: file.size, createdAt: new Date().toISOString() })),
+        createdAt: new Date().toISOString(),
+        editedAt: null,
+      };
+      setDirectMessageDraft('');
+      setDirectMessages((current) => [...current, optimistic]);
+      let persisted: DirectMessage | null = null;
+      try {
+        persisted = await apiClient.createDirectMessage(conversationId, content, replyToMessageId);
+        const created = persisted;
+        setDirectMessages((current) => [...current.filter((message) => message.id !== optimisticId && message.id !== created.id), created]);
+        for (const file of files) {
+          persisted = await apiClient.uploadDirectMessageAttachment(persisted.id, file);
+          const updated = persisted;
+          setDirectMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
+        }
+        setDirectConversations(await apiClient.listDirectConversations());
+      } catch (caught) {
+        if (persisted === null) {
+          setDirectMessages((current) => current.filter((message) => message.id !== optimisticId));
+          setDirectMessageDraft(content);
+        }
+        throw caught;
+      }
+    });
+  };
+
+  const updateDirectMessage = (messageId: string, value: string): void => {
+    void run(async () => {
+      const updated = await apiClient.updateDirectMessage(messageId, messageContentSchema.parse(value));
+      setDirectMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
+      setDirectConversations(await apiClient.listDirectConversations());
+    });
+  };
+
+  const deleteDirectMessage = (messageId: string): void => {
+    void run(async () => {
+      await apiClient.deleteDirectMessage(messageId);
+      setDirectMessages((current) => current.filter((message) => message.id !== messageId));
+      setDirectConversations(await apiClient.listDirectConversations());
+    });
+  };
+
+  const toggleDirectMessageReaction = (messageId: string, emoji: string): void => {
+    void run(async () => {
+      const message = directMessages.find((candidate) => candidate.id === messageId);
+      if (!message) return;
+      const active = message.reactions.find((reaction) => reaction.emoji === emoji)?.reactedByCurrentUser !== true;
+      const updated = await apiClient.setDirectMessageReaction(messageId, emoji, active);
+      setDirectMessages((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
+    });
+  };
+
+  const deleteDirectAttachment = (attachmentId: string): void => {
+    void run(async () => {
+      const updated = await apiClient.deleteDirectMessageAttachment(attachmentId);
+      setDirectMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
+    });
+  };
+
+  const downloadDirectAttachment = (attachmentId: string, fileName: string): void => {
+    void run(async () => {
+      const blob = await apiClient.downloadDirectMessageAttachment(attachmentId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+    });
+  };
+
   const createCommunityChannel = (name: string, type: 'text' | 'voice'): void => {
     void run(async () => {
       if (!serverDetail) return;
@@ -529,6 +694,10 @@ export default function App(): ReactNode {
       setConnection(null);
       setServerDetail(null);
       setServers([]);
+      setDirectConversations([]);
+      setDirectCandidates([]);
+      setActiveDirectConversationId(null);
+      setDirectMessages([]);
       setAuthStage('credentials');
       setOtp('');
       setScreen('auth');
@@ -602,14 +771,16 @@ export default function App(): ReactNode {
   };
 
   const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityPanel user={user} stage={securityStage} code={securityCode} password={securityPassword} passwordConfirmation={securityPasswordConfirmation} setup={twoFactorSetup} qrDataUrl={twoFactorQr} busy={busy} error={error} onCode={setSecurityCode} onPassword={setSecurityPassword} onPasswordConfirmation={setSecurityPasswordConfirmation} onStartPassword={startPasswordSetup} onSavePassword={savePassword} onStartTwoFactor={startTwoFactorSetup} onEnableTwoFactor={enableTwoFactor} onAskDisable={() => { setSecurityCode(''); setSecurityStage('totp-disable'); }} onDisableTwoFactor={disableTwoFactor} onBack={resetSecurity} onClose={() => { resetSecurity(); setSecurityOpen(false); }} /> : null;
+  const directUnreadCount = directConversations.reduce((count, conversation) => count + conversation.unreadCount, 0);
 
   if (screen === 'boot') return <main className="bootScreen"><div className="pulseLogo"><span /></div><span>Подключаем «Ватрушку»…</span></main>;
   if (screen === 'auth') return <AuthPanel mode={authMode} stage={authStage} factor={secondFactor} totpAvailable={totpAvailable} email={email} code={otp} password={password} passwordConfirmation={passwordConfirmation} retrySeconds={retrySeconds} busy={busy} error={error} onMode={(mode) => { setAuthMode(mode); setAuthStage('credentials'); setOtp(''); setError(null); }} onEmailChange={setEmail} onCodeChange={setOtp} onPasswordChange={setPasswordValue} onPasswordConfirmationChange={setPasswordConfirmation} onRequest={requestCode} onVerify={verifyCode} onFactor={switchPasswordFactor} onBack={() => { setAuthStage('credentials'); setOtp(''); setError(null); }} />;
   if (screen === 'profile') return <ProfilePanel value={displayName} busy={busy} error={error} onChange={setDisplayName} onSave={saveProfile} />;
   if (screen === 'invite' && pendingCode) return <InvitePanel code={pendingCode} authenticated={Boolean(user)} error={error} busy={busy} onJoin={() => joinRoom(pendingCode)} onLogin={() => setScreen('auth')} onGuest={() => setScreen('guest')} onBack={() => setScreen(user ? 'home' : 'auth')} />;
   if (screen === 'guest' && pendingCode) return <GuestJoinPanel code={pendingCode} name={guestName} busy={busy} error={error} onName={setGuestName} onJoin={joinGuest} onBack={() => setScreen('invite')} />;
-  if (screen === 'home' && user) return <><HomePanel user={user} version={version} roomCode={roomCode} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} servers={servers} serverName={serverName} serverInvite={serverInvite} onRoomCode={setRoomCode} onCreate={createRoom} onJoin={() => joinRoom()} onLogout={logout} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onOpenServer={openServer} />{renderSecurityPanel()}</>;
-  if (screen === 'server' && user && serverDetail) return <><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} onBack={() => setScreen('home')} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onConnectVoice={connectVoiceChannel} onCopyInvite={() => void window.desktop.copyToClipboard(`Присоединяйтесь к серверу «${serverDetail.name}»\nКод приглашения: ${serverDetail.inviteCode}`)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onAssignRoles={assignCommunityRoles} onKickMember={kickCommunityMember} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onLogout={logout} />{renderSecurityPanel()}</>;
+  if (screen === 'home' && user) return <><HomePanel user={user} version={version} roomCode={roomCode} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} servers={servers} serverName={serverName} serverInvite={serverInvite} directUnreadCount={directUnreadCount} onRoomCode={setRoomCode} onCreate={createRoom} onJoin={() => joinRoom()} onLogout={logout} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onOpenServer={openServer} onDirectMessages={openDirectMessages} />{renderSecurityPanel()}</>;
+  if (screen === 'server' && user && serverDetail) return <><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} directUnreadCount={directUnreadCount} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onConnectVoice={connectVoiceChannel} onCopyInvite={() => void window.desktop.copyToClipboard(`Присоединяйтесь к серверу «${serverDetail.name}»\nКод приглашения: ${serverDetail.inviteCode}`)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onAssignRoles={assignCommunityRoles} onKickMember={kickCommunityMember} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onLogout={logout} />{renderSecurityPanel()}</>;
+  if (screen === 'direct' && user) return <><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onLogout={logout} />{renderSecurityPanel()}</>;
   if (screen === 'room' && connection) return <><RoomView connection={connection} snapshot={mediaSnapshot} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} locked={locked} busy={busy} error={error} onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))} onShare={showSourcePicker} onCopy={copyInvite} onLeave={leaveRoom} onLock={() => void run(async () => { const result = await apiClient.setRoomLock(connection.roomId, !locked); setLocked(result.isLocked); })} onClose={() => void run(async () => { await apiClient.closeRoom(connection.roomId); await media.disconnect(false); setConnection(null); setScreen('home'); })} onKick={(identity) => void run(() => apiClient.kickMediaParticipant(connection, identity))} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onStartAudio={() => void media.startAudio()} onScreenAudioMute={() => media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)} onScreenAudioVolume={setScreenShareVolume} />{sources && <SourcePicker sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}</>;
   return <main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>;
 }

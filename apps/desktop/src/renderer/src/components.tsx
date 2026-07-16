@@ -20,7 +20,7 @@ import {
 
 import type { MediaSnapshot, ParticipantView } from './media.js';
 
-type IconName = 'mic' | 'micOff' | 'screen' | 'copy' | 'leave' | 'lock' | 'unlock' | 'close' | 'users' | 'spark' | 'headphones' | 'chevron' | 'volume' | 'volumeOff' | 'refresh' | 'hash' | 'voice' | 'plus' | 'settings' | 'send';
+type IconName = 'mic' | 'micOff' | 'screen' | 'copy' | 'leave' | 'lock' | 'unlock' | 'close' | 'users' | 'spark' | 'headphones' | 'chevron' | 'volume' | 'volumeOff' | 'refresh' | 'hash' | 'voice' | 'plus' | 'settings' | 'send' | 'message';
 
 export function Icon({ name }: { name: IconName }): ReactNode {
   const paths: Record<IconName, ReactNode> = {
@@ -44,6 +44,7 @@ export function Icon({ name }: { name: IconName }): ReactNode {
     plus: <path d="M12 5v14M5 12h14" />,
     settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></>,
     send: <><path d="m22 2-7 20-4-9-9-4 20-7Z" /><path d="M22 2 11 13" /></>,
+    message: <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z" />,
   };
   return <svg className="icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
@@ -131,6 +132,7 @@ interface HomePanelProps {
   servers: ServerSummary[];
   serverName: string;
   serverInvite: string;
+  directUnreadCount?: number;
   onRoomCode(value: string): void;
   onCreate(): void;
   onJoin(): void;
@@ -144,6 +146,7 @@ interface HomePanelProps {
   onCreateServer(): void;
   onJoinServer(): void;
   onOpenServer(serverId: string): void;
+  onDirectMessages?(): void;
 }
 
 export function HomePanel(props: HomePanelProps): ReactNode {
@@ -155,7 +158,7 @@ export function HomePanel(props: HomePanelProps): ReactNode {
       <article className="actionCard createCard"><div className="cardIcon"><Icon name="spark" /></div><div><h2>Новая комната</h2><p>Вы станете владельцем и сможете управлять входом.</p></div><button className="primaryButton" onClick={props.onCreate} disabled={props.busy}>Создать комнату <Icon name="chevron" /></button></article>
       <article className="actionCard"><div className="cardIcon secondary"><Icon name="users" /></div><div><h2>Присоединиться</h2><p>Введите код из приглашения — регистр не важен.</p></div><div className="joinRow"><label className="srOnly" htmlFor="room-code">Код комнаты</label><input id="room-code" className="codeInput" value={props.roomCode} onChange={(event) => props.onRoomCode(event.target.value.toUpperCase())} maxLength={8} placeholder="ABC234" /><button className="secondaryButton" onClick={props.onJoin} disabled={props.busy || props.roomCode.length < 6}>Войти</button></div></article>
     </section>
-    <section className="communityPanel"><header><div><div className="eyebrow">Постоянные пространства</div><h2>Ваши серверы</h2><p>Текстовые и голосовые каналы, роли, история сообщений и постоянное приглашение.</p></div><span className="communityCount">{props.servers.length}</span></header>{props.servers.length > 0 && <div className="serverCards">{props.servers.map((server) => <button key={server.id} className="serverCard" onClick={() => props.onOpenServer(server.id)}><span className="serverMonogram">{server.name.slice(0, 2).toUpperCase()}</span><span><strong>{server.name}</strong><small>{server.memberCount} участников · {server.inviteCode}</small></span><Icon name="chevron" /></button>)}</div>}<div className="communityActions"><form onSubmit={(event) => { event.preventDefault(); props.onCreateServer(); }}><label className="field"><span>Новый сервер</span><input value={props.serverName} onChange={(event) => props.onServerName(event.target.value)} minLength={2} maxLength={60} placeholder="Например, Команда разработки" /></label><button className="secondaryButton" disabled={props.busy || props.serverName.trim().length < 2}><Icon name="plus" /> Создать</button></form><form onSubmit={(event) => { event.preventDefault(); props.onJoinServer(); }}><label className="field"><span>Код приглашения</span><input className="codeInput" value={props.serverInvite} onChange={(event) => props.onServerInvite(event.target.value.toUpperCase())} maxLength={8} placeholder="ABCD2345" /></label><button className="secondaryButton" disabled={props.busy || props.serverInvite.length !== 8}>Вступить</button></form></div></section>
+    <section className="communityPanel"><header><div><div className="eyebrow">Постоянные пространства</div><h2>Ваши серверы</h2><p>Текстовые и голосовые каналы, роли, история сообщений и постоянное приглашение.</p></div><div className="communityHeaderActions">{props.onDirectMessages === undefined ? null : <button className="directMessagesShortcut" onClick={props.onDirectMessages} type="button"><Icon name="message" /><span>Личные сообщения</span>{(props.directUnreadCount ?? 0) === 0 ? null : <strong>{(props.directUnreadCount ?? 0) > 99 ? '99+' : props.directUnreadCount}</strong>}</button>}<span className="communityCount">{props.servers.length}</span></div></header>{props.servers.length > 0 && <div className="serverCards">{props.servers.map((server) => <button key={server.id} className="serverCard" onClick={() => props.onOpenServer(server.id)}><span className="serverMonogram">{server.name.slice(0, 2).toUpperCase()}</span><span><strong>{server.name}</strong><small>{server.memberCount} участников · {server.inviteCode}</small></span><Icon name="chevron" /></button>)}</div>}<div className="communityActions"><form onSubmit={(event) => { event.preventDefault(); props.onCreateServer(); }}><label className="field"><span>Новый сервер</span><input value={props.serverName} onChange={(event) => props.onServerName(event.target.value)} minLength={2} maxLength={60} placeholder="Например, Команда разработки" /></label><button className="secondaryButton" disabled={props.busy || props.serverName.trim().length < 2}><Icon name="plus" /> Создать</button></form><form onSubmit={(event) => { event.preventDefault(); props.onJoinServer(); }}><label className="field"><span>Код приглашения</span><input className="codeInput" value={props.serverInvite} onChange={(event) => props.onServerInvite(event.target.value.toUpperCase())} maxLength={8} placeholder="ABCD2345" /></label><button className="secondaryButton" disabled={props.busy || props.serverInvite.length !== 8}>Вступить</button></form></div></section>
     {props.error && <div className="errorBanner homeError" role="alert">{props.error}</div>}
     <section className="devicePanel"><div><h2><Icon name="headphones" /> Устройства звука</h2><p>Микрофон и динамики сохраняются только на этом компьютере.</p><button className="deviceRefresh" type="button" onClick={props.onRefreshDevices} disabled={props.busy}><Icon name="refresh" /> Разрешить доступ и обновить</button></div><DeviceSelect label="Устройство записи" value={props.microphoneId} devices={props.devices.inputs} onChange={props.onMicrophone} /><DeviceSelect label="Устройство воспроизведения" value={props.outputId} devices={props.devices.outputs} onChange={props.onOutput} /></section>
     <footer className="footer">Ватрушка {props.version} · Windows vNext</footer>

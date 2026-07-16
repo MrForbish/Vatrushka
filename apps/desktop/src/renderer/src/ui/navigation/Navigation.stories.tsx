@@ -9,6 +9,8 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   args: {
     activeWorkspaceId: 'team',
+    directUnreadCount: 4,
+    onDirectMessages: fn(),
     workspaces: [
       { id: 'team', name: 'Команда Ватрушки', memberCount: 18, statusLabel: '8 в сети', unread: true, mentionCount: 3, activeVoice: true },
       { id: 'friends', name: 'Друзья и игры', memberCount: 42, statusLabel: '12 в сети' },

@@ -115,6 +115,10 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .communityPanel h2 { margin: 6px 0 5px; font-family: "Unbounded Variable", sans-serif; font-size: 20px; font-weight: 560; }
 .communityPanel header p { margin: 0; color: var(--muted); font-size: 11px; }
 .communityCount { min-width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid rgba(230,156,87,.2); border-radius: 14px; color: #ffd6b4; background: rgba(230,156,87,.1); font-weight: 800; }
+.communityHeaderActions { display: flex; align-items: center; gap: 10px; }
+.directMessagesShortcut { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 13px; border: 1px solid rgba(77,214,224,.2); border-radius: 14px; color: #dffcff; background: rgba(77,214,224,.08); font: inherit; }
+.directMessagesShortcut:hover { border-color: rgba(77,214,224,.45); background: rgba(77,214,224,.14); }
+.directMessagesShortcut strong { display: grid; min-width: 21px; height: 21px; place-items: center; border-radius: 999px; background: #da675b; color: white; font-size: 11px; }
 .serverCards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-top: 19px; }
 .serverCard { min-width: 0; display: grid; grid-template-columns: 43px 1fr auto; align-items: center; gap: 11px; padding: 11px; border: 1px solid var(--line); border-radius: 15px; color: #f5eae5; background: rgba(255,255,255,.025); text-align: left; transition: transform .18s, border-color .18s, background .18s; }
 .serverCard:hover { transform: translateY(-2px); border-color: rgba(230,156,87,.25); background: rgba(230,156,87,.055); }

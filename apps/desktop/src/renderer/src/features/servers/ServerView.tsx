@@ -45,7 +45,9 @@ export interface ServerViewProps {
   serverInvite: string;
   busy: boolean;
   error: string | null;
+  directUnreadCount?: number;
   onBack(): void;
+  onDirectMessages?(): void;
   onSwitchServer(serverId: string): void;
   onChannel(channelId: string): void;
   onMessageDraft(value: string): void;
@@ -186,7 +188,9 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const workspaceLibrary = (
     <WorkspaceLibrary
       activeWorkspaceId={props.server.id}
+      directUnreadCount={props.directUnreadCount ?? 0}
       onCreate={() => setServerAction('create')}
+      {...(props.onDirectMessages === undefined ? {} : { onDirectMessages: props.onDirectMessages })}
       onHome={props.onBack}
       onJoin={() => setServerAction('join')}
       onSelect={props.onSwitchServer}

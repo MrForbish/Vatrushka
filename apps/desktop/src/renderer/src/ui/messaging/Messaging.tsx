@@ -38,6 +38,7 @@ export interface MessageListProps {
   messages: MessageViewModel[];
   channelName: string;
   emptyDescription?: string;
+  emptyTitle?: string;
   onDelete?: (messageId: string) => void;
   onEdit?: (message: MessageViewModel) => void;
   onReply?: (message: MessageViewModel) => void;
@@ -58,7 +59,7 @@ function isGroupedWithPrevious(message: MessageViewModel, previous: MessageViewM
   return distance >= 0 && distance <= 5 * 60 * 1_000;
 }
 
-export function MessageList({ channelName, emptyDescription = 'Здесь появится первая история вашего сервера.', messages, onDelete, onDeleteAttachment, onDownloadAttachment, onEdit, onReaction, onReply }: MessageListProps): React.JSX.Element {
+export function MessageList({ channelName, emptyDescription = 'Здесь появится первая история вашего сервера.', emptyTitle, messages, onDelete, onDeleteAttachment, onDownloadAttachment, onEdit, onReaction, onReply }: MessageListProps): React.JSX.Element {
   const scrollElement = useRef<HTMLDivElement>(null);
   const stickToLatest = useRef(true);
   const virtualized = messages.length > 50;
@@ -86,7 +87,7 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
   }, [messages.length, virtualized, virtualizer]);
 
   if (messages.length === 0) {
-    return <div className="vui-message-empty"><span><Icon name="hash" size={28} /></span><h2>Начало канала #{channelName}</h2><p>{emptyDescription}</p></div>;
+    return <div className="vui-message-empty"><span><Icon name="hash" size={28} /></span><h2>{emptyTitle ?? `Начало канала #${channelName}`}</h2><p>{emptyDescription}</p></div>;
   }
   const renderMessage = (message: MessageViewModel, index: number, virtualItem?: VirtualItem): React.JSX.Element => {
     const grouped = isGroupedWithPrevious(message, messages[index - 1]);
@@ -132,9 +133,10 @@ export interface MessageComposerProps {
   onFilesSelected?: (files: File[]) => void;
   onRemoveAttachment?: (id: string) => void;
   leadingActions?: ReactNode;
+  placeholder?: string;
 }
 
-export function MessageComposer({ attachments = [], busy = false, canSend = true, channelName, context, leadingActions, onCancelContext, onChange, onFilesSelected, onRemoveAttachment, onSubmit, value }: MessageComposerProps): React.JSX.Element {
+export function MessageComposer({ attachments = [], busy = false, canSend = true, channelName, context, leadingActions, onCancelContext, onChange, onFilesSelected, onRemoveAttachment, onSubmit, placeholder, value }: MessageComposerProps): React.JSX.Element {
   const fileInput = useRef<HTMLInputElement>(null);
   const submit = (event?: FormEvent): void => {
     event?.preventDefault();
@@ -151,7 +153,7 @@ export function MessageComposer({ attachments = [], busy = false, canSend = true
       {attachments.length === 0 ? null : <div aria-label="Файлы к отправке" className="vui-message-composer__attachments">{attachments.map((attachment) => <div key={attachment.id}><Icon name="attachment" size={16} /><span><strong title={attachment.name}>{attachment.name}</strong><small>{formatFileSize(attachment.size)}</small></span>{onRemoveAttachment === undefined ? null : <IconButton icon="close" label={`Убрать ${attachment.name}`} onClick={() => onRemoveAttachment(attachment.id)} size="sm" type="button" />}</div>)}</div>}
       <div className="vui-message-composer__body">
         <div className="vui-message-composer__tools">{leadingActions}<input accept=".gif,.jpg,.jpeg,.pdf,.png,.txt,.webp,.zip,application/pdf,application/zip,image/gif,image/jpeg,image/png,image/webp,text/plain" aria-label="Выбрать вложения" className="vui-sr-only" disabled={!canSend || busy || onFilesSelected === undefined} multiple onChange={selectFiles} ref={fileInput} type="file" /><IconButton disabled={!canSend || busy || onFilesSelected === undefined || attachments.length >= 4} icon="attachment" label={attachments.length >= 4 ? 'Можно прикрепить не больше четырёх файлов' : 'Прикрепить файлы'} onClick={() => fileInput.current?.click()} size="sm" type="button" /><IconButton disabled icon="emoji" label="Emoji и GIF пока недоступны" size="sm" type="button" /><IconButton disabled icon="mic" label="Голосовые сообщения появятся позже" size="sm" type="button" /></div>
-        <textarea aria-label="Сообщение" disabled={!canSend} maxLength={4000} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); } }} placeholder={canSend ? `Написать в #${channelName}` : 'У вас нет права отправлять сообщения'} rows={1} value={value} />
+        <textarea aria-label="Сообщение" disabled={!canSend} maxLength={4000} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); } }} placeholder={canSend ? placeholder ?? `Написать в #${channelName}` : 'У вас нет права отправлять сообщения'} rows={1} value={value} />
         <IconButton disabled={!canSend || busy || value.trim().length === 0} icon="send" label={context?.mode === 'edit' ? 'Сохранить сообщение' : 'Отправить сообщение'} size="md" type="submit" />
       </div>
       {canSend ? null : <div className="vui-message-composer__permission"><Icon name="lock" size={14} />Отправка сообщений запрещена вашей ролью</div>}
