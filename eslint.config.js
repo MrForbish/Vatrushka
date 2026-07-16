@@ -1,3 +1,4 @@
+import storybook from 'eslint-plugin-storybook';
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
@@ -7,8 +8,12 @@ export default tseslint.config(
       '**/dist/**',
       '**/out/**',
       '**/release/**',
+      '**/storybook-static/**',
       '**/coverage/**',
       '**/node_modules/**',
+      '**/public/mockServiceWorker.js',
+      '**/playwright-report/**',
+      '**/test-results/**',
       'eslint.config.js',
       'apps/desktop/build/icon.*',
     ],
@@ -43,4 +48,5 @@ export default tseslint.config(
       '@typescript-eslint/unbound-method': 'off',
     },
   },
+  storybook.configs['flat/recommended'],
 );

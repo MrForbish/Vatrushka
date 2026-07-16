@@ -1,0 +1,51 @@
+.vui-overlay {
+  position: fixed;
+  z-index: var(--z-modal);
+  inset: 0;
+  display: grid;
+  padding: var(--space-6);
+  place-items: center;
+  background: var(--color-overlay);
+  animation: vui-overlay-in var(--duration-modal) var(--easing-standard);
+}
+
+.vui-modal,
+.vui-drawer {
+  display: grid;
+  max-height: min(760px, calc(100vh - var(--space-12)));
+  overflow: hidden;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-modal);
+  animation: vui-modal-in var(--duration-modal) var(--easing-standard);
+}
+
+.vui-modal--sm { width: min(440px, calc(100vw - var(--space-12))); }
+.vui-modal--md { width: min(600px, calc(100vw - var(--space-12))); }
+.vui-modal--lg { width: min(840px, calc(100vw - var(--space-12))); }
+
+.vui-overlay__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+
+.vui-overlay__header h2 { margin: 0; font: var(--text-heading-lg); }
+.vui-overlay__header p { margin: var(--space-1) 0 0; color: var(--color-text-secondary); font: var(--text-body-md); }
+.vui-overlay__content { overflow: auto; padding: var(--space-6); }
+.vui-overlay__footer { display: flex; justify-content: flex-end; gap: var(--space-3); padding: var(--space-4) var(--space-6); border-top: 1px solid var(--color-border-subtle); background: var(--color-surface-1); }
+.vui-confirm-copy { margin: 0; color: var(--color-text-secondary); font: var(--text-body-lg); }
+
+.vui-overlay--drawer { z-index: var(--z-drawer); padding: 0; place-items: stretch; }
+.vui-drawer { position: absolute; top: 0; bottom: 0; width: min(440px, calc(100vw - var(--space-8))); max-height: none; border-radius: 0; }
+.vui-drawer--right { right: 0; border-width: 0 0 0 1px; animation-name: vui-drawer-right-in; }
+.vui-drawer--left { left: 0; border-width: 0 1px 0 0; animation-name: vui-drawer-left-in; }
+
+@keyframes vui-overlay-in { from { opacity: 0; } }
+@keyframes vui-modal-in { from { opacity: 0; transform: translateY(var(--space-3)) scale(0.98); } }
+@keyframes vui-drawer-right-in { from { transform: translateX(100%); } }
+@keyframes vui-drawer-left-in { from { transform: translateX(-100%); } }

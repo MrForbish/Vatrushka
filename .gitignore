@@ -14,3 +14,8 @@ apps/desktop/build/icon.png
 apps/desktop/.e2e-user-data*/
 .DS_Store
 Thumbs.db
+
+*storybook.log
+storybook-static
+playwright-report/
+test-results/

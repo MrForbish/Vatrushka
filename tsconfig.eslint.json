@@ -11,6 +11,8 @@
     }
   },
   "include": [
+    "apps/desktop/.storybook/**/*.ts",
+    "apps/desktop/.storybook/**/*.tsx",
     "apps/**/*.ts",
     "apps/**/*.tsx",
     "packages/**/*.ts",

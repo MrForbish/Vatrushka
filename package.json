@@ -27,6 +27,10 @@
     "test:api": "npm run test -w @vatrushka/api",
     "test:renderer": "npm run test -w @vatrushka/desktop",
     "test:e2e": "npm run test:e2e -w @vatrushka/desktop",
+    "storybook": "npm run storybook -w @vatrushka/desktop",
+    "build:storybook": "npm run build-storybook -w @vatrushka/desktop",
+    "test:storybook": "npm run test:storybook -w @vatrushka/desktop",
+    "test:visual": "npm run test:visual -w @vatrushka/desktop",
     "db:generate": "npm run db:generate -w @vatrushka/api",
     "db:migrate": "npm run db:migrate -w @vatrushka/api",
     "db:studio": "npm run db:studio -w @vatrushka/api"
@@ -39,5 +43,10 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.64.0",
     "vitest": "4.1.10"
+  },
+  "msw": {
+    "workerDirectory": [
+      "apps/desktop/public"
+    ]
   }
 }

@@ -1,0 +1,21 @@
+.primitive-demo {
+  display: grid;
+  min-width: min(760px, calc(100vw - var(--space-8)));
+  gap: var(--space-6);
+  padding: var(--space-8);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-0);
+  box-shadow: var(--shadow-float);
+}
+
+.primitive-demo--compact { min-width: min(420px, calc(100vw - var(--space-8))); }
+.primitive-demo__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: var(--space-6); }
+.primitive-demo__group { display: grid; align-content: start; gap: var(--space-3); }
+.primitive-demo__group h3 { margin: 0; color: var(--color-text-secondary); font: var(--text-overline); letter-spacing: 0.06em; text-transform: uppercase; }
+.primitive-demo__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.primitive-demo__popover-copy { display: grid; gap: var(--space-2); }
+.primitive-demo__popover-copy strong { font: var(--text-heading-sm); }
+.primitive-demo__popover-copy span { color: var(--color-text-secondary); font: var(--text-body-md); }
+.primitive-skeleton-card { display: grid; grid-template-columns: auto 1fr; gap: var(--space-3); width: 320px; }
+.primitive-skeleton-card > div { display: grid; gap: var(--space-2); }
