@@ -26,4 +26,17 @@ test.describe('Vatrushka design system visual baseline', () => {
     await openStory(page, 'overlays-modal-confirmdialog-drawer--confirm-destructive');
     await expect(page).toHaveScreenshot('overlay-confirm-dialog.png', { animations: 'disabled', fullPage: true });
   });
+
+  test('app shell desktop', async ({ page }) => {
+    await openStory(page, 'layouts-app-shell--full-server');
+    await expect(page).toHaveScreenshot('app-shell-desktop.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('app shell compact drawers', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 760 });
+    await openStory(page, 'layouts-app-shell--full-server');
+    await page.getByRole('button', { name: 'Открыть список серверов' }).click();
+    await expect(page.getByRole('dialog', { name: 'Серверы' })).toBeVisible();
+    await expect(page).toHaveScreenshot('app-shell-compact.png', { animations: 'disabled', fullPage: true });
+  });
 });

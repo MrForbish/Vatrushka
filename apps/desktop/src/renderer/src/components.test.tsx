@@ -5,7 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { RoomConnection, ServerDetail } from '@vatrushka/shared';
 
-import { AuthPanel, GuestJoinPanel, HomePanel, RoomView, ServerView } from './components.js';
+import { AuthPanel, GuestJoinPanel, HomePanel, RoomView } from './components.js';
+import { ServerView } from './features/servers/index.js';
 import type { MediaSnapshot } from './media.js';
 
 const noop = (): void => undefined;
@@ -117,10 +118,10 @@ describe('server UI', () => {
 
   it('shows persistent channels, messages, members, and role management', async () => {
     const onChannel = vi.fn();
-    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" busy={false} error={null} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={noop} onSendMessage={noop} onDeleteMessage={noop} onConnectVoice={noop} onCopyInvite={noop} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onAssignRoles={noop} onKickMember={noop} />);
+    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" serverInvite="" busy={false} error={null} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={noop} onSendMessage={noop} onDeleteMessage={noop} onConnectVoice={noop} onCopyInvite={noop} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onAssignRoles={noop} onKickMember={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onSecurity={noop} onLogout={noop} />);
     expect(screen.getByText('Привет, команда!')).toBeInTheDocument();
     expect(screen.getByText('Владелец сервера')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Голосовой/u }));
+    await userEvent.click(screen.getByRole('button', { name: 'Голосовой' }));
     expect(onChannel).toHaveBeenCalledWith('voice-1');
     await userEvent.click(screen.getByRole('button', { name: /Роли и права/u }));
     expect(screen.getByRole('heading', { name: 'Роли и права' })).toBeInTheDocument();

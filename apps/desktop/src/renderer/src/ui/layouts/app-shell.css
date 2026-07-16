@@ -1,0 +1,49 @@
+.vui-app-shell {
+  display: grid;
+  grid-template-areas:
+    "workspaces server topbar"
+    "workspaces server content";
+  grid-template-columns: 220px 292px minmax(0, 1fr);
+  grid-template-rows: 52px minmax(0, 1fr);
+  width: 100vw;
+  min-width: 1024px;
+  height: 100vh;
+  min-height: 680px;
+  overflow: hidden;
+  background: var(--color-surface-1);
+  color: var(--color-text-primary);
+  font-family: var(--font-ui);
+}
+
+.vui-app-shell__workspaces { grid-area: workspaces; min-width: 0; overflow: hidden; }
+.vui-app-shell__server-context { grid-area: server; min-width: 0; overflow: hidden; }
+.vui-app-shell__topbar { grid-area: topbar; display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: 0 var(--space-4); border-bottom: 1px solid var(--color-border-subtle); background: var(--color-surface-0); }
+.vui-app-shell__content { grid-area: content; min-width: 0; min-height: 0; overflow: hidden; background: var(--color-surface-1); }
+.vui-app-shell__members { display: none; grid-area: members; min-width: 0; overflow: hidden; }
+.vui-app-shell__workspace-toggle { display: none; flex: 0 0 auto; }
+.vui-app-shell__members-toggle { flex: 0 0 auto; }
+.vui-app-shell__drawer-content { height: calc(100vh - 86px); margin: calc(var(--space-6) * -1); }
+.vui-app-shell__drawer-content > .vui-workspace-library,
+.vui-app-shell__drawer-content > .vui-member-panel { width: 100%; border: 0; }
+
+@media (min-width: 1440px) {
+  .vui-app-shell {
+    grid-template-areas:
+      "workspaces server topbar topbar"
+      "workspaces server content members";
+    grid-template-columns: 220px 292px minmax(620px, 1fr) 280px;
+  }
+  .vui-app-shell__members { display: block; }
+  .vui-app-shell__members-toggle { display: none; }
+}
+
+@media (max-width: 1179px) {
+  .vui-app-shell {
+    grid-template-areas:
+      "server topbar"
+      "server content";
+    grid-template-columns: 292px minmax(0, 1fr);
+  }
+  .vui-app-shell__workspaces { display: none; }
+  .vui-app-shell__workspace-toggle { display: inline-grid; }
+}

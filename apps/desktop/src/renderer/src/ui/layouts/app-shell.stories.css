@@ -1,0 +1,10 @@
+.vui-shell-story-stage { display: grid; grid-template-rows: minmax(0, 1fr) auto auto; height: 100%; min-height: 0; padding: var(--space-6); background: radial-gradient(circle at 75% 0, var(--color-primary-soft), transparent 32%), var(--color-surface-1); }
+.vui-shell-story-empty { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; max-width: 560px; }
+.vui-shell-story-empty > span:first-child { display: grid; width: 58px; height: 58px; margin-bottom: var(--space-4); place-items: center; border-radius: var(--radius-lg); background: var(--color-surface-3); color: var(--color-cyan); }
+.vui-shell-story-empty h1 { margin: var(--space-3) 0 var(--space-2); font: var(--text-display-md); }
+.vui-shell-story-empty p { margin: 0; color: var(--color-text-secondary); font: var(--text-body-lg); }
+.vui-shell-story-message { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--color-founder), transparent 72%); border-radius: var(--radius-md); background: var(--gradient-founder); }
+.vui-shell-story-message > span { display: grid; gap: var(--space-1); }
+.vui-shell-story-message strong { display: flex; align-items: center; gap: var(--space-2); font: var(--text-label-md); }
+.vui-shell-story-message p { margin: 0; color: var(--color-text-secondary); }
+.vui-shell-story-composer { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); margin-top: var(--space-3); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-2); color: var(--color-text-muted); }
