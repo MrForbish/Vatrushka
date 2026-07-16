@@ -22,7 +22,10 @@ export interface ParticipantView {
   isGuest: boolean;
   isMuted: boolean;
   isSpeaking: boolean;
+  audioLevel: number;
   isScreenSharing: boolean;
+  volume: number;
+  locallyMuted: boolean;
   platformRole: PlatformRole;
   connectionQuality: string;
 }
@@ -64,6 +67,8 @@ export class MediaSession {
   private snapshot: MediaSnapshot = initialSnapshot;
   private screenShareAudioVolume = 1;
   private screenShareAudioMuted = false;
+  private readonly participantVolumes = new Map<string, number>();
+  private readonly locallyMutedParticipants = new Set<string>();
   private readonly listeners = new Set<() => void>();
 
   constructor(private readonly api: ApiClient) {}
@@ -141,6 +146,25 @@ export class MediaSession {
     if (!this.room) return;
     const switched = await this.room.switchActiveDevice('audiooutput', deviceId, true);
     if (!switched) throw new Error('Не удалось выбрать устройство вывода');
+  }
+
+  setParticipantVolume(identity: string, volume: number): void {
+    const participant = this.room?.remoteParticipants.get(identity);
+    if (!participant) return;
+    const normalized = Math.max(0, Math.min(1, volume));
+    this.participantVolumes.set(identity, normalized);
+    if (normalized > 0) this.locallyMutedParticipants.delete(identity);
+    participant.setVolume(normalized, Track.Source.Microphone);
+    this.refreshSnapshot();
+  }
+
+  setParticipantMuted(identity: string, muted: boolean): void {
+    const participant = this.room?.remoteParticipants.get(identity);
+    if (!participant) return;
+    if (muted) this.locallyMutedParticipants.add(identity);
+    else this.locallyMutedParticipants.delete(identity);
+    participant.setVolume(muted ? 0 : this.participantVolumes.get(identity) ?? 1, Track.Source.Microphone);
+    this.refreshSnapshot();
   }
 
   setScreenShareAudioVolume(volume: number): void {
@@ -221,6 +245,8 @@ export class MediaSession {
     }
     this.room = null;
     this.connection = null;
+    this.participantVolumes.clear();
+    this.locallyMutedParticipants.clear();
     this.snapshot.screenTrack?.detach().forEach((element) => element.remove());
     this.snapshot = initialSnapshot;
     this.emit();
@@ -231,7 +257,11 @@ export class MediaSession {
     room
       .on(RoomEvent.ConnectionStateChanged, refresh)
       .on(RoomEvent.ParticipantConnected, refresh)
-      .on(RoomEvent.ParticipantDisconnected, refresh)
+      .on(RoomEvent.ParticipantDisconnected, (participant) => {
+        this.participantVolumes.delete(participant.identity);
+        this.locallyMutedParticipants.delete(participant.identity);
+        refresh();
+      })
       .on(RoomEvent.ActiveSpeakersChanged, refresh)
       .on(RoomEvent.TrackMuted, refresh)
       .on(RoomEvent.TrackUnmuted, refresh)
@@ -276,7 +306,10 @@ export class MediaSession {
       isGuest: participant.identity.startsWith('guest_'),
       isMuted: !participant.isMicrophoneEnabled,
       isSpeaking: participant.isSpeaking,
+      audioLevel: participant.audioLevel,
       isScreenSharing: participant.isScreenShareEnabled,
+      volume: participant === room.localParticipant ? 1 : this.participantVolumes.get(participant.identity) ?? 1,
+      locallyMuted: participant !== room.localParticipant && this.locallyMutedParticipants.has(participant.identity),
       platformRole: participantPlatformRole(participant),
       connectionQuality: connectionQualityLabel(participant.connectionQuality),
     }));

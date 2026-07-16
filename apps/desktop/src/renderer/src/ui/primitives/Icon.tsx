@@ -6,6 +6,7 @@ export type IconName =
   | 'check'
   | 'chevronDown'
   | 'close'
+  | 'copy'
   | 'download'
   | 'eye'
   | 'eyeOff'
@@ -21,6 +22,7 @@ export type IconName =
   | 'logout'
   | 'message'
   | 'mic'
+  | 'micOff'
   | 'minus'
   | 'panelLeft'
   | 'panelRight'
@@ -28,10 +30,13 @@ export type IconName =
   | 'reply'
   | 'search'
   | 'send'
+  | 'screen'
   | 'settings'
   | 'sparkles'
   | 'users'
   | 'voice'
+  | 'volume'
+  | 'volumeOff'
   | 'warning';
 
 const paths: Record<IconName, ReactNode> = {
@@ -40,6 +45,7 @@ const paths: Record<IconName, ReactNode> = {
   check: <path d="m5 12 4 4L19 6" />,
   chevronDown: <path d="m7 10 5 5 5-5" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,
+  copy: <><rect x="8" y="8" width="11" height="11" rx="2" /><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3" /></>,
   download: <><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></>,
   eye: <><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" /></>,
   eyeOff: <><path d="m4 4 16 16M10.6 6.1A10.5 10.5 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.1 2.8M6.1 7.3C3.8 9.1 2.5 12 2.5 12s3.5 6 9.5 6c.8 0 1.5-.1 2.2-.3" /></>,
@@ -55,6 +61,7 @@ const paths: Record<IconName, ReactNode> = {
   logout: <><path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9" /></>,
   message: <><path d="M4 5h16v12H8l-4 4V5Z" /><path d="M8 9h8M8 13h5" /></>,
   mic: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 10v3a7 7 0 0 0 14 0v-3M12 20v2" /></>,
+  micOff: <><path d="m4 4 16 16M9 9v2a3 3 0 0 0 4.8 2.4M15 9V6a3 3 0 0 0-5.1-2.1M18.4 15.5A7 7 0 0 0 19 11M5 11a7 7 0 0 0 10.7 5.9M12 18v3M9 21h6" /></>,
   minus: <path d="M5 12h14" />,
   panelLeft: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>,
   panelRight: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16" /></>,
@@ -62,10 +69,13 @@ const paths: Record<IconName, ReactNode> = {
   reply: <><path d="m9 17-5-5 5-5" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></>,
   search: <><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></>,
   send: <><path d="m22 2-7 20-4-9-9-4 20-7Z" /><path d="M22 2 11 13" /></>,
+  screen: <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4M9 10l3-3 3 3M12 7v6" /></>,
   settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></>,
   sparkles: <><path d="m12 3 1.2 3.3L16.5 7.5l-3.3 1.2L12 12l-1.2-3.3-3.3-1.2 3.3-1.2L12 3Z" /><path d="m18 13 .8 2.2L21 16l-2.2.8L18 19l-.8-2.2L15 16l2.2-.8L18 13ZM6 13l.7 1.8 1.8.7-1.8.7L6 18l-.7-1.8-1.8-.7 1.8-.7L6 13Z" /></>,
   users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></>,
   voice: <><path d="M8 10v4a4 4 0 0 0 8 0v-4" /><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M12 18v3M9 21h6" /></>,
+  volume: <><path d="M11 5 6 9H2v6h4l5 4V5Z" /><path d="M15.5 8.5a5 5 0 0 1 0 7M18 5a9 9 0 0 1 0 14" /></>,
+  volumeOff: <><path d="M11 5 6 9H2v6h4l5 4V5Z" /><path d="m16 9 5 5M21 9l-5 5" /></>,
   warning: <><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 9v5M12 17h.01" /></>,
 };
 

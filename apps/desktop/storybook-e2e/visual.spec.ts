@@ -49,4 +49,9 @@ test.describe('Vatrushka design system visual baseline', () => {
     await openStory(page, 'messaging-text-channel--composer-states');
     await expect(page).toHaveScreenshot('messaging-composer.png', { animations: 'disabled', fullPage: true });
   });
+
+  test('voice active speaker', async ({ page }) => {
+    await openStory(page, 'voice-voice-stage--visual-stage');
+    await expect(page).toHaveScreenshot('voice-active-speaker.png', { animations: 'disabled', fullPage: true });
+  });
 });

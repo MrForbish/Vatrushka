@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { RoomConnection, ServerDetail } from '@vatrushka/shared';
 
-import { AuthPanel, GuestJoinPanel, HomePanel, RoomView } from './components.js';
+import { AuthPanel, GuestJoinPanel, HomePanel } from './components.js';
 import { ServerView } from './features/servers/index.js';
+import { RoomView } from './features/voice/index.js';
 import type { MediaSnapshot } from './media.js';
 
 const noop = (): void => undefined;
@@ -63,8 +64,8 @@ describe('room UI', () => {
   const baseSnapshot: MediaSnapshot = {
     connectionState: ConnectionState.Connected,
     participants: [
-      { identity: 'user_owner-1_local', displayName: 'Owner', isLocal: true, isOwner: true, isGuest: false, isMuted: true, isSpeaking: false, isScreenSharing: false, platformRole: 'owner', connectionQuality: 'Отличное' },
-      { identity: 'guest_guest-1_remote', displayName: 'Visitor', isLocal: false, isOwner: false, isGuest: true, isMuted: false, isSpeaking: true, isScreenSharing: false, platformRole: 'member', connectionQuality: 'Хорошее' },
+      { identity: 'user_owner-1_local', displayName: 'Owner', isLocal: true, isOwner: true, isGuest: false, isMuted: true, isSpeaking: false, audioLevel: 0, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'owner', connectionQuality: 'Отличное' },
+      { identity: 'guest_guest-1_remote', displayName: 'Visitor', isLocal: false, isOwner: false, isGuest: true, isMuted: false, isSpeaking: true, audioLevel: 0.7, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
     ],
     isMuted: true,
     isScreenSharing: false,
@@ -78,20 +79,23 @@ describe('room UI', () => {
     error: null,
   };
 
-  it('shows participants, speaking and mute text, stable controls, and owner moderation', () => {
-    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} locked={false} busy={false} error={null} onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} />);
-    expect(screen.getByText('Owner (вы)')).toBeInTheDocument();
-    expect(screen.getByText(/Visitor/u)).toBeInTheDocument();
-    expect(screen.getByText(/говорит/u)).toBeInTheDocument();
+  it('shows participants, speaking and mute text, stable controls, and owner moderation', async () => {
+    const onParticipantMute = vi.fn();
+    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} locked={false} busy={false} error={null} onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={onParticipantMute} onParticipantVolume={noop} />);
+    expect(screen.getAllByText('Owner (вы)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Visitor/u).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/говорит/ui).length).toBeGreaterThan(0);
     expect(screen.getByTestId('mute-control')).toHaveAccessibleName('Включить микрофон');
     expect(screen.getByTestId('screen-share-control')).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Закрыть вход' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Исключить Visitor' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Заглушить локально' }));
+    expect(onParticipantMute).toHaveBeenCalledWith('guest_guest-1_remote', true);
   });
 
   it('shows reconnect, busy, and error states without relying only on color', () => {
     const snapshot = { ...baseSnapshot, connectionState: ConnectionState.Reconnecting };
-    render(<RoomView connection={connection} snapshot={snapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} locked={true} busy error="Другой участник уже показывает экран" onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} />);
+    render(<RoomView connection={connection} snapshot={snapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} locked={true} busy error="Другой участник уже показывает экран" onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={noop} onParticipantVolume={noop} />);
     expect(screen.getByText('Переподключение…')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Другой участник уже показывает экран');
     expect(screen.getByRole('button', { name: 'Открыть вход' })).toBeDisabled();
