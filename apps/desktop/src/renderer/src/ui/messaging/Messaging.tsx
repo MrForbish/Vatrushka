@@ -1,4 +1,5 @@
-import { useRef, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
 
 import { Avatar, Badge, Icon, IconButton } from '../primitives';
 import './messaging.css';
@@ -58,15 +59,39 @@ function isGroupedWithPrevious(message: MessageViewModel, previous: MessageViewM
 }
 
 export function MessageList({ channelName, emptyDescription = 'Здесь появится первая история вашего сервера.', messages, onDelete, onDeleteAttachment, onDownloadAttachment, onEdit, onReaction, onReply }: MessageListProps): React.JSX.Element {
+  const scrollElement = useRef<HTMLDivElement>(null);
+  const stickToLatest = useRef(true);
+  const virtualized = messages.length > 50;
+  const getItemKey = useCallback((index: number) => messages[index]?.id ?? index, [messages]);
+  const virtualizer = useVirtualizer({
+    count: messages.length,
+    enabled: virtualized,
+    estimateSize: (index) => messages[index]?.attachments?.length ? 148 : messages[index]?.replyPreview ? 108 : 78,
+    getItemKey,
+    getScrollElement: () => scrollElement.current,
+    overscan: 8,
+  });
+
+  useEffect(() => {
+    stickToLatest.current = true;
+  }, [channelName]);
+
+  useEffect(() => {
+    if (messages.length === 0 || !stickToLatest.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (virtualized) virtualizer.scrollToIndex(messages.length - 1, { align: 'end' });
+      else if (scrollElement.current) scrollElement.current.scrollTop = scrollElement.current.scrollHeight;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages.length, virtualized, virtualizer]);
+
   if (messages.length === 0) {
     return <div className="vui-message-empty"><span><Icon name="hash" size={28} /></span><h2>Начало канала #{channelName}</h2><p>{emptyDescription}</p></div>;
   }
-  return (
-    <div aria-label={`Сообщения канала ${channelName}`} className="vui-message-list" role="feed">
-      {messages.map((message, index) => {
-        const grouped = isGroupedWithPrevious(message, messages[index - 1]);
-        return (
-          <article aria-posinset={index + 1} aria-setsize={messages.length} className="vui-message" data-grouped={grouped || undefined} data-privileged={message.authorBadge !== undefined || undefined} key={message.id}>
+  const renderMessage = (message: MessageViewModel, index: number, virtualItem?: VirtualItem): React.JSX.Element => {
+    const grouped = isGroupedWithPrevious(message, messages[index - 1]);
+    return (
+          <article {...(virtualItem === undefined ? {} : { 'data-index': virtualItem.index, ref: virtualizer.measureElement, style: { transform: `translateY(${virtualItem.start}px)` } })} aria-posinset={index + 1} aria-setsize={messages.length} className="vui-message" data-grouped={grouped || undefined} data-privileged={message.authorBadge !== undefined || undefined} data-virtualized={virtualItem === undefined ? undefined : true} key={message.id}>
             {grouped ? <span aria-hidden="true" className="vui-message__avatar-space" /> : <Avatar name={message.authorName} size="md" />}
             <div className="vui-message__content">
               {message.replyPreview === undefined ? null : <div className="vui-message__reply"><Icon name="reply" size={14} /><strong>{message.replyPreview.authorName}</strong><span>{message.replyPreview.content}</span></div>}
@@ -82,8 +107,14 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
               {message.canDelete === true && onDelete !== undefined ? <IconButton icon="close" label="Удалить сообщение" onClick={() => onDelete(message.id)} size="sm" type="button" /> : null}
             </div>
           </article>
-        );
-      })}
+    );
+  };
+  const content = virtualized
+    ? <div className="vui-message-list__virtual" style={{ height: virtualizer.getTotalSize() }}>{virtualizer.getVirtualItems().map((virtualItem) => renderMessage(messages[virtualItem.index]!, virtualItem.index, virtualItem))}</div>
+    : messages.map((message, index) => renderMessage(message, index));
+  return (
+    <div aria-label={`Сообщения канала ${channelName}`} className="vui-message-list" onScroll={(event) => { const element = event.currentTarget; stickToLatest.current = element.scrollHeight - element.scrollTop - element.clientHeight < 120; }} ref={scrollElement} role="feed">
+      {content}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { Button } from '../primitives';
 import { MessageComposer, MessageList, SystemMessageCard, UnreadDivider, type MessageViewModel } from './Messaging';
@@ -31,6 +31,23 @@ export const Conversation: Story = {
     await expect(args.onReaction).toHaveBeenCalledWith('1', '🔥');
     await userEvent.click(canvas.getByRole('button', { name: 'Скачать vatrushka-foundations.pdf' }));
     await expect(args.onDownloadAttachment).toHaveBeenCalledWith('attachment-1', 'vatrushka-foundations.pdf');
+  },
+};
+
+const longConversation: MessageViewModel[] = Array.from({ length: 200 }, (_, index) => ({
+  id: `long-${index + 1}`,
+  authorId: index % 3 === 0 ? 'anna' : 'founder',
+  authorName: index % 3 === 0 ? 'Анна Белова' : 'Илья Форбиш',
+  content: `Виртуализированное сообщение ${index + 1}. ${index % 7 === 0 ? 'Дополнительная строка проверяет динамическую высоту карточки и стабильность прокрутки.' : ''}`,
+  createdAt: new Date(Date.UTC(2026, 6, 17, 9, index)).toISOString(),
+}));
+
+export const LongConversation: Story = {
+  args: { messages: longConversation },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await waitFor(() => expect(canvas.getByText(/Виртуализированное сообщение 200/u)).toBeVisible());
+    await expect(canvas.getAllByRole('article').length).toBeLessThan(60);
   },
 };
 
