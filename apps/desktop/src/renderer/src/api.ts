@@ -181,8 +181,16 @@ export class ApiClient {
     return this.request(`/channels/${channelId}/messages?limit=100`, { auth: true });
   }
 
-  createMessage(channelId: string, content: string): Promise<TextMessage> {
-    return this.request(`/channels/${channelId}/messages`, { method: 'POST', body: { content }, auth: true });
+  createMessage(channelId: string, content: string, replyToMessageId?: string): Promise<TextMessage> {
+    return this.request(`/channels/${channelId}/messages`, { method: 'POST', body: { content, ...(replyToMessageId === undefined ? {} : { replyToMessageId }) }, auth: true });
+  }
+
+  updateMessage(messageId: string, content: string): Promise<TextMessage> {
+    return this.request(`/messages/${messageId}`, { method: 'PATCH', body: { content }, auth: true });
+  }
+
+  setMessageReaction(messageId: string, emoji: string, active: boolean): Promise<TextMessage> {
+    return this.request(`/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: active ? 'PUT' : 'DELETE', auth: true });
   }
 
   async deleteMessage(messageId: string): Promise<void> {

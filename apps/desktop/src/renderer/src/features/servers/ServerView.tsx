@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 
 import {
   serverPermissions,
@@ -11,13 +11,14 @@ import {
 
 import {
   AppShell,
-  Avatar,
   Badge,
   Button,
   Checkbox,
   Icon,
   IconButton,
   Input,
+  MessageComposer,
+  MessageList,
   MemberPanel,
   Modal,
   SegmentedControl,
@@ -28,6 +29,7 @@ import {
   WorkspaceLibrary,
   type ChannelNavigationItem,
   type MemberNavigationItem,
+  type MessageViewModel,
   type WorkspaceNavigationItem,
 } from '../../ui';
 import './server-view.css';
@@ -47,7 +49,9 @@ export interface ServerViewProps {
   onSwitchServer(serverId: string): void;
   onChannel(channelId: string): void;
   onMessageDraft(value: string): void;
-  onSendMessage(): void;
+  onSendMessage(replyToMessageId?: string): void;
+  onUpdateMessage(messageId: string, content: string): void;
+  onMessageReaction(messageId: string, emoji: string): void;
   onDeleteMessage(messageId: string): void;
   onConnectVoice(channelId: string): void;
   onCopyInvite(): void;
@@ -95,6 +99,13 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const [memberId, setMemberId] = useState('');
   const [memberRoles, setMemberRoles] = useState<string[]>([]);
   const [serverAction, setServerAction] = useState<'create' | 'join' | null>(null);
+  const [editingMessage, setEditingMessage] = useState<MessageViewModel | null>(null);
+  const [replyingMessage, setReplyingMessage] = useState<MessageViewModel | null>(null);
+
+  useEffect(() => {
+    setEditingMessage(null);
+    setReplyingMessage(null);
+  }, [props.activeChannelId, props.server.id]);
 
   const activeChannel = props.server.channels.find((channel) => channel.id === props.activeChannelId) ?? props.server.channels[0] ?? null;
   const canManageChannels = props.server.permissions.includes('MANAGE_CHANNELS');
@@ -191,7 +202,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
           : <ServerTopBar channelName={activeChannel.name} channelType={activeChannel.type} description={activeChannel.type === 'text' ? 'История сохраняется' : 'Голосовая сессия'} memberCount={props.server.memberCount} />}
         workspaceLibrary={workspaceLibrary}
       >
-        <ServerStage {...props} activeChannel={activeChannel} canManageChannels={canManageChannels} canManageMessages={canManageMessages} onOpenChannel={() => openChannelForm('text')} />
+        <ServerStage {...props} activeChannel={activeChannel} canManageChannels={canManageChannels} canManageMessages={canManageMessages} editingMessage={editingMessage} replyingMessage={replyingMessage} onCancelContext={() => { setEditingMessage(null); setReplyingMessage(null); props.onMessageDraft(''); }} onEdit={(message) => { setReplyingMessage(null); setEditingMessage(message); props.onMessageDraft(message.content); }} onOpenChannel={() => openChannelForm('text')} onReply={(message) => { setEditingMessage(null); setReplyingMessage(message); }} />
       </AppShell>
 
       <Modal onClose={() => setChannelFormOpen(false)} open={channelFormOpen} title="Новый канал">
@@ -241,33 +252,49 @@ interface ServerStageProps extends ServerViewProps {
   activeChannel: ServerDetail['channels'][number] | null;
   canManageChannels: boolean;
   canManageMessages: boolean;
+  editingMessage: MessageViewModel | null;
+  replyingMessage: MessageViewModel | null;
+  onCancelContext(): void;
+  onEdit(message: MessageViewModel): void;
   onOpenChannel(): void;
+  onReply(message: MessageViewModel): void;
 }
 
-function ServerStage({ activeChannel, canManageChannels, canManageMessages, onOpenChannel, ...props }: ServerStageProps): ReactNode {
+function ServerStage({ activeChannel, canManageChannels, canManageMessages, editingMessage, onCancelContext, onEdit, onOpenChannel, onReply, replyingMessage, ...props }: ServerStageProps): ReactNode {
   if (activeChannel === null) {
     return <div className="vui-voice-lobby"><Icon name="message" size={40} /><h1>На сервере пока нет каналов</h1>{canManageChannels ? <Button onClick={onOpenChannel}>Создать канал</Button> : null}</div>;
   }
   if (activeChannel.type === 'voice') {
     return <div className="vui-voice-lobby"><span className="vui-voice-lobby__orb"><Icon name="voice" size={34} /></span><Badge tone="primary">Голосовой канал</Badge><h1>{activeChannel.name}</h1><p>Подключитесь к разговору. Внутри доступны выбранные аудиоустройства, демонстрация экрана и системный звук.</p><Button disabled={!props.server.permissions.includes('CONNECT_VOICE')} icon="headphones" loading={props.busy} onClick={() => props.onConnectVoice(activeChannel.id)}>Подключиться</Button></div>;
   }
+  const messageModels: MessageViewModel[] = props.messages.map((message) => ({
+    id: message.id,
+    authorId: message.authorUserId,
+    authorName: message.authorDisplayName,
+    content: message.content,
+    createdAt: message.createdAt,
+    edited: message.editedAt !== null,
+    own: message.authorUserId === props.user.id,
+    canEdit: message.authorUserId === props.user.id,
+    canDelete: message.authorUserId === props.user.id || canManageMessages,
+    ...(message.replyTo === null ? {} : { replyPreview: { authorName: message.replyTo.authorDisplayName, content: message.replyTo.content } }),
+    reactions: message.reactions,
+    ...(message.authorPlatformRole === 'owner' ? { authorBadge: 'founder' as const } : message.authorPlatformRole === 'admin' ? { authorBadge: 'admin' as const } : {}),
+  }));
+  const submitMessage = (): void => {
+    if (editingMessage === null) {
+      props.onSendMessage(replyingMessage?.id);
+      onCancelContext();
+    }
+    else {
+      props.onUpdateMessage(editingMessage.id, props.messageDraft);
+      onCancelContext();
+    }
+  };
   return (
     <section className="vui-message-stage">
-      <div className="vui-message-list">
-        {props.messages.length === 0
-          ? <div className="vui-message-empty"><span><Icon name="hash" size={28} /></span><h2>Начало канала #{activeChannel.name}</h2><p>Здесь появится первая история вашего сервера.</p></div>
-          : props.messages.map((message) => (
-            <article className="vui-message" data-privileged={message.authorPlatformRole !== 'member' || undefined} key={message.id}>
-              <Avatar name={message.authorDisplayName} size="md" />
-              <div><header><strong>{message.authorDisplayName}</strong>{message.authorPlatformRole === 'owner' ? <Badge tone="founder">DEV</Badge> : message.authorPlatformRole === 'admin' ? <Badge tone="primary">ADMIN</Badge> : null}<time>{new Date(message.createdAt).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</time>{message.editedAt === null ? null : <small>изменено</small>}</header><p>{message.content}</p></div>
-              {message.authorUserId === props.user.id || canManageMessages ? <IconButton className="vui-message__delete" icon="close" label="Удалить сообщение" onClick={() => props.onDeleteMessage(message.id)} size="sm" type="button" /> : null}
-            </article>
-          ))}
-      </div>
-      <form className="vui-message-composer" onSubmit={(event) => { event.preventDefault(); props.onSendMessage(); }}>
-        <textarea aria-label="Сообщение" maxLength={4000} onChange={(event) => props.onMessageDraft(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); props.onSendMessage(); } }} placeholder={`Написать в #${activeChannel.name}`} rows={1} value={props.messageDraft} />
-        <IconButton disabled={props.busy || props.messageDraft.trim().length === 0} icon="send" label="Отправить сообщение" size="md" type="submit" />
-      </form>
+      <MessageList channelName={activeChannel.name} messages={messageModels} onDelete={props.onDeleteMessage} onEdit={onEdit} onReaction={props.onMessageReaction} onReply={onReply} />
+      <MessageComposer busy={props.busy} canSend={props.server.permissions.includes('SEND_MESSAGES')} channelName={activeChannel.name} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} onChange={props.onMessageDraft} onSubmit={submitMessage} value={props.messageDraft} />
       {props.error === null ? null : <div className="vui-server-error vui-server-error--floating" role="alert">{props.error}</div>}
     </section>
   );

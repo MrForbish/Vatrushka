@@ -127,7 +127,7 @@ export default function App(): ReactNode {
     if (channel?.type !== 'text') return;
     let active = true;
     const refresh = (): void => {
-      void apiClient.listMessages(channel.id).then((items) => { if (active) setMessages(items); }).catch((caught) => { if (active) setError(userMessage(caught)); });
+      void apiClient.listMessages(channel.id).then((items) => { if (active) setMessages((current) => [...items, ...current.filter((message) => message.id.startsWith('optimistic_'))]); }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     refresh();
     const timer = setInterval(refresh, 3_000);
@@ -290,13 +290,34 @@ export default function App(): ReactNode {
     });
   };
 
-  const sendMessage = (): void => {
+  const sendMessage = (replyToMessageId?: string): void => {
     void run(async () => {
-      if (!activeChannelId) return;
+      if (!activeChannelId || !user) return;
       const content = messageContentSchema.parse(messageDraft);
-      const sent = await apiClient.createMessage(activeChannelId, content);
+      const optimisticId = `optimistic_${crypto.randomUUID()}`;
+      const replyTarget = replyToMessageId === undefined ? null : messages.find((message) => message.id === replyToMessageId) ?? null;
+      const optimistic: TextMessage = {
+        id: optimisticId,
+        channelId: activeChannelId,
+        authorUserId: user.id,
+        authorDisplayName: user.displayName ?? user.email.split('@')[0] ?? 'Пользователь',
+        authorPlatformRole: user.platformRole,
+        content,
+        replyTo: replyTarget === null ? null : { messageId: replyTarget.id, authorUserId: replyTarget.authorUserId, authorDisplayName: replyTarget.authorDisplayName, content: replyTarget.content },
+        reactions: [],
+        createdAt: new Date().toISOString(),
+        editedAt: null,
+      };
       setMessageDraft('');
-      setMessages((current) => [...current.filter((message) => message.id !== sent.id), sent]);
+      setMessages((current) => [...current, optimistic]);
+      try {
+        const sent = await apiClient.createMessage(activeChannelId, content, replyToMessageId);
+        setMessages((current) => [...current.filter((message) => message.id !== optimisticId && message.id !== sent.id), sent]);
+      } catch (caught) {
+        setMessages((current) => current.filter((message) => message.id !== optimisticId));
+        setMessageDraft(content);
+        throw caught;
+      }
     });
   };
 
@@ -304,6 +325,24 @@ export default function App(): ReactNode {
     void run(async () => {
       await apiClient.deleteMessage(messageId);
       setMessages((current) => current.filter((message) => message.id !== messageId));
+    });
+  };
+
+  const updateMessage = (messageId: string, value: string): void => {
+    void run(async () => {
+      const updated = await apiClient.updateMessage(messageId, messageContentSchema.parse(value));
+      setMessageDraft('');
+      setMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
+    });
+  };
+
+  const toggleMessageReaction = (messageId: string, emoji: string): void => {
+    void run(async () => {
+      const message = messages.find((candidate) => candidate.id === messageId);
+      if (!message) return;
+      const active = message.reactions.find((reaction) => reaction.emoji === emoji)?.reactedByCurrentUser !== true;
+      const updated = await apiClient.setMessageReaction(messageId, emoji, active);
+      setMessages((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
     });
   };
 
@@ -476,7 +515,7 @@ export default function App(): ReactNode {
   if (screen === 'invite' && pendingCode) return <InvitePanel code={pendingCode} authenticated={Boolean(user)} error={error} busy={busy} onJoin={() => joinRoom(pendingCode)} onLogin={() => setScreen('auth')} onGuest={() => setScreen('guest')} onBack={() => setScreen(user ? 'home' : 'auth')} />;
   if (screen === 'guest' && pendingCode) return <GuestJoinPanel code={pendingCode} name={guestName} busy={busy} error={error} onName={setGuestName} onJoin={joinGuest} onBack={() => setScreen('invite')} />;
   if (screen === 'home' && user) return <><HomePanel user={user} version={version} roomCode={roomCode} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} servers={servers} serverName={serverName} serverInvite={serverInvite} onRoomCode={setRoomCode} onCreate={createRoom} onJoin={() => joinRoom()} onLogout={logout} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onOpenServer={openServer} />{renderSecurityPanel()}</>;
-  if (screen === 'server' && user && serverDetail) return <><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} onBack={() => setScreen('home')} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onDeleteMessage={deleteMessage} onConnectVoice={connectVoiceChannel} onCopyInvite={() => void window.desktop.copyToClipboard(`Присоединяйтесь к серверу «${serverDetail.name}»\nКод приглашения: ${serverDetail.inviteCode}`)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onAssignRoles={assignCommunityRoles} onKickMember={kickCommunityMember} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onLogout={logout} />{renderSecurityPanel()}</>;
+  if (screen === 'server' && user && serverDetail) return <><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} onBack={() => setScreen('home')} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onConnectVoice={connectVoiceChannel} onCopyInvite={() => void window.desktop.copyToClipboard(`Присоединяйтесь к серверу «${serverDetail.name}»\nКод приглашения: ${serverDetail.inviteCode}`)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onAssignRoles={assignCommunityRoles} onKickMember={kickCommunityMember} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onLogout={logout} />{renderSecurityPanel()}</>;
   if (screen === 'room' && connection) return <><RoomView connection={connection} snapshot={mediaSnapshot} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} locked={locked} busy={busy} error={error} onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))} onShare={showSourcePicker} onCopy={copyInvite} onLeave={leaveRoom} onLock={() => void run(async () => { const result = await apiClient.setRoomLock(connection.roomId, !locked); setLocked(result.isLocked); })} onClose={() => void run(async () => { await apiClient.closeRoom(connection.roomId); await media.disconnect(false); setConnection(null); setScreen('home'); })} onKick={(identity) => void run(() => apiClient.kickMediaParticipant(connection, identity))} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onStartAudio={() => void media.startAudio()} onScreenAudioMute={() => media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)} onScreenAudioVolume={setScreenShareVolume} />{sources && <SourcePicker sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}</>;
   return <main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>;
 }

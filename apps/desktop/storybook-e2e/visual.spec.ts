@@ -39,4 +39,14 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page.getByRole('dialog', { name: 'Серверы' })).toBeVisible();
     await expect(page).toHaveScreenshot('app-shell-compact.png', { animations: 'disabled', fullPage: true });
   });
+
+  test('message conversation', async ({ page }) => {
+    await openStory(page, 'messaging-text-channel--conversation');
+    await expect(page).toHaveScreenshot('messaging-conversation.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('message composer states', async ({ page }) => {
+    await openStory(page, 'messaging-text-channel--composer-states');
+    await expect(page).toHaveScreenshot('messaging-composer.png', { animations: 'disabled', fullPage: true });
+  });
 });

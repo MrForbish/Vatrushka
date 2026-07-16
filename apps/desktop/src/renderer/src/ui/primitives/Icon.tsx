@@ -1,12 +1,15 @@
 import type { ReactNode, SVGProps } from 'react';
 
 export type IconName =
+  | 'attachment'
   | 'bell'
   | 'check'
   | 'chevronDown'
   | 'close'
   | 'eye'
   | 'eyeOff'
+  | 'edit'
+  | 'emoji'
   | 'hash'
   | 'headphones'
   | 'home'
@@ -16,10 +19,12 @@ export type IconName =
   | 'lock'
   | 'logout'
   | 'message'
+  | 'mic'
   | 'minus'
   | 'panelLeft'
   | 'panelRight'
   | 'plus'
+  | 'reply'
   | 'search'
   | 'send'
   | 'settings'
@@ -29,12 +34,15 @@ export type IconName =
   | 'warning';
 
 const paths: Record<IconName, ReactNode> = {
+  attachment: <path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.5-9.5a4 4 0 0 1 5.7 5.7l-9.6 9.5a2 2 0 0 1-2.8-2.8l8.9-8.9" />,
   bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" /><path d="M10 21h4" /></>,
   check: <path d="m5 12 4 4L19 6" />,
   chevronDown: <path d="m7 10 5 5 5-5" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,
   eye: <><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" /></>,
   eyeOff: <><path d="m4 4 16 16M10.6 6.1A10.5 10.5 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.1 2.8M6.1 7.3C3.8 9.1 2.5 12 2.5 12s3.5 6 9.5 6c.8 0 1.5-.1 2.2-.3" /></>,
+  edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4L16.5 3.5Z" /></>,
+  emoji: <><circle cx="12" cy="12" r="9" /><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" /></>,
   hash: <><path d="M5 9h14M4 15h14M10 3 8 21M16 3l-2 18" /></>,
   headphones: <><path d="M4 14v-2a8 8 0 0 1 16 0v2" /><path d="M4 14h3v6H5a1 1 0 0 1-1-1v-5ZM20 14h-3v6h2a1 1 0 0 0 1-1v-5Z" /></>,
   home: <><path d="m3 11 9-8 9 8" /><path d="M5 10v10h14V10M9 20v-6h6v6" /></>,
@@ -44,10 +52,12 @@ const paths: Record<IconName, ReactNode> = {
   lock: <><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></>,
   logout: <><path d="M10 4H5v16h5M14 8l4 4-4 4M18 12H9" /></>,
   message: <><path d="M4 5h16v12H8l-4 4V5Z" /><path d="M8 9h8M8 13h5" /></>,
+  mic: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 10v3a7 7 0 0 0 14 0v-3M12 20v2" /></>,
   minus: <path d="M5 12h14" />,
   panelLeft: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>,
   panelRight: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
+  reply: <><path d="m9 17-5-5 5-5" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></>,
   search: <><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></>,
   send: <><path d="m22 2-7 20-4-9-9-4 20-7Z" /><path d="M22 2 11 13" /></>,
   settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" /></>,

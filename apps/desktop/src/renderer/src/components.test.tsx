@@ -118,9 +118,18 @@ describe('server UI', () => {
 
   it('shows persistent channels, messages, members, and role management', async () => {
     const onChannel = vi.fn();
-    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" serverInvite="" busy={false} error={null} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={noop} onSendMessage={noop} onDeleteMessage={noop} onConnectVoice={noop} onCopyInvite={noop} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onAssignRoles={noop} onKickMember={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onSecurity={noop} onLogout={noop} />);
+    const onMessageDraft = vi.fn();
+    const onMessageReaction = vi.fn();
+    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', replyTo: null, reactions: [], createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" serverInvite="" busy={false} error={null} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={onMessageDraft} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onConnectVoice={noop} onCopyInvite={noop} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onAssignRoles={noop} onKickMember={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onSecurity={noop} onLogout={noop} />);
     expect(screen.getByText('Привет, команда!')).toBeInTheDocument();
     expect(screen.getByText('Владелец сервера')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Ответить' }));
+    expect(screen.getByText('Ответ')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Отменить' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Редактировать сообщение' }));
+    expect(onMessageDraft).toHaveBeenCalledWith('Привет, команда!');
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить реакцию 👍' }));
+    expect(onMessageReaction).toHaveBeenCalledWith('message-1', '👍');
     await userEvent.click(screen.getByRole('button', { name: 'Голосовой' }));
     expect(onChannel).toHaveBeenCalledWith('voice-1');
     await userEvent.click(screen.getByRole('button', { name: /Роли и права/u }));
