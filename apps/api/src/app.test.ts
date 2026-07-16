@@ -419,7 +419,16 @@ describe('servers, channels, messages, and roles API', () => {
       method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { content: 'Отвечаю по теме', replyToMessageId: sentMessage.id },
     });
     expect(replied.statusCode).toBe(201);
-    expect(replied.json<{ replyTo: { messageId: string; authorDisplayName: string } }>().replyTo).toEqual(expect.objectContaining({ messageId: sentMessage.id, authorDisplayName: 'Member' }));
+    const repliedMessage = replied.json<{ id: string; replyTo: { messageId: string; authorDisplayName: string } }>();
+    expect(repliedMessage.replyTo).toEqual(expect.objectContaining({ messageId: sentMessage.id, authorDisplayName: 'Member' }));
+
+    const unreadServer = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    const unreadChannel = unreadServer.json<{ channels: Array<{ id: string; unreadCount: number }> }>().channels.find((channel) => channel.id === textChannel.id);
+    expect(unreadChannel?.unreadCount).toBe(1);
+    const markedRead = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/channels/${textChannel.id}/read`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { messageId: repliedMessage.id } });
+    expect(markedRead.statusCode).toBe(204);
+    const readServer = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(readServer.json<{ channels: Array<{ id: string; unreadCount: number }> }>().channels.find((channel) => channel.id === textChannel.id)?.unreadCount).toBe(0);
 
     const reacted = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/messages/${sentMessage.id}/reactions/${encodeURIComponent('👍')}`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(reacted.statusCode).toBe(200);

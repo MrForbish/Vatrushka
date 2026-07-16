@@ -31,7 +31,7 @@ const workspaces: WorkspaceNavigationItem[] = [
 ];
 
 const channels: ChannelNavigationItem[] = [
-  { id: 'general', name: 'общий', type: 'text', unread: true },
+  { id: 'general', name: 'общий', type: 'text', unread: true, unreadCount: 7 },
   { id: 'planning', name: 'планирование', type: 'text', mentionCount: 2 },
   { id: 'news', name: 'релизы-и-новости', type: 'text' },
   { id: 'lounge', name: 'Разговорная', type: 'voice', participantCount: 4 },

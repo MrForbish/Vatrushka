@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 
@@ -25,6 +25,8 @@ import type {
   TextMessageWithAuthor,
   MessageReactionRecord,
   MessageReactionSummary,
+  ChannelReadStateRecord,
+  ChannelUnreadCount,
   ChannelLeaseRecord,
 } from '../domain.js';
 import type { DataStore } from '../ports.js';
@@ -535,6 +537,23 @@ export class PostgresStore implements DataStore {
 
   async removeMessageReaction(messageId: string, userId: string, emoji: string): Promise<void> {
     await this.db.delete(schema.messageReactions).where(and(eq(schema.messageReactions.messageId, messageId), eq(schema.messageReactions.userId, userId), eq(schema.messageReactions.emoji, emoji)));
+  }
+
+  async markChannelRead(state: ChannelReadStateRecord): Promise<void> {
+    await this.db.insert(schema.channelReadStates).values(state).onConflictDoUpdate({
+      target: [schema.channelReadStates.channelId, schema.channelReadStates.userId],
+      set: { readAt: sql`greatest(${schema.channelReadStates.readAt}, ${state.readAt})` },
+    });
+  }
+
+  async listChannelUnreadCounts(channelIds: string[], userId: string, since: Date): Promise<ChannelUnreadCount[]> {
+    if (channelIds.length === 0) return [];
+    const [states, messages] = await Promise.all([
+      this.db.select().from(schema.channelReadStates).where(and(eq(schema.channelReadStates.userId, userId), inArray(schema.channelReadStates.channelId, channelIds))),
+      this.db.select({ channelId: schema.textMessages.channelId, createdAt: schema.textMessages.createdAt }).from(schema.textMessages).where(and(inArray(schema.textMessages.channelId, channelIds), ne(schema.textMessages.authorUserId, userId), gte(schema.textMessages.createdAt, since))),
+    ]);
+    const readAt = new Map(states.map((state) => [state.channelId, state.readAt]));
+    return channelIds.map((channelId) => ({ channelId, count: messages.filter((message) => message.channelId === channelId && (readAt.has(channelId) ? message.createdAt > readAt.get(channelId)! : message.createdAt >= since)).length }));
   }
 
   async claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }> {

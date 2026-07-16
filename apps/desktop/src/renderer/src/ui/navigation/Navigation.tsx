@@ -75,6 +75,7 @@ export interface ChannelNavigationItem {
   name: string;
   type: 'text' | 'voice';
   unread?: boolean;
+  unreadCount?: number;
   mentionCount?: number;
   participantCount?: number;
 }
@@ -95,6 +96,7 @@ export function ChannelRow({ active = false, canDelete = false, channel, onDelet
         <span>{channel.name}</span>
         {channel.participantCount === undefined || channel.participantCount === 0 ? null : <small>{channel.participantCount}</small>}
         {channel.mentionCount === undefined || channel.mentionCount === 0 ? null : <Badge tone="danger">{channel.mentionCount}</Badge>}
+        {channel.mentionCount !== undefined || channel.unreadCount === undefined || channel.unreadCount === 0 ? null : <Badge tone="primary">{channel.unreadCount > 99 ? '99+' : channel.unreadCount}</Badge>}
         {channel.unread === true ? <span aria-label="Есть непрочитанные сообщения" className="vui-channel-row__unread" role="img" /> : null}
       </button>
       {canDelete && onDelete !== undefined ? <IconButton className="vui-channel-row__delete" icon="close" label={`Удалить канал ${channel.name}`} onClick={() => onDelete(channel.id)} size="sm" type="button" /> : null}

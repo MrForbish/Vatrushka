@@ -146,6 +146,16 @@ export const messageReactions = pgTable(
   (table) => [primaryKey({ columns: [table.messageId, table.userId, table.emoji] }), index('message_reactions_message_idx').on(table.messageId)],
 );
 
+export const channelReadStates = pgTable(
+  'channel_read_states',
+  {
+    channelId: uuid('channel_id').notNull().references(() => serverChannels.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    readAt: timestamp('read_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.channelId, table.userId] }), index('channel_read_states_user_idx').on(table.userId)],
+);
+
 export const channelScreenShareLeases = pgTable(
   'channel_screen_share_leases',
   {

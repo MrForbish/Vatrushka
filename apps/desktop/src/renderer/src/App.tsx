@@ -127,7 +127,15 @@ export default function App(): ReactNode {
     if (channel?.type !== 'text') return;
     let active = true;
     const refresh = (): void => {
-      void apiClient.listMessages(channel.id).then((items) => { if (active) setMessages((current) => [...items, ...current.filter((message) => message.id.startsWith('optimistic_'))]); }).catch((caught) => { if (active) setError(userMessage(caught)); });
+      void apiClient.listMessages(channel.id).then((items) => {
+        if (!active) return;
+        setMessages((current) => [...items, ...current.filter((message) => message.id.startsWith('optimistic_'))]);
+        const latest = items.at(-1);
+        if (latest) {
+          void apiClient.markChannelRead(channel.id, latest.id).catch((caught) => { if (active) setError(userMessage(caught)); });
+          setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((item) => item.id === channel.id ? { ...item, unreadCount: 0 } : item) });
+        }
+      }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     refresh();
     const timer = setInterval(refresh, 3_000);

@@ -118,6 +118,8 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     id: channel.id,
     name: channel.name,
     type: channel.type,
+    unread: channel.unreadCount > 0,
+    unreadCount: channel.unreadCount,
   }));
   const workspaces: WorkspaceNavigationItem[] = props.servers.map((server) => ({
     id: server.id,

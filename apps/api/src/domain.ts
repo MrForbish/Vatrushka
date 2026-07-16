@@ -134,6 +134,17 @@ export interface MessageReactionSummary {
   reactedByCurrentUser: boolean;
 }
 
+export interface ChannelReadStateRecord {
+  channelId: string;
+  userId: string;
+  readAt: Date;
+}
+
+export interface ChannelUnreadCount {
+  channelId: string;
+  count: number;
+}
+
 export interface ChannelLeaseRecord {
   channelId: string;
   participantIdentity: string;

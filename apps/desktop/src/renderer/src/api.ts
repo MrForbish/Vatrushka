@@ -193,6 +193,10 @@ export class ApiClient {
     return this.request(`/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: active ? 'PUT' : 'DELETE', auth: true });
   }
 
+  async markChannelRead(channelId: string, messageId: string): Promise<void> {
+    await this.request(`/channels/${channelId}/read`, { method: 'PUT', body: { messageId }, auth: true });
+  }
+
   async deleteMessage(messageId: string): Promise<void> {
     await this.request(`/messages/${messageId}`, { method: 'DELETE', auth: true });
   }

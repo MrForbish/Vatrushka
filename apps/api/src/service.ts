@@ -89,8 +89,8 @@ function publicServerRole(role: ServerRoleRecord): ServerRole {
   return { id: role.id, serverId: role.serverId, name: role.name, color: role.color, position: role.position, isDefault: role.isDefault, permissions: role.permissions };
 }
 
-function publicServerChannel(channel: ServerChannelRecord): ServerChannel {
-  return { id: channel.id, serverId: channel.serverId, name: channel.name, type: channel.type, position: channel.position };
+function publicServerChannel(channel: ServerChannelRecord, unreadCount = 0): ServerChannel {
+  return { id: channel.id, serverId: channel.serverId, name: channel.name, type: channel.type, position: channel.position, unreadCount };
 }
 
 function publicTextMessage(message: TextMessageWithAuthor, replyTo: TextMessageWithAuthor | null, reactions: MessageReactionSummary[]): TextMessage {
@@ -522,6 +522,16 @@ export class VatrushkaService {
     const [withAuthor] = await this.store.findTextMessagesWithAuthors([message.id]);
     if (!withAuthor) throw new AppError('MESSAGE_NOT_FOUND', 404);
     return (await this.hydrateMessages([withAuthor], user.id))[0]!;
+  }
+
+  async markChannelRead(authorization: string | undefined, channelId: string, messageId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const channel = await this.requireTextChannel(channelId);
+    const server = await this.requireServer(channel.serverId);
+    await this.requireServerPermission(server, user, 'VIEW_CHANNEL');
+    const message = await this.store.findTextMessage(messageId);
+    if (!message || message.channelId !== channel.id) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    await this.store.markChannelRead({ channelId: channel.id, userId: user.id, readAt: message.createdAt });
   }
 
   async deleteMessage(authorization: string | undefined, messageId: string): Promise<void> {
@@ -1065,6 +1075,9 @@ export class VatrushkaService {
       this.store.listAllMemberRoles(server.id),
     ]);
     const publicRoles = roles.map(publicServerRole);
+    const membership = members.find((member) => member.userId === user.id);
+    if (!membership) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    const unreadCounts = new Map((await this.store.listChannelUnreadCounts(channels.filter((channel) => channel.type === 'text').map((channel) => channel.id), user.id, membership.joinedAt)).map((entry) => [entry.channelId, entry.count]));
     const roleById = new Map(publicRoles.map((role) => [role.id, role]));
     const defaultRoles = publicRoles.filter((role) => role.isDefault);
     const publicMembers: ServerMember[] = members.map((member) => ({
@@ -1084,7 +1097,7 @@ export class VatrushkaService {
       ownerUserId: server.ownerUserId,
       memberCount: members.length,
       createdAt: server.createdAt.toISOString(),
-      channels: channels.map(publicServerChannel),
+      channels: channels.map((channel) => publicServerChannel(channel, unreadCounts.get(channel.id) ?? 0)),
       roles: publicRoles,
       members: publicMembers,
       permissions: [...permissions],

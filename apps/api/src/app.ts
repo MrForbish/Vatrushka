@@ -28,6 +28,7 @@ import {
   joinServerSchema,
   messageQuerySchema,
   messageReactionSchema,
+  markChannelReadSchema,
   refreshSchema,
   requestRegistrationSchema,
   requestCodeSchema,
@@ -101,7 +102,7 @@ const connectionSchema = z.object({
 });
 const permissionSchema = z.enum(serverPermissions);
 const serverRoleResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), color: z.string(), position: z.number(), isDefault: z.boolean(), permissions: z.array(permissionSchema) });
-const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number() });
+const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), unreadCount: z.number() });
 const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema) });
 const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteCode: z.string(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
 const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
@@ -388,6 +389,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   api.delete(`${API_PREFIX}/messages/:messageId/reactions/:emoji`, {
     schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: messageReactionParams, response: { 200: textMessageResponseSchema, ...routeErrors() } },
   }, async (request) => service.setMessageReaction(request.headers.authorization, request.params.messageId, request.params.emoji, false));
+
+  api.put(`${API_PREFIX}/channels/:channelId/read`, {
+    schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: channelIdParams, body: markChannelReadSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.markChannelRead(request.headers.authorization, request.params.channelId, request.body.messageId);
+    return reply.status(204).send(null);
+  });
 
   api.post(`${API_PREFIX}/channels/:channelId/connect`, {
     schema: { tags: ['channels'], security: [{ bearerAuth: [] }], params: channelIdParams, response: { 200: connectionSchema, ...routeErrors() } },

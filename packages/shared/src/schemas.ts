@@ -78,6 +78,7 @@ export const assignMemberRolesSchema = z.object({ roleIds: z.array(uuidSchema).m
 export const createMessageSchema = z.object({ content: messageContentSchema, replyToMessageId: uuidSchema.nullish() }).strict();
 export const updateMessageSchema = z.object({ content: messageContentSchema }).strict();
 export const messageQuerySchema = z.object({ before: z.iso.datetime().optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }).strict();
+export const markChannelReadSchema = z.object({ messageId: uuidSchema }).strict();
 
 export const desktopSourceSelectionSchema = z
   .object({ sourceId: z.string().min(1).max(512), includeAudio: z.boolean() })

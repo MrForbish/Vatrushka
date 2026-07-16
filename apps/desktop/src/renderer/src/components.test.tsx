@@ -109,8 +109,8 @@ describe('server UI', () => {
     createdAt: '2026-01-01T00:00:00.000Z',
     permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'SEND_MESSAGES', 'CONNECT_VOICE', 'MANAGE_CHANNELS', 'MANAGE_ROLES', 'MANAGE_MESSAGES'],
     channels: [
-      { id: 'text-1', serverId: 'server-1', name: 'общий', type: 'text', position: 0 },
-      { id: 'voice-1', serverId: 'server-1', name: 'Голосовой', type: 'voice', position: 1 },
+      { id: 'text-1', serverId: 'server-1', name: 'общий', type: 'text', position: 0, unreadCount: 0 },
+      { id: 'voice-1', serverId: 'server-1', name: 'Голосовой', type: 'voice', position: 1, unreadCount: 0 },
     ],
     roles: [{ id: 'role-1', serverId: 'server-1', name: '@everyone', color: '#8d7a72', position: 0, isDefault: true, permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] }],
     members: [{ userId: 'user-1', displayName: 'Anna', platformRole: 'owner', joinedAt: '2026-01-01T00:00:00.000Z', roles: [] }],

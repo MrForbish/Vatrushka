@@ -21,6 +21,8 @@ import type {
   TextMessageWithAuthor,
   MessageReactionRecord,
   MessageReactionSummary,
+  ChannelReadStateRecord,
+  ChannelUnreadCount,
   ChannelLeaseRecord,
 } from '../domain.js';
 import type { DataStore } from '../ports.js';
@@ -39,6 +41,7 @@ export class MemoryStore implements DataStore {
   readonly serverChannels = new Map<string, ServerChannelRecord>();
   readonly textMessages = new Map<string, TextMessageRecord>();
   readonly messageReactions = new Map<string, MessageReactionRecord>();
+  readonly channelReadStates = new Map<string, ChannelReadStateRecord>();
   readonly channelLeases = new Map<string, ChannelLeaseRecord>();
 
   async healthCheck(): Promise<void> {}
@@ -386,6 +389,7 @@ export class MemoryStore implements DataStore {
       this.textMessages.delete(messageId);
       for (const [key, reaction] of this.messageReactions) if (reaction.messageId === messageId) this.messageReactions.delete(key);
     }
+    for (const [key, state] of this.channelReadStates) if (state.channelId === id) this.channelReadStates.delete(key);
     this.channelLeases.delete(id);
     return this.serverChannels.delete(id);
   }
@@ -456,6 +460,19 @@ export class MemoryStore implements DataStore {
 
   async removeMessageReaction(messageId: string, userId: string, emoji: string): Promise<void> {
     this.messageReactions.delete(`${messageId}:${userId}:${emoji}`);
+  }
+
+  async markChannelRead(state: ChannelReadStateRecord): Promise<void> {
+    const key = `${state.channelId}:${state.userId}`;
+    const current = this.channelReadStates.get(key);
+    if (!current || current.readAt < state.readAt) this.channelReadStates.set(key, structuredClone(state));
+  }
+
+  async listChannelUnreadCounts(channelIds: string[], userId: string, since: Date): Promise<ChannelUnreadCount[]> {
+    return channelIds.map((channelId) => {
+      const state = this.channelReadStates.get(`${channelId}:${userId}`);
+      return { channelId, count: [...this.textMessages.values()].filter((message) => message.channelId === channelId && message.authorUserId !== userId && (state ? message.createdAt > state.readAt : message.createdAt >= since)).length };
+    });
   }
 
   async claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }> {

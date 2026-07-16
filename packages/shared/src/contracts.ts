@@ -36,6 +36,7 @@ export interface ServerChannel {
   name: string;
   type: ServerChannelType;
   position: number;
+  unreadCount: number;
 }
 
 export interface ServerRole {
