@@ -14,16 +14,22 @@
     Referrer-Policy "no-referrer"
     -Server
   }
-  reverse_proxy api:3000
+  reverse_proxy 127.0.0.1:3001
   log {
     output stdout
     format json
   }
 }
 
+# Certbot uses this HTTP-only webroot to renew the TURN/TLS certificate.
+http://{$TURN_DOMAIN:turn.invalid} {
+  root * /var/www/certbot
+  file_server
+}
+
 # Used only with infra/livekit/docker-compose.self-hosted.yml.
 {$LIVEKIT_DOMAIN:livekit.invalid} {
-  reverse_proxy host.docker.internal:7880
+  reverse_proxy 127.0.0.1:7880
   log {
     output stdout
     format json

@@ -1,3 +1,6 @@
+# Reference template for manual deployments.
+# Docker Compose injects the production config and credentials through environment variables.
+
 port: 7880
 bind_addresses:
   - "0.0.0.0"
@@ -9,7 +12,6 @@ rtc:
   use_external_ip: true
 
 keys:
-  # Replace both values before starting. Keep them equal to LIVEKIT_API_KEY / LIVEKIT_API_SECRET.
   replace-me-key: replace-me-with-a-long-random-secret
 
 room:
@@ -20,15 +22,15 @@ room:
 webhook:
   api_key: replace-me-key
   urls:
-    - https://api.example.com/api/v1/webhooks/livekit
+    - https://api.myvatrushka.ru/api/v1/webhooks/livekit
 
 turn:
   enabled: true
-  domain: turn.example.com
+  domain: turn.myvatrushka.ru
   udp_port: 3478
   tls_port: 5349
-  cert_file: /certs/fullchain.pem
-  key_file: /certs/privkey.pem
+  cert_file: /etc/letsencrypt/live/turn.myvatrushka.ru/fullchain.pem
+  key_file: /etc/letsencrypt/live/turn.myvatrushka.ru/privkey.pem
 
 logging:
   level: info
