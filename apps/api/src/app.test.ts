@@ -410,10 +410,29 @@ describe('servers, channels, messages, and roles API', () => {
       method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { content: 'Теперь можно писать' },
     });
     expect(sent.statusCode).toBe(201);
-    expect(sent.json<{ authorDisplayName: string }>().authorDisplayName).toBe('Member');
+    const sentMessage = sent.json<{ id: string; authorDisplayName: string; replyTo: unknown; reactions: unknown[] }>();
+    expect(sentMessage.authorDisplayName).toBe('Member');
+    expect(sentMessage.replyTo).toBeNull();
+    expect(sentMessage.reactions).toEqual([]);
+
+    const replied = await context.app.inject({
+      method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { content: 'Отвечаю по теме', replyToMessageId: sentMessage.id },
+    });
+    expect(replied.statusCode).toBe(201);
+    expect(replied.json<{ replyTo: { messageId: string; authorDisplayName: string } }>().replyTo).toEqual(expect.objectContaining({ messageId: sentMessage.id, authorDisplayName: 'Member' }));
+
+    const reacted = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/messages/${sentMessage.id}/reactions/${encodeURIComponent('👍')}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(reacted.statusCode).toBe(200);
+    expect(reacted.json<{ reactions: Array<{ emoji: string; count: number; reactedByCurrentUser: boolean }> }>().reactions).toEqual([{ emoji: '👍', count: 1, reactedByCurrentUser: true }]);
+    const duplicateReaction = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/messages/${sentMessage.id}/reactions/${encodeURIComponent('👍')}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(duplicateReaction.json<{ reactions: Array<{ count: number }> }>().reactions[0]?.count).toBe(1);
+    const unreacted = await context.app.inject({ method: 'DELETE', url: `${API_PREFIX}/messages/${sentMessage.id}/reactions/${encodeURIComponent('👍')}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(unreacted.statusCode).toBe(200);
+    expect(unreacted.json<{ reactions: unknown[] }>().reactions).toEqual([]);
+
     const messages = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(messages.statusCode).toBe(200);
-    expect(messages.json<Array<{ content: string }>>()).toEqual([expect.objectContaining({ content: 'Теперь можно писать' })]);
+    expect(messages.json<Array<{ content: string }>>()).toEqual(expect.arrayContaining([expect.objectContaining({ content: 'Теперь можно писать' }), expect.objectContaining({ content: 'Отвечаю по теме' })]));
   });
 
   it('connects to a persistent voice channel and coordinates screen sharing', async () => {

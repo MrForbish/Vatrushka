@@ -1,4 +1,4 @@
-import { boolean, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import type { PlatformRole, ServerChannelType, ServerPermission } from '@vatrushka/shared';
 
@@ -128,10 +128,22 @@ export const textMessages = pgTable(
     channelId: uuid('channel_id').notNull().references(() => serverChannels.id, { onDelete: 'cascade' }),
     authorUserId: uuid('author_user_id').notNull().references(() => users.id),
     content: text('content').notNull(),
+    replyToMessageId: uuid('reply_to_message_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     editedAt: timestamp('edited_at', { withTimezone: true }),
   },
-  (table) => [index('text_messages_channel_created_idx').on(table.channelId, table.createdAt)],
+  (table) => [index('text_messages_channel_created_idx').on(table.channelId, table.createdAt), foreignKey({ columns: [table.replyToMessageId], foreignColumns: [table.id], name: 'text_messages_reply_to_message_id_fk' }).onDelete('set null')],
+);
+
+export const messageReactions = pgTable(
+  'message_reactions',
+  {
+    messageId: uuid('message_id').notNull().references(() => textMessages.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    emoji: text('emoji').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.messageId, table.userId, table.emoji] }), index('message_reactions_message_idx').on(table.messageId)],
 );
 
 export const channelScreenShareLeases = pgTable(

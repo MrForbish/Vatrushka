@@ -19,6 +19,8 @@ import type {
   ServerChannelRecord,
   TextMessageRecord,
   TextMessageWithAuthor,
+  MessageReactionRecord,
+  MessageReactionSummary,
   ChannelLeaseRecord,
 } from '../domain.js';
 import type { DataStore } from '../ports.js';
@@ -36,6 +38,7 @@ export class MemoryStore implements DataStore {
   readonly serverMemberRoles = new Set<string>();
   readonly serverChannels = new Map<string, ServerChannelRecord>();
   readonly textMessages = new Map<string, TextMessageRecord>();
+  readonly messageReactions = new Map<string, MessageReactionRecord>();
   readonly channelLeases = new Map<string, ChannelLeaseRecord>();
 
   async healthCheck(): Promise<void> {}
@@ -379,7 +382,10 @@ export class MemoryStore implements DataStore {
   }
 
   async deleteServerChannel(id: string): Promise<boolean> {
-    for (const [messageId, message] of this.textMessages) if (message.channelId === id) this.textMessages.delete(messageId);
+    for (const [messageId, message] of this.textMessages) if (message.channelId === id) {
+      this.textMessages.delete(messageId);
+      for (const [key, reaction] of this.messageReactions) if (reaction.messageId === messageId) this.messageReactions.delete(key);
+    }
     this.channelLeases.delete(id);
     return this.serverChannels.delete(id);
   }
@@ -402,6 +408,30 @@ export class MemoryStore implements DataStore {
     return message ? structuredClone(message) : null;
   }
 
+  async findTextMessagesWithAuthors(ids: string[]): Promise<TextMessageWithAuthor[]> {
+    return ids.flatMap((id) => {
+      const message = this.textMessages.get(id);
+      if (!message) return [];
+      const user = this.users.get(message.authorUserId);
+      if (!user) return [];
+      return [{ ...structuredClone(message), displayName: user.displayName, platformRole: user.platformRole }];
+    });
+  }
+
+  async listMessageReactionSummaries(messageIds: string[], currentUserId: string): Promise<MessageReactionSummary[]> {
+    const allowed = new Set(messageIds);
+    const grouped = new Map<string, MessageReactionSummary>();
+    for (const reaction of this.messageReactions.values()) {
+      if (!allowed.has(reaction.messageId)) continue;
+      const key = `${reaction.messageId}:${reaction.emoji}`;
+      const current = grouped.get(key) ?? { messageId: reaction.messageId, emoji: reaction.emoji, count: 0, reactedByCurrentUser: false };
+      current.count += 1;
+      current.reactedByCurrentUser ||= reaction.userId === currentUserId;
+      grouped.set(key, current);
+    }
+    return [...grouped.values()].map((reaction) => structuredClone(reaction));
+  }
+
   async createTextMessage(message: TextMessageRecord): Promise<void> {
     this.textMessages.set(message.id, structuredClone(message));
   }
@@ -415,7 +445,17 @@ export class MemoryStore implements DataStore {
   }
 
   async deleteTextMessage(id: string): Promise<boolean> {
+    for (const [key, reaction] of this.messageReactions) if (reaction.messageId === id) this.messageReactions.delete(key);
+    for (const message of this.textMessages.values()) if (message.replyToMessageId === id) message.replyToMessageId = null;
     return this.textMessages.delete(id);
+  }
+
+  async addMessageReaction(reaction: MessageReactionRecord): Promise<void> {
+    this.messageReactions.set(`${reaction.messageId}:${reaction.userId}:${reaction.emoji}`, structuredClone(reaction));
+  }
+
+  async removeMessageReaction(messageId: string, userId: string, emoji: string): Promise<void> {
+    this.messageReactions.delete(`${messageId}:${userId}:${emoji}`);
   }
 
   async claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }> {

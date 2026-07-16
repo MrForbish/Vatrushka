@@ -26,7 +26,7 @@ import {
 
 import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
-import type { AuthCodeRecord, GuestSessionRecord, RoomRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
+import type { AuthCodeRecord, GuestSessionRecord, MessageReactionSummary, RoomRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
 import type { DataStore, Mailer, MediaService } from './ports.js';
 import {
   hashOpaqueToken,
@@ -93,7 +93,7 @@ function publicServerChannel(channel: ServerChannelRecord): ServerChannel {
   return { id: channel.id, serverId: channel.serverId, name: channel.name, type: channel.type, position: channel.position };
 }
 
-function publicTextMessage(message: TextMessageWithAuthor): TextMessage {
+function publicTextMessage(message: TextMessageWithAuthor, replyTo: TextMessageWithAuthor | null, reactions: MessageReactionSummary[]): TextMessage {
   return {
     id: message.id,
     channelId: message.channelId,
@@ -101,6 +101,8 @@ function publicTextMessage(message: TextMessageWithAuthor): TextMessage {
     authorDisplayName: message.displayName ?? 'Участник',
     authorPlatformRole: message.platformRole,
     content: message.content,
+    replyTo: replyTo === null ? null : { messageId: replyTo.id, authorUserId: replyTo.authorUserId, authorDisplayName: replyTo.displayName ?? 'Участник', content: replyTo.content },
+    reactions: reactions.map(({ emoji, count, reactedByCurrentUser }) => ({ emoji, count, reactedByCurrentUser })),
     createdAt: message.createdAt.toISOString(),
     editedAt: message.editedAt?.toISOString() ?? null,
   };
@@ -475,19 +477,23 @@ export class VatrushkaService {
     const channel = await this.requireTextChannel(channelId);
     const server = await this.requireServer(channel.serverId);
     await this.requireServerPermission(server, user, 'VIEW_CHANNEL');
-    return (await this.store.listTextMessages(channel.id, before ? new Date(before) : null, limit)).map(publicTextMessage);
+    return this.hydrateMessages(await this.store.listTextMessages(channel.id, before ? new Date(before) : null, limit), user.id);
   }
 
-  async createMessage(authorization: string | undefined, channelId: string, content: string): Promise<TextMessage> {
+  async createMessage(authorization: string | undefined, channelId: string, content: string, replyToMessageId: string | null): Promise<TextMessage> {
     const user = await this.authenticate(authorization);
     this.requireCompleteProfile(user);
     const channel = await this.requireTextChannel(channelId);
     const server = await this.requireServer(channel.serverId);
     await this.requireServerPermission(server, user, 'SEND_MESSAGES');
+    if (replyToMessageId !== null) {
+      const replyTarget = await this.store.findTextMessage(replyToMessageId);
+      if (!replyTarget || replyTarget.channelId !== channel.id) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    }
     const now = this.now();
-    const message = { id: randomUUID(), channelId: channel.id, authorUserId: user.id, content, createdAt: now, editedAt: null };
+    const message = { id: randomUUID(), channelId: channel.id, authorUserId: user.id, content, replyToMessageId, createdAt: now, editedAt: null };
     await this.store.createTextMessage(message);
-    return publicTextMessage({ ...message, displayName: user.displayName, platformRole: user.platformRole });
+    return (await this.hydrateMessages([{ ...message, displayName: user.displayName, platformRole: user.platformRole }], user.id))[0]!;
   }
 
   async updateMessage(authorization: string | undefined, messageId: string, content: string): Promise<TextMessage> {
@@ -501,7 +507,21 @@ export class VatrushkaService {
     if (!updated) throw new AppError('MESSAGE_NOT_FOUND', 404);
     const author = await this.store.findUserById(updated.authorUserId);
     if (!author) throw new AppError('MESSAGE_NOT_FOUND', 404);
-    return publicTextMessage({ ...updated, displayName: author.displayName, platformRole: author.platformRole });
+    return (await this.hydrateMessages([{ ...updated, displayName: author.displayName, platformRole: author.platformRole }], user.id))[0]!;
+  }
+
+  async setMessageReaction(authorization: string | undefined, messageId: string, emoji: string, active: boolean): Promise<TextMessage> {
+    const user = await this.authenticate(authorization);
+    const message = await this.store.findTextMessage(messageId);
+    if (!message) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    const channel = await this.requireTextChannel(message.channelId);
+    const server = await this.requireServer(channel.serverId);
+    await this.requireServerPermission(server, user, 'SEND_MESSAGES');
+    if (active) await this.store.addMessageReaction({ messageId: message.id, userId: user.id, emoji, createdAt: this.now() });
+    else await this.store.removeMessageReaction(message.id, user.id, emoji);
+    const [withAuthor] = await this.store.findTextMessagesWithAuthors([message.id]);
+    if (!withAuthor) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    return (await this.hydrateMessages([withAuthor], user.id))[0]!;
   }
 
   async deleteMessage(authorization: string | undefined, messageId: string): Promise<void> {
@@ -512,6 +532,15 @@ export class VatrushkaService {
     const server = await this.requireServer(channel.serverId);
     if (message.authorUserId !== user.id) await this.requireServerPermission(server, user, 'MANAGE_MESSAGES');
     await this.store.deleteTextMessage(message.id);
+  }
+
+  private async hydrateMessages(messages: TextMessageWithAuthor[], currentUserId: string): Promise<TextMessage[]> {
+    const replyIds = [...new Set(messages.map((message) => message.replyToMessageId).filter((id): id is string => id !== null))];
+    const replies = new Map((await this.store.findTextMessagesWithAuthors(replyIds)).map((message) => [message.id, message]));
+    const reactions = await this.store.listMessageReactionSummaries(messages.map((message) => message.id), currentUserId);
+    const byMessage = new Map<string, MessageReactionSummary[]>();
+    for (const reaction of reactions) byMessage.set(reaction.messageId, [...(byMessage.get(reaction.messageId) ?? []), reaction]);
+    return messages.map((message) => publicTextMessage(message, message.replyToMessageId === null ? null : replies.get(message.replyToMessageId) ?? null, byMessage.get(message.id) ?? []));
   }
 
   async connectVoiceChannel(authorization: string | undefined, channelId: string): Promise<RoomConnection> {

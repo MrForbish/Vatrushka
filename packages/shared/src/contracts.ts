@@ -70,6 +70,17 @@ export interface TextMessage {
   authorDisplayName: string;
   authorPlatformRole: PlatformRole;
   content: string;
+  replyTo: {
+    messageId: string;
+    authorUserId: string;
+    authorDisplayName: string;
+    content: string;
+  } | null;
+  reactions: Array<{
+    emoji: string;
+    count: number;
+    reactedByCurrentUser: boolean;
+  }>;
   createdAt: string;
   editedAt: string | null;
 }

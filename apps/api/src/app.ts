@@ -27,6 +27,7 @@ import {
   guestJoinSchema,
   joinServerSchema,
   messageQuerySchema,
+  messageReactionSchema,
   refreshSchema,
   requestRegistrationSchema,
   requestCodeSchema,
@@ -57,6 +58,7 @@ const channelIdParams = z.object({ channelId: z.uuid() });
 const serverRoleParams = z.object({ serverId: z.uuid(), roleId: z.uuid() });
 const serverMemberParams = z.object({ serverId: z.uuid(), userId: z.uuid() });
 const messageIdParams = z.object({ messageId: z.uuid() });
+const messageReactionParams = z.object({ messageId: z.uuid(), emoji: messageReactionSchema });
 const channelParticipantParams = z.object({ channelId: z.uuid(), participantIdentity: z.string().min(3).max(200) });
 
 const errorResponseSchema = z.object({
@@ -103,7 +105,7 @@ const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.strin
 const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema) });
 const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteCode: z.string(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
 const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
-const textMessageResponseSchema = z.object({ id: z.string(), channelId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), authorPlatformRole: z.enum(['member', 'admin', 'owner']), content: z.string(), createdAt: z.string(), editedAt: z.string().nullable() });
+const textMessageResponseSchema = z.object({ id: z.string(), channelId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), authorPlatformRole: z.enum(['member', 'admin', 'owner']), content: z.string(), replyTo: z.object({ messageId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string() }).nullable(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reactedByCurrentUser: z.boolean() })), createdAt: z.string(), editedAt: z.string().nullable() });
 
 export interface BuildAppOptions {
   config: AppConfig;
@@ -366,7 +368,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   api.post(`${API_PREFIX}/channels/:channelId/messages`, {
     schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: channelIdParams, body: createMessageSchema, response: { 201: textMessageResponseSchema, ...routeErrors() } },
-  }, async (request, reply) => reply.status(201).send(await service.createMessage(request.headers.authorization, request.params.channelId, request.body.content)));
+  }, async (request, reply) => reply.status(201).send(await service.createMessage(request.headers.authorization, request.params.channelId, request.body.content, request.body.replyToMessageId ?? null)));
 
   api.patch(`${API_PREFIX}/messages/:messageId`, {
     schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: messageIdParams, body: updateMessageSchema, response: { 200: textMessageResponseSchema, ...routeErrors() } },
@@ -378,6 +380,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     await service.deleteMessage(request.headers.authorization, request.params.messageId);
     return reply.status(204).send(null);
   });
+
+  api.put(`${API_PREFIX}/messages/:messageId/reactions/:emoji`, {
+    schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: messageReactionParams, response: { 200: textMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.setMessageReaction(request.headers.authorization, request.params.messageId, request.params.emoji, true));
+
+  api.delete(`${API_PREFIX}/messages/:messageId/reactions/:emoji`, {
+    schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: messageReactionParams, response: { 200: textMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.setMessageReaction(request.headers.authorization, request.params.messageId, request.params.emoji, false));
 
   api.post(`${API_PREFIX}/channels/:channelId/connect`, {
     schema: { tags: ['channels'], security: [{ bearerAuth: [] }], params: channelIdParams, response: { 200: connectionSchema, ...routeErrors() } },

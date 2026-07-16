@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, isNull, lt, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 
@@ -23,6 +23,8 @@ import type {
   ServerChannelRecord,
   TextMessageRecord,
   TextMessageWithAuthor,
+  MessageReactionRecord,
+  MessageReactionSummary,
   ChannelLeaseRecord,
 } from '../domain.js';
 import type { DataStore } from '../ports.js';
@@ -489,6 +491,30 @@ export class PostgresStore implements DataStore {
     return row ?? null;
   }
 
+  async findTextMessagesWithAuthors(ids: string[]): Promise<TextMessageWithAuthor[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select({ message: schema.textMessages, displayName: schema.users.displayName, platformRole: schema.users.platformRole })
+      .from(schema.textMessages)
+      .innerJoin(schema.users, eq(schema.users.id, schema.textMessages.authorUserId))
+      .where(inArray(schema.textMessages.id, ids));
+    return rows.map(({ message, displayName, platformRole }) => ({ ...message, displayName, platformRole }));
+  }
+
+  async listMessageReactionSummaries(messageIds: string[], currentUserId: string): Promise<MessageReactionSummary[]> {
+    if (messageIds.length === 0) return [];
+    const rows = await this.db.select().from(schema.messageReactions).where(inArray(schema.messageReactions.messageId, messageIds));
+    const grouped = new Map<string, MessageReactionSummary>();
+    for (const reaction of rows) {
+      const key = `${reaction.messageId}:${reaction.emoji}`;
+      const current = grouped.get(key) ?? { messageId: reaction.messageId, emoji: reaction.emoji, count: 0, reactedByCurrentUser: false };
+      current.count += 1;
+      current.reactedByCurrentUser ||= reaction.userId === currentUserId;
+      grouped.set(key, current);
+    }
+    return [...grouped.values()];
+  }
+
   async createTextMessage(message: TextMessageRecord): Promise<void> {
     await this.db.insert(schema.textMessages).values(message);
   }
@@ -501,6 +527,14 @@ export class PostgresStore implements DataStore {
   async deleteTextMessage(id: string): Promise<boolean> {
     const rows = await this.db.delete(schema.textMessages).where(eq(schema.textMessages.id, id)).returning({ id: schema.textMessages.id });
     return rows.length === 1;
+  }
+
+  async addMessageReaction(reaction: MessageReactionRecord): Promise<void> {
+    await this.db.insert(schema.messageReactions).values(reaction).onConflictDoNothing();
+  }
+
+  async removeMessageReaction(messageId: string, userId: string, emoji: string): Promise<void> {
+    await this.db.delete(schema.messageReactions).where(and(eq(schema.messageReactions.messageId, messageId), eq(schema.messageReactions.userId, userId), eq(schema.messageReactions.emoji, emoji)));
   }
 
   async claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }> {

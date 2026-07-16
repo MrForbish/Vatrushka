@@ -115,8 +115,23 @@ export interface TextMessageRecord {
   channelId: string;
   authorUserId: string;
   content: string;
+  replyToMessageId: string | null;
   createdAt: Date;
   editedAt: Date | null;
+}
+
+export interface MessageReactionRecord {
+  messageId: string;
+  userId: string;
+  emoji: string;
+  createdAt: Date;
+}
+
+export interface MessageReactionSummary {
+  messageId: string;
+  emoji: string;
+  count: number;
+  reactedByCurrentUser: boolean;
 }
 
 export interface ChannelLeaseRecord {

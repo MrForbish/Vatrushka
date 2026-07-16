@@ -16,6 +16,8 @@ import type {
   ServerChannelRecord,
   TextMessageRecord,
   TextMessageWithAuthor,
+  MessageReactionRecord,
+  MessageReactionSummary,
   ChannelLeaseRecord,
 } from './domain.js';
 import type { PlatformRole } from '@vatrushka/shared';
@@ -79,10 +81,14 @@ export interface DataStore {
   createServerChannel(channel: ServerChannelRecord): Promise<void>;
   deleteServerChannel(id: string): Promise<boolean>;
   listTextMessages(channelId: string, before: Date | null, limit: number): Promise<TextMessageWithAuthor[]>;
+  findTextMessagesWithAuthors(ids: string[]): Promise<TextMessageWithAuthor[]>;
+  listMessageReactionSummaries(messageIds: string[], currentUserId: string): Promise<MessageReactionSummary[]>;
   findTextMessage(id: string): Promise<TextMessageRecord | null>;
   createTextMessage(message: TextMessageRecord): Promise<void>;
   updateTextMessage(id: string, content: string, now: Date): Promise<TextMessageRecord | null>;
   deleteTextMessage(id: string): Promise<boolean>;
+  addMessageReaction(reaction: MessageReactionRecord): Promise<void>;
+  removeMessageReaction(messageId: string, userId: string, emoji: string): Promise<void>;
   claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }>;
   heartbeatChannelLease(channelId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<ChannelLeaseRecord | null>;
   releaseChannelLease(channelId: string, participantIdentity: string): Promise<boolean>;
