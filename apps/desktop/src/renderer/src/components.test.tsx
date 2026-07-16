@@ -1,5 +1,6 @@
 import { ConnectionState } from 'livekit-client';
-import { render, screen } from '@testing-library/react';
+import type { LocalTrack } from 'livekit-client';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -113,6 +114,21 @@ describe('room UI', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Другой участник уже показывает экран');
     expect(screen.getByRole('button', { name: 'Открыть вход' })).toBeDisabled();
     expect(screen.getByTestId('screen-share-control')).toBeDisabled();
+  });
+
+  it('lets a viewer mute and adjust screen-share audio independently', async () => {
+    const onScreenAudioMute = vi.fn();
+    const onScreenAudioVolume = vi.fn();
+    const track = { attach: vi.fn(), detach: vi.fn(() => []) } as unknown as LocalTrack;
+    const snapshot = { ...baseSnapshot, screenTrack: track, screenSharerName: 'Visitor', screenShareIsLocal: false, hasScreenShareAudio: true, screenShareAudioVolume: 0.7 };
+    render(<RoomView connection={connection} snapshot={snapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} locked={false} busy={false} error={null} onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onStartAudio={noop} onScreenAudioMute={onScreenAudioMute} onScreenAudioVolume={onScreenAudioVolume} onParticipantMute={noop} onParticipantVolume={noop} />);
+
+    expect(screen.getByText('Звук трансляции')).toBeInTheDocument();
+    expect(screen.getByText('Громкость меняется только для вас')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Выключить звук трансляции' }));
+    expect(onScreenAudioMute).toHaveBeenCalledOnce();
+    fireEvent.change(screen.getByRole('slider', { name: 'Громкость трансляции' }), { target: { value: '35' } });
+    expect(onScreenAudioVolume).toHaveBeenCalledWith(0.35);
   });
 });
 

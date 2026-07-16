@@ -6,6 +6,7 @@ import {
   clipboard,
   desktopCapturer,
   ipcMain,
+  screen,
   type IpcMainInvokeEvent,
 } from 'electron';
 import log from 'electron-log/main';
@@ -62,13 +63,26 @@ async function listSources(): Promise<DesktopSourceInfo[]> {
     thumbnailSize: { width: 320, height: 180 },
     fetchWindowIcons: true,
   });
-  return sources.map((source) => ({
-    id: source.id,
-    name: source.name.slice(0, 200),
-    thumbnailDataUrl: source.thumbnail.toDataURL(),
-    ...(source.appIcon && !source.appIcon.isEmpty() ? { appIconDataUrl: source.appIcon.toDataURL() } : {}),
-    type: sourceType(source.id),
-  }));
+  const displays = screen.getAllDisplays();
+  return sources.map((source) => {
+    const type = sourceType(source.id);
+    const display = type === 'screen'
+      ? displays.find((candidate) => String(candidate.id) === source.display_id)
+      : undefined;
+    return {
+      id: source.id,
+      name: source.name.slice(0, 200),
+      thumbnailDataUrl: source.thumbnail.toDataURL(),
+      ...(source.appIcon && !source.appIcon.isEmpty() ? { appIconDataUrl: source.appIcon.toDataURL() } : {}),
+      type,
+      ...(display === undefined ? {} : {
+        displayName: display.label.slice(0, 200),
+        width: Math.round(display.size.width * display.scaleFactor),
+        height: Math.round(display.size.height * display.scaleFactor),
+      }),
+      audioAvailable: process.platform === 'win32',
+    };
+  });
 }
 
 export function registerIpc(options: IpcOptions): () => void {

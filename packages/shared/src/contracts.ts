@@ -215,6 +215,10 @@ export interface DesktopSourceInfo {
   thumbnailDataUrl: string;
   appIconDataUrl?: string;
   type: 'screen' | 'window';
+  displayName?: string;
+  width?: number;
+  height?: number;
+  audioAvailable: boolean;
 }
 
 export interface DesktopBridge {

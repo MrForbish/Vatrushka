@@ -67,6 +67,7 @@ export class MediaSession {
   private snapshot: MediaSnapshot = initialSnapshot;
   private screenShareAudioVolume = 1;
   private screenShareAudioMuted = false;
+  private stoppingScreenShare = false;
   private readonly participantVolumes = new Map<string, number>();
   private readonly locallyMutedParticipants = new Set<string>();
   private readonly listeners = new Set<() => void>();
@@ -185,24 +186,29 @@ export class MediaSession {
 
   async startScreenShare(includeAudio: boolean): Promise<void> {
     if (!this.room || !this.connection) throw new Error('Комната не подключена');
-    await this.room.localParticipant.setScreenShareEnabled(
-      true,
-      {
-        audio: includeAudio
-          ? {
-              restrictOwnAudio: true,
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-            }
-          : false,
-        video: true,
-        resolution: { width: 1920, height: 1080, frameRate: 30 },
-        contentHint: 'detail',
-        systemAudio: includeAudio ? 'include' : 'exclude',
-      },
-      { screenShareEncoding: { maxBitrate: 3_500_000, maxFramerate: 30, priority: 'high' }, simulcast: true },
-    );
+    this.stoppingScreenShare = false;
+    try {
+      await this.room.localParticipant.setScreenShareEnabled(
+        true,
+        {
+          audio: includeAudio
+            ? {
+                restrictOwnAudio: true,
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+              }
+            : false,
+          video: true,
+          resolution: { width: 1920, height: 1080, frameRate: 30 },
+          contentHint: 'detail',
+          systemAudio: includeAudio ? 'include' : 'exclude',
+        },
+        { screenShareEncoding: { maxBitrate: 3_500_000, maxFramerate: 30, priority: 'high' }, simulcast: true },
+      );
+    } catch (error) {
+      throw new Error(screenShareErrorMessage(error), { cause: error });
+    }
     this.startHeartbeat();
     this.refreshSnapshot();
   }
@@ -211,10 +217,13 @@ export class MediaSession {
     this.stopHeartbeat();
     const room = this.room;
     if (room?.localParticipant.isScreenShareEnabled) {
+      this.stoppingScreenShare = true;
       try {
         await room.localParticipant.setScreenShareEnabled(false);
       } catch {
         // Continue with the server-side release even if unpublishing failed.
+      } finally {
+        window.setTimeout(() => { this.stoppingScreenShare = false; }, 1_000);
       }
     }
     if (release && this.connection) {
@@ -269,7 +278,13 @@ export class MediaSession {
       .on(RoomEvent.TrackUnpublished, refresh)
       .on(RoomEvent.LocalTrackPublished, refresh)
       .on(RoomEvent.LocalTrackUnpublished, (publication) => {
-        if (publication.source === Track.Source.ScreenShare) void this.stopScreenShare();
+        if (publication.source === Track.Source.ScreenShare) {
+          if (this.stoppingScreenShare) this.stoppingScreenShare = false;
+          else {
+            this.patch({ error: 'Источник демонстрации закрыт — показ экрана остановлен' });
+            void this.stopScreenShare();
+          }
+        }
         refresh();
       })
       .on(RoomEvent.TrackSubscribed, (track, publication) => {
@@ -396,4 +411,12 @@ function deviceErrorMessage(error: unknown): string {
   if (error instanceof DOMException && error.name === 'NotFoundError') return 'Микрофон не найден';
   if (error instanceof DOMException && error.name === 'NotReadableError') return 'Микрофон используется другим приложением';
   return 'Не удалось включить микрофон';
+}
+
+function screenShareErrorMessage(error: unknown): string {
+  if (error instanceof DOMException && error.name === 'NotAllowedError') return 'Доступ к записи экрана запрещён. Разрешите его в настройках Windows.';
+  if (error instanceof DOMException && error.name === 'NotFoundError') return 'Выбранный экран или окно больше недоступны';
+  if (error instanceof DOMException && error.name === 'NotReadableError') return 'Не удалось прочитать выбранный экран или окно';
+  if (error instanceof DOMException && error.name === 'AbortError') return 'Запуск демонстрации был отменён';
+  return 'Не удалось запустить демонстрацию экрана';
 }

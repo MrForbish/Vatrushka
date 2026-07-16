@@ -6,7 +6,6 @@ import type { LocalTrack, RemoteTrack } from 'livekit-client';
 import {
   colorForIdentity,
   initials,
-  type DesktopSourceInfo,
   type PlatformRole,
   type PublicUser,
   type RoomConnection,
@@ -305,21 +304,6 @@ function ScreenTrack({ track }: { track: RemoteTrack | LocalTrack }): ReactNode 
     return () => { track.detach(element); };
   }, [track]);
   return <video ref={ref} className="screenVideo" autoPlay playsInline />;
-}
-
-export function SourcePicker({ sources, includeAudio, platform, onAudio, onSelect, onCancel }: { sources: DesktopSourceInfo[]; includeAudio: boolean; platform: string; onAudio(value: boolean): void; onSelect(source: DesktopSourceInfo): void; onCancel(): void }): ReactNode {
-  const dialog = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    dialog.current?.querySelector<HTMLButtonElement>('button')?.focus();
-    const key = (event: KeyboardEvent): void => { if (event.key === 'Escape') onCancel(); };
-    window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
-  }, [onCancel]);
-  const groups = [
-    { type: 'screen' as const, title: 'Весь экран', hint: 'Мониторы целиком' },
-    { type: 'window' as const, title: 'Окна приложений', hint: 'Только выбранное окно' },
-  ];
-  return <div className="modalBackdrop"><div className="sourceDialog" role="dialog" aria-modal="true" aria-labelledby="source-title" ref={dialog}><header><div><div className="eyebrow">Демонстрация экрана</div><h2 id="source-title">Что показать?</h2></div><button className="modalClose" aria-label="Закрыть выбор источника" onClick={onCancel}><Icon name="close" /></button></header><div className="sourceGroups">{groups.map((group) => { const items = sources.filter((source) => source.type === group.type); if (items.length === 0) return null; return <section className="sourceGroup" key={group.type}><div className="sourceGroupTitle"><h3>{group.title}</h3><span>{group.hint}</span></div><div className="sourceGrid">{items.map((source, index) => <button key={source.id} className="sourceCard" title={source.name} onClick={() => onSelect(source)}><span className="sourcePreview"><img src={source.thumbnailDataUrl} alt="" /><span className="sourceTypeBadge">{source.type === 'screen' ? `Экран ${index + 1}` : 'Приложение'}</span></span><span className="sourceCaption">{source.appIconDataUrl && <img className="sourceAppIcon" src={source.appIconDataUrl} alt="" />}<span><b>{source.name || (source.type === 'screen' ? `Монитор ${index + 1}` : 'Окно без названия')}</b><small>{source.type === 'screen' ? 'Будет виден весь монитор' : 'Остальные окна не попадут в кадр'}</small></span></span></button>)}</div></section>; })}</div><footer><label className="checkbox"><input type="checkbox" checked={includeAudio} onChange={(event) => onAudio(event.target.checked)} disabled={platform !== 'win32'} /><span><b>Передавать звук компьютера</b><small>Голоса из Ватрушки будут исключены, чтобы не возникало эха</small></span></label>{platform !== 'win32' && <small>Системный звук поддерживается на Windows</small>}<button className="textButton" onClick={onCancel}>Отмена</button></footer></div></div>;
 }
 
 function PlatformBadge({ role }: { role: Exclude<PlatformRole, 'member'> }): ReactNode {
