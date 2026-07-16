@@ -7,7 +7,7 @@ import { API_PREFIX } from '@vatrushka/shared';
 
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
-import { VatrushkaService } from './service.js';
+import { MAX_ATTACHMENT_BYTES, VatrushkaService } from './service.js';
 import { FakeMailer, FakeMediaService } from './testing/fakes.js';
 import { MemoryStore } from './testing/memory-store.js';
 
@@ -97,6 +97,18 @@ async function createRoom(accessToken: string): Promise<{
   const room = await context.store.findRoomById(connection.roomId);
   if (!room) throw new Error('Room not created');
   return { ...connection, livekitRoomName: room.livekitRoomName };
+}
+
+function multipartFile(filename: string, mimeType: string, content: Buffer): { contentType: string; payload: Buffer } {
+  const boundary = 'vatrushka-test-boundary';
+  return {
+    contentType: `multipart/form-data; boundary=${boundary}`,
+    payload: Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${mimeType}\r\n\r\n`),
+      content,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]),
+  };
 }
 
 beforeEach(async () => {
@@ -410,10 +422,63 @@ describe('servers, channels, messages, and roles API', () => {
       method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { content: 'Теперь можно писать' },
     });
     expect(sent.statusCode).toBe(201);
-    const sentMessage = sent.json<{ id: string; authorDisplayName: string; replyTo: unknown; reactions: unknown[] }>();
+    const sentMessage = sent.json<{ id: string; authorDisplayName: string; replyTo: unknown; reactions: unknown[]; attachments: unknown[] }>();
     expect(sentMessage.authorDisplayName).toBe('Member');
     expect(sentMessage.replyTo).toBeNull();
     expect(sentMessage.reactions).toEqual([]);
+    expect(sentMessage.attachments).toEqual([]);
+
+    const fileContent = Buffer.from('Vatrushka attachment');
+    const multipart = multipartFile('notes.txt', 'text/plain', fileContent);
+    const uploaded = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/messages/${sentMessage.id}/attachments`,
+      headers: { authorization: `Bearer ${member.accessToken}`, 'content-type': multipart.contentType },
+      payload: multipart.payload,
+    });
+    expect(uploaded.statusCode).toBe(201);
+    const attachmentMessage = uploaded.json<{ attachments: Array<{ id: string; fileName: string; mimeType: string; size: number }> }>();
+    expect(attachmentMessage.attachments).toEqual([expect.objectContaining({ fileName: 'notes.txt', mimeType: 'text/plain', size: fileContent.length })]);
+    const attachmentId = attachmentMessage.attachments[0]?.id;
+    if (!attachmentId) throw new Error('Attachment was not created');
+
+    const downloaded = await context.app.inject({
+      method: 'GET',
+      url: `${API_PREFIX}/attachments/${attachmentId}/content`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+    });
+    expect(downloaded.statusCode).toBe(200);
+    expect(downloaded.headers['x-content-type-options']).toBe('nosniff');
+    expect(downloaded.rawPayload).toEqual(fileContent);
+
+    const ownerCannotAppend = multipartFile('owner.txt', 'text/plain', Buffer.from('no'));
+    const deniedAttachment = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/messages/${sentMessage.id}/attachments`,
+      headers: { authorization: `Bearer ${owner.accessToken}`, 'content-type': ownerCannotAppend.contentType },
+      payload: ownerCannotAppend.payload,
+    });
+    expect(deniedAttachment.statusCode).toBe(403);
+
+    const disallowed = multipartFile('script.html', 'text/html', Buffer.from('<script></script>'));
+    const rejectedAttachment = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/messages/${sentMessage.id}/attachments`,
+      headers: { authorization: `Bearer ${member.accessToken}`, 'content-type': disallowed.contentType },
+      payload: disallowed.payload,
+    });
+    expect(rejectedAttachment.statusCode).toBe(400);
+    expect(rejectedAttachment.json<{ code: string }>().code).toBe('ATTACHMENT_TYPE_NOT_ALLOWED');
+
+    const tooLarge = multipartFile('too-large.txt', 'text/plain', Buffer.alloc(MAX_ATTACHMENT_BYTES + 1, 1));
+    const rejectedSize = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/messages/${sentMessage.id}/attachments`,
+      headers: { authorization: `Bearer ${member.accessToken}`, 'content-type': tooLarge.contentType },
+      payload: tooLarge.payload,
+    });
+    expect(rejectedSize.statusCode).toBe(413);
+    expect(rejectedSize.json<{ code: string }>().code).toBe('ATTACHMENT_TOO_LARGE');
 
     const replied = await context.app.inject({
       method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { content: 'Отвечаю по теме', replyToMessageId: sentMessage.id },
@@ -441,6 +506,11 @@ describe('servers, channels, messages, and roles API', () => {
 
     const messages = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(messages.statusCode).toBe(200);
+    const listedMessage = messages.json<Array<{ id: string; attachments: Array<{ id: string }> }>>().find((message) => message.id === sentMessage.id);
+    expect(listedMessage?.attachments).toEqual([expect.objectContaining({ id: attachmentId })]);
+    const removedAttachment = await context.app.inject({ method: 'DELETE', url: `${API_PREFIX}/attachments/${attachmentId}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(removedAttachment.statusCode).toBe(200);
+    expect(removedAttachment.json<{ attachments: unknown[] }>().attachments).toEqual([]);
     expect(messages.json<Array<{ content: string }>>()).toEqual(expect.arrayContaining([expect.objectContaining({ content: 'Теперь можно писать' }), expect.objectContaining({ content: 'Отвечаю по теме' })]));
   });
 

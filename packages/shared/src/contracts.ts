@@ -82,8 +82,18 @@ export interface TextMessage {
     count: number;
     reactedByCurrentUser: boolean;
   }>;
+  attachments: MessageAttachment[];
   createdAt: string;
   editedAt: string | null;
+}
+
+export interface MessageAttachment {
+  id: string;
+  messageId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
 }
 
 export interface PublicUser {

@@ -23,6 +23,8 @@ import type {
   MessageReactionSummary,
   ChannelReadStateRecord,
   ChannelUnreadCount,
+  MessageAttachmentRecord,
+  MessageAttachmentMetadata,
   ChannelLeaseRecord,
 } from '../domain.js';
 import type { DataStore } from '../ports.js';
@@ -42,6 +44,7 @@ export class MemoryStore implements DataStore {
   readonly textMessages = new Map<string, TextMessageRecord>();
   readonly messageReactions = new Map<string, MessageReactionRecord>();
   readonly channelReadStates = new Map<string, ChannelReadStateRecord>();
+  readonly messageAttachments = new Map<string, MessageAttachmentRecord>();
   readonly channelLeases = new Map<string, ChannelLeaseRecord>();
 
   async healthCheck(): Promise<void> {}
@@ -388,6 +391,7 @@ export class MemoryStore implements DataStore {
     for (const [messageId, message] of this.textMessages) if (message.channelId === id) {
       this.textMessages.delete(messageId);
       for (const [key, reaction] of this.messageReactions) if (reaction.messageId === messageId) this.messageReactions.delete(key);
+      for (const [attachmentId, attachment] of this.messageAttachments) if (attachment.messageId === messageId) this.messageAttachments.delete(attachmentId);
     }
     for (const [key, state] of this.channelReadStates) if (state.channelId === id) this.channelReadStates.delete(key);
     this.channelLeases.delete(id);
@@ -450,6 +454,7 @@ export class MemoryStore implements DataStore {
 
   async deleteTextMessage(id: string): Promise<boolean> {
     for (const [key, reaction] of this.messageReactions) if (reaction.messageId === id) this.messageReactions.delete(key);
+    for (const [attachmentId, attachment] of this.messageAttachments) if (attachment.messageId === id) this.messageAttachments.delete(attachmentId);
     for (const message of this.textMessages.values()) if (message.replyToMessageId === id) message.replyToMessageId = null;
     return this.textMessages.delete(id);
   }
@@ -473,6 +478,32 @@ export class MemoryStore implements DataStore {
       const state = this.channelReadStates.get(`${channelId}:${userId}`);
       return { channelId, count: [...this.textMessages.values()].filter((message) => message.channelId === channelId && message.authorUserId !== userId && (state ? message.createdAt > state.readAt : message.createdAt >= since)).length };
     });
+  }
+
+  async listMessageAttachments(messageIds: string[]): Promise<MessageAttachmentMetadata[]> {
+    const allowed = new Set(messageIds);
+    return [...this.messageAttachments.values()].filter((attachment) => allowed.has(attachment.messageId)).map((attachment) => structuredClone({
+      id: attachment.id,
+      messageId: attachment.messageId,
+      uploaderUserId: attachment.uploaderUserId,
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+      createdAt: attachment.createdAt,
+    }));
+  }
+
+  async findMessageAttachment(id: string): Promise<MessageAttachmentRecord | null> {
+    const attachment = this.messageAttachments.get(id);
+    return attachment ? structuredClone(attachment) : null;
+  }
+
+  async createMessageAttachment(attachment: MessageAttachmentRecord): Promise<void> {
+    this.messageAttachments.set(attachment.id, structuredClone(attachment));
+  }
+
+  async deleteMessageAttachment(id: string): Promise<boolean> {
+    return this.messageAttachments.delete(id);
   }
 
   async claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }> {

@@ -26,7 +26,7 @@ import {
 
 import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
-import type { AuthCodeRecord, GuestSessionRecord, MessageReactionSummary, RoomRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
+import type { AuthCodeRecord, GuestSessionRecord, MessageAttachmentMetadata, MessageAttachmentRecord, MessageReactionSummary, RoomRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
 import type { DataStore, Mailer, MediaService } from './ports.js';
 import {
   hashOpaqueToken,
@@ -93,7 +93,32 @@ function publicServerChannel(channel: ServerChannelRecord, unreadCount = 0): Ser
   return { id: channel.id, serverId: channel.serverId, name: channel.name, type: channel.type, position: channel.position, unreadCount };
 }
 
-function publicTextMessage(message: TextMessageWithAuthor, replyTo: TextMessageWithAuthor | null, reactions: MessageReactionSummary[]): TextMessage {
+export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+export const MAX_ATTACHMENTS_PER_MESSAGE = 4;
+const ALLOWED_ATTACHMENT_TYPES = new Set([
+  'application/pdf',
+  'application/zip',
+  'image/gif',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'text/plain',
+]);
+
+function safeAttachmentName(fileName: string): string {
+  const normalized = fileName
+    .normalize('NFKC')
+    .replace(/[\\/]/gu, '_')
+    .trim()
+    .slice(0, 180);
+  const printable = [...normalized].filter((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint >= 32 && codePoint !== 127;
+  }).join('');
+  return printable || 'attachment';
+}
+
+function publicTextMessage(message: TextMessageWithAuthor, replyTo: TextMessageWithAuthor | null, reactions: MessageReactionSummary[], attachments: MessageAttachmentMetadata[]): TextMessage {
   return {
     id: message.id,
     channelId: message.channelId,
@@ -103,6 +128,7 @@ function publicTextMessage(message: TextMessageWithAuthor, replyTo: TextMessageW
     content: message.content,
     replyTo: replyTo === null ? null : { messageId: replyTo.id, authorUserId: replyTo.authorUserId, authorDisplayName: replyTo.displayName ?? 'Участник', content: replyTo.content },
     reactions: reactions.map(({ emoji, count, reactedByCurrentUser }) => ({ emoji, count, reactedByCurrentUser })),
+    attachments: attachments.map(({ id, messageId, fileName, mimeType, size, createdAt }) => ({ id, messageId, fileName, mimeType, size, createdAt: createdAt.toISOString() })),
     createdAt: message.createdAt.toISOString(),
     editedAt: message.editedAt?.toISOString() ?? null,
   };
@@ -524,6 +550,64 @@ export class VatrushkaService {
     return (await this.hydrateMessages([withAuthor], user.id))[0]!;
   }
 
+  async uploadMessageAttachment(authorization: string | undefined, messageId: string, input: { fileName: string; mimeType: string; content: Buffer }): Promise<TextMessage> {
+    const user = await this.authenticate(authorization);
+    this.requireCompleteProfile(user);
+    const message = await this.store.findTextMessage(messageId);
+    if (!message) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    const channel = await this.requireTextChannel(message.channelId);
+    const server = await this.requireServer(channel.serverId);
+    await this.requireServerPermission(server, user, 'SEND_MESSAGES');
+    if (message.authorUserId !== user.id) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    if (input.content.length === 0) throw new AppError('VALIDATION_ERROR', 400);
+    if (input.content.length > MAX_ATTACHMENT_BYTES) throw new AppError('ATTACHMENT_TOO_LARGE', 413);
+    const mimeType = input.mimeType.toLowerCase().split(';', 1)[0]?.trim() ?? '';
+    if (!ALLOWED_ATTACHMENT_TYPES.has(mimeType)) throw new AppError('ATTACHMENT_TYPE_NOT_ALLOWED', 400);
+    const existing = await this.store.listMessageAttachments([message.id]);
+    if (existing.length >= MAX_ATTACHMENTS_PER_MESSAGE) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'attachments', max: MAX_ATTACHMENTS_PER_MESSAGE });
+    const attachment: MessageAttachmentRecord = {
+      id: randomUUID(),
+      messageId: message.id,
+      uploaderUserId: user.id,
+      fileName: safeAttachmentName(input.fileName),
+      mimeType,
+      size: input.content.length,
+      content: input.content,
+      createdAt: this.now(),
+    };
+    await this.store.createMessageAttachment(attachment);
+    const [withAuthor] = await this.store.findTextMessagesWithAuthors([message.id]);
+    if (!withAuthor) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    return (await this.hydrateMessages([withAuthor], user.id))[0]!;
+  }
+
+  async getMessageAttachment(authorization: string | undefined, attachmentId: string): Promise<MessageAttachmentRecord> {
+    const user = await this.authenticate(authorization);
+    const attachment = await this.store.findMessageAttachment(attachmentId);
+    if (!attachment) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    const message = await this.store.findTextMessage(attachment.messageId);
+    if (!message) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    const channel = await this.requireTextChannel(message.channelId);
+    const server = await this.requireServer(channel.serverId);
+    await this.requireServerPermission(server, user, 'VIEW_CHANNEL');
+    return attachment;
+  }
+
+  async deleteMessageAttachment(authorization: string | undefined, attachmentId: string): Promise<TextMessage> {
+    const user = await this.authenticate(authorization);
+    const attachment = await this.store.findMessageAttachment(attachmentId);
+    if (!attachment) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    const message = await this.store.findTextMessage(attachment.messageId);
+    if (!message) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    const channel = await this.requireTextChannel(message.channelId);
+    const server = await this.requireServer(channel.serverId);
+    if (message.authorUserId !== user.id && attachment.uploaderUserId !== user.id) await this.requireServerPermission(server, user, 'MANAGE_MESSAGES');
+    await this.store.deleteMessageAttachment(attachment.id);
+    const [withAuthor] = await this.store.findTextMessagesWithAuthors([message.id]);
+    if (!withAuthor) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    return (await this.hydrateMessages([withAuthor], user.id))[0]!;
+  }
+
   async markChannelRead(authorization: string | undefined, channelId: string, messageId: string): Promise<void> {
     const user = await this.authenticate(authorization);
     const channel = await this.requireTextChannel(channelId);
@@ -547,10 +631,16 @@ export class VatrushkaService {
   private async hydrateMessages(messages: TextMessageWithAuthor[], currentUserId: string): Promise<TextMessage[]> {
     const replyIds = [...new Set(messages.map((message) => message.replyToMessageId).filter((id): id is string => id !== null))];
     const replies = new Map((await this.store.findTextMessagesWithAuthors(replyIds)).map((message) => [message.id, message]));
-    const reactions = await this.store.listMessageReactionSummaries(messages.map((message) => message.id), currentUserId);
+    const messageIds = messages.map((message) => message.id);
+    const [reactions, attachments] = await Promise.all([
+      this.store.listMessageReactionSummaries(messageIds, currentUserId),
+      this.store.listMessageAttachments(messageIds),
+    ]);
     const byMessage = new Map<string, MessageReactionSummary[]>();
     for (const reaction of reactions) byMessage.set(reaction.messageId, [...(byMessage.get(reaction.messageId) ?? []), reaction]);
-    return messages.map((message) => publicTextMessage(message, message.replyToMessageId === null ? null : replies.get(message.replyToMessageId) ?? null, byMessage.get(message.id) ?? []));
+    const attachmentsByMessage = new Map<string, MessageAttachmentMetadata[]>();
+    for (const attachment of attachments) attachmentsByMessage.set(attachment.messageId, [...(attachmentsByMessage.get(attachment.messageId) ?? []), attachment]);
+    return messages.map((message) => publicTextMessage(message, message.replyToMessageId === null ? null : replies.get(message.replyToMessageId) ?? null, byMessage.get(message.id) ?? [], attachmentsByMessage.get(message.id) ?? []));
   }
 
   async connectVoiceChannel(authorization: string | undefined, channelId: string): Promise<RoomConnection> {

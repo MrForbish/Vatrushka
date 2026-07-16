@@ -20,6 +20,8 @@ import type {
   MessageReactionSummary,
   ChannelReadStateRecord,
   ChannelUnreadCount,
+  MessageAttachmentRecord,
+  MessageAttachmentMetadata,
   ChannelLeaseRecord,
 } from './domain.js';
 import type { PlatformRole } from '@vatrushka/shared';
@@ -93,6 +95,10 @@ export interface DataStore {
   removeMessageReaction(messageId: string, userId: string, emoji: string): Promise<void>;
   markChannelRead(state: ChannelReadStateRecord): Promise<void>;
   listChannelUnreadCounts(channelIds: string[], userId: string, since: Date): Promise<ChannelUnreadCount[]>;
+  listMessageAttachments(messageIds: string[]): Promise<MessageAttachmentMetadata[]>;
+  findMessageAttachment(id: string): Promise<MessageAttachmentRecord | null>;
+  createMessageAttachment(attachment: MessageAttachmentRecord): Promise<void>;
+  deleteMessageAttachment(id: string): Promise<boolean>;
   claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }>;
   heartbeatChannelLease(channelId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<ChannelLeaseRecord | null>;
   releaseChannelLease(channelId: string, participantIdentity: string): Promise<boolean>;

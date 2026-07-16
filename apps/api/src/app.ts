@@ -1,4 +1,5 @@
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
@@ -48,7 +49,7 @@ import {
 
 import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
-import type { VatrushkaService } from './service.js';
+import { MAX_ATTACHMENT_BYTES, type VatrushkaService } from './service.js';
 
 const roomIdParams = z.object({ roomId: z.uuid() });
 const roomCodeParams = z.object({ code: roomCodeSchema });
@@ -59,6 +60,7 @@ const channelIdParams = z.object({ channelId: z.uuid() });
 const serverRoleParams = z.object({ serverId: z.uuid(), roleId: z.uuid() });
 const serverMemberParams = z.object({ serverId: z.uuid(), userId: z.uuid() });
 const messageIdParams = z.object({ messageId: z.uuid() });
+const attachmentIdParams = z.object({ attachmentId: z.uuid() });
 const messageReactionParams = z.object({ messageId: z.uuid(), emoji: messageReactionSchema });
 const channelParticipantParams = z.object({ channelId: z.uuid(), participantIdentity: z.string().min(3).max(200) });
 
@@ -106,7 +108,8 @@ const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.strin
 const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema) });
 const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteCode: z.string(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
 const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
-const textMessageResponseSchema = z.object({ id: z.string(), channelId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), authorPlatformRole: z.enum(['member', 'admin', 'owner']), content: z.string(), replyTo: z.object({ messageId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string() }).nullable(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reactedByCurrentUser: z.boolean() })), createdAt: z.string(), editedAt: z.string().nullable() });
+const messageAttachmentResponseSchema = z.object({ id: z.string(), messageId: z.string(), fileName: z.string(), mimeType: z.string(), size: z.number(), createdAt: z.string() });
+const textMessageResponseSchema = z.object({ id: z.string(), channelId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), authorPlatformRole: z.enum(['member', 'admin', 'owner']), content: z.string(), replyTo: z.object({ messageId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string() }).nullable(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reactedByCurrentUser: z.boolean() })), attachments: z.array(messageAttachmentResponseSchema), createdAt: z.string(), editedAt: z.string().nullable() });
 
 export interface BuildAppOptions {
   config: AppConfig;
@@ -115,7 +118,7 @@ export interface BuildAppOptions {
 }
 
 function routeErrors(): Record<number, typeof errorResponseSchema> {
-  return { 400: errorResponseSchema, 401: errorResponseSchema, 403: errorResponseSchema, 404: errorResponseSchema, 409: errorResponseSchema, 410: errorResponseSchema, 429: errorResponseSchema, 500: errorResponseSchema, 503: errorResponseSchema };
+  return { 400: errorResponseSchema, 401: errorResponseSchema, 403: errorResponseSchema, 404: errorResponseSchema, 409: errorResponseSchema, 410: errorResponseSchema, 413: errorResponseSchema, 429: errorResponseSchema, 500: errorResponseSchema, 503: errorResponseSchema };
 }
 
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
@@ -160,6 +163,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Authorization', 'Content-Type'],
   });
+  await app.register(multipart, { limits: { fileSize: MAX_ATTACHMENT_BYTES, files: 1, fields: 0, parts: 1 } });
   await app.register(rateLimit, { global: false, max: 60, timeWindow: '1 minute', ban: 2 });
   await app.register(rawBody, { field: 'rawBody', global: false, encoding: 'utf8', runFirst: true });
 
@@ -197,6 +201,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     }
     if (error instanceof Error && 'statusCode' in error && error.statusCode === 429) {
       void reply.status(429).send(createApiError('RATE_LIMITED', request.id));
+      return;
+    }
+    if (error instanceof Error && 'statusCode' in error && error.statusCode === 413) {
+      void reply.status(413).send(createApiError('ATTACHMENT_TOO_LARGE', request.id));
       return;
     }
     request.log.error({ err: error }, 'Unhandled API error');
@@ -381,6 +389,39 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     await service.deleteMessage(request.headers.authorization, request.params.messageId);
     return reply.status(204).send(null);
   });
+
+  api.post(`${API_PREFIX}/messages/:messageId/attachments`, {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    schema: { tags: ['attachments'], security: [{ bearerAuth: [] }], params: messageIdParams, response: { 201: textMessageResponseSchema, ...routeErrors() } },
+  }, async (request, reply) => {
+    const file = await request.file({ limits: { fileSize: MAX_ATTACHMENT_BYTES, files: 1, fields: 0, parts: 1 } });
+    if (!file || file.fieldname !== 'file') throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'file' });
+    const content = await file.toBuffer();
+    const message = await service.uploadMessageAttachment(request.headers.authorization, request.params.messageId, {
+      fileName: file.filename,
+      mimeType: file.mimetype,
+      content,
+    });
+    return reply.status(201).send(message);
+  });
+
+  api.get(`${API_PREFIX}/attachments/:attachmentId/content`, {
+    schema: { tags: ['attachments'], security: [{ bearerAuth: [] }], params: attachmentIdParams },
+  }, async (request, reply) => {
+    const attachment = await service.getMessageAttachment(request.headers.authorization, request.params.attachmentId);
+    const disposition = attachment.mimeType.startsWith('image/') ? 'inline' : 'attachment';
+    return reply
+      .header('Cache-Control', 'private, max-age=3600')
+      .header('Content-Disposition', `${disposition}; filename="attachment"; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`)
+      .header('Content-Length', attachment.size)
+      .header('X-Content-Type-Options', 'nosniff')
+      .type(attachment.mimeType)
+      .send(attachment.content);
+  });
+
+  api.delete(`${API_PREFIX}/attachments/:attachmentId`, {
+    schema: { tags: ['attachments'], security: [{ bearerAuth: [] }], params: attachmentIdParams, response: { 200: textMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.deleteMessageAttachment(request.headers.authorization, request.params.attachmentId));
 
   api.put(`${API_PREFIX}/messages/:messageId/reactions/:emoji`, {
     schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: messageReactionParams, response: { 200: textMessageResponseSchema, ...routeErrors() } },

@@ -23,6 +23,14 @@
 .vui-message__reactions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-2); }
 .vui-message__reactions button { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-round); background: var(--color-surface-2); color: var(--color-text-secondary); font: var(--text-caption); }
 .vui-message__reactions button[aria-pressed='true'] { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-text-primary); }
+.vui-message__attachments { display: grid; max-width: 520px; gap: var(--space-2); margin-top: var(--space-2); }
+.vui-message-attachment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-2); min-height: 52px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-1); }
+.vui-message-attachment > span:first-child { display: grid; width: 32px; height: 32px; place-items: center; border-radius: var(--radius-sm); background: var(--color-primary-soft); color: var(--color-primary-hover); }
+.vui-message-attachment > span:nth-child(2) { display: grid; min-width: 0; }
+.vui-message-attachment strong,
+.vui-message-attachment small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vui-message-attachment strong { color: var(--color-text-primary); font: var(--text-label-md); }
+.vui-message-attachment small { color: var(--color-text-muted); font: var(--text-caption); }
 
 .vui-message-composer { display: grid; margin: var(--space-3) var(--space-6) var(--space-5); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-2); }
 .vui-message-composer:focus-within { border-color: var(--color-focus); box-shadow: var(--shadow-focus); }
@@ -30,6 +38,13 @@
 .vui-message-composer__context > span { display: grid; min-width: 0; font: var(--text-caption); }
 .vui-message-composer__context > span strong { font: var(--text-label-md); }
 .vui-message-composer__context > button { margin-left: auto; }
+.vui-message-composer__attachments { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3) 0; border-top: 1px solid var(--color-border-subtle); }
+.vui-message-composer__attachments > div { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); min-width: 180px; max-width: 280px; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-1); color: var(--color-text-secondary); }
+.vui-message-composer__attachments > div > span { display: grid; min-width: 0; }
+.vui-message-composer__attachments strong,
+.vui-message-composer__attachments small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vui-message-composer__attachments strong { font: var(--text-label-sm); }
+.vui-message-composer__attachments small { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-message-composer__body { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; gap: var(--space-2); padding: var(--space-2); }
 .vui-message-composer__tools { display: flex; align-items: center; }
 .vui-message-composer textarea { min-height: 36px; max-height: 144px; padding: var(--space-2); resize: vertical; border: 0; outline: 0; background: transparent; color: var(--color-text-primary); font: var(--text-body-md); }

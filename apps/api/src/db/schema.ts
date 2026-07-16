@@ -1,6 +1,8 @@
-import { boolean, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { boolean, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import type { PlatformRole, ServerChannelType, ServerPermission } from '@vatrushka/shared';
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
 
 export const users = pgTable(
   'users',
@@ -154,6 +156,21 @@ export const channelReadStates = pgTable(
     readAt: timestamp('read_at', { withTimezone: true }).notNull(),
   },
   (table) => [primaryKey({ columns: [table.channelId, table.userId] }), index('channel_read_states_user_idx').on(table.userId)],
+);
+
+export const messageAttachments = pgTable(
+  'message_attachments',
+  {
+    id: uuid('id').primaryKey(),
+    messageId: uuid('message_id').notNull().references(() => textMessages.id, { onDelete: 'cascade' }),
+    uploaderUserId: uuid('uploader_user_id').notNull().references(() => users.id),
+    fileName: text('file_name').notNull(),
+    mimeType: text('mime_type').notNull(),
+    size: integer('size').notNull(),
+    content: bytea('content').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('message_attachments_message_idx').on(table.messageId)],
 );
 
 export const channelScreenShareLeases = pgTable(

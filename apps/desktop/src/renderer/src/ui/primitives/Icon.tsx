@@ -6,6 +6,7 @@ export type IconName =
   | 'check'
   | 'chevronDown'
   | 'close'
+  | 'download'
   | 'eye'
   | 'eyeOff'
   | 'edit'
@@ -39,6 +40,7 @@ const paths: Record<IconName, ReactNode> = {
   check: <path d="m5 12 4 4L19 6" />,
   chevronDown: <path d="m7 10 5 5 5-5" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,
+  download: <><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></>,
   eye: <><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" /><circle cx="12" cy="12" r="2.5" /></>,
   eyeOff: <><path d="m4 4 16 16M10.6 6.1A10.5 10.5 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.1 2.8M6.1 7.3C3.8 9.1 2.5 12 2.5 12s3.5 6 9.5 6c.8 0 1.5-.1 2.2-.3" /></>,
   edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4L16.5 3.5Z" /></>,

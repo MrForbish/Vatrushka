@@ -27,6 +27,8 @@ import type {
   MessageReactionSummary,
   ChannelReadStateRecord,
   ChannelUnreadCount,
+  MessageAttachmentRecord,
+  MessageAttachmentMetadata,
   ChannelLeaseRecord,
 } from '../domain.js';
 import type { DataStore } from '../ports.js';
@@ -554,6 +556,24 @@ export class PostgresStore implements DataStore {
     ]);
     const readAt = new Map(states.map((state) => [state.channelId, state.readAt]));
     return channelIds.map((channelId) => ({ channelId, count: messages.filter((message) => message.channelId === channelId && (readAt.has(channelId) ? message.createdAt > readAt.get(channelId)! : message.createdAt >= since)).length }));
+  }
+
+  async listMessageAttachments(messageIds: string[]): Promise<MessageAttachmentMetadata[]> {
+    if (messageIds.length === 0) return [];
+    return this.db.select({ id: schema.messageAttachments.id, messageId: schema.messageAttachments.messageId, uploaderUserId: schema.messageAttachments.uploaderUserId, fileName: schema.messageAttachments.fileName, mimeType: schema.messageAttachments.mimeType, size: schema.messageAttachments.size, createdAt: schema.messageAttachments.createdAt }).from(schema.messageAttachments).where(inArray(schema.messageAttachments.messageId, messageIds)).orderBy(asc(schema.messageAttachments.createdAt));
+  }
+
+  async findMessageAttachment(id: string): Promise<MessageAttachmentRecord | null> {
+    const [attachment] = await this.db.select().from(schema.messageAttachments).where(eq(schema.messageAttachments.id, id)).limit(1);
+    return attachment ?? null;
+  }
+
+  async createMessageAttachment(attachment: MessageAttachmentRecord): Promise<void> {
+    await this.db.insert(schema.messageAttachments).values(attachment);
+  }
+
+  async deleteMessageAttachment(id: string): Promise<boolean> {
+    return (await this.db.delete(schema.messageAttachments).where(eq(schema.messageAttachments.id, id)).returning({ id: schema.messageAttachments.id })).length === 1;
   }
 
   async claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }> {

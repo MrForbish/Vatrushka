@@ -145,6 +145,19 @@ export interface ChannelUnreadCount {
   count: number;
 }
 
+export interface MessageAttachmentRecord {
+  id: string;
+  messageId: string;
+  uploaderUserId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  content: Buffer;
+  createdAt: Date;
+}
+
+export type MessageAttachmentMetadata = Omit<MessageAttachmentRecord, 'content'>;
+
 export interface ChannelLeaseRecord {
   channelId: string;
   participantIdentity: string;

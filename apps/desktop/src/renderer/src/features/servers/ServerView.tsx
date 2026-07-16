@@ -49,10 +49,12 @@ export interface ServerViewProps {
   onSwitchServer(serverId: string): void;
   onChannel(channelId: string): void;
   onMessageDraft(value: string): void;
-  onSendMessage(replyToMessageId?: string): void;
+  onSendMessage(replyToMessageId?: string, files?: File[]): void;
   onUpdateMessage(messageId: string, content: string): void;
   onMessageReaction(messageId: string, emoji: string): void;
   onDeleteMessage(messageId: string): void;
+  onDeleteAttachment(attachmentId: string): void;
+  onDownloadAttachment(attachmentId: string, fileName: string): void;
   onConnectVoice(channelId: string): void;
   onCopyInvite(): void;
   onCreateChannel(name: string, type: 'text' | 'voice'): void;
@@ -84,6 +86,9 @@ const permissionLabels: Record<ServerPermission, string> = {
   MUTE_MEMBERS: 'Отключать участников в голосе',
 };
 
+const allowedAttachmentTypes = new Set(['application/pdf', 'application/zip', 'image/gif', 'image/jpeg', 'image/png', 'image/webp', 'text/plain']);
+const maxAttachmentBytes = 8 * 1024 * 1024;
+
 function displayName(user: PublicUser): string {
   return user.displayName ?? user.email.split('@')[0] ?? 'Пользователь';
 }
@@ -101,11 +106,22 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const [serverAction, setServerAction] = useState<'create' | 'join' | null>(null);
   const [editingMessage, setEditingMessage] = useState<MessageViewModel | null>(null);
   const [replyingMessage, setReplyingMessage] = useState<MessageViewModel | null>(null);
+  const [pendingAttachments, setPendingAttachments] = useState<Array<{ id: string; file: File }>>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
 
   useEffect(() => {
     setEditingMessage(null);
     setReplyingMessage(null);
+    setPendingAttachments([]);
+    setAttachmentError(null);
   }, [props.activeChannelId, props.server.id]);
+
+  const addAttachments = (files: File[]): void => {
+    const accepted = files.filter((file) => allowedAttachmentTypes.has(file.type) && file.size > 0 && file.size <= maxAttachmentBytes);
+    setAttachmentError(accepted.length === files.length ? null : 'Поддерживаются изображения, PDF, TXT и ZIP размером до 8 МБ.');
+    setPendingAttachments((current) => [...current, ...accepted.map((file) => ({ id: crypto.randomUUID(), file }))].slice(0, 4));
+    if (pendingAttachments.length + accepted.length > 4) setAttachmentError('К одному сообщению можно прикрепить не больше четырёх файлов.');
+  };
 
   const activeChannel = props.server.channels.find((channel) => channel.id === props.activeChannelId) ?? props.server.channels[0] ?? null;
   const canManageChannels = props.server.permissions.includes('MANAGE_CHANNELS');
@@ -204,7 +220,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
           : <ServerTopBar channelName={activeChannel.name} channelType={activeChannel.type} description={activeChannel.type === 'text' ? 'История сохраняется' : 'Голосовая сессия'} memberCount={props.server.memberCount} />}
         workspaceLibrary={workspaceLibrary}
       >
-        <ServerStage {...props} activeChannel={activeChannel} canManageChannels={canManageChannels} canManageMessages={canManageMessages} editingMessage={editingMessage} replyingMessage={replyingMessage} onCancelContext={() => { setEditingMessage(null); setReplyingMessage(null); props.onMessageDraft(''); }} onEdit={(message) => { setReplyingMessage(null); setEditingMessage(message); props.onMessageDraft(message.content); }} onOpenChannel={() => openChannelForm('text')} onReply={(message) => { setEditingMessage(null); setReplyingMessage(message); }} />
+        <ServerStage {...props} activeChannel={activeChannel} attachmentError={attachmentError} canManageChannels={canManageChannels} canManageMessages={canManageMessages} editingMessage={editingMessage} pendingAttachments={pendingAttachments} replyingMessage={replyingMessage} onAddAttachments={addAttachments} onCancelContext={() => { setEditingMessage(null); setReplyingMessage(null); props.onMessageDraft(''); }} onEdit={(message) => { setReplyingMessage(null); setEditingMessage(message); setPendingAttachments([]); setAttachmentError(null); props.onMessageDraft(message.content); }} onOpenChannel={() => openChannelForm('text')} onRemoveAttachment={(id) => { setPendingAttachments((current) => current.filter((attachment) => attachment.id !== id)); setAttachmentError(null); }} onReply={(message) => { setEditingMessage(null); setReplyingMessage(message); }} onSentAttachments={() => { setPendingAttachments([]); setAttachmentError(null); }} />
       </AppShell>
 
       <Modal onClose={() => setChannelFormOpen(false)} open={channelFormOpen} title="Новый канал">
@@ -252,17 +268,22 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
 
 interface ServerStageProps extends ServerViewProps {
   activeChannel: ServerDetail['channels'][number] | null;
+  attachmentError: string | null;
   canManageChannels: boolean;
   canManageMessages: boolean;
   editingMessage: MessageViewModel | null;
+  pendingAttachments: Array<{ id: string; file: File }>;
   replyingMessage: MessageViewModel | null;
+  onAddAttachments(files: File[]): void;
   onCancelContext(): void;
   onEdit(message: MessageViewModel): void;
   onOpenChannel(): void;
+  onRemoveAttachment(id: string): void;
   onReply(message: MessageViewModel): void;
+  onSentAttachments(): void;
 }
 
-function ServerStage({ activeChannel, canManageChannels, canManageMessages, editingMessage, onCancelContext, onEdit, onOpenChannel, onReply, replyingMessage, ...props }: ServerStageProps): ReactNode {
+function ServerStage({ activeChannel, attachmentError, canManageChannels, canManageMessages, editingMessage, onAddAttachments, onCancelContext, onEdit, onOpenChannel, onRemoveAttachment, onReply, onSentAttachments, pendingAttachments, replyingMessage, ...props }: ServerStageProps): ReactNode {
   if (activeChannel === null) {
     return <div className="vui-voice-lobby"><Icon name="message" size={40} /><h1>На сервере пока нет каналов</h1>{canManageChannels ? <Button onClick={onOpenChannel}>Создать канал</Button> : null}</div>;
   }
@@ -279,13 +300,15 @@ function ServerStage({ activeChannel, canManageChannels, canManageMessages, edit
     own: message.authorUserId === props.user.id,
     canEdit: message.authorUserId === props.user.id,
     canDelete: message.authorUserId === props.user.id || canManageMessages,
+    attachments: message.attachments.map((attachment) => ({ ...attachment, canDelete: message.authorUserId === props.user.id || canManageMessages })),
     ...(message.replyTo === null ? {} : { replyPreview: { authorName: message.replyTo.authorDisplayName, content: message.replyTo.content } }),
     reactions: message.reactions,
     ...(message.authorPlatformRole === 'owner' ? { authorBadge: 'founder' as const } : message.authorPlatformRole === 'admin' ? { authorBadge: 'admin' as const } : {}),
   }));
   const submitMessage = (): void => {
     if (editingMessage === null) {
-      props.onSendMessage(replyingMessage?.id);
+      props.onSendMessage(replyingMessage?.id, pendingAttachments.map((attachment) => attachment.file));
+      onSentAttachments();
       onCancelContext();
     }
     else {
@@ -295,8 +318,9 @@ function ServerStage({ activeChannel, canManageChannels, canManageMessages, edit
   };
   return (
     <section className="vui-message-stage">
-      <MessageList channelName={activeChannel.name} messages={messageModels} onDelete={props.onDeleteMessage} onEdit={onEdit} onReaction={props.onMessageReaction} onReply={onReply} />
-      <MessageComposer busy={props.busy} canSend={props.server.permissions.includes('SEND_MESSAGES')} channelName={activeChannel.name} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} onChange={props.onMessageDraft} onSubmit={submitMessage} value={props.messageDraft} />
+      <MessageList channelName={activeChannel.name} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onEdit={onEdit} onReaction={props.onMessageReaction} onReply={onReply} />
+      <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} canSend={props.server.permissions.includes('SEND_MESSAGES')} channelName={activeChannel.name} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} {...(editingMessage === null ? { onFilesSelected: onAddAttachments } : {})} onChange={props.onMessageDraft} onRemoveAttachment={onRemoveAttachment} onSubmit={submitMessage} value={props.messageDraft} />
+      {attachmentError === null ? null : <div className="vui-server-error vui-server-error--attachment" role="alert">{attachmentError}</div>}
       {props.error === null ? null : <div className="vui-server-error vui-server-error--floating" role="alert">{props.error}</div>}
     </section>
   );

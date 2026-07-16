@@ -1,4 +1,4 @@
-import type { FormEvent, ReactNode } from 'react';
+import { useRef, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
 
 import { Avatar, Badge, Icon, IconButton } from '../primitives';
 import './messaging.css';
@@ -7,6 +7,14 @@ export interface MessageReactionViewModel {
   emoji: string;
   count: number;
   reactedByCurrentUser?: boolean;
+}
+
+export interface MessageAttachmentViewModel {
+  id: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  canDelete?: boolean;
 }
 
 export interface MessageViewModel {
@@ -22,6 +30,7 @@ export interface MessageViewModel {
   canEdit?: boolean;
   replyPreview?: { authorName: string; content: string };
   reactions?: MessageReactionViewModel[];
+  attachments?: MessageAttachmentViewModel[];
 }
 
 export interface MessageListProps {
@@ -32,6 +41,14 @@ export interface MessageListProps {
   onEdit?: (message: MessageViewModel) => void;
   onReply?: (message: MessageViewModel) => void;
   onReaction?: (messageId: string, emoji: string) => void;
+  onDownloadAttachment?: (attachmentId: string, fileName: string) => void;
+  onDeleteAttachment?: (attachmentId: string) => void;
+}
+
+function formatFileSize(size: number): string {
+  if (size < 1024) return `${size} Б`;
+  if (size < 1024 * 1024) return `${Math.ceil(size / 1024)} КБ`;
+  return `${(size / (1024 * 1024)).toFixed(1)} МБ`;
 }
 
 function isGroupedWithPrevious(message: MessageViewModel, previous: MessageViewModel | undefined): boolean {
@@ -40,7 +57,7 @@ function isGroupedWithPrevious(message: MessageViewModel, previous: MessageViewM
   return distance >= 0 && distance <= 5 * 60 * 1_000;
 }
 
-export function MessageList({ channelName, emptyDescription = 'Здесь появится первая история вашего сервера.', messages, onDelete, onEdit, onReaction, onReply }: MessageListProps): React.JSX.Element {
+export function MessageList({ channelName, emptyDescription = 'Здесь появится первая история вашего сервера.', messages, onDelete, onDeleteAttachment, onDownloadAttachment, onEdit, onReaction, onReply }: MessageListProps): React.JSX.Element {
   if (messages.length === 0) {
     return <div className="vui-message-empty"><span><Icon name="hash" size={28} /></span><h2>Начало канала #{channelName}</h2><p>{emptyDescription}</p></div>;
   }
@@ -55,6 +72,7 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
               {message.replyPreview === undefined ? null : <div className="vui-message__reply"><Icon name="reply" size={14} /><strong>{message.replyPreview.authorName}</strong><span>{message.replyPreview.content}</span></div>}
               {grouped ? <span className="vui-sr-only">{message.authorName}</span> : <header><strong>{message.authorName}</strong>{message.authorBadge === 'founder' ? <Badge tone="founder">DEV</Badge> : message.authorBadge === 'admin' ? <Badge tone="primary">ADMIN</Badge> : null}<time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</time>{message.edited === true ? <small>изменено</small> : null}</header>}
               <p>{message.content}</p>
+              {message.attachments === undefined || message.attachments.length === 0 ? null : <div className="vui-message__attachments">{message.attachments.map((attachment) => <div className="vui-message-attachment" key={attachment.id}><span aria-hidden="true"><Icon name="attachment" size={20} /></span><span><strong title={attachment.fileName}>{attachment.fileName}</strong><small>{formatFileSize(attachment.size)} · {attachment.mimeType}</small></span>{onDownloadAttachment === undefined ? null : <IconButton icon="download" label={`Скачать ${attachment.fileName}`} onClick={() => onDownloadAttachment(attachment.id, attachment.fileName)} size="sm" type="button" />}{attachment.canDelete === true && onDeleteAttachment !== undefined ? <IconButton icon="close" label={`Удалить ${attachment.fileName}`} onClick={() => onDeleteAttachment(attachment.id)} size="sm" type="button" /> : null}</div>)}</div>}
               {message.reactions === undefined || message.reactions.length === 0 ? null : <div aria-label="Реакции" className="vui-message__reactions">{message.reactions.map((reaction) => <button aria-pressed={reaction.reactedByCurrentUser} key={reaction.emoji} onClick={() => onReaction?.(message.id, reaction.emoji)} type="button"><span>{reaction.emoji}</span><strong>{reaction.count}</strong></button>)}</div>}
             </div>
             <div aria-label={`Действия с сообщением ${message.authorName}`} className="vui-message__actions" role="group">
@@ -73,25 +91,35 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
 export interface MessageComposerProps {
   value: string;
   channelName: string;
+  attachments?: Array<{ id: string; name: string; size: number; mimeType: string }>;
   busy?: boolean;
   canSend?: boolean;
   context?: { mode: 'edit' | 'reply'; label: string };
   onChange: (value: string) => void;
   onSubmit: () => void;
   onCancelContext?: () => void;
+  onFilesSelected?: (files: File[]) => void;
+  onRemoveAttachment?: (id: string) => void;
   leadingActions?: ReactNode;
 }
 
-export function MessageComposer({ busy = false, canSend = true, channelName, context, leadingActions, onCancelContext, onChange, onSubmit, value }: MessageComposerProps): React.JSX.Element {
+export function MessageComposer({ attachments = [], busy = false, canSend = true, channelName, context, leadingActions, onCancelContext, onChange, onFilesSelected, onRemoveAttachment, onSubmit, value }: MessageComposerProps): React.JSX.Element {
+  const fileInput = useRef<HTMLInputElement>(null);
   const submit = (event?: FormEvent): void => {
     event?.preventDefault();
     if (canSend && !busy && value.trim().length > 0) onSubmit();
   };
+  const selectFiles = (event: ChangeEvent<HTMLInputElement>): void => {
+    const files = [...(event.target.files ?? [])];
+    if (files.length > 0) onFilesSelected?.(files);
+    event.target.value = '';
+  };
   return (
     <form className="vui-message-composer" onSubmit={submit}>
       {context === undefined ? null : <div className="vui-message-composer__context"><Icon name={context.mode === 'edit' ? 'edit' : 'reply'} size={16} /><span><strong>{context.mode === 'edit' ? 'Редактирование' : 'Ответ'}</strong>{context.label}</span>{onCancelContext === undefined ? null : <IconButton icon="close" label="Отменить" onClick={onCancelContext} size="sm" type="button" />}</div>}
+      {attachments.length === 0 ? null : <div aria-label="Файлы к отправке" className="vui-message-composer__attachments">{attachments.map((attachment) => <div key={attachment.id}><Icon name="attachment" size={16} /><span><strong title={attachment.name}>{attachment.name}</strong><small>{formatFileSize(attachment.size)}</small></span>{onRemoveAttachment === undefined ? null : <IconButton icon="close" label={`Убрать ${attachment.name}`} onClick={() => onRemoveAttachment(attachment.id)} size="sm" type="button" />}</div>)}</div>}
       <div className="vui-message-composer__body">
-        <div className="vui-message-composer__tools">{leadingActions}<IconButton disabled icon="attachment" label="Вложения пока недоступны" size="sm" type="button" /><IconButton disabled icon="emoji" label="Emoji и GIF пока недоступны" size="sm" type="button" /><IconButton disabled icon="mic" label="Голосовые сообщения появятся позже" size="sm" type="button" /></div>
+        <div className="vui-message-composer__tools">{leadingActions}<input accept=".gif,.jpg,.jpeg,.pdf,.png,.txt,.webp,.zip,application/pdf,application/zip,image/gif,image/jpeg,image/png,image/webp,text/plain" aria-label="Выбрать вложения" className="vui-sr-only" disabled={!canSend || busy || onFilesSelected === undefined} multiple onChange={selectFiles} ref={fileInput} type="file" /><IconButton disabled={!canSend || busy || onFilesSelected === undefined || attachments.length >= 4} icon="attachment" label={attachments.length >= 4 ? 'Можно прикрепить не больше четырёх файлов' : 'Прикрепить файлы'} onClick={() => fileInput.current?.click()} size="sm" type="button" /><IconButton disabled icon="emoji" label="Emoji и GIF пока недоступны" size="sm" type="button" /><IconButton disabled icon="mic" label="Голосовые сообщения появятся позже" size="sm" type="button" /></div>
         <textarea aria-label="Сообщение" disabled={!canSend} maxLength={4000} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); } }} placeholder={canSend ? `Написать в #${channelName}` : 'У вас нет права отправлять сообщения'} rows={1} value={value} />
         <IconButton disabled={!canSend || busy || value.trim().length === 0} icon="send" label={context?.mode === 'edit' ? 'Сохранить сообщение' : 'Отправить сообщение'} size="md" type="submit" />
       </div>

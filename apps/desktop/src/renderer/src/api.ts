@@ -31,9 +31,11 @@ export class ClientError extends Error {
 
 interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
+  formData?: FormData;
   auth?: boolean;
   guestToken?: string;
   retry?: boolean;
+  responseType?: 'blob' | 'json';
 }
 
 export class ApiClient {
@@ -201,6 +203,20 @@ export class ApiClient {
     await this.request(`/messages/${messageId}`, { method: 'DELETE', auth: true });
   }
 
+  uploadMessageAttachment(messageId: string, file: File): Promise<TextMessage> {
+    const formData = new FormData();
+    formData.set('file', file, file.name);
+    return this.request(`/messages/${messageId}/attachments`, { method: 'POST', formData, auth: true });
+  }
+
+  deleteMessageAttachment(attachmentId: string): Promise<TextMessage> {
+    return this.request(`/attachments/${attachmentId}`, { method: 'DELETE', auth: true });
+  }
+
+  downloadMessageAttachment(attachmentId: string): Promise<Blob> {
+    return this.request(`/attachments/${attachmentId}/content`, { auth: true, responseType: 'blob' });
+  }
+
   connectVoiceChannel(channelId: string): Promise<RoomConnection> {
     return this.request(`/channels/${channelId}/connect`, { method: 'POST', auth: true });
   }
@@ -297,7 +313,7 @@ export class ApiClient {
   }
 
   private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const { body, auth = false, guestToken, retry = true, headers, ...init } = options;
+    const { body, formData, auth = false, guestToken, retry = true, responseType = 'json', headers, ...init } = options;
     const requestHeaders = new Headers(headers);
     requestHeaders.set('Accept', 'application/json');
     if (body !== undefined) requestHeaders.set('Content-Type', 'application/json');
@@ -309,7 +325,7 @@ export class ApiClient {
       response = await fetch(`${apiBase}${path}`, {
         ...init,
         headers: requestHeaders,
-        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        ...(formData ? { body: formData } : body === undefined ? {} : { body: JSON.stringify(body) }),
       });
     } catch {
       throw new ClientError('NETWORK_ERROR', 'Не удалось подключиться к серверу', 0);
@@ -324,6 +340,7 @@ export class ApiClient {
       throw new ClientError(error?.code ?? 'UNKNOWN_ERROR', error?.message ?? 'Неизвестная ошибка сервера', response.status, error?.details);
     }
     if (response.status === 204) return undefined as T;
+    if (responseType === 'blob') return response.blob() as Promise<T>;
     return response.json() as Promise<T>;
   }
 }

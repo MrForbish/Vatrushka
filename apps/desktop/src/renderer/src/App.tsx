@@ -298,7 +298,7 @@ export default function App(): ReactNode {
     });
   };
 
-  const sendMessage = (replyToMessageId?: string): void => {
+  const sendMessage = (replyToMessageId?: string, files: File[] = []): void => {
     void run(async () => {
       if (!activeChannelId || !user) return;
       const content = messageContentSchema.parse(messageDraft);
@@ -313,17 +313,27 @@ export default function App(): ReactNode {
         content,
         replyTo: replyTarget === null ? null : { messageId: replyTarget.id, authorUserId: replyTarget.authorUserId, authorDisplayName: replyTarget.authorDisplayName, content: replyTarget.content },
         reactions: [],
+        attachments: files.map((file) => ({ id: `optimistic_${crypto.randomUUID()}`, messageId: optimisticId, fileName: file.name, mimeType: file.type, size: file.size, createdAt: new Date().toISOString() })),
         createdAt: new Date().toISOString(),
         editedAt: null,
       };
       setMessageDraft('');
       setMessages((current) => [...current, optimistic]);
+      let persisted: TextMessage | null = null;
       try {
-        const sent = await apiClient.createMessage(activeChannelId, content, replyToMessageId);
-        setMessages((current) => [...current.filter((message) => message.id !== optimisticId && message.id !== sent.id), sent]);
+        persisted = await apiClient.createMessage(activeChannelId, content, replyToMessageId);
+        const created = persisted;
+        setMessages((current) => [...current.filter((message) => message.id !== optimisticId && message.id !== created.id), created]);
+        for (const file of files) {
+          persisted = await apiClient.uploadMessageAttachment(persisted.id, file);
+          const updated = persisted;
+          setMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
+        }
       } catch (caught) {
-        setMessages((current) => current.filter((message) => message.id !== optimisticId));
-        setMessageDraft(content);
+        if (persisted === null) {
+          setMessages((current) => current.filter((message) => message.id !== optimisticId));
+          setMessageDraft(content);
+        }
         throw caught;
       }
     });
@@ -333,6 +343,25 @@ export default function App(): ReactNode {
     void run(async () => {
       await apiClient.deleteMessage(messageId);
       setMessages((current) => current.filter((message) => message.id !== messageId));
+    });
+  };
+
+  const deleteAttachment = (attachmentId: string): void => {
+    void run(async () => {
+      const updated = await apiClient.deleteMessageAttachment(attachmentId);
+      setMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
+    });
+  };
+
+  const downloadAttachment = (attachmentId: string, fileName: string): void => {
+    void run(async () => {
+      const blob = await apiClient.downloadMessageAttachment(attachmentId);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
     });
   };
 
@@ -523,7 +552,7 @@ export default function App(): ReactNode {
   if (screen === 'invite' && pendingCode) return <InvitePanel code={pendingCode} authenticated={Boolean(user)} error={error} busy={busy} onJoin={() => joinRoom(pendingCode)} onLogin={() => setScreen('auth')} onGuest={() => setScreen('guest')} onBack={() => setScreen(user ? 'home' : 'auth')} />;
   if (screen === 'guest' && pendingCode) return <GuestJoinPanel code={pendingCode} name={guestName} busy={busy} error={error} onName={setGuestName} onJoin={joinGuest} onBack={() => setScreen('invite')} />;
   if (screen === 'home' && user) return <><HomePanel user={user} version={version} roomCode={roomCode} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} servers={servers} serverName={serverName} serverInvite={serverInvite} onRoomCode={setRoomCode} onCreate={createRoom} onJoin={() => joinRoom()} onLogout={logout} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onOpenServer={openServer} />{renderSecurityPanel()}</>;
-  if (screen === 'server' && user && serverDetail) return <><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} onBack={() => setScreen('home')} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onConnectVoice={connectVoiceChannel} onCopyInvite={() => void window.desktop.copyToClipboard(`Присоединяйтесь к серверу «${serverDetail.name}»\nКод приглашения: ${serverDetail.inviteCode}`)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onAssignRoles={assignCommunityRoles} onKickMember={kickCommunityMember} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onLogout={logout} />{renderSecurityPanel()}</>;
+  if (screen === 'server' && user && serverDetail) return <><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} onBack={() => setScreen('home')} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onConnectVoice={connectVoiceChannel} onCopyInvite={() => void window.desktop.copyToClipboard(`Присоединяйтесь к серверу «${serverDetail.name}»\nКод приглашения: ${serverDetail.inviteCode}`)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onAssignRoles={assignCommunityRoles} onKickMember={kickCommunityMember} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onLogout={logout} />{renderSecurityPanel()}</>;
   if (screen === 'room' && connection) return <><RoomView connection={connection} snapshot={mediaSnapshot} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} locked={locked} busy={busy} error={error} onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))} onShare={showSourcePicker} onCopy={copyInvite} onLeave={leaveRoom} onLock={() => void run(async () => { const result = await apiClient.setRoomLock(connection.roomId, !locked); setLocked(result.isLocked); })} onClose={() => void run(async () => { await apiClient.closeRoom(connection.roomId); await media.disconnect(false); setConnection(null); setScreen('home'); })} onKick={(identity) => void run(() => apiClient.kickMediaParticipant(connection, identity))} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onStartAudio={() => void media.startAudio()} onScreenAudioMute={() => media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)} onScreenAudioVolume={setScreenShareVolume} />{sources && <SourcePicker sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}</>;
   return <main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>;
 }
