@@ -40,7 +40,9 @@
 .vui-room__empty { display: grid; justify-items: center; color: var(--color-text-muted); text-align: center; }
 .vui-room__empty h1 { color: var(--color-text-primary); font: var(--text-display-md); }
 .vui-room__controls { display: flex; justify-content: center; padding-top: var(--space-3); }
-.vui-room__devices { display: grid; grid-template-columns: repeat(2, 132px); gap: var(--space-2); margin: 0 var(--space-2); }
+.vui-room__devices { display: grid; grid-template-columns: repeat(2, 148px); gap: var(--space-2); margin: 0 var(--space-2); }
+.vui-room__devices > div:first-child { display: flex; grid-column: 1 / -1; align-items: center; justify-content: space-between; min-height: 24px; color: var(--color-text-muted); }
+.vui-room__devices > div:first-child strong { font: var(--text-caption); }
 .vui-room__devices .vui-field { gap: var(--space-1); min-width: 0; }
 .vui-room__devices .vui-field > span { font: var(--text-caption); }
 .vui-room__devices select { min-height: 42px; padding: 0 var(--space-2); font: var(--text-caption); }
@@ -49,5 +51,6 @@
 
 @media (max-width: 1080px) {
   .vui-room { grid-template-columns: 210px minmax(0, 1fr); }
-  .vui-room__devices { grid-template-columns: 120px; }
+  .vui-room__devices { grid-template-columns: 132px; }
+  .vui-room__devices > div:first-child { grid-column: 1; }
 }

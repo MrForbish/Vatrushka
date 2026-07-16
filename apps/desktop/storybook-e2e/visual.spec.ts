@@ -54,4 +54,9 @@ test.describe('Vatrushka design system visual baseline', () => {
     await openStory(page, 'voice-voice-stage--visual-stage');
     await expect(page).toHaveScreenshot('voice-active-speaker.png', { animations: 'disabled', fullPage: true });
   });
+
+  test('voice room device controls', async ({ page }) => {
+    await openStory(page, 'features-voice-room--visual-room');
+    await expect(page).toHaveScreenshot('voice-room-devices.png', { animations: 'disabled', fullPage: true });
+  });
 });

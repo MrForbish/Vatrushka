@@ -28,6 +28,7 @@ export type IconName =
   | 'panelRight'
   | 'plus'
   | 'reply'
+  | 'refresh'
   | 'search'
   | 'send'
   | 'screen'
@@ -67,6 +68,7 @@ const paths: Record<IconName, ReactNode> = {
   panelRight: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16" /></>,
   plus: <path d="M12 5v14M5 12h14" />,
   reply: <><path d="m9 17-5-5 5-5" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></>,
+  refresh: <><path d="M20 7v5h-5" /><path d="M4 17v-5h5M6.1 8a7 7 0 0 1 11.7-2.6L20 7M4 17l2.2 1.6A7 7 0 0 0 18 16" /></>,
   search: <><circle cx="11" cy="11" r="6" /><path d="m16 16 4 4" /></>,
   send: <><path d="m22 2-7 20-4-9-9-4 20-7Z" /><path d="M22 2 11 13" /></>,
   screen: <><rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4M9 10l3-3 3 3M12 7v6" /></>,

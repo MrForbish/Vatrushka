@@ -8,6 +8,7 @@ import {
   Badge,
   Button,
   Icon,
+  IconButton,
   Select,
   Slider,
   VoiceControlButton,
@@ -41,6 +42,7 @@ export interface RoomViewProps {
   onKick(identity: string): void;
   onMicrophone(value: string): void;
   onOutput(value: string): void;
+  onRefreshDevices(): void;
   onStartAudio(): void;
   onScreenAudioMute(): void;
   onScreenAudioVolume(value: number): void;
@@ -100,7 +102,7 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
         </div>
         {!props.snapshot.canPlayAudio ? <button className="vui-room__audio-gate" onClick={props.onStartAudio}>Нажмите, чтобы включить звук участников</button> : null}
         {props.error || props.snapshot.error ? <div className="vui-room__error" role="alert">{props.error ?? props.snapshot.error}</div> : null}
-        <div className="vui-room__controls"><VoiceControlDock><VoiceControlButton active={props.snapshot.isMuted} disabled={props.connection.canSpeak === false} icon={props.snapshot.isMuted ? 'micOff' : 'mic'} label={props.connection.canSpeak === false ? 'Роль не разрешает говорить' : props.snapshot.isMuted ? 'Включить микрофон' : 'Выключить микрофон'} onClick={props.onMute} testId="mute-control" /><div className="vui-room__devices"><Select label="Микрофон" onChange={(event) => props.onMicrophone(event.target.value)} options={deviceOptions(props.devices.inputs, 'Микрофон')} value={props.microphoneId ?? 'default'} /><Select label="Вывод" onChange={(event) => props.onOutput(event.target.value)} options={deviceOptions(props.devices.outputs, 'Вывод')} value={props.outputId ?? 'default'} /></div><VoiceControlButton active={props.snapshot.isScreenSharing} disabled={props.busy || props.connection.canStream === false} icon="screen" label={props.connection.canStream === false ? 'Роль не разрешает показ' : props.snapshot.isScreenSharing ? 'Остановить показ' : 'Показать экран'} onClick={props.onShare} testId="screen-share-control" /><VoiceControlButton icon="copy" label="Пригласить" onClick={props.onCopy} testId="copy-invite-control" /><VoiceControlButton danger icon="logout" label="Выйти" onClick={props.onLeave} testId="leave-control" /></VoiceControlDock></div>
+        <div className="vui-room__controls"><VoiceControlDock><VoiceControlButton active={props.snapshot.isMuted} disabled={props.connection.canSpeak === false} icon={props.snapshot.isMuted ? 'micOff' : 'mic'} label={props.connection.canSpeak === false ? 'Роль не разрешает говорить' : props.snapshot.isMuted ? 'Включить микрофон' : 'Выключить микрофон'} onClick={props.onMute} testId="mute-control" /><div className="vui-room__devices"><div><strong>Аудиоустройства</strong><IconButton icon="refresh" label="Обновить список аудиоустройств" onClick={props.onRefreshDevices} size="sm" type="button" /></div><Select label="Устройство ввода" onChange={(event) => props.onMicrophone(event.target.value)} options={deviceOptions(props.devices.inputs, 'Микрофон')} value={props.microphoneId ?? 'default'} /><Select label="Устройство вывода" onChange={(event) => props.onOutput(event.target.value)} options={deviceOptions(props.devices.outputs, 'Динамики')} value={props.outputId ?? 'default'} /></div><VoiceControlButton active={props.snapshot.isScreenSharing} disabled={props.busy || props.connection.canStream === false} icon="screen" label={props.connection.canStream === false ? 'Роль не разрешает показ' : props.snapshot.isScreenSharing ? 'Остановить показ' : 'Показать экран'} onClick={props.onShare} testId="screen-share-control" /><VoiceControlButton icon="copy" label="Пригласить" onClick={props.onCopy} testId="copy-invite-control" /><VoiceControlButton danger icon="logout" label="Выйти" onClick={props.onLeave} testId="leave-control" /></VoiceControlDock></div>
       </section>
     </main>
   );

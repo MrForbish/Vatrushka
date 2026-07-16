@@ -8,7 +8,10 @@ function getAbsolutePath(value: string): string {
 }
 
 const config: StorybookConfig = {
-  stories: ['../src/renderer/src/ui/**/*.stories.@(ts|tsx)'],
+  stories: [
+    '../src/renderer/src/ui/**/*.stories.@(ts|tsx)',
+    '../src/renderer/src/features/**/*.stories.@(ts|tsx)',
+  ],
   staticDirs: ['../public'],
   addons: [
     getAbsolutePath('@storybook/addon-vitest'),
@@ -16,7 +19,7 @@ const config: StorybookConfig = {
     getAbsolutePath('@storybook/addon-docs'),
   ],
   framework: getAbsolutePath('@storybook/react-vite'),
-  viteFinal: (config) => mergeConfig(config, { esbuild: { jsx: 'automatic' } }),
+  viteFinal: (config) => mergeConfig(config, { esbuild: { jsx: 'automatic' }, optimizeDeps: { include: ['livekit-client'] } }),
 };
 
 export default config;

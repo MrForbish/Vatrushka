@@ -45,7 +45,7 @@ type Story = StoryObj<typeof meta>;
 export const ActiveConversation: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByText('Макеты уже готовы')).toBeInTheDocument();
+    await expect(canvas.getAllByText('Макеты уже готовы').length).toBeGreaterThan(0);
     await userEvent.click(canvas.getByRole('button', { name: 'Добавить реакцию 👍' }));
     await expect(args.onMessageReaction).toHaveBeenCalledWith('dm-message-1', '👍');
   },

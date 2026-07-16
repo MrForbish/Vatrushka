@@ -78,10 +78,17 @@ describe('room UI', () => {
     canPlayAudio: true,
     error: null,
   };
+  const voiceDevices = {
+    inputs: [{ deviceId: 'microphone-studio', groupId: 'group-input', kind: 'audioinput', label: 'Studio Microphone', toJSON: () => ({}) } as MediaDeviceInfo],
+    outputs: [{ deviceId: 'headphones-usb', groupId: 'group-output', kind: 'audiooutput', label: 'USB Headphones', toJSON: () => ({}) } as MediaDeviceInfo],
+  };
 
   it('shows participants, speaking and mute text, stable controls, and owner moderation', async () => {
     const onParticipantMute = vi.fn();
-    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} locked={false} busy={false} error={null} onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={onParticipantMute} onParticipantVolume={noop} />);
+    const onMicrophone = vi.fn();
+    const onOutput = vi.fn();
+    const onRefreshDevices = vi.fn();
+    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={voiceDevices} microphoneId={undefined} outputId={undefined} locked={false} busy={false} error={null} onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={onMicrophone} onOutput={onOutput} onRefreshDevices={onRefreshDevices} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={onParticipantMute} onParticipantVolume={noop} />);
     expect(screen.getAllByText('Owner (вы)').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Visitor/u).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/говорит/ui).length).toBeGreaterThan(0);
@@ -91,11 +98,17 @@ describe('room UI', () => {
     expect(screen.getByRole('button', { name: 'Исключить Visitor' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Заглушить локально' }));
     expect(onParticipantMute).toHaveBeenCalledWith('guest_guest-1_remote', true);
+    await userEvent.selectOptions(screen.getByLabelText('Устройство ввода'), 'microphone-studio');
+    await userEvent.selectOptions(screen.getByLabelText('Устройство вывода'), 'headphones-usb');
+    expect(onMicrophone).toHaveBeenCalledWith('microphone-studio');
+    expect(onOutput).toHaveBeenCalledWith('headphones-usb');
+    await userEvent.click(screen.getByRole('button', { name: 'Обновить список аудиоустройств' }));
+    expect(onRefreshDevices).toHaveBeenCalledOnce();
   });
 
   it('shows reconnect, busy, and error states without relying only on color', () => {
     const snapshot = { ...baseSnapshot, connectionState: ConnectionState.Reconnecting };
-    render(<RoomView connection={connection} snapshot={snapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} locked={true} busy error="Другой участник уже показывает экран" onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={noop} onParticipantVolume={noop} />);
+    render(<RoomView connection={connection} snapshot={snapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} locked={true} busy error="Другой участник уже показывает экран" onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={noop} onParticipantVolume={noop} />);
     expect(screen.getByText('Переподключение…')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Другой участник уже показывает экран');
     expect(screen.getByRole('button', { name: 'Открыть вход' })).toBeDisabled();
