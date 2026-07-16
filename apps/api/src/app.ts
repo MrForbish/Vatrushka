@@ -28,6 +28,7 @@ import {
   guestJoinSchema,
   joinServerSchema,
   messageQuerySchema,
+  messageNotificationQuerySchema,
   messageReactionSchema,
   markChannelReadSchema,
   refreshSchema,
@@ -109,6 +110,8 @@ const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z
 const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteCode: z.string(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
 const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
 const messageAttachmentResponseSchema = z.object({ id: z.string(), messageId: z.string(), fileName: z.string(), mimeType: z.string(), size: z.number(), createdAt: z.string() });
+const messageNotificationResponseSchema = z.object({ id: z.string(), serverId: z.string(), serverName: z.string(), channelId: z.string(), channelName: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string(), createdAt: z.string() });
+const messageNotificationPageResponseSchema = z.object({ items: z.array(messageNotificationResponseSchema), cursor: z.object({ createdAt: z.string(), id: z.string().nullable() }).nullable() });
 const textMessageResponseSchema = z.object({ id: z.string(), channelId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), authorPlatformRole: z.enum(['member', 'admin', 'owner']), content: z.string(), replyTo: z.object({ messageId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string() }).nullable(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reactedByCurrentUser: z.boolean() })), attachments: z.array(messageAttachmentResponseSchema), createdAt: z.string(), editedAt: z.string().nullable() });
 
 export interface BuildAppOptions {
@@ -374,6 +377,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   api.get(`${API_PREFIX}/channels/:channelId/messages`, {
     schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: channelIdParams, querystring: messageQuerySchema, response: { 200: z.array(textMessageResponseSchema), ...routeErrors() } },
   }, async (request) => service.listMessages(request.headers.authorization, request.params.channelId, request.query.before, request.query.limit));
+
+  api.get(`${API_PREFIX}/notifications/messages`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], querystring: messageNotificationQuerySchema, response: { 200: messageNotificationPageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.listMessageNotifications(request.headers.authorization, request.query.since, request.query.afterId, request.query.limit));
 
   api.post(`${API_PREFIX}/channels/:channelId/messages`, {
     schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: channelIdParams, body: createMessageSchema, response: { 201: textMessageResponseSchema, ...routeErrors() } },

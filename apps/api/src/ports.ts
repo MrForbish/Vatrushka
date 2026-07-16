@@ -22,6 +22,7 @@ import type {
   ChannelUnreadCount,
   MessageAttachmentRecord,
   MessageAttachmentMetadata,
+  MessageNotificationRecord,
   ChannelLeaseRecord,
 } from './domain.js';
 import type { PlatformRole } from '@vatrushka/shared';
@@ -99,6 +100,7 @@ export interface DataStore {
   findMessageAttachment(id: string): Promise<MessageAttachmentRecord | null>;
   createMessageAttachment(attachment: MessageAttachmentRecord): Promise<void>;
   deleteMessageAttachment(id: string): Promise<boolean>;
+  listMessageNotifications(userId: string, since: Date, afterId: string | null, limit: number): Promise<MessageNotificationRecord[]>;
   claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }>;
   heartbeatChannelLease(channelId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<ChannelLeaseRecord | null>;
   releaseChannelLease(channelId: string, participantIdentity: string): Promise<boolean>;

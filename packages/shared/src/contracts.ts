@@ -96,6 +96,31 @@ export interface MessageAttachment {
   createdAt: string;
 }
 
+export interface MessageNotification {
+  id: string;
+  serverId: string;
+  serverName: string;
+  channelId: string;
+  channelName: string;
+  authorUserId: string;
+  authorDisplayName: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface MessageNotificationPage {
+  items: MessageNotification[];
+  cursor: { createdAt: string; id: string | null } | null;
+}
+
+export interface DesktopMessageNotification {
+  id: string;
+  title: string;
+  body: string;
+  serverId: string;
+  channelId: string;
+}
+
 export interface PublicUser {
   id: string;
   email: string;
@@ -168,6 +193,8 @@ export interface DesktopBridge {
   selectDesktopSource(sourceId: string, includeAudio: boolean): Promise<void>;
   clearSelectedDesktopSource(): Promise<void>;
   copyToClipboard(text: string): Promise<void>;
+  showMessageNotification(notification: DesktopMessageNotification): Promise<void>;
+  onMessageNotificationClick(callback: (target: Pick<DesktopMessageNotification, 'serverId' | 'channelId'>) => void): () => void;
   onDeepLink(callback: (roomCode: string) => void): () => void;
   getPlatform(): Promise<string>;
   getLocalSettings(): Promise<LocalSettings>;

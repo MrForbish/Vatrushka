@@ -25,6 +25,7 @@ import type {
   ChannelUnreadCount,
   MessageAttachmentRecord,
   MessageAttachmentMetadata,
+  MessageNotificationRecord,
   ChannelLeaseRecord,
 } from '../domain.js';
 import type { DataStore } from '../ports.js';
@@ -504,6 +505,33 @@ export class MemoryStore implements DataStore {
 
   async deleteMessageAttachment(id: string): Promise<boolean> {
     return this.messageAttachments.delete(id);
+  }
+
+  async listMessageNotifications(userId: string, since: Date, afterId: string | null, limit: number): Promise<MessageNotificationRecord[]> {
+    return [...this.textMessages.values()]
+      .filter((message) => message.authorUserId !== userId && (message.createdAt > since || (message.createdAt.getTime() === since.getTime() && (afterId === null || message.id.localeCompare(afterId) > 0))))
+      .map((message): MessageNotificationRecord | null => {
+        const channel = this.serverChannels.get(message.channelId);
+        const author = this.users.get(message.authorUserId);
+        if (!channel || channel.type !== 'text' || !author || !this.serverMembers.has(`${channel.serverId}:${userId}`)) return null;
+        const server = this.servers.get(channel.serverId);
+        if (!server) return null;
+        return {
+          id: message.id,
+          serverId: server.id,
+          serverName: server.name,
+          channelId: channel.id,
+          channelName: channel.name,
+          authorUserId: author.id,
+          authorDisplayName: author.displayName,
+          content: message.content,
+          createdAt: message.createdAt,
+        };
+      })
+      .filter((notification): notification is MessageNotificationRecord => notification !== null)
+      .sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id))
+      .slice(0, limit)
+      .map((notification) => structuredClone(notification));
   }
 
   async claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }> {

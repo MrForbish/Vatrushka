@@ -487,6 +487,32 @@ describe('servers, channels, messages, and roles API', () => {
     const repliedMessage = replied.json<{ id: string; replyTo: { messageId: string; authorDisplayName: string } }>();
     expect(repliedMessage.replyTo).toEqual(expect.objectContaining({ messageId: sentMessage.id, authorDisplayName: 'Member' }));
 
+    const notificationBaseline = await context.app.inject({
+      method: 'GET',
+      url: `${API_PREFIX}/notifications/messages?limit=20`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+    });
+    expect(notificationBaseline.statusCode).toBe(200);
+    expect(notificationBaseline.json()).toEqual({ items: [], cursor: { createdAt: context.clock.now.toISOString(), id: null } });
+
+    const notifications = await context.app.inject({
+      method: 'GET',
+      url: `${API_PREFIX}/notifications/messages?since=${encodeURIComponent('2025-12-31T23:59:59.000Z')}&limit=20`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+    });
+    expect(notifications.statusCode).toBe(200);
+    expect(notifications.json<{ items: Array<{ id: string; serverId: string; channelId: string; authorDisplayName: string }>; cursor: { id: string } }>().items).toEqual([
+      expect.objectContaining({ id: repliedMessage.id, serverId: server.id, channelId: textChannel.id, authorDisplayName: 'Owner' }),
+    ]);
+    expect(notifications.json<{ cursor: { id: string } }>().cursor.id).toBe(repliedMessage.id);
+    const afterNotification = await context.app.inject({
+      method: 'GET',
+      url: `${API_PREFIX}/notifications/messages?since=${encodeURIComponent(context.clock.now.toISOString())}&afterId=${repliedMessage.id}&limit=20`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+    });
+    expect(afterNotification.statusCode).toBe(200);
+    expect(afterNotification.json<{ items: unknown[]; cursor: null }>()).toEqual({ items: [], cursor: null });
+
     const unreadServer = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${member.accessToken}` } });
     const unreadChannel = unreadServer.json<{ channels: Array<{ id: string; unreadCount: number }> }>().channels.find((channel) => channel.id === textChannel.id);
     expect(unreadChannel?.unreadCount).toBe(1);

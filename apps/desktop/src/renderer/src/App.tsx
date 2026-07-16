@@ -54,6 +54,10 @@ export default function App(): ReactNode {
   const [securityPasswordConfirmation, setSecurityPasswordConfirmation] = useState('');
   const [twoFactorSetup, setTwoFactorSetup] = useState<TwoFactorSetup | null>(null);
   const [twoFactorQr, setTwoFactorQr] = useState<string | null>(null);
+  const notificationCursorRef = useRef<string | null>(null);
+  const notificationCursorIdRef = useRef<string | null>(null);
+  const notificationUserRef = useRef<string | null>(null);
+  const shownNotificationIdsRef = useRef(new Set<string>());
   const mediaSnapshot = useSyncExternalStore(media.subscribe, media.getSnapshot, media.getSnapshot);
 
   const updateUser = (next: PublicUser | null): void => {
@@ -120,6 +124,59 @@ export default function App(): ReactNode {
     void apiClient.listServers().then((items) => { if (active) setServers(items); }).catch((caught) => { if (active) setError(userMessage(caught)); });
     return () => { active = false; };
   }, [screen, user]);
+
+  useEffect(() => {
+    if (!user || (screen !== 'home' && screen !== 'server')) return;
+    if (notificationUserRef.current !== user.id) {
+      notificationUserRef.current = user.id;
+      notificationCursorRef.current = null;
+      notificationCursorIdRef.current = null;
+      shownNotificationIdsRef.current.clear();
+    }
+    let active = true;
+    const poll = (): void => {
+      const since = notificationCursorRef.current;
+      void apiClient.listMessageNotifications(since, notificationCursorIdRef.current).then((page) => {
+        if (!active) return;
+        const notifications = page.items;
+        const fresh = notifications.filter((notification) => !shownNotificationIdsRef.current.has(notification.id));
+        for (const notification of fresh) {
+          shownNotificationIdsRef.current.add(notification.id);
+          void window.desktop.showMessageNotification({
+            id: notification.id,
+            title: `${notification.authorDisplayName} · #${notification.channelName}`,
+            body: `${notification.content.slice(0, 700)}\n${notification.serverName}`,
+            serverId: notification.serverId,
+            channelId: notification.channelId,
+          }).catch(() => undefined);
+        }
+        if (page.cursor) {
+          notificationCursorRef.current = page.cursor.createdAt;
+          notificationCursorIdRef.current = page.cursor.id;
+        }
+        if (fresh.length > 0) {
+          const counts = new Map<string, number>();
+          for (const notification of fresh) counts.set(notification.channelId, (counts.get(notification.channelId) ?? 0) + 1);
+          setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((channel) => ({ ...channel, unreadCount: channel.unreadCount + (counts.get(channel.id) ?? 0) })) });
+        }
+      }).catch((caught) => { if (active) setError(userMessage(caught)); });
+    };
+    poll();
+    const timer = window.setInterval(poll, 5_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [screen, user]);
+
+  useEffect(() => window.desktop.onMessageNotificationClick((target) => {
+    if (!userRef.current) return;
+    void apiClient.getServer(target.serverId).then((detail) => {
+      if (!detail.channels.some((channel) => channel.id === target.channelId && channel.type === 'text')) return;
+      setServerDetail(detail);
+      setActiveChannelId(target.channelId);
+      setMessages([]);
+      setError(null);
+      setScreen('server');
+    }).catch((caught) => setError(userMessage(caught)));
+  }), []);
 
   useEffect(() => {
     if (screen !== 'server' || !serverDetail || !activeChannelId) return;

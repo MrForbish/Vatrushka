@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNull, lt, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 
@@ -29,6 +29,7 @@ import type {
   ChannelUnreadCount,
   MessageAttachmentRecord,
   MessageAttachmentMetadata,
+  MessageNotificationRecord,
   ChannelLeaseRecord,
 } from '../domain.js';
 import type { DataStore } from '../ports.js';
@@ -574,6 +575,35 @@ export class PostgresStore implements DataStore {
 
   async deleteMessageAttachment(id: string): Promise<boolean> {
     return (await this.db.delete(schema.messageAttachments).where(eq(schema.messageAttachments.id, id)).returning({ id: schema.messageAttachments.id })).length === 1;
+  }
+
+  async listMessageNotifications(userId: string, since: Date, afterId: string | null, limit: number): Promise<MessageNotificationRecord[]> {
+    return this.db
+      .select({
+        id: schema.textMessages.id,
+        serverId: schema.servers.id,
+        serverName: schema.servers.name,
+        channelId: schema.serverChannels.id,
+        channelName: schema.serverChannels.name,
+        authorUserId: schema.users.id,
+        authorDisplayName: schema.users.displayName,
+        content: schema.textMessages.content,
+        createdAt: schema.textMessages.createdAt,
+      })
+      .from(schema.textMessages)
+      .innerJoin(schema.users, eq(schema.users.id, schema.textMessages.authorUserId))
+      .innerJoin(schema.serverChannels, eq(schema.serverChannels.id, schema.textMessages.channelId))
+      .innerJoin(schema.servers, eq(schema.servers.id, schema.serverChannels.serverId))
+      .innerJoin(schema.serverMembers, and(eq(schema.serverMembers.serverId, schema.servers.id), eq(schema.serverMembers.userId, userId)))
+      .where(and(
+        eq(schema.serverChannels.type, 'text'),
+        ne(schema.textMessages.authorUserId, userId),
+        afterId === null
+          ? gte(schema.textMessages.createdAt, since)
+          : or(gt(schema.textMessages.createdAt, since), and(eq(schema.textMessages.createdAt, since), gt(schema.textMessages.id, afterId))),
+      ))
+      .orderBy(asc(schema.textMessages.createdAt), asc(schema.textMessages.id))
+      .limit(limit);
   }
 
   async claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }> {

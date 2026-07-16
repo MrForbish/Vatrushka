@@ -15,6 +15,7 @@ import {
   desktopSourceSelectionSchema,
   localSettingsSchema,
   type DesktopSourceInfo,
+  type DesktopMessageNotification,
 } from '@vatrushka/shared';
 
 import type { DesktopStorage } from './storage.js';
@@ -32,13 +33,24 @@ export const IPC_CHANNELS = {
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
   deepLink: 'app:deep-link',
+  notificationShow: 'notification:show-message',
+  notificationClick: 'notification:message-click',
 } as const;
 
 interface IpcOptions {
   isTrustedSender(event: IpcMainInvokeEvent): boolean;
   storage: DesktopStorage;
   setSelectedSource(selection: { sourceId: string; includeAudio: boolean } | null): void;
+  showMessageNotification(notification: DesktopMessageNotification): void;
 }
+
+const desktopMessageNotificationSchema = z.object({
+  id: z.uuid(),
+  title: z.string().trim().min(1).max(200),
+  body: z.string().trim().min(1).max(1_000),
+  serverId: z.uuid(),
+  channelId: z.uuid(),
+}).strict();
 
 function sourceType(id: string): DesktopSourceInfo['type'] {
   return id.startsWith('screen:') ? 'screen' : 'window';
@@ -60,7 +72,7 @@ async function listSources(): Promise<DesktopSourceInfo[]> {
 }
 
 export function registerIpc(options: IpcOptions): () => void {
-  const channels = Object.values(IPC_CHANNELS).filter((channel) => channel !== IPC_CHANNELS.deepLink);
+  const channels = Object.values(IPC_CHANNELS).filter((channel) => channel !== IPC_CHANNELS.deepLink && channel !== IPC_CHANNELS.notificationClick);
   const handle = <TArgs extends unknown[], TResult>(
     channel: string,
     listener: (event: IpcMainInvokeEvent, ...args: TArgs) => Promise<TResult> | TResult,
@@ -94,6 +106,7 @@ export function registerIpc(options: IpcOptions): () => void {
   });
   handle(IPC_CHANNELS.sourceClear, () => options.setSelectedSource(null));
   handle(IPC_CHANNELS.clipboardCopy, (_event, value: unknown) => clipboard.writeText(z.string().max(20_000).parse(value)));
+  handle(IPC_CHANNELS.notificationShow, (_event, value: unknown) => options.showMessageNotification(desktopMessageNotificationSchema.parse(value)));
   handle(IPC_CHANNELS.platform, () => process.platform);
   handle(IPC_CHANNELS.settingsGet, () => options.storage.getSettings());
   handle(IPC_CHANNELS.settingsUpdate, async (_event, value: unknown) => options.storage.updateSettings(localSettingsSchema.parse(value)));

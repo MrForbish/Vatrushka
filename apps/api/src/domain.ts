@@ -158,6 +158,18 @@ export interface MessageAttachmentRecord {
 
 export type MessageAttachmentMetadata = Omit<MessageAttachmentRecord, 'content'>;
 
+export interface MessageNotificationRecord {
+  id: string;
+  serverId: string;
+  serverName: string;
+  channelId: string;
+  channelName: string;
+  authorUserId: string;
+  authorDisplayName: string | null;
+  content: string;
+  createdAt: Date;
+}
+
 export interface ChannelLeaseRecord {
   channelId: string;
   participantIdentity: string;

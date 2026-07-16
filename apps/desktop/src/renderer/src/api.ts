@@ -12,6 +12,7 @@ import {
   type ServerRole,
   type ServerSummary,
   type TextMessage,
+  type MessageNotificationPage,
   type TwoFactorSetup,
 } from '@vatrushka/shared';
 
@@ -181,6 +182,11 @@ export class ApiClient {
 
   listMessages(channelId: string): Promise<TextMessage[]> {
     return this.request(`/channels/${channelId}/messages?limit=100`, { auth: true });
+  }
+
+  listMessageNotifications(since: string | null, afterId: string | null): Promise<MessageNotificationPage> {
+    const cursor = since === null ? '' : `&since=${encodeURIComponent(since)}${afterId === null ? '' : `&afterId=${encodeURIComponent(afterId)}`}`;
+    return this.request(`/notifications/messages?limit=20${cursor}`, { auth: true });
   }
 
   createMessage(channelId: string, content: string, replyToMessageId?: string): Promise<TextMessage> {

@@ -33,7 +33,9 @@ test('launches the secure auth shell with an allowlisted preload API', async () 
     'getStoredRefreshToken',
     'listDesktopSources',
     'onDeepLink',
+    'onMessageNotificationClick',
     'selectDesktopSource',
+    'showMessageNotification',
     'storeRefreshToken',
     'updateLocalSettings',
   ].sort());

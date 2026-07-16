@@ -17,6 +17,8 @@ import {
   type ServerRole,
   type ServerSummary,
   type TextMessage,
+  type MessageNotification,
+  type MessageNotificationPage,
   type TwoFactorSetup,
   serverPermissions,
   expiresAt,
@@ -26,7 +28,7 @@ import {
 
 import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
-import type { AuthCodeRecord, GuestSessionRecord, MessageAttachmentMetadata, MessageAttachmentRecord, MessageReactionSummary, RoomRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
+import type { AuthCodeRecord, GuestSessionRecord, MessageAttachmentMetadata, MessageAttachmentRecord, MessageNotificationRecord, MessageReactionSummary, RoomRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
 import type { DataStore, Mailer, MediaService } from './ports.js';
 import {
   hashOpaqueToken,
@@ -504,6 +506,35 @@ export class VatrushkaService {
     const server = await this.requireServer(channel.serverId);
     await this.requireServerPermission(server, user, 'VIEW_CHANNEL');
     return this.hydrateMessages(await this.store.listTextMessages(channel.id, before ? new Date(before) : null, limit), user.id);
+  }
+
+  async listMessageNotifications(authorization: string | undefined, since: string | undefined, afterId: string | undefined, limit: number): Promise<MessageNotificationPage> {
+    const user = await this.authenticate(authorization);
+    if (since === undefined) return { items: [], cursor: { createdAt: this.now().toISOString(), id: null } };
+    const records = await this.store.listMessageNotifications(user.id, new Date(since), afterId ?? null, limit);
+    const permissionsByServer = new Map<string, Set<ServerPermission>>();
+    for (const serverId of new Set(records.map((notification) => notification.serverId))) {
+      const server = await this.store.findServerById(serverId);
+      permissionsByServer.set(serverId, server ? await this.serverPermissionsFor(server, user) : new Set());
+    }
+    const items: MessageNotification[] = records
+      .filter((notification) => {
+        const permissions = permissionsByServer.get(notification.serverId);
+        return permissions?.has('VIEW_SERVER') === true && permissions.has('VIEW_CHANNEL');
+      })
+      .map((notification: MessageNotificationRecord) => ({
+        id: notification.id,
+        serverId: notification.serverId,
+        serverName: notification.serverName,
+        channelId: notification.channelId,
+        channelName: notification.channelName,
+        authorUserId: notification.authorUserId,
+        authorDisplayName: notification.authorDisplayName ?? 'Участник',
+        content: notification.content,
+        createdAt: notification.createdAt.toISOString(),
+      }));
+    const lastScanned = records.at(-1);
+    return { items, cursor: lastScanned ? { createdAt: lastScanned.createdAt.toISOString(), id: lastScanned.id } : null };
   }
 
   async createMessage(authorization: string | undefined, channelId: string, content: string, replyToMessageId: string | null): Promise<TextMessage> {

@@ -5,12 +5,13 @@ import {
   app,
   BrowserWindow,
   desktopCapturer,
+  Notification,
   session,
   type IpcMainInvokeEvent,
 } from 'electron';
 import log from 'electron-log/main';
 
-import { APP_NAME, APP_PROTOCOL } from '@vatrushka/shared';
+import { APP_NAME, APP_PROTOCOL, type DesktopMessageNotification } from '@vatrushka/shared';
 
 import { findDeepLink } from './deep-link.js';
 import { configureLogging, IPC_CHANNELS, registerIpc } from './ipc.js';
@@ -25,6 +26,7 @@ let mainWindow: BrowserWindow | null = null;
 let pendingDeepLink = findDeepLink(process.argv, APP_PROTOCOL);
 let selectedSource: { sourceId: string; includeAudio: boolean } | null = null;
 let removeIpcHandlers: (() => void) | null = null;
+const activeNotifications = new Set<Notification>();
 
 function isTrustedUrl(value: string): boolean {
   try {
@@ -58,6 +60,23 @@ function sendDeepLink(code: string): void {
   mainWindow.focus();
   mainWindow.webContents.send(IPC_CHANNELS.deepLink, code);
   pendingDeepLink = null;
+}
+
+function showMessageNotification(message: DesktopMessageNotification): void {
+  if (!Notification.isSupported() || mainWindow?.isFocused()) return;
+  const notification = new Notification({ title: message.title, body: message.body });
+  const release = (): void => { activeNotifications.delete(notification); };
+  activeNotifications.add(notification);
+  notification.once('click', () => {
+    if (mainWindow?.isMinimized()) mainWindow.restore();
+    mainWindow?.show();
+    mainWindow?.focus();
+    mainWindow?.webContents.send(IPC_CHANNELS.notificationClick, { serverId: message.serverId, channelId: message.channelId });
+    release();
+  });
+  notification.once('close', release);
+  notification.once('failed', release);
+  notification.show();
 }
 
 function registerProtocol(): void {
@@ -221,6 +240,7 @@ if (!hasLock) {
       setSelectedSource(selection) {
         selectedSource = selection;
       },
+      showMessageNotification,
     });
     await createWindow();
   });
@@ -229,6 +249,8 @@ if (!hasLock) {
 app.on('window-all-closed', () => app.quit());
 app.on('before-quit', () => {
   selectedSource = null;
+  for (const notification of activeNotifications) notification.close();
+  activeNotifications.clear();
   removeIpcHandlers?.();
   removeIpcHandlers = null;
 });

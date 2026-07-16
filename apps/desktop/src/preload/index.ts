@@ -15,9 +15,12 @@ const channels = {
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
   deepLink: 'app:deep-link',
+  notificationShow: 'notification:show-message',
+  notificationClick: 'notification:message-click',
 } as const;
 
 const deepLinkCallbacks = new Set<(roomCode: string) => void>();
+const notificationClickCallbacks = new Set<(target: { serverId: string; channelId: string }) => void>();
 let pendingDeepLink: string | null = null;
 
 ipcRenderer.on(channels.deepLink, (_event, roomCode: unknown) => {
@@ -27,6 +30,11 @@ ipcRenderer.on(channels.deepLink, (_event, roomCode: unknown) => {
     return;
   }
   for (const callback of deepLinkCallbacks) callback(roomCode);
+});
+
+ipcRenderer.on(channels.notificationClick, (_event, target: unknown) => {
+  if (!target || typeof target !== 'object' || !('serverId' in target) || !('channelId' in target) || typeof target.serverId !== 'string' || typeof target.channelId !== 'string') return;
+  for (const callback of notificationClickCallbacks) callback({ serverId: target.serverId, channelId: target.channelId });
 });
 
 const bridge: DesktopBridge = {
@@ -39,6 +47,11 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(channels.sourceSelect, { sourceId, includeAudio }) as Promise<void>,
   clearSelectedDesktopSource: () => ipcRenderer.invoke(channels.sourceClear) as Promise<void>,
   copyToClipboard: (text) => ipcRenderer.invoke(channels.clipboardCopy, text) as Promise<void>,
+  showMessageNotification: (notification) => ipcRenderer.invoke(channels.notificationShow, notification) as Promise<void>,
+  onMessageNotificationClick: (callback) => {
+    notificationClickCallbacks.add(callback);
+    return () => notificationClickCallbacks.delete(callback);
+  },
   onDeepLink: (callback) => {
     deepLinkCallbacks.add(callback);
     if (pendingDeepLink) {
