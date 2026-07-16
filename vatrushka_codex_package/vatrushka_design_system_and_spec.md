@@ -1,0 +1,1473 @@
+# Vatrushka — Storybook, дизайн-система и ТЗ на модернизацию
+
+**Версия:** 1.0  
+**Целевая платформа:** desktop-приложение Windows 10/11 на Electron + React + TypeScript  
+**Назначение документа:** единый источник требований для разработки через Codex и ручной проверки результата.
+
+> Визуальные макеты задают направление, композицию и характер интерфейса. Этот документ является источником истины для поведения, состояний, прав доступа, размеров и критериев приёмки. Текст на сгенерированных изображениях не следует копировать буквально.
+
+---
+
+## 1. Исходное состояние проекта
+
+Уже реализованный функционал необходимо сохранить и интегрировать в новый интерфейс без регрессий:
+
+- голосовые комнаты;
+- выбор источника демонстрации: весь экран, окно или отдельное приложение;
+- подписи и превью источников демонстрации;
+- передача звука приложения вместе с демонстрацией;
+- выбор автором демонстрации: передавать звук или нет;
+- индивидуальная регулировка и mute звука демонстрации у каждого зрителя;
+- исключение голосов участников комнаты из звука демонстрации, чтобы не возникало дублирования и эха;
+- выбор устройства записи и устройства воспроизведения;
+- регистрация и авторизация по паролю, коду с почты и/или 2FA;
+- визуальное выделение системного аккаунта автора/разработчика;
+- серверы, категории, голосовые и текстовые каналы;
+- базовая модель ролей и прав доступа.
+
+Новое ТЗ не требует переписывать работающий MVP с нуля. Сначала должен быть проведён аудит текущей реализации и составлена карта переиспользуемых модулей.
+
+---
+
+## 2. Цели модернизации
+
+1. Сделать Vatrushka визуально самостоятельным продуктом, а не копией Discord.
+2. Перевести интерфейс на единую дизайн-систему с токенами и Storybook.
+3. Сделать демонстрацию экрана и управление звуком центральной сильной стороной продукта.
+4. Упростить навигацию между серверами, каналами, личными сообщениями и голосовыми сессиями.
+5. Сделать роли и права понятными обычному владельцу сервера, но достаточно строгими для backend-проверок.
+6. Подготовить архитектуру интерфейса к дальнейшему развитию без размножения локальных стилей и несогласованных компонентов.
+
+### Не входит в текущий этап
+
+- мобильная версия;
+- видеозвонки;
+- публичный каталог серверов;
+- магазин ботов или интеграций;
+- полноценные треды и форумные каналы;
+- запись и облачное хранение разговоров;
+- транскрибация и AI-анализ речи.
+
+Эти возможности могут быть заложены в архитектуре, но не должны увеличивать объём текущей реализации.
+
+---
+
+# Часть I. Визуальная система
+
+## 3. Визуальная концепция
+
+### 3.1. Характер
+
+Vatrushka должна восприниматься как «живое цифровое пространство», а не как плотный список меню.
+
+Основные свойства:
+
+- тёмная графитово-синяя основа;
+- крупные спокойные поверхности;
+- карточная навигация по серверам вместо вертикального ряда круглых иконок;
+- умеренные фиолетовые и холодно-голубые акценты;
+- зелёный только для активной голосовой связи и успешных состояний;
+- янтарный только для системного статуса Founder / Developer и особо важных предупреждений;
+- минимум декоративного неона;
+- световые эффекты должны показывать состояние, а не служить постоянным украшением.
+
+### 3.2. Отличия от Discord
+
+Запрещено воспроизводить следующие паттерны один в один:
+
+- узкий rail из круглых серверных иконок;
+- одинаковая трёхколоночная структура на всех экранах;
+- серый плотный список каналов без контекстного пространства сервера;
+- копирование формы кнопок, цветов и hover-состояний Discord;
+- корона как основной знак владельца;
+- визуальная иерархия, в которой текстовый чат всегда является единственным центром интерфейса.
+
+Вместо этого используются:
+
+- библиотека серверов в виде вертикальных карточек;
+- отдельный контекстный центр сервера с обложкой, быстрыми действиями и каналами;
+- голосовая сцена как самостоятельный тип рабочего пространства;
+- плавающий control dock;
+- карточки сообщений и системных событий;
+- отдельный аудиомикшер для голоса и демонстрации.
+
+---
+
+## 4. Шрифты
+
+### 4.1. Основной набор
+
+#### Onest Variable
+
+Используется для 90% интерфейса:
+
+- сообщения;
+- названия каналов;
+- кнопки;
+- формы;
+- настройки;
+- таблицы;
+- всплывающие подсказки;
+- системные сообщения.
+
+Начертания: 400, 500, 600, 700.
+
+#### Unbounded
+
+Используется дозированно:
+
+- логотип Vatrushka;
+- крупные заголовки экранов входа;
+- название продукта в системных экранах;
+- промо-блоки;
+- пустые состояния верхнего уровня.
+
+Начертания: 500 и 600. Не применять для длинного текста и списков.
+
+#### IBM Plex Mono
+
+Используется для:
+
+- кодов приглашения;
+- резервных кодов 2FA;
+- ID сессий;
+- технической диагностики;
+- ping, bitrate, FPS;
+- служебных логов.
+
+### 4.2. Fallback
+
+```css
+--font-ui: "Onest", "Segoe UI", Arial, sans-serif;
+--font-display: "Unbounded", "Segoe UI", sans-serif;
+--font-mono: "IBM Plex Mono", "Cascadia Mono", monospace;
+```
+
+### 4.3. Типографическая шкала
+
+| Токен | Шрифт | Размер / высота | Вес | Применение |
+|---|---|---:|---:|---|
+| display-xl | Unbounded | 30 / 38 px | 600 | крупный системный заголовок |
+| display-md | Unbounded | 24 / 32 px | 500 | экран входа, пустое состояние |
+| heading-lg | Onest | 20 / 28 px | 600 | название сервера или страницы |
+| heading-md | Onest | 17 / 24 px | 600 | заголовок панели |
+| heading-sm | Onest | 15 / 22 px | 600 | карточка, секция |
+| body-lg | Onest | 15 / 22 px | 400 | сообщения |
+| body-md | Onest | 14 / 20 px | 400 | основной UI |
+| label-md | Onest | 13 / 18 px | 600 | кнопки и поля |
+| caption | Onest | 12 / 16 px | 400 | время, secondary text |
+| overline | Onest | 11 / 16 px | 600 | заголовки групп ролей |
+| mono-sm | IBM Plex Mono | 12 / 18 px | 400 | коды и диагностика |
+
+Правила:
+
+- верхний регистр разрешён только для `overline`;
+- letter-spacing для overline: `0.06em`;
+- текст сообщений не должен быть меньше 14 px;
+- интерфейс должен выдерживать увеличение масштаба ОС до 125–150%.
+
+---
+
+## 5. Цветовая система
+
+### 5.1. Базовые токены
+
+```css
+:root {
+  --color-canvas: #07111B;
+  --color-surface-0: #0B1622;
+  --color-surface-1: #0F1C2A;
+  --color-surface-2: #142334;
+  --color-surface-3: #192B3E;
+  --color-surface-elevated: #172638;
+
+  --color-border-subtle: #1A2A3B;
+  --color-border-default: #25394E;
+  --color-border-strong: #34506B;
+
+  --color-text-primary: #F4F7FB;
+  --color-text-secondary: #B4C0CE;
+  --color-text-muted: #7F8D9D;
+  --color-text-disabled: #596777;
+
+  --color-primary: #7A5AF8;
+  --color-primary-hover: #8D73FF;
+  --color-primary-pressed: #6545DB;
+  --color-primary-soft: rgba(122, 90, 248, 0.16);
+
+  --color-cyan: #39C6E6;
+  --color-cyan-soft: rgba(57, 198, 230, 0.14);
+
+  --color-success: #2FD27A;
+  --color-success-soft: rgba(47, 210, 122, 0.14);
+  --color-warning: #FFB020;
+  --color-warning-soft: rgba(255, 176, 32, 0.14);
+  --color-danger: #FF5B6E;
+  --color-danger-soft: rgba(255, 91, 110, 0.14);
+
+  --color-founder: #FFB020;
+  --color-founder-strong: #F08A00;
+  --color-focus: #A78BFA;
+  --color-speaking: #35D98B;
+}
+```
+
+### 5.2. Градиенты
+
+```css
+--gradient-brand: linear-gradient(135deg, #714DFF 0%, #3FC3E8 100%);
+--gradient-active-server: linear-gradient(135deg, rgba(122,90,248,.24), rgba(57,198,230,.10));
+--gradient-founder: linear-gradient(135deg, rgba(255,176,32,.20), rgba(240,138,0,.06));
+```
+
+Градиент запрещено применять к длинному тексту. Допустимы логотип, тонкая рамка active-server и системный Founder badge.
+
+### 5.3. Состояния присутствия
+
+- online: `#2FD27A`;
+- idle: `#FFB020`;
+- do-not-disturb: `#FF5B6E`;
+- offline: `#647386`;
+- streaming: `#A66CFF`.
+
+### 5.4. Доступность
+
+- контраст основного текста к фону не ниже 4.5:1;
+- focus ring видим на любом фоне;
+- цвет не является единственным носителем состояния: дополнительно используются иконка, текст или форма;
+- danger и success не должны отличаться только оттенком.
+
+---
+
+## 6. Геометрия, отступы и эффекты
+
+### 6.1. Сетка
+
+Используется 4-пиксельная базовая сетка. Основные шаги:
+
+```text
+4, 8, 12, 16, 20, 24, 32, 40, 48
+```
+
+### 6.2. Радиусы
+
+```css
+--radius-xs: 6px;
+--radius-sm: 10px;
+--radius-md: 14px;
+--radius-lg: 18px;
+--radius-xl: 24px;
+--radius-round: 999px;
+```
+
+### 6.3. Тени
+
+```css
+--shadow-float: 0 12px 36px rgba(0, 0, 0, 0.28);
+--shadow-modal: 0 24px 80px rgba(0, 0, 0, 0.46);
+--shadow-focus: 0 0 0 3px rgba(167, 139, 250, 0.30);
+```
+
+### 6.4. Анимации
+
+- hover: 120–160 ms;
+- раскрытие панели: 180–220 ms;
+- modal: 220–260 ms;
+- speaking ring: реакция на RMS-уровень аудио, сглаживание 100–180 ms;
+- не использовать бесконечное мерцание;
+- учитывать `prefers-reduced-motion`.
+
+---
+
+# Часть II. Storybook
+
+## 7. Назначение Storybook
+
+Storybook должен быть не набором красивых скриншотов, а исполняемым каталогом компонентов и их состояний.
+
+Рекомендуемый стек:
+
+- Storybook for React + Vite;
+- addon-essentials;
+- addon-interactions;
+- addon-a11y;
+- visual regression через Chromatic или локальные screenshot-тесты Playwright;
+- MSW для мокирования API.
+
+Компоненты не должны зависеть напрямую от Electron IPC, LiveKit или реального backend. Интеграции передаются через props, hooks или adapters.
+
+## 8. Структура Storybook
+
+```text
+Foundations/
+  Colors
+  Typography
+  Spacing
+  Radius & Elevation
+  Motion
+  Icons
+
+Primitives/
+  Button
+  IconButton
+  Input
+  PasswordInput
+  SearchInput
+  Select
+  SegmentedControl
+  Checkbox
+  Radio
+  Switch
+  Slider
+  Tooltip
+  Popover
+  Badge
+  StatusDot
+  Avatar
+  Progress
+  AudioLevelMeter
+  Divider
+  Skeleton
+
+Navigation/
+  WorkspaceCard
+  WorkspaceLibrary
+  ServerHeader
+  ChannelCategory
+  ChannelRow
+  DirectMessageRow
+  Breadcrumbs
+  TopBar
+  UserProfileDock
+
+Messaging/
+  MessageGroup
+  MessageBubble
+  SystemMessageCard
+  ReplyPreview
+  ReactionPill
+  AttachmentCard
+  MentionChip
+  Composer
+  TypingIndicator
+  UnreadMarker
+
+Voice/
+  VoiceParticipantTile
+  VoiceParticipantStrip
+  ActiveSpeakerBadge
+  VoiceControlDock
+  DeviceQuickPicker
+  AudioMixerPanel
+  StreamPlayer
+  StreamStatusBar
+  ViewerCountBadge
+  ConnectionQualityBadge
+
+ScreenShare/
+  ScreenSourceCard
+  ScreenSourceGrid
+  ShareAudioModeCard
+  ScreenSharePreview
+  ScreenSharePickerDialog
+  StreamViewerControls
+
+Identity/
+  RoleBadge
+  FounderBadge
+  PresenceBadge
+  MemberListItem
+  UserProfileCard
+  BotBadge
+
+AccessControl/
+  RoleCard
+  RoleHierarchyList
+  PermissionTriState
+  PermissionGroup
+  DangerousPermissionAlert
+  ChannelOverrideEditor
+
+Overlays/
+  Modal
+  ConfirmDialog
+  Drawer
+  ContextMenu
+  Toast
+  CommandPalette
+  EmptyState
+  ErrorState
+
+Pages/
+  LoginPage
+  VerifyEmailPage
+  TwoFactorPage
+  ServerTextChannelPage
+  VoiceChannelPage
+  ScreenSharePickerPage
+  ServerRolesPage
+  AudioSettingsPage
+  SessionManagementPage
+```
+
+## 9. Обязательные stories и состояния
+
+Для каждого интерактивного компонента:
+
+- Default;
+- Hover;
+- Active / Pressed;
+- Focus-visible;
+- Disabled;
+- Loading;
+- Error;
+- Long Russian text;
+- Empty content;
+- Reduced motion;
+- Keyboard interaction.
+
+Дополнительно:
+
+### WorkspaceCard
+
+- обычный сервер;
+- активный сервер;
+- непрочитанные сообщения;
+- упоминание;
+- активный голосовой канал;
+- длинное имя;
+- сервер без изображения.
+
+### ChannelRow
+
+- text;
+- voice;
+- private;
+- announcement;
+- temporary;
+- unread;
+- mention count;
+- full voice channel;
+- denied access;
+- drag state.
+
+### VoiceParticipantTile
+
+- speaking;
+- muted by self;
+- muted by moderator;
+- deafened;
+- connection degraded;
+- sharing screen;
+- Founder / Developer;
+- overflow name.
+
+### ScreenSourceCard
+
+- screen;
+- window;
+- application;
+- selected;
+- source has audio;
+- source has no audio;
+- source closed;
+- preview unavailable.
+
+### PermissionTriState
+
+- inherit;
+- allow;
+- deny;
+- disabled by hierarchy;
+- blocked by system rule;
+- dangerous permission warning.
+
+## 10. Тестирование компонентов
+
+Каждый критичный Storybook-компонент получает interaction test:
+
+- управление с клавиатуры;
+- корректное открытие popover/modal;
+- изменение toggle/slider;
+- вызов callback;
+- отсутствие взаимодействия в disabled-состоянии;
+- корректный aria-label;
+- сохранение фокуса после закрытия модального окна.
+
+---
+
+# Часть III. Компоновка приложения
+
+## 11. Главный App Shell
+
+### 11.1. Размеры
+
+Для окна шириной 1440 px и больше:
+
+- верхняя панель: 52 px;
+- библиотека серверов: 220 px;
+- контекст сервера и каналы: 292 px;
+- основная область: `flex: 1`, минимум 620 px;
+- панель участников: 280 px.
+
+Адаптация:
+
+- 1180–1439 px: панель участников закрыта по умолчанию и открывается drawer;
+- 1024–1179 px: библиотека серверов открывается drawer, контекст сервера остаётся;
+- минимально поддерживаемое окно: 1024 × 680;
+- ниже минимального размера показывать ограничение resize, а не ломать компоновку.
+
+### 11.2. Библиотека серверов
+
+Серверы отображаются карточками, а не круглыми иконками.
+
+Карточка содержит:
+
+- квадратный или скруглённый знак сервера;
+- название;
+- количество участников или краткий статус;
+- unread marker;
+- mention badge;
+- признак активного голосового события.
+
+В нижней части:
+
+- личные сообщения;
+- карточка текущего пользователя;
+- настройки;
+- создание или подключение к серверу.
+
+### 11.3. Контекст сервера
+
+В верхней части:
+
+- обложка сервера;
+- название;
+- видимость: public/private;
+- быстрые действия: пригласить, настройки, ссылка, уведомления;
+- количество участников онлайн.
+
+Ниже:
+
+- overview-разделы;
+- категории каналов;
+- голосовые сессии;
+- временные комнаты;
+- компактный статус текущего подключения.
+
+---
+
+# Часть IV. Функциональные требования
+
+## 12. Серверы и каналы
+
+### 12.1. Типы каналов
+
+```ts
+type ChannelType =
+  | 'TEXT'
+  | 'VOICE'
+  | 'STAGE'
+  | 'ANNOUNCEMENT'
+  | 'TEMPORARY'
+  | 'CATEGORY';
+```
+
+`PRIVATE` не является отдельным типом: приватность задаётся permission overwrite.
+
+### 12.2. Общие функции
+
+- создание, переименование, перемещение и удаление каналов;
+- drag-and-drop внутри категории и между категориями;
+- сворачивание категорий;
+- настройка лимита голосового канала;
+- настройка bitrate при наличии права;
+- скрытие недоступных каналов;
+- создание временного канала при входе пользователя и удаление после выхода последнего участника;
+- сохранение порядка каналов на сервере.
+
+### 12.3. Acceptance criteria
+
+- пользователь не видит канал без `VIEW_CHANNEL`;
+- пользователь не может подключиться к voice-каналу без `CONNECT_VOICE`;
+- UI не считается защитой: backend проверяет права на каждую операцию;
+- изменение порядка каналов синхронно обновляется у всех подключённых клиентов;
+- удаление категории требует выбора: удалить вложенные каналы или переместить их.
+
+---
+
+## 13. Текстовые каналы
+
+### 13.1. Сообщения
+
+Поддержать:
+
+- группировку последовательных сообщений одного автора;
+- replies;
+- редактирование;
+- удаление;
+- реакции;
+- упоминания пользователей и ролей;
+- системные карточки;
+- закрепление;
+- вложения;
+- markdown;
+- code blocks;
+- optimistic update с откатом при ошибке;
+- virtualized list.
+
+### 13.2. Composer
+
+Composer содержит:
+
+- multiline input;
+- кнопку вложения;
+- emoji/GIF entry point;
+- push-to-talk/voice-message entry point как disabled placeholder до отдельного релиза;
+- reply/edit context;
+- индикатор прав на отправку.
+
+### 13.3. Системные карточки
+
+Отдельный тип сообщений для:
+
+- начала стрима;
+- запланированного события;
+- приглашения в voice-канал;
+- изменения роли;
+- закреплённого объявления;
+- предупреждения модератора.
+
+---
+
+## 14. Личные сообщения
+
+- список последних диалогов в библиотеке серверов;
+- unread и mention counters;
+- typing indicator;
+- presence;
+- блокировка пользователя;
+- возможность запретить личные сообщения от участников конкретного сервера;
+- текстовые сообщения и вложения используют общий messaging-компонент.
+
+Групповые DM не входят в текущий этап.
+
+---
+
+## 15. Голосовой канал как сцена
+
+### 15.1. Режим без демонстрации
+
+Центр экрана:
+
+- активный говорящий выделяется крупнее;
+- остальные участники располагаются в адаптивной ленте или сетке;
+- speaking ring реагирует на реальную громкость;
+- пользователь видит mute/deafen/connection state;
+- по hover доступны индивидуальная громкость и локальный mute.
+
+### 15.2. Режим демонстрации
+
+- центральная область — `StreamPlayer` с фиксированным 16:9 или исходным aspect ratio;
+- участники переходят в нижнюю горизонтальную сцену;
+- справа может открываться `AudioMixerPanel`;
+- отображаются автор, источник, наличие звука, качество, viewer count;
+- полноэкранный режим;
+- режим «в отдельном окне» допускается как следующий этап, UI entry point можно предусмотреть.
+
+### 15.3. Control dock
+
+Плавающая нижняя панель:
+
+- microphone;
+- deafen/output mute;
+- quick device selector;
+- screen share;
+- invite;
+- leave channel.
+
+Каждая кнопка имеет tooltip и keyboard shortcut.
+
+### 15.4. Раздельный звук
+
+У зрителя должны быть независимые значения:
+
+- `voiceVolume` — голоса участников;
+- `streamVolume` — звук демонстрации;
+- `streamMuted`;
+- per-user volume;
+- output device.
+
+Значения viewer-side хранятся локально и не влияют на других участников.
+
+### 15.5. Защита от дублирования голосов
+
+При демонстрации со звуком приложение должно использовать доступный механизм loopback/application capture так, чтобы звук голосового клиента не возвращался в stream track.
+
+Требования:
+
+- voice tracks и screen-audio track передаются отдельно;
+- клиент зрителя не микширует повторно голос из stream track;
+- UI явно показывает состояние «Голоса участников не попадают в стрим»;
+- если ОС или выбранный source не позволяет гарантировать изоляцию, пользователь получает предупреждение до начала демонстрации;
+- запрещено молча заявлять об изоляции, если она технически не обеспечена.
+
+---
+
+## 16. Выбор источника демонстрации
+
+### 16.1. Модальное окно
+
+Верхние вкладки:
+
+- `Весь экран`;
+- `Окно`;
+- `Приложение`.
+
+Карточка источника:
+
+- live preview;
+- название;
+- тип;
+- разрешение для экрана;
+- иконка процесса;
+- доступность системного звука;
+- выбранное состояние;
+- tooltip при обрезанном названии.
+
+### 16.2. Блок звука
+
+Варианты:
+
+1. `Передавать звук приложения`;
+2. `Без звука`;
+3. `Не дублировать голоса участников` — включено по умолчанию и помечено как рекомендованное.
+
+При выборе source без audio capture пункт звука disabled с объяснением причины.
+
+### 16.3. Предпросмотр результата
+
+Перед запуском отображать итог:
+
+```text
+Экран 1 · 2560×1440 · со звуком · защита от дублирования включена
+```
+
+### 16.4. Ошибочные состояния
+
+- нет разрешения на захват;
+- список источников пуст;
+- source закрылся;
+- аудиозахват недоступен;
+- демонстрация уже активна;
+- LiveKit publish failed;
+- потеря source во время стрима.
+
+---
+
+## 17. Аудиоустройства и аудионастройки
+
+### 17.1. Input
+
+- выбор системного default или конкретного устройства;
+- live level meter;
+- mic test с локальным playback;
+- input gain;
+- noise suppression;
+- echo cancellation;
+- automatic gain control;
+- manual input sensitivity;
+- push-to-talk binding;
+- уведомление при исчезновении устройства.
+
+### 17.2. Output
+
+- выбор output device;
+- test sound;
+- master volume;
+- voice volume;
+- stream volume;
+- automatic switch to newly connected headset как опция;
+- fallback на default device при отключении выбранного.
+
+### 17.3. Сохранение
+
+Настройки сохраняются:
+
+- на пользователя;
+- отдельно для каждого компьютера/device profile;
+- локально применяются мгновенно;
+- синхронизация общих предпочтений допускается, deviceId не отправляется как глобальная настройка между разными ПК.
+
+---
+
+## 18. Авторизация и безопасность аккаунта
+
+Сохранить существующие способы входа и добавить завершённые пользовательские сценарии:
+
+- регистрация email + password;
+- подтверждение email одноразовым кодом;
+- вход по password;
+- вход по email-коду;
+- TOTP 2FA;
+- резервные коды;
+- восстановление пароля;
+- trusted device;
+- список активных сессий;
+- завершение отдельной или всех сессий;
+- уведомление о новом входе;
+- rate limiting;
+- блокировка brute-force без раскрытия существования email.
+
+В Electron refresh token хранится через `safeStorage` или HttpOnly-сессию, в зависимости от текущей архитектуры. Renderer не должен иметь прямого доступа к долгоживущему секрету.
+
+---
+
+## 19. Системный аккаунт Founder / Developer
+
+Статус автора приложения является platform-level badge, а не обычной серверной ролью.
+
+Требования:
+
+- хранится и выдаётся только backend;
+- не может быть назначен владельцем сервера;
+- не копируется через цвет роли;
+- отображается янтарным кольцом аватара;
+- содержит знак «искра + фигурная скобка» или отдельную фирменную пиктограмму;
+- подпись: `Founder · Developer`;
+- в профиле: «Создатель Vatrushka»;
+- не даёт автоматических прав на пользовательских серверах, если это отдельно не предусмотрено platform moderation policy.
+
+Нужно разделять:
+
+- `platformBadge = FOUNDER_DEVELOPER`;
+- `serverRole = OWNER | ADMINISTRATOR | ...`.
+
+---
+
+# Часть V. Роли и права
+
+## 20. Предустановленные роли
+
+- Owner — системный владелец сервера;
+- Administrator;
+- Moderator;
+- Curator;
+- Presenter;
+- Member;
+- Guest;
+- Restricted.
+
+Owner нельзя удалить, переназначить без операции передачи владения или опустить ниже других ролей.
+
+## 21. Группы permissions
+
+### Сервер
+
+- `MANAGE_SERVER`;
+- `MANAGE_CHANNELS`;
+- `MANAGE_ROLES`;
+- `MANAGE_INVITES`;
+- `MANAGE_INTEGRATIONS`;
+- `VIEW_AUDIT_LOG`;
+- `MANAGE_SERVER_SECURITY`.
+
+### Участники и модерация
+
+- `KICK_MEMBERS`;
+- `BAN_MEMBERS`;
+- `TIMEOUT_MEMBERS`;
+- `MANAGE_NICKNAMES`;
+- `VIEW_MODERATION_NOTES`;
+- `MANAGE_REPORTS`.
+
+### Текст
+
+- `VIEW_CHANNEL`;
+- `READ_MESSAGE_HISTORY`;
+- `SEND_MESSAGES`;
+- `SEND_ATTACHMENTS`;
+- `ADD_REACTIONS`;
+- `EMBED_LINKS`;
+- `MENTION_EVERYONE`;
+- `MANAGE_OWN_MESSAGES`;
+- `MANAGE_MESSAGES`;
+- `PIN_MESSAGES`;
+- `CREATE_THREADS`.
+
+### Голос и демонстрация
+
+- `CONNECT_VOICE`;
+- `SPEAK`;
+- `STREAM_SCREEN`;
+- `STREAM_APPLICATION_AUDIO`;
+- `USE_PRIORITY_VOICE`;
+- `MUTE_MEMBERS`;
+- `DEAFEN_MEMBERS`;
+- `MOVE_MEMBERS`;
+- `STOP_OTHERS_STREAM`;
+- `CREATE_TEMPORARY_VOICE`.
+
+### Администрирование безопасности
+
+- `MANAGE_2FA_POLICY`;
+- `MANAGE_SESSIONS`;
+- `VIEW_TECHNICAL_LOGS`;
+- `EXPORT_SERVER_DATA`.
+
+## 22. Представление прав
+
+В UI каждое channel override имеет три состояния:
+
+- inherit;
+- allow;
+- deny.
+
+Глобальные права роли — обычный набор разрешений. Явные deny используются только в channel/member overwrite.
+
+Рекомендуемая модель данных:
+
+```ts
+type PermissionKey = string;
+
+type ChannelPermissionOverwrite = {
+  targetType: 'ROLE' | 'MEMBER';
+  targetId: string;
+  allow: PermissionKey[];
+  deny: PermissionKey[];
+};
+```
+
+## 23. Алгоритм вычисления прав
+
+1. Server Owner получает все серверные права, кроме platform-only операций.
+2. Если у пользователя есть `ADMINISTRATOR`, он обходит channel overwrites, но не может управлять Owner и platform badges.
+3. Начальный набор — permissions роли `@everyone`.
+4. Добавляется union permissions всех ролей пользователя.
+5. Применяется channel overwrite для `@everyone`: сначала deny, затем allow.
+6. Объединяются channel overwrites всех ролей пользователя: сначала все deny, затем все allow.
+7. Применяется member-specific overwrite: deny, затем allow.
+8. После вычисления прав применяется role hierarchy constraint.
+
+### Иерархия
+
+Пользователь не может:
+
+- изменять роль равного или более высокого rank;
+- назначать права, которых нет у него самого;
+- kick/ban/timeout участника с максимальной ролью не ниже своей;
+- перемещать Owner;
+- управлять system roles.
+
+Backend обязан повторять все проверки, независимо от состояния UI.
+
+## 24. Редактор ролей
+
+Экран состоит из:
+
+- левой навигации server settings;
+- списка ролей с drag-and-drop иерархией;
+- центральной панели permission groups;
+- правого инспектора роли;
+- быстрых presets;
+- предупреждения для опасных разрешений;
+- индикатора несохранённых изменений или autosave state.
+
+Dangerous permissions:
+
+- Administrator;
+- Manage Roles;
+- Manage Server;
+- Ban Members;
+- Manage 2FA Policy;
+- Export Server Data.
+
+Перед назначением Administrator показывать confirm dialog с перечислением последствий.
+
+---
+
+# Часть VI. Дополнительные модули
+
+## 25. Панель участников
+
+- группировка по platform badge и server role;
+- online / idle / DND / offline;
+- поиск;
+- контекстное меню;
+- быстрый local volume;
+- mute/block/report;
+- collapsed mode;
+- не показывать скрытых администраторов через недокументированные поля.
+
+## 26. Presence
+
+Статусы:
+
+- online;
+- idle;
+- do-not-disturb;
+- offline;
+- streaming.
+
+Presence отправляется через realtime-канал с heartbeat. Offline не должен вычисляться только на клиенте.
+
+## 27. Уведомления
+
+- unread dot;
+- mention counter;
+- desktop notification;
+- sound notification;
+- per-server и per-channel настройки;
+- режим `all / mentions / none`;
+- DND выключает звук и desktop notification, но не меняет unread state.
+
+## 28. Audit log
+
+Логировать:
+
+- изменение ролей и permissions;
+- создание/удаление каналов;
+- изменение server settings;
+- invite creation/revocation;
+- kick/ban/timeout;
+- принудительный stop stream;
+- изменение 2FA policy;
+- transfer ownership.
+
+Запись содержит:
+
+- actor;
+- action;
+- target;
+- timestamp;
+- before/after summary;
+- request/correlation id;
+- optional reason.
+
+---
+
+# Часть VII. Техническая реализация
+
+## 29. Рекомендуемая структура frontend
+
+```text
+src/renderer/
+  app/
+    routing/
+    providers/
+    stores/
+  features/
+    auth/
+    servers/
+    channels/
+    messaging/
+    voice/
+    screen-share/
+    roles/
+    settings/
+  ui/
+    foundations/
+    primitives/
+    patterns/
+    layouts/
+  shared/
+    api/
+    contracts/
+    ipc/
+    utils/
+```
+
+Правила:
+
+- UI-компоненты не обращаются к API напрямую;
+- бизнес-операции находятся в feature hooks/services;
+- все API contracts валидируются Zod;
+- цвета и размеры только через tokens;
+- никакого raw hex в feature-компонентах;
+- feature components не дублируют primitives.
+
+## 30. Управление состоянием
+
+Рекомендуется:
+
+- TanStack Query — server state и cache;
+- Zustand — локальное ephemeral state: открытые панели, выбранный source, состояние dock;
+- LiveKit SDK — media state;
+- WebSocket client — presence, messaging, server updates;
+- React Hook Form + Zod — формы.
+
+## 31. Основные сущности backend
+
+```text
+users
+user_credentials
+user_2fa_methods
+user_sessions
+platform_badges
+servers
+server_members
+roles
+member_roles
+channels
+channel_permission_overwrites
+messages
+message_reactions
+attachments
+invites
+voice_sessions
+screen_share_sessions
+audit_logs
+notification_settings
+moderation_actions
+```
+
+Ключевые ограничения:
+
+- unique `(server_id, role_name)` по необходимости;
+- unique ownership на сервер;
+- unique `(member_id, role_id)`;
+- foreign keys с продуманным delete policy;
+- messages удаляются soft-delete для модерационного аудита, если это соответствует политике хранения;
+- session tokens не хранятся в открытом виде.
+
+## 32. REST API — минимальный набор
+
+```text
+POST   /auth/register
+POST   /auth/verify-email
+POST   /auth/login
+POST   /auth/login/code
+POST   /auth/2fa/verify
+POST   /auth/refresh
+GET    /auth/sessions
+DELETE /auth/sessions/:id
+
+GET    /servers
+POST   /servers
+GET    /servers/:serverId
+PATCH  /servers/:serverId
+
+GET    /servers/:serverId/channels
+POST   /servers/:serverId/channels
+PATCH  /channels/:channelId
+DELETE /channels/:channelId
+
+GET    /channels/:channelId/messages
+POST   /channels/:channelId/messages
+PATCH  /messages/:messageId
+DELETE /messages/:messageId
+
+GET    /servers/:serverId/roles
+POST   /servers/:serverId/roles
+PATCH  /roles/:roleId
+DELETE /roles/:roleId
+PUT    /channels/:channelId/overwrites/:targetType/:targetId
+
+POST   /voice/channels/:channelId/token
+POST   /voice/channels/:channelId/screen-share/start
+POST   /voice/channels/:channelId/screen-share/stop
+
+GET    /servers/:serverId/audit-log
+```
+
+Имена endpoints можно адаптировать к текущему API, но permission checks обязательны на backend.
+
+## 33. Realtime events
+
+```text
+MESSAGE_CREATED
+MESSAGE_UPDATED
+MESSAGE_DELETED
+REACTION_UPDATED
+CHANNEL_CREATED
+CHANNEL_UPDATED
+CHANNEL_DELETED
+ROLE_UPDATED
+MEMBER_ROLE_UPDATED
+MEMBER_PRESENCE_UPDATED
+VOICE_STATE_UPDATED
+SCREEN_SHARE_STARTED
+SCREEN_SHARE_UPDATED
+SCREEN_SHARE_STOPPED
+SERVER_NOTIFICATION_UPDATED
+AUDIT_EVENT_CREATED
+```
+
+Каждое событие содержит version или updatedAt для защиты от out-of-order обновлений.
+
+## 34. LiveKit metadata
+
+Server-generated token metadata:
+
+```ts
+type VoiceParticipantMetadata = {
+  userId: string;
+  serverId: string;
+  channelId: string;
+  displayName: string;
+  platformBadges: string[];
+  canPublishMicrophone: boolean;
+  canPublishScreen: boolean;
+  canPublishScreenAudio: boolean;
+};
+```
+
+Клиент не может сам повысить media permissions через metadata.
+
+## 35. Electron security
+
+Сохранить:
+
+- `nodeIntegration: false`;
+- `contextIsolation: true`;
+- `sandbox: true`;
+- typed preload API;
+- allowlist IPC channels;
+- запрет произвольной навигации;
+- CSP;
+- подписанные обновления;
+- секреты вне renderer;
+- отсутствие токенов в логах.
+
+Screen capture и device enumeration выполняются через ограниченный preload/IPC adapter.
+
+---
+
+# Часть VIII. Нефункциональные требования
+
+## 36. Производительность
+
+- 60 FPS для scroll, hover и dock animations на типичном ПК;
+- virtualized message list при 5 000+ загруженных сообщений;
+- превью screen sources не должно бесконтрольно потреблять CPU;
+- обновление thumbnail не чаще необходимого и останавливается после закрытия picker;
+- debounce поиска 150–250 ms;
+- lazy-load тяжёлых settings pages;
+- не перерендеривать весь список участников при изменении RMS одного говорящего.
+
+## 37. Доступность
+
+- полная навигация клавиатурой;
+- видимый focus;
+- Escape закрывает верхний overlay;
+- modal удерживает focus;
+- slider доступен с клавиатуры;
+- screen reader labels для mute, deafen и share controls;
+- target size не меньше 36×36 px, основные кнопки 40–44 px;
+- текст не зашивается в изображения.
+
+## 38. Локализация
+
+- русский язык является первым;
+- все строки через i18n keys;
+- отсутствие hardcoded text в JSX;
+- поддержка длинных строк;
+- даты через Intl;
+- plural forms для участников и уведомлений.
+
+## 39. Тестирование
+
+### Unit
+
+- permission resolver;
+- role hierarchy;
+- audio settings reducers;
+- source selection;
+- auth validation;
+- formatting utilities.
+
+### Component
+
+- Storybook interaction tests;
+- accessibility checks;
+- screenshot regression.
+
+### Integration
+
+- API permission denials;
+- realtime updates;
+- role editor save;
+- screen share start/stop;
+- device fallback.
+
+### E2E
+
+- регистрация → подтверждение → вход;
+- 2FA flow;
+- создание сервера и каналов;
+- назначение роли;
+- запрет доступа к приватному каналу;
+- подключение двух клиентов к voice;
+- демонстрация со звуком;
+- индивидуальный mute stream sound;
+- отсутствие дублирования голосов;
+- отзыв сессии.
+
+---
+
+# Часть IX. Критерии готовности
+
+## 40. Design system DoD
+
+- все основные экраны используют tokens;
+- Storybook содержит foundations, primitives и ключевые page stories;
+- отсутствуют дублирующие Button/Input/Modal реализации;
+- visual regression настроен для критичных экранов;
+- тёмная тема выглядит целостно на 100%, 125% и 150% scaling.
+
+## 41. Voice and screen share DoD
+
+- голос и stream audio регулируются независимо;
+- viewer mute не влияет на других;
+- source picker показывает корректные подписи;
+- пользователь видит, есть ли у source звук;
+- presenter выбирает режим звука до начала;
+- голоса участников не дублируются при поддерживаемом capture mode;
+- при неподдерживаемом режиме есть честное предупреждение;
+- stop share освобождает tracks и системные resources.
+
+## 42. Roles DoD
+
+- вычисление прав соответствует алгоритму из раздела 23;
+- backend запрещает недоступные операции;
+- UI корректно показывает inherit/allow/deny;
+- hierarchy защищает равные и старшие роли;
+- Owner защищён;
+- Founder badge не выдаётся через server roles;
+- audit log фиксирует изменения.
+
+## 43. Auth DoD
+
+- все заявленные login flows работают;
+- 2FA имеет recovery codes;
+- сессии можно просматривать и отзывать;
+- долгоживущие токены не доступны произвольному renderer-коду;
+- rate limits покрыты интеграционными тестами.
+
+---
+
+# Часть X. Этапы реализации
+
+## Этап 0. Аудит MVP
+
+- инвентаризация компонентов;
+- карта data flows;
+- фиксация текущих API и LiveKit flows;
+- список технического долга;
+- baseline E2E для работающих функций.
+
+## Этап 1. Foundations + Storybook
+
+- tokens;
+- fonts;
+- primitives;
+- overlays;
+- interaction/a11y tests.
+
+## Этап 2. App Shell
+
+- workspace library;
+- server context;
+- top bar;
+- member drawer;
+- profile dock;
+- responsive desktop behavior.
+
+## Этап 3. Text and DM UX
+
+- message components;
+- composer;
+- reactions/replies/attachments;
+- unread and notifications;
+- virtualization.
+
+## Этап 4. Voice Stage
+
+- participant strip;
+- control dock;
+- active speaker;
+- per-user volume;
+- connection states.
+
+## Этап 5. Screen Share UX
+
+- source picker;
+- audio modes;
+- viewer audio mixer;
+- error states;
+- resource cleanup.
+
+## Этап 6. Roles and Server Settings
+
+- permission resolver;
+- role hierarchy;
+- editor;
+- channel overwrites;
+- audit log.
+
+## Этап 7. Auth hardening
+
+- trusted devices;
+- sessions;
+- recovery codes;
+- security notifications.
+
+## Этап 8. Stabilization
+
+- E2E;
+- performance profiling;
+- accessibility;
+- visual regression;
+- migration cleanup;
+- release notes.
+
+---
+
+# Часть XI. Инструкция для Codex
+
+## 44. Правила выполнения
+
+1. Не переписывать проект с нуля.
+2. Сначала вывести inventory текущих модулей, API и state management.
+3. Сопоставить существующий код с разделами ТЗ.
+4. Сформировать план миграции по небольшим PR/commit-группам.
+5. Сохранить существующие рабочие сценарии.
+6. Не доверять правам, ролям и media permissions с клиента.
+7. Не использовать mock data в production path.
+8. Не хардкодить цвета и строки.
+9. Добавлять тесты вместе с функцией.
+10. После каждого этапа запускать typecheck, unit, integration и E2E smoke.
+
+## 45. Формат первой задачи для Codex
+
+```text
+Проанализируй текущий репозиторий Vatrushka и документ
+vatrushka_design_system_and_spec.md.
+
+Не меняй код на первом шаге.
+
+Составь:
+1. карту текущей архитектуры frontend/backend/Electron/LiveKit;
+2. перечень уже реализованных требований;
+3. gap analysis по разделам ТЗ;
+4. список компонентов, которые можно переиспользовать;
+5. список компонентов, которые следует заменить;
+6. план миграции по этапам и файлам;
+7. риски регрессии для voice, screen audio, auth и permissions.
+
+После согласования плана начни с этапа Foundations + Storybook.
+```
+
+---
+
+# Часть XII. Визуальные референсы
+
+Использовать как направление:
+
+1. `интерфейс_приложения_vatrushka_в_темной_теме.png` — основная оболочка, серверы, чат, участники.
+2. `интерфейс_голосового_чата_vatrushka.png` — голосовая сцена, stream player, участники, аудиомикшер.
+3. `выбор_экрана_для_демонстрации.png` — source picker и режимы передачи звука.
+4. `интерфейс_управления_сервером_vatrushka.png` — роли, permissions, иерархия.
+5. `современный_дизайн_приложения_для_общения.png` — дополнительная композиция главного экрана.
+
+Макеты не являются pixel-perfect спецификацией текста и данных. Размеры, токены и поведение берутся из этого документа.
