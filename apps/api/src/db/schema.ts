@@ -173,6 +173,62 @@ export const messageAttachments = pgTable(
   (table) => [index('message_attachments_message_idx').on(table.messageId)],
 );
 
+export const directConversations = pgTable(
+  'direct_conversations',
+  {
+    id: uuid('id').primaryKey(),
+    userAId: uuid('user_a_id').notNull().references(() => users.id),
+    userBId: uuid('user_b_id').notNull().references(() => users.id),
+    userAReadAt: timestamp('user_a_read_at', { withTimezone: true }).notNull(),
+    userBReadAt: timestamp('user_b_read_at', { withTimezone: true }).notNull(),
+    userAReadMessageId: uuid('user_a_read_message_id'),
+    userBReadMessageId: uuid('user_b_read_message_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [uniqueIndex('direct_conversations_pair_unique').on(table.userAId, table.userBId), index('direct_conversations_user_a_idx').on(table.userAId, table.updatedAt), index('direct_conversations_user_b_idx').on(table.userBId, table.updatedAt)],
+);
+
+export const directMessages = pgTable(
+  'direct_messages',
+  {
+    id: uuid('id').primaryKey(),
+    conversationId: uuid('conversation_id').notNull().references(() => directConversations.id, { onDelete: 'cascade' }),
+    authorUserId: uuid('author_user_id').notNull().references(() => users.id),
+    content: text('content').notNull(),
+    replyToMessageId: uuid('reply_to_message_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+  },
+  (table) => [index('direct_messages_conversation_created_idx').on(table.conversationId, table.createdAt), foreignKey({ columns: [table.replyToMessageId], foreignColumns: [table.id], name: 'direct_messages_reply_to_message_id_fk' }).onDelete('set null')],
+);
+
+export const directMessageReactions = pgTable(
+  'direct_message_reactions',
+  {
+    messageId: uuid('message_id').notNull().references(() => directMessages.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    emoji: text('emoji').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.messageId, table.userId, table.emoji] }), index('direct_message_reactions_message_idx').on(table.messageId)],
+);
+
+export const directMessageAttachments = pgTable(
+  'direct_message_attachments',
+  {
+    id: uuid('id').primaryKey(),
+    messageId: uuid('message_id').notNull().references(() => directMessages.id, { onDelete: 'cascade' }),
+    uploaderUserId: uuid('uploader_user_id').notNull().references(() => users.id),
+    fileName: text('file_name').notNull(),
+    mimeType: text('mime_type').notNull(),
+    size: integer('size').notNull(),
+    content: bytea('content').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('direct_message_attachments_message_idx').on(table.messageId)],
+);
+
 export const channelScreenShareLeases = pgTable(
   'channel_screen_share_leases',
   {

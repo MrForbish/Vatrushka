@@ -170,6 +170,50 @@ export interface MessageNotificationRecord {
   createdAt: Date;
 }
 
+export interface DirectConversationRecord {
+  id: string;
+  userAId: string;
+  userBId: string;
+  userAReadAt: Date;
+  userBReadAt: Date;
+  userAReadMessageId: string | null;
+  userBReadMessageId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface DirectMessageRecord {
+  id: string;
+  conversationId: string;
+  authorUserId: string;
+  content: string;
+  replyToMessageId: string | null;
+  createdAt: Date;
+  editedAt: Date | null;
+}
+
+export type DirectMessageWithAuthor = DirectMessageRecord & Pick<UserRecord, 'displayName' | 'platformRole'>;
+
+export interface DirectConversationOverviewRecord {
+  conversation: DirectConversationRecord;
+  participant: Pick<UserRecord, 'id' | 'displayName' | 'platformRole'>;
+  lastMessage: Pick<DirectMessageRecord, 'authorUserId' | 'content' | 'createdAt'> | null;
+  unreadCount: number;
+}
+
+export interface DirectMessageAttachmentRecord {
+  id: string;
+  messageId: string;
+  uploaderUserId: string;
+  fileName: string;
+  mimeType: string;
+  size: number;
+  content: Buffer;
+  createdAt: Date;
+}
+
+export type DirectMessageAttachmentMetadata = Omit<DirectMessageAttachmentRecord, 'content'>;
+
 export interface ChannelLeaseRecord {
   channelId: string;
   participantIdentity: string;

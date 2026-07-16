@@ -26,6 +26,12 @@ import type {
   MessageAttachmentRecord,
   MessageAttachmentMetadata,
   MessageNotificationRecord,
+  DirectConversationRecord,
+  DirectConversationOverviewRecord,
+  DirectMessageRecord,
+  DirectMessageWithAuthor,
+  DirectMessageAttachmentRecord,
+  DirectMessageAttachmentMetadata,
   ChannelLeaseRecord,
 } from '../domain.js';
 import type { DataStore } from '../ports.js';
@@ -46,6 +52,10 @@ export class MemoryStore implements DataStore {
   readonly messageReactions = new Map<string, MessageReactionRecord>();
   readonly channelReadStates = new Map<string, ChannelReadStateRecord>();
   readonly messageAttachments = new Map<string, MessageAttachmentRecord>();
+  readonly directConversations = new Map<string, DirectConversationRecord>();
+  readonly directMessages = new Map<string, DirectMessageRecord>();
+  readonly directMessageReactions = new Map<string, MessageReactionRecord>();
+  readonly directMessageAttachments = new Map<string, DirectMessageAttachmentRecord>();
   readonly channelLeases = new Map<string, ChannelLeaseRecord>();
 
   async healthCheck(): Promise<void> {}
@@ -505,6 +515,142 @@ export class MemoryStore implements DataStore {
 
   async deleteMessageAttachment(id: string): Promise<boolean> {
     return this.messageAttachments.delete(id);
+  }
+
+  async getOrCreateDirectConversation(userAId: string, userBId: string, now: Date): Promise<DirectConversationRecord> {
+    const [firstUserId, secondUserId] = [userAId, userBId].sort();
+    const existing = [...this.directConversations.values()].find((conversation) => conversation.userAId === firstUserId && conversation.userBId === secondUserId);
+    if (existing) return structuredClone(existing);
+    const conversation: DirectConversationRecord = { id: crypto.randomUUID(), userAId: firstUserId!, userBId: secondUserId!, userAReadAt: now, userBReadAt: now, userAReadMessageId: null, userBReadMessageId: null, createdAt: now, updatedAt: now };
+    this.directConversations.set(conversation.id, conversation);
+    return structuredClone(conversation);
+  }
+
+  async findDirectConversation(id: string): Promise<DirectConversationRecord | null> {
+    const conversation = this.directConversations.get(id);
+    return conversation ? structuredClone(conversation) : null;
+  }
+
+  async listDirectConversationOverviews(userId: string): Promise<DirectConversationOverviewRecord[]> {
+    return [...this.directConversations.values()]
+      .filter((conversation) => conversation.userAId === userId || conversation.userBId === userId)
+      .map((conversation): DirectConversationOverviewRecord | null => {
+        const participantId = conversation.userAId === userId ? conversation.userBId : conversation.userAId;
+        const participant = this.users.get(participantId);
+        if (!participant) return null;
+        const messages = [...this.directMessages.values()].filter((message) => message.conversationId === conversation.id).sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime() || right.id.localeCompare(left.id));
+        const readAt = conversation.userAId === userId ? conversation.userAReadAt : conversation.userBReadAt;
+        const readMessageId = conversation.userAId === userId ? conversation.userAReadMessageId : conversation.userBReadMessageId;
+        const latest = messages[0];
+        return {
+          conversation: structuredClone(conversation),
+          participant: { id: participant.id, displayName: participant.displayName, platformRole: participant.platformRole },
+          lastMessage: latest ? { authorUserId: latest.authorUserId, content: latest.content, createdAt: latest.createdAt } : null,
+          unreadCount: messages.filter((message) => message.authorUserId !== userId && (message.createdAt > readAt || (message.createdAt.getTime() === readAt.getTime() && (readMessageId === null || message.id.localeCompare(readMessageId) > 0)))).length,
+        };
+      })
+      .filter((overview): overview is DirectConversationOverviewRecord => overview !== null)
+      .sort((left, right) => right.conversation.updatedAt.getTime() - left.conversation.updatedAt.getTime())
+      .map((overview) => structuredClone(overview));
+  }
+
+  async listDirectMessages(conversationId: string, before: Date | null, limit: number): Promise<DirectMessageWithAuthor[]> {
+    return [...this.directMessages.values()]
+      .filter((message) => message.conversationId === conversationId && (!before || message.createdAt < before))
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime() || right.id.localeCompare(left.id))
+      .slice(0, limit)
+      .reverse()
+      .flatMap((message) => {
+        const author = this.users.get(message.authorUserId);
+        return author ? [{ ...structuredClone(message), displayName: author.displayName, platformRole: author.platformRole }] : [];
+      });
+  }
+
+  async findDirectMessagesWithAuthors(ids: string[]): Promise<DirectMessageWithAuthor[]> {
+    return ids.flatMap((id) => {
+      const message = this.directMessages.get(id);
+      const author = message ? this.users.get(message.authorUserId) : null;
+      return message && author ? [{ ...structuredClone(message), displayName: author.displayName, platformRole: author.platformRole }] : [];
+    });
+  }
+
+  async findDirectMessage(id: string): Promise<DirectMessageRecord | null> {
+    const message = this.directMessages.get(id);
+    return message ? structuredClone(message) : null;
+  }
+
+  async createDirectMessage(message: DirectMessageRecord): Promise<void> {
+    this.directMessages.set(message.id, structuredClone(message));
+    const conversation = this.directConversations.get(message.conversationId);
+    if (conversation) conversation.updatedAt = message.createdAt;
+  }
+
+  async updateDirectMessage(id: string, content: string, now: Date): Promise<DirectMessageRecord | null> {
+    const message = this.directMessages.get(id);
+    if (!message) return null;
+    message.content = content;
+    message.editedAt = now;
+    return structuredClone(message);
+  }
+
+  async deleteDirectMessage(id: string): Promise<boolean> {
+    for (const [key, reaction] of this.directMessageReactions) if (reaction.messageId === id) this.directMessageReactions.delete(key);
+    for (const [attachmentId, attachment] of this.directMessageAttachments) if (attachment.messageId === id) this.directMessageAttachments.delete(attachmentId);
+    for (const message of this.directMessages.values()) if (message.replyToMessageId === id) message.replyToMessageId = null;
+    return this.directMessages.delete(id);
+  }
+
+  async listDirectMessageReactionSummaries(messageIds: string[], currentUserId: string): Promise<MessageReactionSummary[]> {
+    const allowed = new Set(messageIds);
+    const grouped = new Map<string, MessageReactionSummary>();
+    for (const reaction of this.directMessageReactions.values()) {
+      if (!allowed.has(reaction.messageId)) continue;
+      const key = `${reaction.messageId}:${reaction.emoji}`;
+      const current = grouped.get(key) ?? { messageId: reaction.messageId, emoji: reaction.emoji, count: 0, reactedByCurrentUser: false };
+      current.count += 1;
+      current.reactedByCurrentUser ||= reaction.userId === currentUserId;
+      grouped.set(key, current);
+    }
+    return [...grouped.values()].map((reaction) => structuredClone(reaction));
+  }
+
+  async addDirectMessageReaction(reaction: MessageReactionRecord): Promise<void> {
+    this.directMessageReactions.set(`${reaction.messageId}:${reaction.userId}:${reaction.emoji}`, structuredClone(reaction));
+  }
+
+  async removeDirectMessageReaction(messageId: string, userId: string, emoji: string): Promise<void> {
+    this.directMessageReactions.delete(`${messageId}:${userId}:${emoji}`);
+  }
+
+  async markDirectConversationRead(conversationId: string, userId: string, readAt: Date, messageId: string): Promise<boolean> {
+    const conversation = this.directConversations.get(conversationId);
+    if (!conversation) return false;
+    if (conversation.userAId === userId && (conversation.userAReadAt < readAt || (conversation.userAReadAt.getTime() === readAt.getTime() && (conversation.userAReadMessageId === null || messageId.localeCompare(conversation.userAReadMessageId) > 0)))) {
+      conversation.userAReadAt = readAt;
+      conversation.userAReadMessageId = messageId;
+    } else if (conversation.userBId === userId && (conversation.userBReadAt < readAt || (conversation.userBReadAt.getTime() === readAt.getTime() && (conversation.userBReadMessageId === null || messageId.localeCompare(conversation.userBReadMessageId) > 0)))) {
+      conversation.userBReadAt = readAt;
+      conversation.userBReadMessageId = messageId;
+    } else if (conversation.userAId !== userId && conversation.userBId !== userId) return false;
+    return true;
+  }
+
+  async listDirectMessageAttachments(messageIds: string[]): Promise<DirectMessageAttachmentMetadata[]> {
+    const allowed = new Set(messageIds);
+    return [...this.directMessageAttachments.values()].filter((attachment) => allowed.has(attachment.messageId)).map((attachment) => structuredClone({ id: attachment.id, messageId: attachment.messageId, uploaderUserId: attachment.uploaderUserId, fileName: attachment.fileName, mimeType: attachment.mimeType, size: attachment.size, createdAt: attachment.createdAt }));
+  }
+
+  async findDirectMessageAttachment(id: string): Promise<DirectMessageAttachmentRecord | null> {
+    const attachment = this.directMessageAttachments.get(id);
+    return attachment ? structuredClone(attachment) : null;
+  }
+
+  async createDirectMessageAttachment(attachment: DirectMessageAttachmentRecord): Promise<void> {
+    this.directMessageAttachments.set(attachment.id, structuredClone(attachment));
+  }
+
+  async deleteDirectMessageAttachment(id: string): Promise<boolean> {
+    return this.directMessageAttachments.delete(id);
   }
 
   async listMessageNotifications(userId: string, since: Date, afterId: string | null, limit: number): Promise<MessageNotificationRecord[]> {

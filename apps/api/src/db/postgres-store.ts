@@ -30,6 +30,12 @@ import type {
   MessageAttachmentRecord,
   MessageAttachmentMetadata,
   MessageNotificationRecord,
+  DirectConversationRecord,
+  DirectConversationOverviewRecord,
+  DirectMessageRecord,
+  DirectMessageWithAuthor,
+  DirectMessageAttachmentRecord,
+  DirectMessageAttachmentMetadata,
   ChannelLeaseRecord,
 } from '../domain.js';
 import type { DataStore } from '../ports.js';
@@ -604,6 +610,117 @@ export class PostgresStore implements DataStore {
       ))
       .orderBy(asc(schema.textMessages.createdAt), asc(schema.textMessages.id))
       .limit(limit);
+  }
+
+  async getOrCreateDirectConversation(userAId: string, userBId: string, now: Date): Promise<DirectConversationRecord> {
+    const [firstUserId, secondUserId] = [userAId, userBId].sort();
+    const candidate: DirectConversationRecord = { id: crypto.randomUUID(), userAId: firstUserId!, userBId: secondUserId!, userAReadAt: now, userBReadAt: now, userAReadMessageId: null, userBReadMessageId: null, createdAt: now, updatedAt: now };
+    const [created] = await this.db.insert(schema.directConversations).values(candidate).onConflictDoNothing({ target: [schema.directConversations.userAId, schema.directConversations.userBId] }).returning();
+    if (created) return created;
+    const [existing] = await this.db.select().from(schema.directConversations).where(and(eq(schema.directConversations.userAId, firstUserId!), eq(schema.directConversations.userBId, secondUserId!))).limit(1);
+    if (!existing) throw new Error('Direct conversation conflict could not be resolved');
+    return existing;
+  }
+
+  async findDirectConversation(id: string): Promise<DirectConversationRecord | null> {
+    const [conversation] = await this.db.select().from(schema.directConversations).where(eq(schema.directConversations.id, id)).limit(1);
+    return conversation ?? null;
+  }
+
+  async listDirectConversationOverviews(userId: string): Promise<DirectConversationOverviewRecord[]> {
+    const conversations = await this.db.select().from(schema.directConversations).where(or(eq(schema.directConversations.userAId, userId), eq(schema.directConversations.userBId, userId))).orderBy(desc(schema.directConversations.updatedAt)).limit(100);
+    return Promise.all(conversations.map(async (conversation): Promise<DirectConversationOverviewRecord> => {
+      const participantId = conversation.userAId === userId ? conversation.userBId : conversation.userAId;
+      const [participant] = await this.db.select({ id: schema.users.id, displayName: schema.users.displayName, platformRole: schema.users.platformRole }).from(schema.users).where(eq(schema.users.id, participantId)).limit(1);
+      if (!participant) throw new Error('Direct conversation participant was not found');
+      const [lastMessage] = await this.db.select({ authorUserId: schema.directMessages.authorUserId, content: schema.directMessages.content, createdAt: schema.directMessages.createdAt }).from(schema.directMessages).where(eq(schema.directMessages.conversationId, conversation.id)).orderBy(desc(schema.directMessages.createdAt), desc(schema.directMessages.id)).limit(1);
+      const readAt = conversation.userAId === userId ? conversation.userAReadAt : conversation.userBReadAt;
+      const readMessageId = conversation.userAId === userId ? conversation.userAReadMessageId : conversation.userBReadMessageId;
+      const [unread] = await this.db.select({ count: sql<number>`count(*)::int` }).from(schema.directMessages).where(and(eq(schema.directMessages.conversationId, conversation.id), ne(schema.directMessages.authorUserId, userId), or(gt(schema.directMessages.createdAt, readAt), and(eq(schema.directMessages.createdAt, readAt), readMessageId === null ? sql`true` : gt(schema.directMessages.id, readMessageId)))));
+      return { conversation, participant, lastMessage: lastMessage ?? null, unreadCount: unread?.count ?? 0 };
+    }));
+  }
+
+  async listDirectMessages(conversationId: string, before: Date | null, limit: number): Promise<DirectMessageWithAuthor[]> {
+    const where = before ? and(eq(schema.directMessages.conversationId, conversationId), lt(schema.directMessages.createdAt, before)) : eq(schema.directMessages.conversationId, conversationId);
+    const rows = await this.db.select({ message: schema.directMessages, displayName: schema.users.displayName, platformRole: schema.users.platformRole }).from(schema.directMessages).innerJoin(schema.users, eq(schema.users.id, schema.directMessages.authorUserId)).where(where).orderBy(desc(schema.directMessages.createdAt), desc(schema.directMessages.id)).limit(limit);
+    return rows.reverse().map(({ message, displayName, platformRole }) => ({ ...message, displayName, platformRole }));
+  }
+
+  async findDirectMessagesWithAuthors(ids: string[]): Promise<DirectMessageWithAuthor[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db.select({ message: schema.directMessages, displayName: schema.users.displayName, platformRole: schema.users.platformRole }).from(schema.directMessages).innerJoin(schema.users, eq(schema.users.id, schema.directMessages.authorUserId)).where(inArray(schema.directMessages.id, ids));
+    return rows.map(({ message, displayName, platformRole }) => ({ ...message, displayName, platformRole }));
+  }
+
+  async findDirectMessage(id: string): Promise<DirectMessageRecord | null> {
+    const [message] = await this.db.select().from(schema.directMessages).where(eq(schema.directMessages.id, id)).limit(1);
+    return message ?? null;
+  }
+
+  async createDirectMessage(message: DirectMessageRecord): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.insert(schema.directMessages).values(message);
+      await tx.update(schema.directConversations).set({ updatedAt: message.createdAt }).where(eq(schema.directConversations.id, message.conversationId));
+    });
+  }
+
+  async updateDirectMessage(id: string, content: string, now: Date): Promise<DirectMessageRecord | null> {
+    const [message] = await this.db.update(schema.directMessages).set({ content, editedAt: now }).where(eq(schema.directMessages.id, id)).returning();
+    return message ?? null;
+  }
+
+  async deleteDirectMessage(id: string): Promise<boolean> {
+    return (await this.db.delete(schema.directMessages).where(eq(schema.directMessages.id, id)).returning({ id: schema.directMessages.id })).length === 1;
+  }
+
+  async listDirectMessageReactionSummaries(messageIds: string[], currentUserId: string): Promise<MessageReactionSummary[]> {
+    if (messageIds.length === 0) return [];
+    const rows = await this.db.select().from(schema.directMessageReactions).where(inArray(schema.directMessageReactions.messageId, messageIds));
+    const grouped = new Map<string, MessageReactionSummary>();
+    for (const reaction of rows) {
+      const key = `${reaction.messageId}:${reaction.emoji}`;
+      const current = grouped.get(key) ?? { messageId: reaction.messageId, emoji: reaction.emoji, count: 0, reactedByCurrentUser: false };
+      current.count += 1;
+      current.reactedByCurrentUser ||= reaction.userId === currentUserId;
+      grouped.set(key, current);
+    }
+    return [...grouped.values()];
+  }
+
+  async addDirectMessageReaction(reaction: MessageReactionRecord): Promise<void> {
+    await this.db.insert(schema.directMessageReactions).values(reaction).onConflictDoNothing();
+  }
+
+  async removeDirectMessageReaction(messageId: string, userId: string, emoji: string): Promise<void> {
+    await this.db.delete(schema.directMessageReactions).where(and(eq(schema.directMessageReactions.messageId, messageId), eq(schema.directMessageReactions.userId, userId), eq(schema.directMessageReactions.emoji, emoji)));
+  }
+
+  async markDirectConversationRead(conversationId: string, userId: string, readAt: Date, messageId: string): Promise<boolean> {
+    const [conversation] = await this.db.select().from(schema.directConversations).where(eq(schema.directConversations.id, conversationId)).limit(1);
+    if (!conversation) return false;
+    if (conversation.userAId === userId) await this.db.update(schema.directConversations).set({ userAReadAt: readAt, userAReadMessageId: messageId }).where(and(eq(schema.directConversations.id, conversationId), or(lt(schema.directConversations.userAReadAt, readAt), and(eq(schema.directConversations.userAReadAt, readAt), or(isNull(schema.directConversations.userAReadMessageId), lt(schema.directConversations.userAReadMessageId, messageId))))));
+    else if (conversation.userBId === userId) await this.db.update(schema.directConversations).set({ userBReadAt: readAt, userBReadMessageId: messageId }).where(and(eq(schema.directConversations.id, conversationId), or(lt(schema.directConversations.userBReadAt, readAt), and(eq(schema.directConversations.userBReadAt, readAt), or(isNull(schema.directConversations.userBReadMessageId), lt(schema.directConversations.userBReadMessageId, messageId))))));
+    else return false;
+    return true;
+  }
+
+  async listDirectMessageAttachments(messageIds: string[]): Promise<DirectMessageAttachmentMetadata[]> {
+    if (messageIds.length === 0) return [];
+    return this.db.select({ id: schema.directMessageAttachments.id, messageId: schema.directMessageAttachments.messageId, uploaderUserId: schema.directMessageAttachments.uploaderUserId, fileName: schema.directMessageAttachments.fileName, mimeType: schema.directMessageAttachments.mimeType, size: schema.directMessageAttachments.size, createdAt: schema.directMessageAttachments.createdAt }).from(schema.directMessageAttachments).where(inArray(schema.directMessageAttachments.messageId, messageIds)).orderBy(asc(schema.directMessageAttachments.createdAt));
+  }
+
+  async findDirectMessageAttachment(id: string): Promise<DirectMessageAttachmentRecord | null> {
+    const [attachment] = await this.db.select().from(schema.directMessageAttachments).where(eq(schema.directMessageAttachments.id, id)).limit(1);
+    return attachment ?? null;
+  }
+
+  async createDirectMessageAttachment(attachment: DirectMessageAttachmentRecord): Promise<void> {
+    await this.db.insert(schema.directMessageAttachments).values(attachment);
+  }
+
+  async deleteDirectMessageAttachment(id: string): Promise<boolean> {
+    return (await this.db.delete(schema.directMessageAttachments).where(eq(schema.directMessageAttachments.id, id)).returning({ id: schema.directMessageAttachments.id })).length === 1;
   }
 
   async claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }> {

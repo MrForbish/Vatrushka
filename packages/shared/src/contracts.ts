@@ -113,6 +113,39 @@ export interface MessageNotificationPage {
   cursor: { createdAt: string; id: string | null } | null;
 }
 
+export interface DirectMessageParticipant {
+  userId: string;
+  displayName: string;
+  platformRole: PlatformRole;
+}
+
+export interface DirectConversationSummary {
+  id: string;
+  participant: DirectMessageParticipant;
+  lastMessage: { authorUserId: string; content: string; createdAt: string } | null;
+  unreadCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DirectMessageCandidate extends DirectMessageParticipant {
+  sharedServerNames: string[];
+}
+
+export interface DirectMessage {
+  id: string;
+  conversationId: string;
+  authorUserId: string;
+  authorDisplayName: string;
+  authorPlatformRole: PlatformRole;
+  content: string;
+  replyTo: { messageId: string; authorUserId: string; authorDisplayName: string; content: string } | null;
+  reactions: Array<{ emoji: string; count: number; reactedByCurrentUser: boolean }>;
+  attachments: MessageAttachment[];
+  createdAt: string;
+  editedAt: string | null;
+}
+
 export interface DesktopMessageNotification {
   id: string;
   title: string;

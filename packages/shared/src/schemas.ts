@@ -80,6 +80,8 @@ export const updateMessageSchema = z.object({ content: messageContentSchema }).s
 export const messageQuerySchema = z.object({ before: z.iso.datetime().optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }).strict();
 export const messageNotificationQuerySchema = z.object({ since: z.iso.datetime().optional(), afterId: uuidSchema.optional(), limit: z.coerce.number().int().min(1).max(50).default(20) }).strict();
 export const markChannelReadSchema = z.object({ messageId: uuidSchema }).strict();
+export const createDirectConversationSchema = z.object({ userId: uuidSchema }).strict();
+export const createDirectMessageSchema = z.object({ content: messageContentSchema, replyToMessageId: uuidSchema.nullish() }).strict();
 
 export const desktopSourceSelectionSchema = z
   .object({ sourceId: z.string().min(1).max(512), includeAudio: z.boolean() })

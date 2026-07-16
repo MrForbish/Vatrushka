@@ -19,6 +19,9 @@ import {
   type TextMessage,
   type MessageNotification,
   type MessageNotificationPage,
+  type DirectConversationSummary,
+  type DirectMessage,
+  type DirectMessageCandidate,
   type TwoFactorSetup,
   serverPermissions,
   expiresAt,
@@ -28,7 +31,7 @@ import {
 
 import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
-import type { AuthCodeRecord, GuestSessionRecord, MessageAttachmentMetadata, MessageAttachmentRecord, MessageNotificationRecord, MessageReactionSummary, RoomRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
+import type { AuthCodeRecord, DirectConversationOverviewRecord, DirectConversationRecord, DirectMessageAttachmentMetadata, DirectMessageAttachmentRecord, DirectMessageWithAuthor, GuestSessionRecord, MessageAttachmentMetadata, MessageAttachmentRecord, MessageNotificationRecord, MessageReactionSummary, RoomRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
 import type { DataStore, Mailer, MediaService } from './ports.js';
 import {
   hashOpaqueToken,
@@ -133,6 +136,33 @@ function publicTextMessage(message: TextMessageWithAuthor, replyTo: TextMessageW
     attachments: attachments.map(({ id, messageId, fileName, mimeType, size, createdAt }) => ({ id, messageId, fileName, mimeType, size, createdAt: createdAt.toISOString() })),
     createdAt: message.createdAt.toISOString(),
     editedAt: message.editedAt?.toISOString() ?? null,
+  };
+}
+
+function publicDirectMessage(message: DirectMessageWithAuthor, replyTo: DirectMessageWithAuthor | null, reactions: MessageReactionSummary[], attachments: DirectMessageAttachmentMetadata[]): DirectMessage {
+  return {
+    id: message.id,
+    conversationId: message.conversationId,
+    authorUserId: message.authorUserId,
+    authorDisplayName: message.displayName ?? 'Участник',
+    authorPlatformRole: message.platformRole,
+    content: message.content,
+    replyTo: replyTo === null ? null : { messageId: replyTo.id, authorUserId: replyTo.authorUserId, authorDisplayName: replyTo.displayName ?? 'Участник', content: replyTo.content },
+    reactions: reactions.map(({ emoji, count, reactedByCurrentUser }) => ({ emoji, count, reactedByCurrentUser })),
+    attachments: attachments.map(({ id, messageId, fileName, mimeType, size, createdAt }) => ({ id, messageId, fileName, mimeType, size, createdAt: createdAt.toISOString() })),
+    createdAt: message.createdAt.toISOString(),
+    editedAt: message.editedAt?.toISOString() ?? null,
+  };
+}
+
+function publicDirectConversation(overview: DirectConversationOverviewRecord): DirectConversationSummary {
+  return {
+    id: overview.conversation.id,
+    participant: { userId: overview.participant.id, displayName: overview.participant.displayName ?? 'Участник', platformRole: overview.participant.platformRole },
+    lastMessage: overview.lastMessage === null ? null : { ...overview.lastMessage, createdAt: overview.lastMessage.createdAt.toISOString() },
+    unreadCount: overview.unreadCount,
+    createdAt: overview.conversation.createdAt.toISOString(),
+    updatedAt: overview.conversation.updatedAt.toISOString(),
   };
 }
 
@@ -659,6 +689,158 @@ export class VatrushkaService {
     await this.store.deleteTextMessage(message.id);
   }
 
+  async listDirectMessageCandidates(authorization: string | undefined): Promise<DirectMessageCandidate[]> {
+    const user = await this.authenticate(authorization);
+    const candidates = new Map<string, DirectMessageCandidate>();
+    for (const server of await this.store.listServersForUser(user.id)) {
+      const permissions = await this.serverPermissionsFor(server, user);
+      if (!permissions.has('VIEW_SERVER')) continue;
+      for (const member of await this.store.listServerMembers(server.id)) {
+        if (member.userId === user.id || !member.displayName) continue;
+        const existing = candidates.get(member.userId);
+        if (existing) existing.sharedServerNames.push(server.name);
+        else candidates.set(member.userId, { userId: member.userId, displayName: member.displayName, platformRole: member.platformRole, sharedServerNames: [server.name] });
+      }
+    }
+    return [...candidates.values()].map((candidate) => ({ ...candidate, sharedServerNames: [...new Set(candidate.sharedServerNames)].sort() })).sort((left, right) => left.displayName.localeCompare(right.displayName, 'ru'));
+  }
+
+  async listDirectConversations(authorization: string | undefined): Promise<DirectConversationSummary[]> {
+    const user = await this.authenticate(authorization);
+    return (await this.store.listDirectConversationOverviews(user.id)).map(publicDirectConversation);
+  }
+
+  async createDirectConversation(authorization: string | undefined, participantUserId: string): Promise<DirectConversationSummary> {
+    const user = await this.authenticate(authorization);
+    this.requireCompleteProfile(user);
+    if (participantUserId === user.id) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 400);
+    const participant = await this.store.findUserById(participantUserId);
+    if (!participant?.displayName) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
+    let shareVisibleServer = false;
+    for (const server of await this.store.listServersForUser(user.id)) {
+      if (!(await this.store.findServerMember(server.id, participant.id))) continue;
+      if ((await this.serverPermissionsFor(server, user)).has('VIEW_SERVER')) {
+        shareVisibleServer = true;
+        break;
+      }
+    }
+    if (!shareVisibleServer) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
+    const conversation = await this.store.getOrCreateDirectConversation(user.id, participant.id, this.now());
+    const overview = (await this.store.listDirectConversationOverviews(user.id)).find((candidate) => candidate.conversation.id === conversation.id);
+    if (!overview) throw new AppError('DIRECT_CONVERSATION_NOT_FOUND', 404);
+    return publicDirectConversation(overview);
+  }
+
+  async listDirectMessages(authorization: string | undefined, conversationId: string, before: string | undefined, limit: number): Promise<DirectMessage[]> {
+    const user = await this.authenticate(authorization);
+    await this.requireDirectConversation(conversationId, user.id);
+    return this.hydrateDirectMessages(await this.store.listDirectMessages(conversationId, before ? new Date(before) : null, limit), user.id);
+  }
+
+  async createDirectMessage(authorization: string | undefined, conversationId: string, content: string, replyToMessageId: string | null): Promise<DirectMessage> {
+    const user = await this.authenticate(authorization);
+    this.requireCompleteProfile(user);
+    const conversation = await this.requireDirectConversation(conversationId, user.id);
+    if (replyToMessageId !== null) {
+      const reply = await this.store.findDirectMessage(replyToMessageId);
+      if (!reply || reply.conversationId !== conversationId) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
+    }
+    const createdAt = new Date(Math.max(this.now().getTime(), conversation.updatedAt.getTime() + 1));
+    const message = { id: randomUUID(), conversationId, authorUserId: user.id, content, replyToMessageId, createdAt, editedAt: null };
+    await this.store.createDirectMessage(message);
+    return (await this.hydrateDirectMessages([{ ...message, displayName: user.displayName, platformRole: user.platformRole }], user.id))[0]!;
+  }
+
+  async updateDirectMessage(authorization: string | undefined, messageId: string, content: string): Promise<DirectMessage> {
+    const user = await this.authenticate(authorization);
+    const message = await this.store.findDirectMessage(messageId);
+    if (!message || message.authorUserId !== user.id) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
+    await this.requireDirectConversation(message.conversationId, user.id);
+    const updated = await this.store.updateDirectMessage(message.id, content, this.now());
+    if (!updated) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
+    return (await this.hydrateDirectMessages([{ ...updated, displayName: user.displayName, platformRole: user.platformRole }], user.id))[0]!;
+  }
+
+  async deleteDirectMessage(authorization: string | undefined, messageId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const message = await this.store.findDirectMessage(messageId);
+    if (!message || message.authorUserId !== user.id) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
+    await this.requireDirectConversation(message.conversationId, user.id);
+    await this.store.deleteDirectMessage(message.id);
+  }
+
+  async setDirectMessageReaction(authorization: string | undefined, messageId: string, emoji: string, active: boolean): Promise<DirectMessage> {
+    const user = await this.authenticate(authorization);
+    const message = await this.store.findDirectMessage(messageId);
+    if (!message) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
+    await this.requireDirectConversation(message.conversationId, user.id);
+    if (active) await this.store.addDirectMessageReaction({ messageId, userId: user.id, emoji, createdAt: this.now() });
+    else await this.store.removeDirectMessageReaction(messageId, user.id, emoji);
+    const [withAuthor] = await this.store.findDirectMessagesWithAuthors([message.id]);
+    if (!withAuthor) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
+    return (await this.hydrateDirectMessages([withAuthor], user.id))[0]!;
+  }
+
+  async markDirectConversationRead(authorization: string | undefined, conversationId: string, messageId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    await this.requireDirectConversation(conversationId, user.id);
+    const message = await this.store.findDirectMessage(messageId);
+    if (!message || message.conversationId !== conversationId) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
+    await this.store.markDirectConversationRead(conversationId, user.id, message.createdAt, message.id);
+  }
+
+  async uploadDirectMessageAttachment(authorization: string | undefined, messageId: string, input: { fileName: string; mimeType: string; content: Buffer }): Promise<DirectMessage> {
+    const user = await this.authenticate(authorization);
+    const message = await this.store.findDirectMessage(messageId);
+    if (!message || message.authorUserId !== user.id) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
+    await this.requireDirectConversation(message.conversationId, user.id);
+    if (input.content.length === 0) throw new AppError('VALIDATION_ERROR', 400);
+    if (input.content.length > MAX_ATTACHMENT_BYTES) throw new AppError('ATTACHMENT_TOO_LARGE', 413);
+    const mimeType = input.mimeType.toLowerCase().split(';', 1)[0]?.trim() ?? '';
+    if (!ALLOWED_ATTACHMENT_TYPES.has(mimeType)) throw new AppError('ATTACHMENT_TYPE_NOT_ALLOWED', 400);
+    if ((await this.store.listDirectMessageAttachments([message.id])).length >= MAX_ATTACHMENTS_PER_MESSAGE) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'attachments', max: MAX_ATTACHMENTS_PER_MESSAGE });
+    const attachment: DirectMessageAttachmentRecord = { id: randomUUID(), messageId, uploaderUserId: user.id, fileName: safeAttachmentName(input.fileName), mimeType, size: input.content.length, content: input.content, createdAt: this.now() };
+    await this.store.createDirectMessageAttachment(attachment);
+    const [withAuthor] = await this.store.findDirectMessagesWithAuthors([message.id]);
+    if (!withAuthor) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
+    return (await this.hydrateDirectMessages([withAuthor], user.id))[0]!;
+  }
+
+  async getDirectMessageAttachment(authorization: string | undefined, attachmentId: string): Promise<DirectMessageAttachmentRecord> {
+    const user = await this.authenticate(authorization);
+    const attachment = await this.store.findDirectMessageAttachment(attachmentId);
+    if (!attachment) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    const message = await this.store.findDirectMessage(attachment.messageId);
+    if (!message) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    await this.requireDirectConversation(message.conversationId, user.id);
+    return attachment;
+  }
+
+  async deleteDirectMessageAttachment(authorization: string | undefined, attachmentId: string): Promise<DirectMessage> {
+    const user = await this.authenticate(authorization);
+    const attachment = await this.store.findDirectMessageAttachment(attachmentId);
+    if (!attachment || attachment.uploaderUserId !== user.id) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    const message = await this.store.findDirectMessage(attachment.messageId);
+    if (!message) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    await this.requireDirectConversation(message.conversationId, user.id);
+    await this.store.deleteDirectMessageAttachment(attachment.id);
+    const [withAuthor] = await this.store.findDirectMessagesWithAuthors([message.id]);
+    if (!withAuthor) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
+    return (await this.hydrateDirectMessages([withAuthor], user.id))[0]!;
+  }
+
+  private async hydrateDirectMessages(messages: DirectMessageWithAuthor[], currentUserId: string): Promise<DirectMessage[]> {
+    const replyIds = [...new Set(messages.map((message) => message.replyToMessageId).filter((id): id is string => id !== null))];
+    const replies = new Map((await this.store.findDirectMessagesWithAuthors(replyIds)).map((message) => [message.id, message]));
+    const messageIds = messages.map((message) => message.id);
+    const [reactions, attachments] = await Promise.all([this.store.listDirectMessageReactionSummaries(messageIds, currentUserId), this.store.listDirectMessageAttachments(messageIds)]);
+    const reactionsByMessage = new Map<string, MessageReactionSummary[]>();
+    for (const reaction of reactions) reactionsByMessage.set(reaction.messageId, [...(reactionsByMessage.get(reaction.messageId) ?? []), reaction]);
+    const attachmentsByMessage = new Map<string, DirectMessageAttachmentMetadata[]>();
+    for (const attachment of attachments) attachmentsByMessage.set(attachment.messageId, [...(attachmentsByMessage.get(attachment.messageId) ?? []), attachment]);
+    return messages.map((message) => publicDirectMessage(message, message.replyToMessageId === null ? null : replies.get(message.replyToMessageId) ?? null, reactionsByMessage.get(message.id) ?? [], attachmentsByMessage.get(message.id) ?? []));
+  }
+
   private async hydrateMessages(messages: TextMessageWithAuthor[], currentUserId: string): Promise<TextMessage[]> {
     const replyIds = [...new Set(messages.map((message) => message.replyToMessageId).filter((id): id is string => id !== null))];
     const replies = new Map((await this.store.findTextMessagesWithAuthors(replyIds)).map((message) => [message.id, message]));
@@ -1159,6 +1341,12 @@ export class VatrushkaService {
     const channel = await this.requireServerChannel(id);
     if (channel.type !== 'text') throw new AppError('CHANNEL_NOT_FOUND', 404);
     return channel;
+  }
+
+  private async requireDirectConversation(id: string, userId: string): Promise<DirectConversationRecord> {
+    const conversation = await this.store.findDirectConversation(id);
+    if (!conversation || (conversation.userAId !== userId && conversation.userBId !== userId)) throw new AppError('DIRECT_CONVERSATION_NOT_FOUND', 404);
+    return conversation;
   }
 
   private async requireVoiceChannel(id: string): Promise<ServerChannelRecord> {

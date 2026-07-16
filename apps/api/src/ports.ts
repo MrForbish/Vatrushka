@@ -23,6 +23,12 @@ import type {
   MessageAttachmentRecord,
   MessageAttachmentMetadata,
   MessageNotificationRecord,
+  DirectConversationRecord,
+  DirectConversationOverviewRecord,
+  DirectMessageRecord,
+  DirectMessageWithAuthor,
+  DirectMessageAttachmentRecord,
+  DirectMessageAttachmentMetadata,
   ChannelLeaseRecord,
 } from './domain.js';
 import type { PlatformRole } from '@vatrushka/shared';
@@ -101,6 +107,23 @@ export interface DataStore {
   createMessageAttachment(attachment: MessageAttachmentRecord): Promise<void>;
   deleteMessageAttachment(id: string): Promise<boolean>;
   listMessageNotifications(userId: string, since: Date, afterId: string | null, limit: number): Promise<MessageNotificationRecord[]>;
+  getOrCreateDirectConversation(userAId: string, userBId: string, now: Date): Promise<DirectConversationRecord>;
+  findDirectConversation(id: string): Promise<DirectConversationRecord | null>;
+  listDirectConversationOverviews(userId: string): Promise<DirectConversationOverviewRecord[]>;
+  listDirectMessages(conversationId: string, before: Date | null, limit: number): Promise<DirectMessageWithAuthor[]>;
+  findDirectMessagesWithAuthors(ids: string[]): Promise<DirectMessageWithAuthor[]>;
+  findDirectMessage(id: string): Promise<DirectMessageRecord | null>;
+  createDirectMessage(message: DirectMessageRecord): Promise<void>;
+  updateDirectMessage(id: string, content: string, now: Date): Promise<DirectMessageRecord | null>;
+  deleteDirectMessage(id: string): Promise<boolean>;
+  listDirectMessageReactionSummaries(messageIds: string[], currentUserId: string): Promise<MessageReactionSummary[]>;
+  addDirectMessageReaction(reaction: MessageReactionRecord): Promise<void>;
+  removeDirectMessageReaction(messageId: string, userId: string, emoji: string): Promise<void>;
+  markDirectConversationRead(conversationId: string, userId: string, readAt: Date, messageId: string): Promise<boolean>;
+  listDirectMessageAttachments(messageIds: string[]): Promise<DirectMessageAttachmentMetadata[]>;
+  findDirectMessageAttachment(id: string): Promise<DirectMessageAttachmentRecord | null>;
+  createDirectMessageAttachment(attachment: DirectMessageAttachmentRecord): Promise<void>;
+  deleteDirectMessageAttachment(id: string): Promise<boolean>;
   claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }>;
   heartbeatChannelLease(channelId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<ChannelLeaseRecord | null>;
   releaseChannelLease(channelId: string, participantIdentity: string): Promise<boolean>;

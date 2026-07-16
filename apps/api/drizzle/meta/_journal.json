@@ -57,6 +57,20 @@
       "when": 1784239270904,
       "tag": "0007_superb_speedball",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784241577813,
+      "tag": "0008_tearful_microchip",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784241809188,
+      "tag": "0009_big_khan",
+      "breakpoints": true
     }
   ]
 }

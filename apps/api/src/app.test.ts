@@ -561,6 +561,74 @@ describe('servers, channels, messages, and roles API', () => {
     expect(claimed.statusCode).toBe(200);
     expect(context.store.channelLeases.has(voice.id)).toBe(true);
   });
+
+  it('creates private one-to-one conversations only for users sharing a server', async () => {
+    const anna = await login('dm-anna@example.com', 'Anna');
+    const boris = await login('dm-boris@example.com', 'Boris');
+    const outsider = await login('dm-outsider@example.com', 'Outsider');
+
+    const deniedWithoutSharedServer = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { userId: boris.userId } });
+    expect(deniedWithoutSharedServer.statusCode).toBe(403);
+
+    const createdServer = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { name: 'DM community' } });
+    const server = createdServer.json<{ inviteCode: string }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/join`, headers: { authorization: `Bearer ${boris.accessToken}` }, payload: { inviteCode: server.inviteCode } });
+
+    const candidates = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-conversations/candidates`, headers: { authorization: `Bearer ${anna.accessToken}` } });
+    expect(candidates.statusCode).toBe(200);
+    expect(candidates.json<Array<{ userId: string; displayName: string; sharedServerNames: string[] }>>()).toEqual([expect.objectContaining({ userId: boris.userId, displayName: 'Boris', sharedServerNames: ['DM community'] })]);
+
+    const createdConversation = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { userId: boris.userId } });
+    expect(createdConversation.statusCode).toBe(201);
+    const conversation = createdConversation.json<{ id: string; participant: { userId: string }; unreadCount: number }>();
+    expect(conversation.participant.userId).toBe(boris.userId);
+    const sameConversation = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations`, headers: { authorization: `Bearer ${boris.accessToken}` }, payload: { userId: anna.userId } });
+    expect(sameConversation.json<{ id: string }>().id).toBe(conversation.id);
+
+    const sent = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations/${conversation.id}/messages`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { content: 'Привет в личке' } });
+    expect(sent.statusCode).toBe(201);
+    const sentMessage = sent.json<{ id: string; attachments: unknown[]; reactions: unknown[] }>();
+    expect(sentMessage.attachments).toEqual([]);
+    expect(sentMessage.reactions).toEqual([]);
+
+    const borisConversations = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-conversations`, headers: { authorization: `Bearer ${boris.accessToken}` } });
+    expect(borisConversations.json<Array<{ id: string; unreadCount: number; lastMessage: { content: string } }>>()).toEqual([expect.objectContaining({ id: conversation.id, unreadCount: 1, lastMessage: expect.objectContaining({ content: 'Привет в личке' }) })]);
+
+    const listed = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-conversations/${conversation.id}/messages?limit=100`, headers: { authorization: `Bearer ${boris.accessToken}` } });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json<Array<{ id: string }>>()).toEqual([expect.objectContaining({ id: sentMessage.id })]);
+    const outsiderDenied = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-conversations/${conversation.id}/messages?limit=100`, headers: { authorization: `Bearer ${outsider.accessToken}` } });
+    expect(outsiderDenied.statusCode).toBe(404);
+
+    const markedRead = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/direct-conversations/${conversation.id}/read`, headers: { authorization: `Bearer ${boris.accessToken}` }, payload: { messageId: sentMessage.id } });
+    expect(markedRead.statusCode).toBe(204);
+    const readConversations = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-conversations`, headers: { authorization: `Bearer ${boris.accessToken}` } });
+    expect(readConversations.json<Array<{ unreadCount: number }>>()[0]?.unreadCount).toBe(0);
+
+    const replied = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations/${conversation.id}/messages`, headers: { authorization: `Bearer ${boris.accessToken}` }, payload: { content: 'Привет!', replyToMessageId: sentMessage.id } });
+    expect(replied.statusCode).toBe(201);
+    const replyMessage = replied.json<{ id: string; replyTo: { messageId: string } }>();
+    expect(replyMessage.replyTo.messageId).toBe(sentMessage.id);
+    const forbiddenEdit = await context.app.inject({ method: 'PATCH', url: `${API_PREFIX}/direct-messages/${replyMessage.id}`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { content: 'Подмена' } });
+    expect(forbiddenEdit.statusCode).toBe(404);
+
+    const reacted = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/direct-messages/${replyMessage.id}/reactions/${encodeURIComponent('👍')}`, headers: { authorization: `Bearer ${anna.accessToken}` } });
+    expect(reacted.statusCode).toBe(200);
+    expect(reacted.json<{ reactions: Array<{ emoji: string; count: number }> }>().reactions).toEqual([{ emoji: '👍', count: 1, reactedByCurrentUser: true }]);
+
+    const dmFile = multipartFile('private.txt', 'text/plain', Buffer.from('private attachment'));
+    const uploaded = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-messages/${replyMessage.id}/attachments`, headers: { authorization: `Bearer ${boris.accessToken}`, 'content-type': dmFile.contentType }, payload: dmFile.payload });
+    expect(uploaded.statusCode).toBe(201);
+    const attachmentId = uploaded.json<{ attachments: Array<{ id: string }> }>().attachments[0]?.id;
+    if (!attachmentId) throw new Error('Direct attachment was not created');
+    const downloaded = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-attachments/${attachmentId}/content`, headers: { authorization: `Bearer ${anna.accessToken}` } });
+    expect(downloaded.rawPayload.toString()).toBe('private attachment');
+    const outsiderDownload = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-attachments/${attachmentId}/content`, headers: { authorization: `Bearer ${outsider.accessToken}` } });
+    expect(outsiderDownload.statusCode).toBe(404);
+    const removed = await context.app.inject({ method: 'DELETE', url: `${API_PREFIX}/direct-attachments/${attachmentId}`, headers: { authorization: `Bearer ${boris.accessToken}` } });
+    expect(removed.statusCode).toBe(200);
+    expect(removed.json<{ attachments: unknown[] }>().attachments).toEqual([]);
+  });
 });
 
 describe('screen-share lease and webhooks', () => {

@@ -21,6 +21,8 @@ import {
   completePasswordLoginSchema,
   createChannelSchema,
   createMessageSchema,
+  createDirectConversationSchema,
+  createDirectMessageSchema,
   createRoleSchema,
   createServerSchema,
   createApiError,
@@ -62,6 +64,7 @@ const serverRoleParams = z.object({ serverId: z.uuid(), roleId: z.uuid() });
 const serverMemberParams = z.object({ serverId: z.uuid(), userId: z.uuid() });
 const messageIdParams = z.object({ messageId: z.uuid() });
 const attachmentIdParams = z.object({ attachmentId: z.uuid() });
+const directConversationIdParams = z.object({ conversationId: z.uuid() });
 const messageReactionParams = z.object({ messageId: z.uuid(), emoji: messageReactionSchema });
 const channelParticipantParams = z.object({ channelId: z.uuid(), participantIdentity: z.string().min(3).max(200) });
 
@@ -113,6 +116,10 @@ const messageAttachmentResponseSchema = z.object({ id: z.string(), messageId: z.
 const messageNotificationResponseSchema = z.object({ id: z.string(), serverId: z.string(), serverName: z.string(), channelId: z.string(), channelName: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string(), createdAt: z.string() });
 const messageNotificationPageResponseSchema = z.object({ items: z.array(messageNotificationResponseSchema), cursor: z.object({ createdAt: z.string(), id: z.string().nullable() }).nullable() });
 const textMessageResponseSchema = z.object({ id: z.string(), channelId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), authorPlatformRole: z.enum(['member', 'admin', 'owner']), content: z.string(), replyTo: z.object({ messageId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string() }).nullable(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reactedByCurrentUser: z.boolean() })), attachments: z.array(messageAttachmentResponseSchema), createdAt: z.string(), editedAt: z.string().nullable() });
+const directMessageParticipantResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']) });
+const directConversationResponseSchema = z.object({ id: z.string(), participant: directMessageParticipantResponseSchema, lastMessage: z.object({ authorUserId: z.string(), content: z.string(), createdAt: z.string() }).nullable(), unreadCount: z.number(), createdAt: z.string(), updatedAt: z.string() });
+const directMessageCandidateResponseSchema = directMessageParticipantResponseSchema.extend({ sharedServerNames: z.array(z.string()) });
+const directMessageResponseSchema = z.object({ id: z.string(), conversationId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), authorPlatformRole: z.enum(['member', 'admin', 'owner']), content: z.string(), replyTo: z.object({ messageId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string() }).nullable(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reactedByCurrentUser: z.boolean() })), attachments: z.array(messageAttachmentResponseSchema), createdAt: z.string(), editedAt: z.string().nullable() });
 
 export interface BuildAppOptions {
   config: AppConfig;
@@ -374,6 +381,75 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     return reply.status(204).send(null);
   });
 
+  api.get(`${API_PREFIX}/direct-conversations/candidates`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], response: { 200: z.array(directMessageCandidateResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listDirectMessageCandidates(request.headers.authorization));
+
+  api.get(`${API_PREFIX}/direct-conversations`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], response: { 200: z.array(directConversationResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listDirectConversations(request.headers.authorization));
+
+  api.post(`${API_PREFIX}/direct-conversations`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], body: createDirectConversationSchema, response: { 201: directConversationResponseSchema, ...routeErrors() } },
+  }, async (request, reply) => reply.status(201).send(await service.createDirectConversation(request.headers.authorization, request.body.userId)));
+
+  api.get(`${API_PREFIX}/direct-conversations/:conversationId/messages`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], params: directConversationIdParams, querystring: messageQuerySchema, response: { 200: z.array(directMessageResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listDirectMessages(request.headers.authorization, request.params.conversationId, request.query.before, request.query.limit));
+
+  api.post(`${API_PREFIX}/direct-conversations/:conversationId/messages`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], params: directConversationIdParams, body: createDirectMessageSchema, response: { 201: directMessageResponseSchema, ...routeErrors() } },
+  }, async (request, reply) => reply.status(201).send(await service.createDirectMessage(request.headers.authorization, request.params.conversationId, request.body.content, request.body.replyToMessageId ?? null)));
+
+  api.patch(`${API_PREFIX}/direct-messages/:messageId`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], params: messageIdParams, body: updateMessageSchema, response: { 200: directMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateDirectMessage(request.headers.authorization, request.params.messageId, request.body.content));
+
+  api.delete(`${API_PREFIX}/direct-messages/:messageId`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], params: messageIdParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.deleteDirectMessage(request.headers.authorization, request.params.messageId);
+    return reply.status(204).send(null);
+  });
+
+  api.put(`${API_PREFIX}/direct-messages/:messageId/reactions/:emoji`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], params: messageReactionParams, response: { 200: directMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.setDirectMessageReaction(request.headers.authorization, request.params.messageId, request.params.emoji, true));
+
+  api.delete(`${API_PREFIX}/direct-messages/:messageId/reactions/:emoji`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], params: messageReactionParams, response: { 200: directMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.setDirectMessageReaction(request.headers.authorization, request.params.messageId, request.params.emoji, false));
+
+  api.put(`${API_PREFIX}/direct-conversations/:conversationId/read`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], params: directConversationIdParams, body: markChannelReadSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.markDirectConversationRead(request.headers.authorization, request.params.conversationId, request.body.messageId);
+    return reply.status(204).send(null);
+  });
+
+  api.post(`${API_PREFIX}/direct-messages/:messageId/attachments`, {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], params: messageIdParams, response: { 201: directMessageResponseSchema, ...routeErrors() } },
+  }, async (request, reply) => {
+    if (!request.isMultipart()) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'file' });
+    const file = await request.file({ limits: { fileSize: MAX_ATTACHMENT_BYTES, files: 1, fields: 0, parts: 1 } });
+    if (!file || file.fieldname !== 'file') throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'file' });
+    const message = await service.uploadDirectMessageAttachment(request.headers.authorization, request.params.messageId, { fileName: file.filename, mimeType: file.mimetype, content: await file.toBuffer() });
+    return reply.status(201).send(message);
+  });
+
+  api.get(`${API_PREFIX}/direct-attachments/:attachmentId/content`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], params: attachmentIdParams },
+  }, async (request, reply) => {
+    const attachment = await service.getDirectMessageAttachment(request.headers.authorization, request.params.attachmentId);
+    const disposition = attachment.mimeType.startsWith('image/') ? 'inline' : 'attachment';
+    return reply.header('Cache-Control', 'private, max-age=3600').header('Content-Disposition', `${disposition}; filename="attachment"; filename*=UTF-8''${encodeURIComponent(attachment.fileName)}`).header('Content-Length', attachment.size).header('X-Content-Type-Options', 'nosniff').type(attachment.mimeType).send(attachment.content);
+  });
+
+  api.delete(`${API_PREFIX}/direct-attachments/:attachmentId`, {
+    schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], params: attachmentIdParams, response: { 200: directMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.deleteDirectMessageAttachment(request.headers.authorization, request.params.attachmentId));
+
   api.get(`${API_PREFIX}/channels/:channelId/messages`, {
     schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: channelIdParams, querystring: messageQuerySchema, response: { 200: z.array(textMessageResponseSchema), ...routeErrors() } },
   }, async (request) => service.listMessages(request.headers.authorization, request.params.channelId, request.query.before, request.query.limit));
@@ -401,6 +477,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
     schema: { tags: ['attachments'], security: [{ bearerAuth: [] }], params: messageIdParams, response: { 201: textMessageResponseSchema, ...routeErrors() } },
   }, async (request, reply) => {
+    if (!request.isMultipart()) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'file' });
     const file = await request.file({ limits: { fileSize: MAX_ATTACHMENT_BYTES, files: 1, fields: 0, parts: 1 } });
     if (!file || file.fieldname !== 'file') throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'file' });
     const content = await file.toBuffer();
