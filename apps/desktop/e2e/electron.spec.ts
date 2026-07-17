@@ -264,7 +264,8 @@ test('accepts a validated invite link after authentication without exposing a ma
   await window.getByRole('button', { name: /Продолжить/u }).click();
   await window.getByLabel('Код из письма').fill('123456');
   await window.getByRole('button', { name: /Подтвердить вход/u }).click();
-  await expect(window.getByText('Сервер по ссылке').first()).toBeVisible();
+  const serverNavigation = window.getByRole('complementary', { name: 'Навигация сервера' });
+  await expect(serverNavigation.getByText('Сервер по ссылке')).toBeVisible();
   await expect(window.getByRole('button', { name: 'общий' })).toBeVisible();
   expect(inviteAccepted).toBe(true);
 });
