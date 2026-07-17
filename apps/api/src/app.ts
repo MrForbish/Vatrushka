@@ -57,6 +57,21 @@ import {
   createAttachmentIntentSchema,
   updateUserNotificationPreferencesSchema,
   reorderRoleSchema,
+  archiveServerSchema,
+  banServerMemberSchema,
+  createServerCategorySchema,
+  createServerInviteSchema,
+  deleteServerSchema,
+  serverAppearanceUploadIntentSchema,
+  serverAuditQuerySchema,
+  serverDangerReauthenticationSchema,
+  transferServerOwnershipSchema,
+  updateServerAppearanceSchema,
+  updateServerCategorySchema,
+  updateServerChannelSettingsSchema,
+  updateServerMemberSchema,
+  updateServerModerationSchema,
+  updateServerOverviewSchema,
   verifyRegistrationSchema,
 } from '@vatrushka/shared';
 
@@ -83,6 +98,9 @@ const conversationIdParams = z.object({ conversationId: z.uuid() });
 const canonicalMessageParams = z.object({ conversationId: z.uuid(), messageId: canonicalMessageIdSchema });
 const canonicalReactionParams = canonicalMessageParams.extend({ emoji: messageReactionSchema });
 const notificationIdParams = z.object({ notificationId: z.uuid() });
+const serverCategoryParams = z.object({ serverId: z.uuid(), categoryId: z.uuid() });
+const serverInviteParams = z.object({ serverId: z.uuid(), inviteId: z.uuid() });
+const serverSettingsChannelParams = z.object({ serverId: z.uuid(), channelId: z.uuid() });
 
 const errorResponseSchema = z.object({
   code: z.string(),
@@ -179,6 +197,14 @@ const homeDashboardResponseSchema = z.object({
   onboarding: z.object({ visible: z.boolean(), steps: z.array(homeOnboardingStepResponseSchema) }),
 });
 const serverAuditLogResponseSchema = z.object({ id: z.string(), serverId: z.string(), actorUserId: z.string().nullable(), actorDisplayName: z.string(), action: z.string(), targetType: z.string(), targetId: z.string().nullable(), before: z.unknown(), after: z.unknown(), createdAt: z.string() });
+const serverOverviewSettingsResponseSchema = z.object({ id: z.string(), name: z.string(), description: z.string().nullable(), language: z.string(), timezone: z.string(), systemChannelId: z.string().nullable(), welcomeChannelId: z.string().nullable(), defaultNotificationLevel: z.enum(['all', 'mentions', 'none']), defaultVoiceInactivitySeconds: z.number(), ownerUserId: z.string(), ownerDisplayName: z.string(), version: z.number(), updatedAt: z.string() });
+const serverAppearanceSettingsResponseSchema = z.object({ iconUrl: z.string().nullable(), bannerUrl: z.string().nullable(), accentColor: z.string().nullable(), version: z.number() });
+const serverSettingsMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), username: z.string().nullable(), nickname: z.string().nullable(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), lastActiveAt: z.string().nullable(), mutedUntil: z.string().nullable(), deafened: z.boolean(), roleIds: z.array(z.string()) });
+const serverCategoryResponseSchema = z.object({ id: z.string(), name: z.string(), position: z.number() });
+const serverChannelSettingsResponseSchema = z.object({ id: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), categoryId: z.string().nullable(), slowModeSeconds: z.number(), maxParticipants: z.number().nullable(), bitrate: z.number().nullable(), version: z.number(), archivedAt: z.string().nullable() });
+const serverInviteSettingsResponseSchema = z.object({ id: z.string(), createdByUserId: z.string().nullable(), createdByDisplayName: z.string(), destinationChannelId: z.string().nullable(), tokenPreview: z.string(), expiresAt: z.string().nullable(), maxUses: z.number().nullable(), useCount: z.number(), revokedAt: z.string().nullable(), createdAt: z.string() });
+const serverModerationSettingsResponseSchema = z.object({ verificationLevel: z.enum(['none', 'email_verified', 'account_age']), newMemberRestrictionMinutes: z.number(), messageRateLimitPerMinute: z.number(), mentionLimitPerMessage: z.number(), rules: z.string().nullable(), version: z.number() });
+const serverBanSettingsResponseSchema = z.object({ userId: z.string(), displayName: z.string(), actorUserId: z.string().nullable(), actorDisplayName: z.string(), reason: z.string(), createdAt: z.string() });
 const messageAttachmentResponseSchema = z.object({ id: z.string(), messageId: z.string(), fileName: z.string(), mimeType: z.string(), size: z.number(), createdAt: z.string() });
 const messageNotificationResponseSchema = z.object({ id: z.string(), serverId: z.string(), serverName: z.string(), channelId: z.string(), channelName: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string(), mention: z.boolean().optional(), createdAt: z.string() });
 const messageNotificationPageResponseSchema = z.object({ items: z.array(messageNotificationResponseSchema), cursor: z.object({ createdAt: z.string(), id: z.string().nullable() }).nullable() });
@@ -502,6 +528,106 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   api.get(`${API_PREFIX}/servers/:serverId`, {
     schema: { tags: ['servers'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: serverDetailResponseSchema, ...routeErrors() } },
   }, async (request) => service.getServer(request.headers.authorization, request.params.serverId));
+
+  api.get(`${API_PREFIX}/servers/:serverId/settings/overview`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: serverOverviewSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getServerOverviewSettings(request.headers.authorization, request.params.serverId));
+
+  api.put(`${API_PREFIX}/servers/:serverId/settings/overview`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, body: updateServerOverviewSchema, response: { 200: serverOverviewSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateServerOverviewSettings(request.headers.authorization, request.params.serverId, request.body));
+
+  api.get(`${API_PREFIX}/servers/:serverId/settings/appearance`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: serverAppearanceSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getServerAppearanceSettings(request.headers.authorization, request.params.serverId));
+
+  api.post(`${API_PREFIX}/servers/:serverId/settings/appearance/upload-intent`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, body: serverAppearanceUploadIntentSchema, response: { 200: z.object({ objectKey: z.string(), uploadUrl: z.url(), headers: z.record(z.string(), z.string()), expiresAt: z.string() }), ...routeErrors() } },
+  }, async (request) => service.createServerAppearanceUploadIntent(request.headers.authorization, request.params.serverId, request.body));
+
+  api.put(`${API_PREFIX}/servers/:serverId/settings/appearance`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, body: updateServerAppearanceSchema, response: { 200: serverAppearanceSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateServerAppearanceSettings(request.headers.authorization, request.params.serverId, request.body));
+
+  api.get(`${API_PREFIX}/servers/:serverId/settings/members`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, querystring: z.object({ search: z.string().trim().max(100).optional() }).strict(), response: { 200: z.array(serverSettingsMemberResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listServerSettingsMembers(request.headers.authorization, request.params.serverId, request.query.search));
+
+  api.patch(`${API_PREFIX}/servers/:serverId/settings/members/:userId`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverMemberParams, body: updateServerMemberSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.updateServerSettingsMember(request.headers.authorization, request.params.serverId, request.params.userId, request.body); return reply.status(204).send(null); });
+
+  api.get(`${API_PREFIX}/servers/:serverId/settings/channels`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: z.object({ categories: z.array(serverCategoryResponseSchema), channels: z.array(serverChannelSettingsResponseSchema) }), ...routeErrors() } },
+  }, async (request) => service.listServerChannelSettings(request.headers.authorization, request.params.serverId));
+
+  api.post(`${API_PREFIX}/servers/:serverId/settings/categories`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, body: createServerCategorySchema, response: { 201: serverCategoryResponseSchema, ...routeErrors() } },
+  }, async (request, reply) => reply.status(201).send(await service.createServerCategory(request.headers.authorization, request.params.serverId, request.body.name, request.body.position)));
+
+  api.patch(`${API_PREFIX}/servers/:serverId/settings/categories/:categoryId`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverCategoryParams, body: updateServerCategorySchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.updateServerCategory(request.headers.authorization, request.params.serverId, request.params.categoryId, request.body); return reply.status(204).send(null); });
+
+  api.delete(`${API_PREFIX}/servers/:serverId/settings/categories/:categoryId`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverCategoryParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.deleteServerCategory(request.headers.authorization, request.params.serverId, request.params.categoryId); return reply.status(204).send(null); });
+
+  api.patch(`${API_PREFIX}/servers/:serverId/settings/channels/:channelId`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverSettingsChannelParams, body: updateServerChannelSettingsSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.updateServerChannelSettings(request.headers.authorization, request.params.serverId, request.params.channelId, request.body); return reply.status(204).send(null); });
+
+  api.get(`${API_PREFIX}/servers/:serverId/settings/invites`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: z.array(serverInviteSettingsResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listServerInvites(request.headers.authorization, request.params.serverId));
+
+  api.post(`${API_PREFIX}/servers/:serverId/settings/invites`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, body: createServerInviteSchema, response: { 201: serverInviteSettingsResponseSchema.extend({ inviteUrl: z.url() }), ...routeErrors() } },
+  }, async (request, reply) => reply.status(201).send(await service.createServerInvite(request.headers.authorization, request.params.serverId, request.body)));
+
+  api.delete(`${API_PREFIX}/servers/:serverId/settings/invites/:inviteId`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverInviteParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.revokeServerInvite(request.headers.authorization, request.params.serverId, request.params.inviteId); return reply.status(204).send(null); });
+
+  api.get(`${API_PREFIX}/servers/:serverId/settings/moderation`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: serverModerationSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getServerModerationSettings(request.headers.authorization, request.params.serverId));
+
+  api.put(`${API_PREFIX}/servers/:serverId/settings/moderation`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, body: updateServerModerationSchema, response: { 200: serverModerationSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateServerModerationSettings(request.headers.authorization, request.params.serverId, request.body));
+
+  api.get(`${API_PREFIX}/servers/:serverId/settings/bans`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: z.array(serverBanSettingsResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listServerBans(request.headers.authorization, request.params.serverId));
+
+  api.post(`${API_PREFIX}/servers/:serverId/settings/bans/:userId`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverMemberParams, body: banServerMemberSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.banServerMember(request.headers.authorization, request.params.serverId, request.params.userId, request.body.reason); return reply.status(204).send(null); });
+
+  api.delete(`${API_PREFIX}/servers/:serverId/settings/bans/:userId`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverMemberParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.unbanServerMember(request.headers.authorization, request.params.serverId, request.params.userId); return reply.status(204).send(null); });
+
+  api.get(`${API_PREFIX}/servers/:serverId/settings/audit-log`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, querystring: serverAuditQuerySchema, response: { 200: z.object({ entries: z.array(serverAuditLogResponseSchema), nextCursor: z.string().nullable() }), ...routeErrors() } },
+  }, async (request) => service.listServerSettingsAudit(request.headers.authorization, request.params.serverId, request.query));
+
+  api.post(`${API_PREFIX}/servers/:serverId/settings/revoke-invites`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, body: serverDangerReauthenticationSchema, response: { 200: z.object({ revoked: z.number() }), ...routeErrors() } },
+  }, async (request) => service.revokeAllServerInvites(request.headers.authorization, request.params.serverId, request.body));
+
+  api.post(`${API_PREFIX}/servers/:serverId/settings/archive`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, body: archiveServerSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.archiveServer(request.headers.authorization, request.params.serverId, request.body.archived, request.body); return reply.status(204).send(null); });
+
+  api.post(`${API_PREFIX}/servers/:serverId/settings/transfer-ownership`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, body: transferServerOwnershipSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.transferServerOwnership(request.headers.authorization, request.params.serverId, request.body.userId, request.body); return reply.status(204).send(null); });
+
+  api.delete(`${API_PREFIX}/servers/:serverId/settings`, {
+    schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, body: deleteServerSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.deleteServerPermanently(request.headers.authorization, request.params.serverId, request.body.confirmation, request.body); return reply.status(204).send(null); });
 
   api.post(`${API_PREFIX}/servers/:serverId/channels`, {
     schema: { tags: ['channels'], security: [{ bearerAuth: [] }], params: serverIdParams, body: createChannelSchema, response: { 201: serverChannelResponseSchema, ...routeErrors() } },

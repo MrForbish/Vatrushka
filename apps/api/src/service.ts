@@ -46,6 +46,16 @@ import {
   type InternalNotification,
   type UserUnreadSummary,
   type UserNotificationPreferences,
+  type CreatedServerInvite,
+  type ServerAppearanceSettings,
+  type ServerAuditLogPage,
+  type ServerBanSettings,
+  type ServerChannelCategory,
+  type ServerChannelSettings,
+  type ServerInviteSettings,
+  type ServerModerationSettings,
+  type ServerOverviewSettings,
+  type ServerSettingsMember,
   serverPermissions,
   highestRolePosition,
   resolveChannelPermissions,
@@ -64,6 +74,7 @@ import { attachmentObjectKey } from './services/attachment-objects.js';
 import { MemoryPresenceStore } from './services/presence-store.js';
 import type { CanonicalMentionInput, CanonicalMessagingStore } from './services/canonical-messaging.js';
 import type { RedisRealtimeBus } from './services/realtime.js';
+import type { ServerModerationUpdate, ServerOverviewUpdate, ServerSettingsStore } from './services/server-settings.js';
 import {
   hashOpaqueToken,
   hashOtp,
@@ -90,6 +101,7 @@ export interface ServiceDependencies {
   presenceStore?: PresenceStore;
   canonicalMessagingStore?: CanonicalMessagingStore;
   realtimeBus?: RedisRealtimeBus | null;
+  serverSettingsStore?: ServerSettingsStore;
   clock?: () => Date;
 }
 
@@ -213,6 +225,7 @@ export class VatrushkaService {
   readonly presenceStore: PresenceStore;
   readonly canonicalMessagingStore: CanonicalMessagingStore | null;
   readonly realtimeBus: RedisRealtimeBus | null;
+  readonly serverSettingsStore: ServerSettingsStore | null;
   private readonly mailer: Mailer;
   private readonly clock: () => Date;
   private readonly pendingVoiceMoves = new Map<string, { channelId: string; expiresAt: Date; seamlesslyMoved: boolean }>();
@@ -226,6 +239,7 @@ export class VatrushkaService {
     this.presenceStore = dependencies.presenceStore ?? new MemoryPresenceStore();
     this.canonicalMessagingStore = dependencies.canonicalMessagingStore ?? null;
     this.realtimeBus = dependencies.realtimeBus ?? null;
+    this.serverSettingsStore = dependencies.serverSettingsStore ?? null;
     this.clock = dependencies.clock ?? (() => new Date());
   }
 
@@ -793,7 +807,8 @@ export class VatrushkaService {
   async acceptServerInvite(authorization: string | undefined, inviteToken: string): Promise<ServerDetail> {
     const user = await this.authenticate(authorization);
     this.requireCompleteProfile(user);
-    const server = await this.store.findServerByInviteToken(inviteToken);
+    const modernInvite = this.serverSettingsStore ? await this.serverSettingsStore.consumeInvite(hashOpaqueToken(inviteToken), this.now()) : null;
+    const server = modernInvite ? await this.store.findServerById(modernInvite.serverId) : await this.store.findServerByInviteToken(inviteToken);
     if (!server) throw new AppError('SERVER_NOT_FOUND', 404);
     if (!await this.store.findServerMember(server.id, user.id)) {
       await this.store.addServerMember({ serverId: server.id, userId: user.id, joinedAt: this.now() });
@@ -1648,6 +1663,238 @@ export class VatrushkaService {
     return visible.filter((summary): summary is ConversationSummary => summary !== null);
   }
 
+  async getServerOverviewSettings(authorization: string | undefined, serverId: string): Promise<ServerOverviewSettings> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'VIEW_SERVER');
+    const settings = await this.settings().getOverview(serverId);
+    if (!settings) throw new AppError('SERVER_NOT_FOUND', 404);
+    return settings;
+  }
+
+  async updateServerOverviewSettings(authorization: string | undefined, serverId: string, input: ServerOverviewUpdate): Promise<ServerOverviewSettings> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_SERVER');
+    const updated = await this.settings().updateOverview(serverId, input, this.now());
+    if (!updated) throw new AppError('VALIDATION_ERROR', 409, undefined, { field: 'version', message: 'Настройки изменились в другой сессии' });
+    await this.recordServerAudit(serverId, user, 'SERVER_OVERVIEW_UPDATED', 'SERVER', serverId, { name: server.name }, input);
+    return updated;
+  }
+
+  async getServerAppearanceSettings(authorization: string | undefined, serverId: string): Promise<ServerAppearanceSettings> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'VIEW_SERVER');
+    const settings = await this.settings().getAppearance(serverId, async (key) => this.objectStorage ? this.objectStorage.createGetUrl(key, 900) : '');
+    if (!settings) throw new AppError('SERVER_NOT_FOUND', 404);
+    return settings;
+  }
+
+  async createServerAppearanceUploadIntent(authorization: string | undefined, serverId: string, input: { kind: 'icon' | 'banner'; mimeType: string; sizeBytes: number }): Promise<{ objectKey: string; uploadUrl: string; headers: Record<string, string>; expiresAt: string }> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_SERVER');
+    if (!this.objectStorage) throw new AppError('MEDIA_STORAGE_UNAVAILABLE', 503);
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(input.mimeType)) throw new AppError('ATTACHMENT_TYPE_NOT_ALLOWED', 415);
+    const maxSize = input.kind === 'icon' ? 5 * 1024 * 1024 : 12 * 1024 * 1024;
+    if (input.sizeBytes > maxSize) throw new AppError('ATTACHMENT_TOO_LARGE', 413);
+    const objectKey = `servers/${serverId}/${input.kind}/${randomUUID()}`;
+    const expiresAtValue = expiresAt(this.now(), 900);
+    return { objectKey, uploadUrl: await this.objectStorage.createPutUrl(objectKey, input.mimeType, input.sizeBytes, 900), headers: { 'Content-Type': input.mimeType }, expiresAt: expiresAtValue.toISOString() };
+  }
+
+  async updateServerAppearanceSettings(authorization: string | undefined, serverId: string, input: { iconObjectKey?: string | null | undefined; bannerObjectKey?: string | null | undefined; accentColor: string | null; version: number }): Promise<ServerAppearanceSettings> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_SERVER');
+    for (const key of [input.iconObjectKey, input.bannerObjectKey]) {
+      if (key && (!key.startsWith(`servers/${serverId}/`) || !this.objectStorage)) throw new AppError('VALIDATION_ERROR', 400);
+      if (key && this.objectStorage) await this.objectStorage.headObject(key).catch(() => { throw new AppError('ATTACHMENT_NOT_FOUND', 404); });
+    }
+    if (!await this.settings().updateAppearance(serverId, input, this.now())) throw new AppError('VALIDATION_ERROR', 409, undefined, { field: 'version', message: 'Настройки изменились в другой сессии' });
+    await this.recordServerAudit(serverId, user, 'SERVER_APPEARANCE_UPDATED', 'SERVER', serverId, null, input);
+    return this.getServerAppearanceSettings(authorization, serverId);
+  }
+
+  async listServerSettingsMembers(authorization: string | undefined, serverId: string, search?: string): Promise<ServerSettingsMember[]> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'VIEW_SERVER');
+    return this.settings().listMembers(serverId, search?.trim() || null);
+  }
+
+  async updateServerSettingsMember(authorization: string | undefined, serverId: string, memberUserId: string, input: { nickname?: string | null | undefined; mutedUntil?: string | null | undefined; deafened?: boolean | undefined }): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    const requestedVoiceModeration = input.mutedUntil !== undefined || input.deafened !== undefined;
+    await this.requireServerPermission(server, user, requestedVoiceModeration ? 'MUTE_MEMBERS' : 'MANAGE_SERVER');
+    if (memberUserId === server.ownerUserId && memberUserId !== user.id) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    const memberUpdate: { nickname?: string | null; mutedUntil?: Date | null; deafened?: boolean } = {};
+    if (input.nickname !== undefined) memberUpdate.nickname = input.nickname;
+    if (input.mutedUntil !== undefined) memberUpdate.mutedUntil = input.mutedUntil ? new Date(input.mutedUntil) : null;
+    if (input.deafened !== undefined) memberUpdate.deafened = input.deafened;
+    const changed = await this.settings().updateMember(serverId, memberUserId, memberUpdate);
+    if (!changed) throw new AppError('SERVER_NOT_FOUND', 404);
+    await this.recordServerAudit(serverId, user, 'MEMBER_UPDATED', 'MEMBER', memberUserId, null, input);
+  }
+
+  async listServerChannelSettings(authorization: string | undefined, serverId: string): Promise<{ categories: ServerChannelCategory[]; channels: ServerChannelSettings[] }> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'VIEW_SERVER');
+    const [categories, channels] = await Promise.all([this.settings().listCategories(serverId), this.settings().listChannels(serverId)]);
+    return { categories, channels };
+  }
+
+  async createServerCategory(authorization: string | undefined, serverId: string, name: string, position?: number): Promise<ServerChannelCategory> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_CHANNELS');
+    const categories = await this.settings().listCategories(serverId);
+    const created = await this.settings().createCategory(randomUUID(), serverId, name, position ?? Math.max(-1, ...categories.map((item) => item.position)) + 1, this.now());
+    await this.recordServerAudit(serverId, user, 'CHANNEL_CATEGORY_CREATED', 'CATEGORY', created.id, null, created);
+    return created;
+  }
+
+  async updateServerCategory(authorization: string | undefined, serverId: string, categoryId: string, input: { name?: string | undefined; position?: number | undefined }): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_CHANNELS');
+    if (!await this.settings().updateCategory(serverId, categoryId, input, this.now())) throw new AppError('CHANNEL_NOT_FOUND', 404);
+    await this.recordServerAudit(serverId, user, 'CHANNEL_CATEGORY_UPDATED', 'CATEGORY', categoryId, null, input);
+  }
+
+  async deleteServerCategory(authorization: string | undefined, serverId: string, categoryId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_CHANNELS');
+    if (!await this.settings().deleteCategory(serverId, categoryId)) throw new AppError('CHANNEL_NOT_FOUND', 404);
+    await this.recordServerAudit(serverId, user, 'CHANNEL_CATEGORY_DELETED', 'CATEGORY', categoryId, null, null);
+  }
+
+  async updateServerChannelSettings(authorization: string | undefined, serverId: string, channelId: string, input: { name?: string | undefined; position?: number | undefined; categoryId?: string | null | undefined; slowModeSeconds?: number | undefined; maxParticipants?: number | null | undefined; bitrate?: number | null | undefined; archived?: boolean | undefined; version: number }): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_CHANNELS');
+    if (!await this.settings().updateChannel(serverId, channelId, input, this.now())) throw new AppError('VALIDATION_ERROR', 409, undefined, { field: 'version', message: 'Канал изменился в другой сессии' });
+    await this.recordServerAudit(serverId, user, 'CHANNEL_SETTINGS_UPDATED', 'CHANNEL', channelId, null, input);
+  }
+
+  async listServerInvites(authorization: string | undefined, serverId: string): Promise<ServerInviteSettings[]> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_INVITES');
+    return this.settings().listInvites(serverId);
+  }
+
+  async createServerInvite(authorization: string | undefined, serverId: string, input: { destinationChannelId: string | null; expiresInSeconds: number | null; maxUses: number | null }): Promise<CreatedServerInvite> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_INVITES');
+    const token = randomOpaqueToken(18);
+    const created = await this.settings().createInvite({ id: randomUUID(), serverId, actorUserId: user.id, destinationChannelId: input.destinationChannelId, tokenHash: hashOpaqueToken(token), tokenPreview: `…${token.slice(-6)}`, expiresAt: input.expiresInSeconds === null ? null : expiresAt(this.now(), input.expiresInSeconds), maxUses: input.maxUses, now: this.now() });
+    await this.recordServerAudit(serverId, user, 'INVITE_CREATED', 'INVITE', created.id, null, { destinationChannelId: created.destinationChannelId, expiresAt: created.expiresAt, maxUses: created.maxUses });
+    return { ...created, createdByDisplayName: user.displayName ?? user.email, inviteUrl: this.inviteUrl(token) };
+  }
+
+  async revokeServerInvite(authorization: string | undefined, serverId: string, inviteId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_INVITES');
+    if (!await this.settings().revokeInvite(serverId, inviteId, this.now())) throw new AppError('SERVER_NOT_FOUND', 404);
+    await this.recordServerAudit(serverId, user, 'INVITE_REVOKED', 'INVITE', inviteId, null, null);
+  }
+
+  async getServerModerationSettings(authorization: string | undefined, serverId: string): Promise<ServerModerationSettings> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'VIEW_SERVER');
+    const settings = await this.settings().getModeration(serverId);
+    if (!settings) throw new AppError('SERVER_NOT_FOUND', 404);
+    return settings;
+  }
+
+  async updateServerModerationSettings(authorization: string | undefined, serverId: string, input: ServerModerationUpdate): Promise<ServerModerationSettings> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_SERVER_SECURITY');
+    if (!await this.settings().updateModeration(serverId, input, this.now())) throw new AppError('VALIDATION_ERROR', 409, undefined, { field: 'version', message: 'Настройки изменились в другой сессии' });
+    await this.recordServerAudit(serverId, user, 'MODERATION_SETTINGS_UPDATED', 'SERVER', serverId, null, input);
+    return this.getServerModerationSettings(authorization, serverId);
+  }
+
+  async listServerBans(authorization: string | undefined, serverId: string): Promise<ServerBanSettings[]> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'BAN_MEMBERS');
+    return this.settings().listBans(serverId);
+  }
+
+  async banServerMember(authorization: string | undefined, serverId: string, memberUserId: string, reason: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'BAN_MEMBERS');
+    if (memberUserId === server.ownerUserId || memberUserId === user.id) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    const roles = await this.store.listServerRoles(server.id);
+    const actorTopPosition = await this.serverRolePositionFor(server, user, roles);
+    const targetRoleIds = new Set(await this.store.listMemberRoleIds(server.id, memberUserId));
+    if (Math.max(0, ...roles.filter((role) => targetRoleIds.has(role.id)).map((role) => role.position)) >= actorTopPosition) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    if (!await this.settings().banMember(serverId, memberUserId, user.id, reason, this.now())) throw new AppError('SERVER_NOT_FOUND', 404);
+    await this.recordServerAudit(serverId, user, 'MEMBER_BANNED', 'MEMBER', memberUserId, null, { reason });
+  }
+
+  async unbanServerMember(authorization: string | undefined, serverId: string, memberUserId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'BAN_MEMBERS');
+    if (!await this.settings().unbanMember(serverId, memberUserId, user.id, this.now())) throw new AppError('SERVER_NOT_FOUND', 404);
+    await this.recordServerAudit(serverId, user, 'MEMBER_UNBANNED', 'MEMBER', memberUserId, null, null);
+  }
+
+  async listServerSettingsAudit(authorization: string | undefined, serverId: string, input: { before?: string | undefined; action?: string | undefined; actorUserId?: string | undefined; limit: number }): Promise<ServerAuditLogPage> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'VIEW_AUDIT_LOG');
+    return this.settings().listAudit(serverId, { before: input.before ? new Date(input.before) : null, action: input.action ?? null, actorUserId: input.actorUserId ?? null, limit: input.limit });
+  }
+
+  async revokeAllServerInvites(authorization: string | undefined, serverId: string, reauthentication: { password: string; totpCode: string | null }): Promise<{ revoked: number }> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    if (server.ownerUserId !== user.id) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    await this.requireDangerReauthentication(user, reauthentication);
+    const revoked = await this.settings().revokeAllInvites(serverId, this.now());
+    await this.recordServerAudit(serverId, user, 'ALL_INVITES_REVOKED', 'SERVER', serverId, null, { revoked });
+    return { revoked };
+  }
+
+  async archiveServer(authorization: string | undefined, serverId: string, archived: boolean, reauthentication: { password: string; totpCode: string | null }): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    if (server.ownerUserId !== user.id) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    await this.requireDangerReauthentication(user, reauthentication);
+    if (!await this.settings().setArchived(serverId, user.id, archived, this.now())) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    await this.recordServerAudit(serverId, user, archived ? 'SERVER_ARCHIVED' : 'SERVER_RESTORED', 'SERVER', serverId, null, null);
+  }
+
+  async transferServerOwnership(authorization: string | undefined, serverId: string, memberUserId: string, reauthentication: { password: string; totpCode: string | null }): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    if (server.ownerUserId !== user.id || memberUserId === user.id) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    await this.requireDangerReauthentication(user, reauthentication);
+    if (!await this.settings().transferOwnership(serverId, user.id, memberUserId, this.now())) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    await this.recordServerAudit(serverId, user, 'OWNERSHIP_TRANSFERRED', 'MEMBER', memberUserId, { ownerUserId: user.id }, { ownerUserId: memberUserId });
+  }
+
+  async deleteServerPermanently(authorization: string | undefined, serverId: string, confirmation: string, reauthentication: { password: string; totpCode: string | null }): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    if (server.ownerUserId !== user.id || confirmation !== server.name) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    await this.requireDangerReauthentication(user, reauthentication);
+    if (!await this.settings().deleteServer(serverId, user.id)) throw new AppError('SERVER_NOT_FOUND', 404);
+  }
+
   async createCanonicalDirectConversation(authorization: string | undefined, otherUserId: string): Promise<ConversationSummary> {
     const user = await this.authenticate(authorization);
     this.requireCompleteProfile(user);
@@ -2171,6 +2418,24 @@ export class VatrushkaService {
       after,
       createdAt: this.now(),
     });
+  }
+
+  private settings(): ServerSettingsStore {
+    if (!this.serverSettingsStore) throw new AppError('INTERNAL_ERROR', 500);
+    return this.serverSettingsStore;
+  }
+
+  private async requireDangerReauthentication(user: UserRecord, input: { password: string; totpCode: string | null }): Promise<void> {
+    if (!user.passwordHash || !await verifyPassword(input.password, user.passwordHash)) throw new AppError('INVALID_CREDENTIALS', 401);
+    if (!user.twoFactorEnabled) return;
+    if (!user.totpSecretEncrypted || !input.totpCode) throw new AppError('INVALID_SECOND_FACTOR', 401);
+    let secret: string;
+    try {
+      secret = decryptCredential(user.totpSecretEncrypted, this.config.CREDENTIAL_ENCRYPTION_KEY);
+    } catch {
+      throw new AppError('INTERNAL_ERROR', 500);
+    }
+    if (!verifyTotp(secret, input.totpCode, this.now().getTime())) throw new AppError('INVALID_SECOND_FACTOR', 401);
   }
 
   private requireCompleteProfile(user: UserRecord): asserts user is UserRecord & { displayName: string } {

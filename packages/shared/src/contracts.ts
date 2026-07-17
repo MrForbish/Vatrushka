@@ -258,6 +258,104 @@ export interface ServerDetail extends ServerSummary {
   permissions: ServerPermission[];
 }
 
+export type ServerNotificationLevel = 'all' | 'mentions' | 'none';
+export type ServerVerificationLevel = 'none' | 'email_verified' | 'account_age';
+
+export interface ServerOverviewSettings {
+  id: string;
+  name: string;
+  description: string | null;
+  language: string;
+  timezone: string;
+  systemChannelId: string | null;
+  welcomeChannelId: string | null;
+  defaultNotificationLevel: ServerNotificationLevel;
+  defaultVoiceInactivitySeconds: number;
+  ownerUserId: string;
+  ownerDisplayName: string;
+  version: number;
+  updatedAt: string;
+}
+
+export interface ServerAppearanceSettings {
+  iconUrl: string | null;
+  bannerUrl: string | null;
+  accentColor: string | null;
+  version: number;
+}
+
+export interface ServerSettingsMember {
+  userId: string;
+  displayName: string;
+  username: string | null;
+  nickname: string | null;
+  platformRole: PlatformRole;
+  joinedAt: string;
+  lastActiveAt: string | null;
+  mutedUntil: string | null;
+  deafened: boolean;
+  roleIds: string[];
+}
+
+export interface ServerChannelCategory {
+  id: string;
+  name: string;
+  position: number;
+}
+
+export interface ServerChannelSettings {
+  id: string;
+  name: string;
+  type: ServerChannelType;
+  position: number;
+  categoryId: string | null;
+  slowModeSeconds: number;
+  maxParticipants: number | null;
+  bitrate: number | null;
+  version: number;
+  archivedAt: string | null;
+}
+
+export interface ServerInviteSettings {
+  id: string;
+  createdByUserId: string | null;
+  createdByDisplayName: string;
+  destinationChannelId: string | null;
+  tokenPreview: string;
+  expiresAt: string | null;
+  maxUses: number | null;
+  useCount: number;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreatedServerInvite extends ServerInviteSettings {
+  inviteUrl: string;
+}
+
+export interface ServerModerationSettings {
+  verificationLevel: ServerVerificationLevel;
+  newMemberRestrictionMinutes: number;
+  messageRateLimitPerMinute: number;
+  mentionLimitPerMessage: number;
+  rules: string | null;
+  version: number;
+}
+
+export interface ServerBanSettings {
+  userId: string;
+  displayName: string;
+  actorUserId: string | null;
+  actorDisplayName: string;
+  reason: string;
+  createdAt: string;
+}
+
+export interface ServerAuditLogPage {
+  entries: ServerAuditLogEntry[];
+  nextCursor: string | null;
+}
+
 export interface TextMessage {
   id: string;
   channelId: string;

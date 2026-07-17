@@ -72,6 +72,70 @@ export const newMessageContentSchema = z.string().trim().max(4_000).refine((valu
 export const messageReactionSchema = z.string().trim().min(1).max(32).refine((value) => !controlCharacterPattern.test(value));
 export const createServerSchema = z.object({ name: serverNameSchema }).strict();
 export const createChannelSchema = z.object({ name: channelNameSchema, type: z.enum(['text', 'voice']) }).strict();
+export const updateServerOverviewSchema = z.object({
+  name: serverNameSchema,
+  description: z.string().trim().max(1_000).nullable(),
+  language: z.string().trim().min(2).max(16),
+  timezone: z.string().trim().min(1).max(100),
+  systemChannelId: uuidSchema.nullable(),
+  welcomeChannelId: uuidSchema.nullable(),
+  defaultNotificationLevel: z.enum(['all', 'mentions', 'none']),
+  defaultVoiceInactivitySeconds: z.number().int().min(0).max(86_400),
+  version: z.number().int().positive(),
+}).strict();
+export const updateServerAppearanceSchema = z.object({
+  iconObjectKey: z.string().trim().min(1).max(512).nullable().optional(),
+  bannerObjectKey: z.string().trim().min(1).max(512).nullable().optional(),
+  accentColor: z.string().regex(/^#[0-9a-f]{6}$/iu).nullable(),
+  version: z.number().int().positive(),
+}).strict();
+export const serverAppearanceUploadIntentSchema = z.object({
+  kind: z.enum(['icon', 'banner']),
+  mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']),
+  sizeBytes: z.number().int().positive().max(12 * 1024 * 1024),
+}).strict();
+export const updateServerMemberSchema = z.object({
+  nickname: z.string().trim().min(1).max(32).nullable().optional(),
+  mutedUntil: z.iso.datetime().nullable().optional(),
+  deafened: z.boolean().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
+export const createServerCategorySchema = z.object({ name: z.string().trim().min(1).max(50), position: z.number().int().min(0).max(999).optional() }).strict();
+export const updateServerCategorySchema = z.object({ name: z.string().trim().min(1).max(50).optional(), position: z.number().int().min(0).max(999).optional() }).strict().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
+export const updateServerChannelSettingsSchema = z.object({
+  name: channelNameSchema.optional(),
+  position: z.number().int().min(0).max(999).optional(),
+  categoryId: uuidSchema.nullable().optional(),
+  slowModeSeconds: z.number().int().min(0).max(21_600).optional(),
+  maxParticipants: z.number().int().min(1).max(1_000).nullable().optional(),
+  bitrate: z.number().int().min(16_000).max(510_000).nullable().optional(),
+  archived: z.boolean().optional(),
+  version: z.number().int().positive(),
+}).strict();
+export const createServerInviteSchema = z.object({
+  destinationChannelId: uuidSchema.nullable().default(null),
+  expiresInSeconds: z.number().int().min(300).max(2_592_000).nullable().default(604_800),
+  maxUses: z.number().int().min(1).max(10_000).nullable().default(null),
+}).strict();
+export const updateServerModerationSchema = z.object({
+  verificationLevel: z.enum(['none', 'email_verified', 'account_age']),
+  newMemberRestrictionMinutes: z.number().int().min(0).max(43_200),
+  messageRateLimitPerMinute: z.number().int().min(1).max(600),
+  mentionLimitPerMessage: z.number().int().min(0).max(100),
+  rules: z.string().trim().max(10_000).nullable(),
+  version: z.number().int().positive(),
+}).strict();
+export const banServerMemberSchema = z.object({ reason: z.string().trim().min(1).max(500) }).strict();
+export const serverAuditQuerySchema = z.object({
+  before: z.iso.datetime().optional(),
+  action: z.string().trim().min(1).max(80).optional(),
+  actorUserId: uuidSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+}).strict();
+const serverReauthenticationFields = { password: passwordSchema, totpCode: otpCodeSchema.nullable().default(null) };
+export const serverDangerReauthenticationSchema = z.object(serverReauthenticationFields).strict();
+export const archiveServerSchema = z.object({ archived: z.boolean(), ...serverReauthenticationFields }).strict();
+export const transferServerOwnershipSchema = z.object({ userId: uuidSchema, ...serverReauthenticationFields }).strict();
+export const deleteServerSchema = z.object({ confirmation: serverNameSchema, ...serverReauthenticationFields }).strict();
 export const createRoleSchema = z.object({
   name: roleNameSchema,
   color: z.string().regex(/^#[0-9a-f]{6}$/iu).default('#a86b4b'),

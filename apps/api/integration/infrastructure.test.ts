@@ -10,6 +10,7 @@ import { createPostgresStore } from '../src/db/postgres-store.js';
 import { createPresenceStore } from '../src/services/presence-store.js';
 import { createCanonicalMessagingStore } from '../src/services/canonical-messaging.js';
 import { OutboxWorker, RedisRealtimeBus } from '../src/services/realtime.js';
+import { createServerSettingsStore } from '../src/services/server-settings.js';
 import { loadConfig } from '../src/config.js';
 
 const databaseUrl = process.env.INTEGRATION_DATABASE_URL;
@@ -22,6 +23,7 @@ if (!databaseUrl || !redisUrl) {
 const adminPool = new pg.Pool({ connectionString: databaseUrl, max: 2 });
 const postgres = createPostgresStore(databaseUrl);
 const messaging = createCanonicalMessagingStore(databaseUrl);
+const serverSettings = createServerSettingsStore(databaseUrl);
 const presence = await createPresenceStore(loadConfig({
   NODE_ENV: 'test',
   PRESENCE_STORAGE_DRIVER: 'redis',
@@ -43,6 +45,7 @@ afterAll(async () => {
   await realtime.close();
   await postgres.close();
   await messaging.close();
+  await serverSettings.close();
   await adminPool.end();
 });
 
@@ -144,6 +147,28 @@ describe('production infrastructure adapters', () => {
     expect((await messaging.unreadSummary(second.id)).totalReplyUnread).toBe(0);
     expect(await messaging.softDeleteMessage(created.message.id, first.id, false, new Date(now.getTime() + 2_000))).toBe(true);
     expect((await messaging.findMessage(created.message.id, second.id))?.deletedAt).not.toBeNull();
+  });
+
+  it('persists versioned server settings and constrained invite links', async () => {
+    const now = new Date('2026-07-18T13:00:00.000Z');
+    const owner = (await postgres.store.getOrCreateUser(`${randomUUID()}@settings.integration.test`, now)).user;
+    const serverId = randomUUID();
+    const channelId = randomUUID();
+    await adminPool.query('insert into servers (id, name, invite_code, owner_user_id, created_at, updated_at) values ($1, $2, $3, $4, $5, $5)', [serverId, 'Settings', randomUUID(), owner.id, now]);
+    await adminPool.query('insert into server_members (server_id, user_id, joined_at) values ($1, $2, $3)', [serverId, owner.id, now]);
+    await adminPool.query("insert into server_channels (id, server_id, name, type, position, created_at, updated_at) values ($1, $2, 'general', 'text', 0, $3, $3)", [channelId, serverId, now]);
+
+    const initial = await serverSettings.getOverview(serverId);
+    expect(initial?.version).toBe(1);
+    const updated = await serverSettings.updateOverview(serverId, { name: 'Updated settings', description: 'Description', language: 'ru', timezone: 'Europe/Moscow', systemChannelId: channelId, welcomeChannelId: channelId, defaultNotificationLevel: 'mentions', defaultVoiceInactivitySeconds: 600, version: 1 }, new Date(now.getTime() + 1_000));
+    expect(updated).toMatchObject({ name: 'Updated settings', version: 2, systemChannelId: channelId });
+    await expect(serverSettings.updateOverview(serverId, { name: 'Stale', description: null, language: 'ru', timezone: 'UTC', systemChannelId: null, welcomeChannelId: null, defaultNotificationLevel: 'none', defaultVoiceInactivitySeconds: 0, version: 1 }, now)).resolves.toBeNull();
+
+    const rawToken = randomUUID();
+    const created = await serverSettings.createInvite({ id: randomUUID(), serverId, actorUserId: owner.id, destinationChannelId: channelId, tokenHash: rawToken, tokenPreview: '…token', expiresAt: new Date(now.getTime() + 60_000), maxUses: 1, now });
+    expect(created.destinationChannelId).toBe(channelId);
+    await expect(serverSettings.consumeInvite(rawToken, now)).resolves.toMatchObject({ serverId, destinationChannelId: channelId });
+    await expect(serverSettings.consumeInvite(rawToken, now)).resolves.toBeNull();
   });
 
   it('publishes the transactional outbox through Redis with deduplication', async () => {

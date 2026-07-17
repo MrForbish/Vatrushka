@@ -8,12 +8,14 @@ import { createObjectStorage } from './services/object-storage.js';
 import { createPresenceStore } from './services/presence-store.js';
 import { createCanonicalMessagingStore } from './services/canonical-messaging.js';
 import { createRealtimeBus, OutboxWorker } from './services/realtime.js';
+import { createServerSettingsStore } from './services/server-settings.js';
 
 const config = loadConfig();
 const database = createPostgresStore(config.DATABASE_URL);
 const objectStorage = createObjectStorage(config);
 const presenceStore = await createPresenceStore(config);
 const canonicalMessagingStore = createCanonicalMessagingStore(config.DATABASE_URL);
+const serverSettingsStore = createServerSettingsStore(config.DATABASE_URL);
 const realtimeBus = await createRealtimeBus(config);
 const outboxWorker = realtimeBus ? new OutboxWorker(canonicalMessagingStore, realtimeBus) : null;
 outboxWorker?.start();
@@ -29,6 +31,7 @@ const service = new VatrushkaService({
   presenceStore,
   canonicalMessagingStore,
   realtimeBus,
+  serverSettingsStore,
 });
 const app = await buildApp({ config, service, ...(realtimeBus ? { realtimeBus } : {}) });
 
@@ -38,6 +41,7 @@ app.addHook('onClose', async () => {
   await realtimeBus?.close();
   await presenceStore.close();
   await canonicalMessagingStore.close();
+  await serverSettingsStore.close();
   await database.close();
 });
 
