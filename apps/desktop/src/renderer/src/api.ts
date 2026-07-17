@@ -13,6 +13,7 @@ import {
   type ConversationSummary,
   type InternalNotification,
   type UserUnreadSummary,
+  type UserNotificationPreferences,
   type HomeDashboardResponse,
   type PasswordLoginChallenge,
   type PublicUser,
@@ -301,6 +302,14 @@ export class ApiClient {
     return this.request('/me/unread', { auth: true });
   }
 
+  getNotificationPreferences(): Promise<UserNotificationPreferences> {
+    return this.request('/me/notification-preferences', { auth: true });
+  }
+
+  updateNotificationPreferences(input: Omit<UserNotificationPreferences, 'updatedAt'>): Promise<UserNotificationPreferences> {
+    return this.request('/me/notification-preferences', { method: 'PUT', body: input, auth: true });
+  }
+
   listNotifications(before?: string, unreadOnly = false): Promise<InternalNotification[]> {
     const query = new URLSearchParams({ limit: '100', unreadOnly: String(unreadOnly) });
     if (before) query.set('before', before);
@@ -309,6 +318,10 @@ export class ApiClient {
 
   async markNotificationRead(notificationId: string): Promise<void> {
     await this.request(`/notifications/${notificationId}/read`, { method: 'PATCH', auth: true });
+  }
+
+  async dismissNotification(notificationId: string): Promise<void> {
+    await this.request(`/notifications/${notificationId}/dismiss`, { method: 'PATCH', auth: true });
   }
 
   markAllNotificationsRead(): Promise<{ updated: number }> {

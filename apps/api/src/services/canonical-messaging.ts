@@ -8,6 +8,7 @@ import type {
   ConversationReadState,
   ConversationSummary,
   InternalNotification,
+  UserNotificationPreferences,
   UserUnreadSummary,
 } from '@vatrushka/shared';
 
@@ -251,7 +252,8 @@ export class CanonicalMessagingStore {
         c.updated_at,
         latest.id as last_message_id, latest.author_id as last_author_id, latest.content as last_content, latest.created_at as last_created_at,
         (select count(*)::int from messages unread where unread.conversation_id = c.id and unread.deleted_at is null and unread.author_id <> $1 and unread.id > coalesce(state.last_read_message_id, 0)) as unread_count,
-        coalesce(state.mention_count, 0)::int as mention_count
+        (select count(*)::int from conversation_message_mentions mention join messages mentioned_message on mentioned_message.id = mention.message_id
+          where mentioned_message.conversation_id = c.id and mentioned_message.deleted_at is null and mentioned_message.id > coalesce(state.last_read_message_id, 0) and mention.mentioned_user_id = $1) as mention_count
       from conversations c
       left join server_channels channel on channel.id = c.channel_id
       left join conversation_read_states state on state.conversation_id = c.id and state.user_id = $1
@@ -477,6 +479,9 @@ export class CanonicalMessagingStore {
           where m.conversation_id = $1 and mention.mentioned_user_id = $2 and m.id > excluded.last_read_message_id
         ) else conversation_read_states.mention_count end
       returning conversation_id, last_delivered_message_id, last_read_message_id, last_delivered_at, last_read_at, mention_count
+      ), read_notifications as (
+        update notifications set read_at = coalesce(read_at, $5)
+        where user_id = $2 and conversation_id = $1 and $4::bigint is not null and message_id <= $4::bigint
       ), queued_event as (
         insert into outbox_events (event_type, aggregate_type, aggregate_id, payload, created_at, available_at)
         select 'conversation.read_state.updated', 'conversation', $1,
@@ -494,7 +499,8 @@ export class CanonicalMessagingStore {
     const result = await this.pool.query<{ conversation_id: string; unread_count: number; mention_count: number; first_unread_message_id: string | null; type: CanonicalConversationRecord['type'] }>(`
       select c.id as conversation_id, c.type,
         count(m.id) filter (where m.author_id <> $1 and m.deleted_at is null)::int as unread_count,
-        coalesce(state.mention_count, 0)::int as mention_count,
+        (select count(*)::int from conversation_message_mentions mention join messages mentioned_message on mentioned_message.id = mention.message_id
+          where mentioned_message.conversation_id = c.id and mentioned_message.deleted_at is null and mentioned_message.id > coalesce(state.last_read_message_id, 0) and mention.mentioned_user_id = $1) as mention_count,
         min(m.id)::text as first_unread_message_id
       from conversations c
       left join conversation_read_states state on state.conversation_id = c.id and state.user_id = $1
@@ -504,10 +510,11 @@ export class CanonicalMessagingStore {
       group by c.id, c.type, state.mention_count
     `, [userId]);
     const conversations = result.rows.map((row) => ({ conversationId: row.conversation_id, unreadCount: row.unread_count, mentionCount: row.mention_count, firstUnreadMessageId: row.first_unread_message_id }));
+    const replyResult = await this.pool.query<{ count: number }>("select count(*)::int as count from notifications where user_id = $1 and type = 'reply' and read_at is null and dismissed_at is null", [userId]);
     return {
       totalDirectUnread: result.rows.filter((row) => row.type !== 'server_channel').reduce((sum, row) => sum + row.unread_count, 0),
       totalMentionUnread: result.rows.reduce((sum, row) => sum + row.mention_count, 0),
-      totalReplyUnread: 0,
+      totalReplyUnread: replyResult.rows[0]?.count ?? 0,
       conversations,
     };
   }
@@ -515,12 +522,58 @@ export class CanonicalMessagingStore {
   async listNotifications(userId: string, before: Date | null, limit: number, unreadOnly: boolean): Promise<InternalNotification[]> {
     const result = await this.pool.query<{
       id: string; type: InternalNotification['type']; actor_user_id: string | null; conversation_id: string | null; message_id: string | null; payload: Record<string, unknown>; created_at: Date; read_at: Date | null; dismissed_at: Date | null;
-    }>(`select id, type, actor_user_id, conversation_id, message_id::text, payload, created_at, read_at, dismissed_at from notifications where user_id = $1 and dismissed_at is null ${before ? 'and created_at < $2' : ''} ${unreadOnly ? 'and read_at is null' : ''} order by created_at desc, id desc limit $3`, [userId, before, limit]);
-    return result.rows.map((row) => ({ id: row.id, type: row.type, actorUserId: row.actor_user_id, conversationId: row.conversation_id, messageId: row.message_id, payload: row.payload, createdAt: row.created_at.toISOString(), readAt: row.read_at?.toISOString() ?? null, dismissedAt: row.dismissed_at?.toISOString() ?? null }));
+      actor_display_name: string | null; conversation_title: string | null; server_id: string | null; channel_id: string | null;
+    }>(`
+      select notification.id, notification.type, notification.actor_user_id, notification.conversation_id, notification.message_id::text,
+        notification.payload, notification.created_at, notification.read_at, notification.dismissed_at,
+        actor.display_name as actor_display_name, coalesce(channel.name, peer.display_name, peer.username) as conversation_title,
+        conversation.server_id, conversation.channel_id
+      from notifications notification
+      left join users actor on actor.id = notification.actor_user_id
+      left join conversations conversation on conversation.id = notification.conversation_id
+      left join server_channels channel on channel.id = conversation.channel_id
+      left join lateral (
+        select user_record.display_name, user_record.username from conversation_members member join users user_record on user_record.id = member.user_id
+        where member.conversation_id = conversation.id and member.user_id <> $1 and member.left_at is null limit 1
+      ) peer on true
+      where notification.user_id = $1 and notification.dismissed_at is null ${before ? 'and notification.created_at < $2' : ''} ${unreadOnly ? 'and notification.read_at is null' : ''}
+      order by notification.created_at desc, notification.id desc limit $3
+    `, [userId, before, limit]);
+    return result.rows.map((row) => ({ id: row.id, type: row.type, actorUserId: row.actor_user_id, conversationId: row.conversation_id, messageId: row.message_id, payload: row.payload, createdAt: row.created_at.toISOString(), readAt: row.read_at?.toISOString() ?? null, dismissedAt: row.dismissed_at?.toISOString() ?? null, actorDisplayName: row.actor_display_name, conversationTitle: row.conversation_title, serverId: row.server_id, channelId: row.channel_id }));
+  }
+
+  async getNotificationPreferences(userId: string, now: Date): Promise<UserNotificationPreferences> {
+    const result = await this.pool.query<{
+      desktop_enabled: boolean; sound_enabled: boolean; preview_mode: UserNotificationPreferences['previewMode']; direct_messages_enabled: boolean; mentions_enabled: boolean;
+      quiet_hours_start: string | null; quiet_hours_end: string | null; quiet_hours_timezone: string | null; updated_at: Date;
+    }>(`
+      insert into user_notification_preferences (user_id, updated_at) values ($1, $2)
+      on conflict (user_id) do update set user_id = excluded.user_id
+      returning desktop_enabled, sound_enabled, preview_mode, direct_messages_enabled, mentions_enabled, quiet_hours_start, quiet_hours_end, quiet_hours_timezone, updated_at
+    `, [userId, now]);
+    const row = result.rows[0]!;
+    return { desktopEnabled: row.desktop_enabled, soundEnabled: row.sound_enabled, previewMode: row.preview_mode, directMessagesEnabled: row.direct_messages_enabled, mentionsEnabled: row.mentions_enabled, quietHoursStart: row.quiet_hours_start, quietHoursEnd: row.quiet_hours_end, quietHoursTimezone: row.quiet_hours_timezone, updatedAt: row.updated_at.toISOString() };
+  }
+
+  async updateNotificationPreferences(userId: string, input: Omit<UserNotificationPreferences, 'updatedAt'>, now: Date): Promise<UserNotificationPreferences> {
+    await this.pool.query(`
+      insert into user_notification_preferences (user_id, desktop_enabled, sound_enabled, show_preview, preview_mode, direct_messages_enabled, mentions_enabled, quiet_hours_start, quiet_hours_end, quiet_hours_timezone, updated_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      on conflict (user_id) do update set desktop_enabled = excluded.desktop_enabled, sound_enabled = excluded.sound_enabled,
+        show_preview = excluded.show_preview, preview_mode = excluded.preview_mode, direct_messages_enabled = excluded.direct_messages_enabled,
+        mentions_enabled = excluded.mentions_enabled, quiet_hours_start = excluded.quiet_hours_start, quiet_hours_end = excluded.quiet_hours_end,
+        quiet_hours_timezone = excluded.quiet_hours_timezone, updated_at = excluded.updated_at
+    `, [userId, input.desktopEnabled, input.soundEnabled, input.previewMode === 'full', input.previewMode, input.directMessagesEnabled, input.mentionsEnabled, input.quietHoursStart, input.quietHoursEnd, input.quietHoursTimezone, now]);
+    return this.getNotificationPreferences(userId, now);
   }
 
   async markNotificationRead(userId: string, notificationId: string, now: Date): Promise<boolean> {
     const result = await this.pool.query('update notifications set read_at = coalesce(read_at, $3) where id = $1 and user_id = $2 returning id', [notificationId, userId, now]);
+    return result.rowCount === 1;
+  }
+
+  async dismissNotification(userId: string, notificationId: string, now: Date): Promise<boolean> {
+    const result = await this.pool.query('update notifications set dismissed_at = coalesce(dismissed_at, $3), read_at = coalesce(read_at, $3) where id = $1 and user_id = $2 returning id', [notificationId, userId, now]);
     return result.rowCount === 1;
   }
 

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { LocalSettings, PublicUser, ServerDetail, ServerPermission, ServerSummary, UserPresence, UserPrivacySettings } from '@vatrushka/shared';
+import type { LocalSettings, PublicUser, ServerDetail, ServerPermission, ServerSummary, UserNotificationPreferences, UserPresence, UserPrivacySettings } from '@vatrushka/shared';
 
 import type { AudioDevices } from '../../audio-devices';
 import { SecurityCenter, type SecurityTab } from '../../features/security';
-import { SettingsPageState, SettingsPlaceholderPage, SettingsShell, UserAudioSettingsPage, UserPresenceSettingsPage, UserPrivacySettingsPage, UserProfileSettingsPage } from '../../features/settings';
+import { SettingsPageState, SettingsPlaceholderPage, SettingsShell, UserAudioSettingsPage, UserNotificationSettingsPage, UserPresenceSettingsPage, UserPrivacySettingsPage, UserProfileSettingsPage } from '../../features/settings';
 import { ConfirmDialog, WorkspaceLibrary, type WorkspaceNavigationItem } from '../../ui';
 import type { SettingsRoute } from './route-paths';
 import { serverSettingsPath, userSettingsPath } from './route-paths';
@@ -44,6 +44,8 @@ export interface SettingsRoutePageProps {
   onUpdatePresence(input: { preference: UserPresence['preference']; customText: string | null; customTextExpiresAt: string | null }): Promise<UserPresence>;
   onPresenceChange(presence: UserPresence): void;
   onLoadPrivacy(): Promise<UserPrivacySettings>;
+  onLoadNotificationPreferences(): Promise<UserNotificationPreferences>;
+  onUpdateNotificationPreferences(input: Omit<UserNotificationPreferences, 'updatedAt'>): Promise<UserNotificationPreferences>;
   onUpdatePrivacy(input: Pick<UserPrivacySettings, 'directMessages' | 'presenceVisibility' | 'activityVisible'>): Promise<UserPrivacySettings>;
   onCurrentSessionRevoked(): void;
   onUserChange(user: PublicUser): void;
@@ -62,7 +64,6 @@ const sectionPermission: Partial<Record<(typeof serverSettingsNavigation)[number
 };
 
 const userSecurityTabs = {
-  notifications: 'notifications',
   security: 'protection',
   sessions: 'sessions',
   activity: 'activity',
@@ -116,7 +117,9 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
         ? <UserPresenceSettingsPage onDirtyChange={setPageDirty} onLoad={props.onLoadPresence} onPresenceChange={props.onPresenceChange} onSave={props.onUpdatePresence} presence={props.presence} />
       : props.route.section === 'audio'
         ? <UserAudioSettingsPage busy={props.busy} devices={props.devices} inputLevel={props.inputLevel} microphoneId={props.microphoneId} onMicrophone={props.onMicrophone} onOutput={props.onOutput} onRefresh={props.onRefreshDevices} onTestOutput={props.onTestOutput} outputId={props.outputId} voiceConnected={props.voiceConnected} />
-        : props.route.section === 'privacy'
+      : props.route.section === 'notifications'
+        ? <UserNotificationSettingsPage dndActive={props.presence?.preference === 'do_not_disturb'} onDirtyChange={setPageDirty} onLoad={props.onLoadNotificationPreferences} onPreviewSound={props.onTestOutput} onSave={props.onUpdateNotificationPreferences} />
+      : props.route.section === 'privacy'
           ? <UserPrivacySettingsPage onDirtyChange={setPageDirty} onLoad={props.onLoadPrivacy} onSave={props.onUpdatePrivacy} />
         : securityTab === undefined
           ? <SettingsPlaceholderPage description={item.description} scope="user" title={item.label} />

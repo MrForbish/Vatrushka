@@ -28,6 +28,7 @@ const service = new VatrushkaService({
   objectStorage,
   presenceStore,
   canonicalMessagingStore,
+  realtimeBus,
 });
 const app = await buildApp({ config, service, ...(realtimeBus ? { realtimeBus } : {}) });
 

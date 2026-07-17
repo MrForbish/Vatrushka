@@ -141,6 +141,13 @@
       "when": 1784327549197,
       "tag": "0019_server_default_channels_expand",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784330780452,
+      "tag": "0020_notification_preview_mode",
+      "breakpoints": true
     }
   ]
 }

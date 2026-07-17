@@ -27,3 +27,8 @@
 .vui-user-settings-note--dnd { display: grid; gap: var(--space-1); border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border-subtle)); }
 @media (max-width: 1180px) { .vui-user-profile-settings__grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .vui-presence-options { grid-template-columns: 1fr; } }
+.vui-user-settings-test { justify-self: start; padding: 8px 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); color: var(--color-text-secondary); background: var(--color-surface-1); font: var(--text-label-sm); cursor: pointer; }
+.vui-user-settings-test:hover:not(:disabled) { color: var(--color-text-primary); border-color: var(--color-border-strong); }
+.vui-user-settings-test:disabled { opacity: .45; cursor: not-allowed; }
+.vui-user-settings-time-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.vui-user-settings-time-grid > :last-child { grid-column: 1 / -1; }

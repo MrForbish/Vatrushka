@@ -133,6 +133,17 @@ export const notificationQuerySchema = z.object({
   unreadOnly: z.coerce.boolean().default(false),
 }).strict();
 export const notificationPreferenceLevelSchema = z.enum(['all', 'mentions', 'none']);
+export const notificationPreviewModeSchema = z.enum(['full', 'sender_only', 'hidden']);
+export const updateUserNotificationPreferencesSchema = z.object({
+  desktopEnabled: z.boolean(),
+  soundEnabled: z.boolean(),
+  previewMode: notificationPreviewModeSchema,
+  directMessagesEnabled: z.boolean(),
+  mentionsEnabled: z.boolean(),
+  quietHoursStart: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u).nullable(),
+  quietHoursEnd: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/u).nullable(),
+  quietHoursTimezone: z.string().trim().min(1).max(100).nullable(),
+}).strict().refine((value) => (value.quietHoursStart === null) === (value.quietHoursEnd === null), 'Quiet hours require both start and end');
 export const createAttachmentIntentSchema = z.object({
   fileName: z.string().trim().min(1).max(180),
   mimeType: z.string().trim().min(3).max(127),

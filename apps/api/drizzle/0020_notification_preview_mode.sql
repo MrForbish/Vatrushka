@@ -1,0 +1,1 @@
+ALTER TABLE "user_notification_preferences" ADD COLUMN "preview_mode" text DEFAULT 'full' NOT NULL;

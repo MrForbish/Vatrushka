@@ -394,6 +394,20 @@ export interface UserUnreadSummary {
   conversations: Array<{ conversationId: string; unreadCount: number; mentionCount: number; firstUnreadMessageId: string | null }>;
 }
 
+export type NotificationPreviewMode = 'full' | 'sender_only' | 'hidden';
+
+export interface UserNotificationPreferences {
+  desktopEnabled: boolean;
+  soundEnabled: boolean;
+  previewMode: NotificationPreviewMode;
+  directMessagesEnabled: boolean;
+  mentionsEnabled: boolean;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
+  quietHoursTimezone: string | null;
+  updatedAt: string;
+}
+
 export interface InternalNotification {
   id: string;
   type: ConversationNotificationType;
@@ -404,6 +418,10 @@ export interface InternalNotification {
   createdAt: string;
   readAt: string | null;
   dismissedAt: string | null;
+  actorDisplayName?: string | null;
+  conversationTitle?: string | null;
+  serverId?: string | null;
+  channelId?: string | null;
 }
 
 export type RealtimeEventType =

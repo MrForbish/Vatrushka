@@ -592,6 +592,7 @@ export const userNotificationPreferences = pgTable(
     desktopEnabled: boolean('desktop_enabled').notNull().default(true),
     soundEnabled: boolean('sound_enabled').notNull().default(true),
     showPreview: boolean('show_preview').notNull().default(true),
+    previewMode: text('preview_mode').notNull().default('full'),
     directMessagesEnabled: boolean('direct_messages_enabled').notNull().default(true),
     mentionsEnabled: boolean('mentions_enabled').notNull().default(true),
     quietHoursStart: text('quiet_hours_start'),

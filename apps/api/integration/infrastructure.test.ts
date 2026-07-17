@@ -133,6 +133,15 @@ describe('production infrastructure adapters', () => {
     const stale = await messaging.updateReadState(direct.conversation.id, second.id, created.message.id, created.message.id, new Date(now.getTime() + 1_000));
     expect(stale?.lastReadMessageId).toBe(state?.lastReadMessageId);
     expect(await messaging.listNotifications(second.id, null, 10, true)).toHaveLength(1);
+    const mentioned = await messaging.createMessage({ conversationId: direct.conversation.id, authorId: first.id, clientMessageId: randomUUID(), content: 'hello @second', replyToMessageId: created.message.id, attachmentIds: [], mentions: [{ type: 'user', userId: second.id, start: 6, length: 7 }], now: new Date(now.getTime() + 1_500) });
+    const unread = await messaging.unreadSummary(second.id);
+    expect(unread.conversations.find((item) => item.conversationId === direct.conversation.id)?.mentionCount).toBe(1);
+    expect(unread.totalReplyUnread).toBe(1);
+    const preferences = await messaging.updateNotificationPreferences(second.id, { desktopEnabled: false, soundEnabled: true, previewMode: 'sender_only', directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: '22:00', quietHoursEnd: '08:00', quietHoursTimezone: 'Europe/Moscow' }, now);
+    expect((await messaging.getNotificationPreferences(second.id, now)).previewMode).toBe('sender_only');
+    expect(preferences.desktopEnabled).toBe(false);
+    await messaging.updateReadState(direct.conversation.id, second.id, mentioned.message.id, mentioned.message.id, new Date(now.getTime() + 1_800));
+    expect((await messaging.unreadSummary(second.id)).totalReplyUnread).toBe(0);
     expect(await messaging.softDeleteMessage(created.message.id, first.id, false, new Date(now.getTime() + 2_000))).toBe(true);
     expect((await messaging.findMessage(created.message.id, second.id))?.deletedAt).not.toBeNull();
   });

@@ -72,6 +72,15 @@ export class RedisRealtimeBus {
     else await this.publisher.del(key);
   }
 
+  async publishPresence(userId: string, targetUserIds: string[], payload: Record<string, unknown>): Promise<boolean> {
+    const fingerprint = JSON.stringify(payload);
+    const stateKey = `vatrushka:realtime:presence-state:${userId}`;
+    const previous = await this.publisher.get(stateKey);
+    await this.publisher.set(stateKey, fingerprint, { EX: 5 * 60 });
+    if (previous === fingerprint) return false;
+    return this.publish({ id: `presence:${userId}:${Date.now()}`, type: 'presence.updated', occurredAt: new Date().toISOString(), conversationId: null, targetUserIds: [...new Set(targetUserIds)], payload: { userId, ...payload } });
+  }
+
   async close(): Promise<void> {
     if (this.subscriber.isOpen) await this.subscriber.quit();
     if (this.publisher.isOpen) await this.publisher.quit();

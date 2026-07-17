@@ -52,6 +52,7 @@ export interface ServerViewProps {
   connectedVoiceServerId?: string | undefined;
   voiceStage?: ReactNode | undefined;
   voiceConnectionPanel?: ReactNode | undefined;
+  typingText?: string | undefined;
   onBack(): void;
   onDirectMessages?(): void;
   onSwitchServer(serverId: string): void;
@@ -329,6 +330,7 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
   return (
     <section className="vui-message-stage">
       <MessageList channelName={activeChannel.name} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onLoadAttachment={props.onLoadAttachment} onEdit={onEdit} {...(channelPermissions.includes('ADD_REACTIONS') ? { onReaction: props.onMessageReaction } : {})} {...(channelPermissions.includes('SEND_MESSAGES') ? { onReply } : {})} />
+      {props.typingText ? <div aria-live="polite" className="vui-message-typing"><span /><strong>{props.typingText}</strong> печатает…</div> : null}
       <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} canSend={editingMessage === null ? channelPermissions.includes('SEND_MESSAGES') : editingMessage.canEdit === true} channelName={activeChannel.name} mentionCandidates={props.server.members.map((member) => ({ userId: member.userId, displayName: member.displayName }))} mentions={draftMentions} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} {...(editingMessage === null && channelPermissions.includes('SEND_ATTACHMENTS') ? { onFilesSelected: onAddAttachments } : {})} onChange={props.onMessageDraft} onMentionsChange={onMentionsChange} onRemoveAttachment={onRemoveAttachment} onSubmit={submitMessage} value={props.messageDraft} />
       {attachmentError === null ? null : <div className="vui-server-error vui-server-error--attachment" role="alert">{attachmentError}</div>}
       {props.error === null ? null : <div className="vui-server-error vui-server-error--floating" role="alert">{props.error}</div>}

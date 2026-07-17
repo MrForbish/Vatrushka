@@ -45,6 +45,7 @@ import {
   type ConversationSummary,
   type InternalNotification,
   type UserUnreadSummary,
+  type UserNotificationPreferences,
   serverPermissions,
   highestRolePosition,
   resolveChannelPermissions,
@@ -62,6 +63,7 @@ import type { DataStore, Mailer, MediaService, ObjectStorage, PresenceStore } fr
 import { attachmentObjectKey } from './services/attachment-objects.js';
 import { MemoryPresenceStore } from './services/presence-store.js';
 import type { CanonicalMentionInput, CanonicalMessagingStore } from './services/canonical-messaging.js';
+import type { RedisRealtimeBus } from './services/realtime.js';
 import {
   hashOpaqueToken,
   hashOtp,
@@ -87,6 +89,7 @@ export interface ServiceDependencies {
   objectStorage?: ObjectStorage | null;
   presenceStore?: PresenceStore;
   canonicalMessagingStore?: CanonicalMessagingStore;
+  realtimeBus?: RedisRealtimeBus | null;
   clock?: () => Date;
 }
 
@@ -209,6 +212,7 @@ export class VatrushkaService {
   readonly objectStorage: ObjectStorage | null;
   readonly presenceStore: PresenceStore;
   readonly canonicalMessagingStore: CanonicalMessagingStore | null;
+  readonly realtimeBus: RedisRealtimeBus | null;
   private readonly mailer: Mailer;
   private readonly clock: () => Date;
   private readonly pendingVoiceMoves = new Map<string, { channelId: string; expiresAt: Date; seamlesslyMoved: boolean }>();
@@ -221,6 +225,7 @@ export class VatrushkaService {
     this.objectStorage = dependencies.objectStorage ?? null;
     this.presenceStore = dependencies.presenceStore ?? new MemoryPresenceStore();
     this.canonicalMessagingStore = dependencies.canonicalMessagingStore ?? null;
+    this.realtimeBus = dependencies.realtimeBus ?? null;
     this.clock = dependencies.clock ?? (() => new Date());
   }
 
@@ -543,7 +548,9 @@ export class VatrushkaService {
   async heartbeatPresence(authorization: string | undefined, idle: boolean): Promise<UserPresence> {
     const { user, session } = await this.authenticateContext(authorization);
     await this.presenceStore.heartbeat(user.id, session.id, idle, this.now(), this.config.PRESENCE_TTL_SECONDS);
-    return this.publicPresence(user);
+    const presence = await this.publicPresence(user);
+    await this.broadcastPresence(user, presence);
+    return presence;
   }
 
   async updatePresence(authorization: string | undefined, input: { preference: PresencePreference; customText: string | null; customTextExpiresAt: string | null }): Promise<UserPresence> {
@@ -551,7 +558,20 @@ export class VatrushkaService {
     const expiresAt = input.customText && input.customTextExpiresAt ? new Date(input.customTextExpiresAt) : null;
     const updated = await this.store.updatePresence(user.id, { preference: input.preference, customText: input.customText || null, customTextExpiresAt: expiresAt }, this.now());
     if (!updated) throw new AppError('UNAUTHORIZED', 401);
-    return this.publicPresence(updated);
+    const presence = await this.publicPresence(updated);
+    await this.broadcastPresence(updated, presence);
+    return presence;
+  }
+
+  private async broadcastPresence(user: UserRecord, presence: UserPresence): Promise<void> {
+    if (!this.realtimeBus) return;
+    const recipients = new Set<string>([user.id]);
+    if (user.presenceVisibility === 'shared_servers') {
+      for (const server of await this.store.listServersForUser(user.id)) {
+        for (const member of await this.store.listServerMembers(server.id)) recipients.add(member.userId);
+      }
+    }
+    await this.realtimeBus.publishPresence(user.id, [...recipients], { effectiveStatus: presence.effectiveStatus, customText: user.presenceVisibility === 'shared_servers' ? presence.customText : null, customTextExpiresAt: user.presenceVisibility === 'shared_servers' ? presence.customTextExpiresAt : null, updatedAt: presence.updatedAt });
   }
 
   async getPrivacySettings(authorization: string | undefined): Promise<UserPrivacySettings> {
@@ -1714,6 +1734,16 @@ export class VatrushkaService {
     return this.messaging().unreadSummary(user.id);
   }
 
+  async getNotificationPreferences(authorization: string | undefined): Promise<UserNotificationPreferences> {
+    const user = await this.authenticate(authorization);
+    return this.messaging().getNotificationPreferences(user.id, this.now());
+  }
+
+  async updateNotificationPreferences(authorization: string | undefined, input: Omit<UserNotificationPreferences, 'updatedAt'>): Promise<UserNotificationPreferences> {
+    const user = await this.authenticate(authorization);
+    return this.messaging().updateNotificationPreferences(user.id, input, this.now());
+  }
+
   async listCanonicalNotifications(authorization: string | undefined, before: string | undefined, limit: number, unreadOnly: boolean): Promise<InternalNotification[]> {
     const user = await this.authenticate(authorization);
     return this.messaging().listNotifications(user.id, before ? new Date(before) : null, limit, unreadOnly);
@@ -1722,6 +1752,11 @@ export class VatrushkaService {
   async markCanonicalNotificationRead(authorization: string | undefined, notificationId: string): Promise<void> {
     const user = await this.authenticate(authorization);
     if (!(await this.messaging().markNotificationRead(user.id, notificationId, this.now()))) throw new AppError('MESSAGE_NOT_FOUND', 404);
+  }
+
+  async dismissCanonicalNotification(authorization: string | undefined, notificationId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    if (!(await this.messaging().dismissNotification(user.id, notificationId, this.now()))) throw new AppError('MESSAGE_NOT_FOUND', 404);
   }
 
   async markAllCanonicalNotificationsRead(authorization: string | undefined): Promise<{ updated: number }> {

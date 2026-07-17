@@ -55,6 +55,7 @@ import {
   updateConversationReadStateSchema,
   notificationQuerySchema,
   createAttachmentIntentSchema,
+  updateUserNotificationPreferencesSchema,
   reorderRoleSchema,
   verifyRegistrationSchema,
 } from '@vatrushka/shared';
@@ -201,7 +202,8 @@ const canonicalMessageResponseSchema = z.object({
 const canonicalMessagePageResponseSchema = z.object({ items: z.array(canonicalMessageResponseSchema), pageInfo: z.object({ before: z.string().nullable(), after: z.string().nullable(), hasMore: z.boolean() }) });
 const canonicalReadStateResponseSchema = z.object({ conversationId: z.string(), lastDeliveredMessageId: z.string().nullable(), lastReadMessageId: z.string().nullable(), lastDeliveredAt: z.string().nullable(), lastReadAt: z.string().nullable(), mentionCount: z.number() });
 const unreadSummaryResponseSchema = z.object({ totalDirectUnread: z.number(), totalMentionUnread: z.number(), totalReplyUnread: z.number(), conversations: z.array(z.object({ conversationId: z.string(), unreadCount: z.number(), mentionCount: z.number(), firstUnreadMessageId: z.string().nullable() })) });
-const internalNotificationResponseSchema = z.object({ id: z.string(), type: z.enum(['direct_message', 'mention', 'reply', 'server_invite', 'moderation', 'system']), actorUserId: z.string().nullable(), conversationId: z.string().nullable(), messageId: z.string().nullable(), payload: z.record(z.string(), z.unknown()), createdAt: z.string(), readAt: z.string().nullable(), dismissedAt: z.string().nullable() });
+const userNotificationPreferencesResponseSchema = updateUserNotificationPreferencesSchema.extend({ updatedAt: z.string() });
+const internalNotificationResponseSchema = z.object({ id: z.string(), type: z.enum(['direct_message', 'mention', 'reply', 'server_invite', 'moderation', 'system']), actorUserId: z.string().nullable(), conversationId: z.string().nullable(), messageId: z.string().nullable(), payload: z.record(z.string(), z.unknown()), createdAt: z.string(), readAt: z.string().nullable(), dismissedAt: z.string().nullable(), actorDisplayName: z.string().nullable().optional(), conversationTitle: z.string().nullable().optional(), serverId: z.string().nullable().optional(), channelId: z.string().nullable().optional() });
 const attachmentIntentResponseSchema = z.object({ attachmentId: z.string(), uploadUrl: z.url(), headers: z.record(z.string(), z.string()), expiresAt: z.string() });
 
 export interface BuildAppOptions {
@@ -622,6 +624,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], response: { 200: unreadSummaryResponseSchema, ...routeErrors() } },
   }, async (request) => service.getCanonicalUnreadSummary(request.headers.authorization));
 
+  api.get(`${API_PREFIX}/me/notification-preferences`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], response: { 200: userNotificationPreferencesResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getNotificationPreferences(request.headers.authorization));
+
+  api.put(`${API_PREFIX}/me/notification-preferences`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], body: updateUserNotificationPreferencesSchema, response: { 200: userNotificationPreferencesResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateNotificationPreferences(request.headers.authorization, request.body));
+
   api.get(`${API_PREFIX}/notifications`, {
     schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], querystring: notificationQuerySchema, response: { 200: z.array(internalNotificationResponseSchema), ...routeErrors() } },
   }, async (request) => service.listCanonicalNotifications(request.headers.authorization, request.query.before, request.query.limit, request.query.unreadOnly));
@@ -630,6 +640,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], params: notificationIdParams, response: { 204: z.null(), ...routeErrors() } },
   }, async (request, reply) => {
     await service.markCanonicalNotificationRead(request.headers.authorization, request.params.notificationId);
+    return reply.status(204).send(null);
+  });
+
+  api.patch(`${API_PREFIX}/notifications/:notificationId/dismiss`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], params: notificationIdParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.dismissCanonicalNotification(request.headers.authorization, request.params.notificationId);
     return reply.status(204).send(null);
   });
 
