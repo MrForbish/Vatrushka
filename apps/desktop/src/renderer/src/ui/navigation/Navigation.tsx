@@ -89,13 +89,14 @@ interface ChannelRowProps {
   active?: boolean;
   canDelete?: boolean;
   onSelect: (id: string) => void;
+  onConnectVoice?: ((id: string) => void) | undefined;
   onDelete?: ((id: string) => void) | undefined;
 }
 
-export function ChannelRow({ active = false, canDelete = false, channel, onDelete, onSelect }: ChannelRowProps): React.JSX.Element {
+export function ChannelRow({ active = false, canDelete = false, channel, onConnectVoice, onDelete, onSelect }: ChannelRowProps): React.JSX.Element {
   return (
     <div className="vui-channel-row" data-active={active || undefined}>
-      <button aria-current={active ? 'page' : undefined} onClick={() => onSelect(channel.id)} type="button">
+      <button aria-current={active ? 'page' : undefined} onClick={() => onSelect(channel.id)} onDoubleClick={channel.type === 'voice' && onConnectVoice !== undefined ? () => onConnectVoice(channel.id) : undefined} title={channel.type === 'voice' && onConnectVoice !== undefined ? 'Двойной щелчок — подключиться' : undefined} type="button">
         <Icon name={channel.type === 'text' ? 'hash' : 'voice'} size={17} />
         <span>{channel.name}</span>
         {channel.participantCount === undefined || channel.participantCount === 0 ? null : <small>{channel.participantCount}</small>}
@@ -114,16 +115,17 @@ interface ChannelCategoryProps {
   activeChannelId?: string | undefined;
   canManage?: boolean;
   onSelect: (id: string) => void;
+  onConnectVoice?: ((id: string) => void) | undefined;
   onCreate?: ((type: ChannelNavigationItem['type']) => void) | undefined;
   onDelete?: ((id: string) => void) | undefined;
   type: ChannelNavigationItem['type'];
 }
 
-export function ChannelCategory({ activeChannelId, canManage = false, channels, onCreate, onDelete, onSelect, title, type }: ChannelCategoryProps): React.JSX.Element {
+export function ChannelCategory({ activeChannelId, canManage = false, channels, onConnectVoice, onCreate, onDelete, onSelect, title, type }: ChannelCategoryProps): React.JSX.Element {
   return (
     <section className="vui-channel-category">
       <header><span>{title}</span>{canManage && onCreate !== undefined ? <IconButton icon="plus" label={`Создать ${type === 'text' ? 'текстовый' : 'голосовой'} канал`} onClick={() => onCreate(type)} size="sm" type="button" /> : null}</header>
-      <div>{channels.map((channel) => <ChannelRow active={channel.id === activeChannelId} canDelete={canManage} channel={channel} key={channel.id} onDelete={onDelete} onSelect={onSelect} />)}</div>
+      <div>{channels.map((channel) => <ChannelRow active={channel.id === activeChannelId} canDelete={canManage} channel={channel} key={channel.id} onConnectVoice={onConnectVoice} onDelete={onDelete} onSelect={onSelect} />)}</div>
     </section>
   );
 }
@@ -159,13 +161,14 @@ export interface ServerContextProps {
   connectionPanel?: ReactNode;
   profile: ReactNode;
   onChannel: (id: string) => void;
+  onConnectVoice?: ((id: string) => void) | undefined;
   onCreateChannel?: ((type: ChannelNavigationItem['type']) => void) | undefined;
   onDeleteChannel?: ((id: string) => void) | undefined;
   onCopyInvite: () => void;
   onManageRoles: () => void;
 }
 
-export function ServerContext({ activeChannelId, canManageChannels = false, canManageRoles = false, connectionLabel = 'Голосовой канал не подключён', connectionPanel, name, onChannel, onCopyInvite, onCreateChannel, onDeleteChannel, onManageRoles, privacyLabel = 'Приватный сервер', profile, textChannels, voiceChannels }: ServerContextProps): React.JSX.Element {
+export function ServerContext({ activeChannelId, canManageChannels = false, canManageRoles = false, connectionLabel = 'Голосовой канал не подключён', connectionPanel, name, onChannel, onConnectVoice, onCopyInvite, onCreateChannel, onDeleteChannel, onManageRoles, privacyLabel = 'Приватный сервер', profile, textChannels, voiceChannels }: ServerContextProps): React.JSX.Element {
   return (
     <aside aria-label="Навигация сервера" className="vui-server-context">
       <header className="vui-server-context__header">
@@ -174,7 +177,7 @@ export function ServerContext({ activeChannelId, canManageChannels = false, canM
       </header>
       <div className="vui-server-context__scroll">
         <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={textChannels} onCreate={onCreateChannel} onDelete={onDeleteChannel} onSelect={onChannel} title="Текстовые каналы" type="text" />
-        <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={voiceChannels} onCreate={onCreateChannel} onDelete={onDeleteChannel} onSelect={onChannel} title="Голосовые каналы" type="voice" />
+        <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={voiceChannels} onConnectVoice={onConnectVoice} onCreate={onCreateChannel} onDelete={onDeleteChannel} onSelect={onChannel} title="Голосовые каналы" type="voice" />
       </div>
       {connectionPanel ?? <div className="vui-server-context__connection"><StatusDot label="Статус голосового подключения" status="offline" /><span>{connectionLabel}</span></div>}
       {profile}

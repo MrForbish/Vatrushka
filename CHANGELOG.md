@@ -2,6 +2,20 @@
 
 All notable changes to Vatrushka are documented here. The project follows semantic versioning for desktop and API release artifacts.
 
+## [0.4.2] - 2026-07-17
+
+### Changed
+
+- removed the redundant Home navigation column; server actions remain in the workspace rail while security and logout stay available in the top bar;
+- a voice channel can now be joined by double-clicking its name without hiding the server navigation;
+- added soft local join and leave cues for the current user and remote participants, routed through the selected output device.
+
+### Quality
+
+- participant cue detection starts from a silent baseline, ignores the local LiveKit participant and coalesces simultaneous joins/leaves;
+- added renderer coverage for remote participant diffs, Home shell structure and double-click voice joining;
+- updated the Windows Home visual baseline for the simplified two-column shell.
+
 ## [0.4.1] - 2026-07-17
 
 ### Fixed

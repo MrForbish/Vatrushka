@@ -8,11 +8,11 @@ import {
   Badge as UiBadge,
   Button as UiButton,
   Icon as UiIcon,
+  IconButton as UiIconButton,
   Input as UiInput,
   PasswordInput as UiPasswordInput,
   SegmentedControl as UiSegmentedControl,
   Select as UiSelect,
-  UserProfileDock,
   WorkspaceLibrary,
   type WorkspaceNavigationItem,
 } from './ui';
@@ -117,8 +117,7 @@ export function HomePanel(props: HomePanelProps): ReactNode {
   const namedOutputs = props.devices.outputs.some((device) => device.deviceId !== 'default' && device.label.trim().length > 0);
   return <AppShell
     members={<aside className="vui-home-activity"><header><span>Статус</span><UiBadge tone="success">В сети</UiBadge></header><div className="vui-home-activity__avatar">{name.slice(0, 1).toUpperCase()}</div><strong>{name}</strong><small>{props.user.email}</small><div className="vui-home-activity__tip"><UiIcon name="info" size={17} /><span>Выбор аудиоустройств хранится только на этом компьютере.</span></div></aside>}
-    serverContext={<aside className="vui-home-context"><header><span><UiIcon name="home" size={18} /></span><div><strong>Главная</strong><small>Ваше пространство</small></div></header><nav><a href="#home-servers"><UiIcon name="users" size={17} />Мои серверы<UiBadge>{props.servers.length}</UiBadge></a><a href="#home-create"><UiIcon name="plus" size={17} />Создать сервер</a><a href="#home-audio"><UiIcon name="headphones" size={17} />Аудиоустройства</a></nav><div className="vui-home-context__summary"><UiIcon name="sparkles" size={18} /><span><strong>Готовы начать?</strong><small>Откройте сервер или создайте новый.</small></span></div><UserProfileDock email={props.user.email} founder={props.user.platformRole === 'owner'} name={name} onLogout={props.onLogout} onSecurity={props.onSecurity} /></aside>}
-    topBar={<div className="vui-home-topbar"><UiIcon name="home" size={19} /><span><strong>Главная</strong><small>Серверы, личные сообщения и настройка звука</small></span><UiBadge>v{props.version}</UiBadge></div>}
+    topBar={<div className="vui-home-topbar"><UiIcon name="home" size={19} /><span><strong>Главная</strong><small>Серверы, личные сообщения и настройка звука</small></span><UiBadge>v{props.version}</UiBadge><UiIconButton icon="settings" label="Безопасность и настройки" onClick={props.onSecurity} size="sm" type="button" /><UiIconButton icon="logout" label="Выйти из аккаунта" onClick={props.onLogout} size="sm" type="button" /></div>}
     workspaceLibrary={<WorkspaceLibrary directUnreadCount={props.directUnreadCount ?? 0} onCreate={() => document.getElementById('home-server-name')?.focus()} {...(props.onDirectMessages === undefined ? {} : { onDirectMessages: props.onDirectMessages })} onHome={() => undefined} onJoin={() => document.getElementById('home-server-invite')?.focus()} onSelect={props.onOpenServer} workspaces={workspaces} />}
   >
     <div className="vui-home-dashboard"><section className="vui-home-welcome"><div><UiBadge tone="primary"><span className="vui-home-live" /> Ватрушка готова</UiBadge><h1>Добро пожалова, <em>{name}</em></h1><p>Выберите сервер или создайте новое пространство для вашей команды.</p></div><span className="vui-home-welcome__mark"><UiIcon name="voice" size={34} /></span></section>

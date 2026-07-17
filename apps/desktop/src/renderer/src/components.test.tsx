@@ -41,6 +41,8 @@ describe('main screen', () => {
     expect(screen.getByLabelText('Микрофон')).toBeInTheDocument();
     expect(screen.getByLabelText('Динамики / наушники')).toBeInTheDocument();
     expect(screen.getByText('v1.2.3')).toBeInTheDocument();
+    expect(document.querySelector('.vui-app-shell__server-context')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Безопасность и настройки' })).toBeInTheDocument();
   });
 });
 
@@ -152,7 +154,8 @@ describe('server UI', () => {
     const onChannel = vi.fn();
     const onMessageDraft = vi.fn();
     const onMessageReaction = vi.fn();
-    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', replyTo: null, reactions: [], attachments: [], createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" serverInvite="" busy={false} error={null} auditLog={[]} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={onMessageDraft} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={noop} onCopyInvite={noop} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onUpdateRole={noop} onDeleteRole={noop} onReorderRole={noop} onAssignRoles={noop} onSetChannelOverwrite={noop} onLoadAudit={noop} onKickMember={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onSecurity={noop} onLogout={noop} />);
+    const onConnectVoice = vi.fn();
+    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', replyTo: null, reactions: [], attachments: [], createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" serverInvite="" busy={false} error={null} auditLog={[]} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={onMessageDraft} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={onConnectVoice} onCopyInvite={noop} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onUpdateRole={noop} onDeleteRole={noop} onReorderRole={noop} onAssignRoles={noop} onSetChannelOverwrite={noop} onLoadAudit={noop} onKickMember={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onSecurity={noop} onLogout={noop} />);
     expect(screen.getByText('Привет, команда!')).toBeInTheDocument();
     expect(screen.getByText('Владелец сервера')).toBeInTheDocument();
     const upload = screen.getByLabelText('Выбрать вложения');
@@ -167,6 +170,8 @@ describe('server UI', () => {
     expect(onMessageReaction).toHaveBeenCalledWith('message-1', '👍');
     await userEvent.click(screen.getByRole('button', { name: 'Голосовой' }));
     expect(onChannel).toHaveBeenCalledWith('voice-1');
+    await userEvent.dblClick(screen.getByRole('button', { name: 'Голосовой' }));
+    expect(onConnectVoice).toHaveBeenCalledWith('voice-1');
     await userEvent.click(screen.getByRole('button', { name: /Роли и права/u }));
     expect(screen.getByRole('heading', { name: 'Настройки сервера' })).toBeInTheDocument();
   });

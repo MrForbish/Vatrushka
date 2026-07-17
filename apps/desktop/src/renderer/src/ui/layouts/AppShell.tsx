@@ -6,7 +6,7 @@ import './app-shell.css';
 
 export interface AppShellProps {
   workspaceLibrary: ReactNode;
-  serverContext: ReactNode;
+  serverContext?: ReactNode;
   topBar: ReactNode;
   children: ReactNode;
   members: ReactNode;
@@ -19,9 +19,9 @@ export function AppShell({ children, members, membersDrawerTitle = 'Участн
   const [membersOpen, setMembersOpen] = useState(false);
 
   return (
-    <div className="vui-app-shell">
+    <div className="vui-app-shell" data-has-server-context={serverContext === undefined ? undefined : true}>
       <div className="vui-app-shell__workspaces">{workspaceLibrary}</div>
-      <div className="vui-app-shell__server-context">{serverContext}</div>
+      {serverContext === undefined ? null : <div className="vui-app-shell__server-context">{serverContext}</div>}
       <header className="vui-app-shell__topbar">
         <IconButton className="vui-app-shell__workspace-toggle" icon="panelLeft" label="Открыть список серверов" onClick={() => setWorkspaceOpen(true)} size="sm" type="button" />
         {topBar}

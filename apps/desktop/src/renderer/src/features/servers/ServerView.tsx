@@ -189,6 +189,10 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       connectionPanel={props.voiceConnectionPanel}
       name={props.server.name}
       onChannel={props.onChannel}
+      onConnectVoice={(channelId) => {
+        if (channelId === props.connectedVoiceChannelId) props.onChannel(channelId);
+        else props.onConnectVoice(channelId);
+      }}
       onCopyInvite={props.onCopyInvite}
       onCreateChannel={openChannelForm}
       onDeleteChannel={props.onDeleteChannel}

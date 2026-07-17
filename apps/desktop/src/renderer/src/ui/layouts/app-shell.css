@@ -26,6 +26,13 @@
 .vui-app-shell__drawer-content > .vui-workspace-library,
 .vui-app-shell__drawer-content > .vui-member-panel { width: 100%; border: 0; }
 
+.vui-app-shell:not([data-has-server-context]) {
+  grid-template-areas:
+    "workspaces topbar"
+    "workspaces content";
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
 @media (min-width: 1440px) {
   .vui-app-shell {
     grid-template-areas:
@@ -35,6 +42,13 @@
   }
   .vui-app-shell__members { display: block; }
   .vui-app-shell__members-toggle { display: none; }
+
+  .vui-app-shell:not([data-has-server-context]) {
+    grid-template-areas:
+      "workspaces topbar topbar"
+      "workspaces content members";
+    grid-template-columns: 220px minmax(620px, 1fr) 280px;
+  }
 }
 
 @media (max-width: 1179px) {
@@ -46,4 +60,11 @@
   }
   .vui-app-shell__workspaces { display: none; }
   .vui-app-shell__workspace-toggle { display: inline-grid; }
+
+  .vui-app-shell:not([data-has-server-context]) {
+    grid-template-areas:
+      "topbar"
+      "content";
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

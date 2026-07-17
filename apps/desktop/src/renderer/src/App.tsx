@@ -11,7 +11,7 @@ import { SourcePicker } from './features/screen-share/index.js';
 import { SecurityCenter } from './features/security/index.js';
 import { ServerView } from './features/servers/index.js';
 import { UpdateStatus } from './features/update/index.js';
-import { RoomView, VoiceConnectionPanel } from './features/voice/index.js';
+import { diffRemoteParticipants, RoomView, VoiceConnectionPanel, VoiceCuePlayer, type VoiceCue } from './features/voice/index.js';
 import { MediaSession } from './media.js';
 
 type Screen = 'boot' | 'auth' | 'profile' | 'home' | 'server' | 'direct';
@@ -60,7 +60,15 @@ export default function App(): ReactNode {
   const notificationCursorIdRef = useRef<string | null>(null);
   const notificationUserRef = useRef<string | null>(null);
   const shownNotificationIdsRef = useRef(new Set<string>());
+  const voiceCuePlayerRef = useRef<VoiceCuePlayer | null>(null);
+  const participantConnectionRef = useRef<RoomConnection | null>(null);
+  const previousRemoteParticipantsRef = useRef<Set<string> | null>(null);
   const mediaSnapshot = useSyncExternalStore(media.subscribe, media.getSnapshot, media.getSnapshot);
+
+  const playVoiceCue = useCallback((cue: VoiceCue): void => {
+    voiceCuePlayerRef.current ??= new VoiceCuePlayer();
+    voiceCuePlayerRef.current.play(cue, settings.outputDeviceId);
+  }, [settings.outputDeviceId]);
 
   const updateUser = (next: PublicUser | null): void => {
     userRef.current = next;
@@ -145,6 +153,22 @@ export default function App(): ReactNode {
       void Promise.all(fallbacks).catch((caught) => setError(userMessage(caught)));
     }
   }, [connection, devices.inputs, devices.outputs, settings]);
+
+  useEffect(() => {
+    if (connection === null) {
+      participantConnectionRef.current = null;
+      previousRemoteParticipantsRef.current = null;
+      return;
+    }
+    if (participantConnectionRef.current !== connection) {
+      participantConnectionRef.current = connection;
+      previousRemoteParticipantsRef.current = null;
+    }
+    const changes = diffRemoteParticipants(previousRemoteParticipantsRef.current, mediaSnapshot.participants);
+    previousRemoteParticipantsRef.current = changes.current;
+    if (changes.joined.length > 0) playVoiceCue('join');
+    if (changes.left.length > 0) playVoiceCue('leave');
+  }, [connection, mediaSnapshot.participants, playVoiceCue]);
 
   useEffect(() => {
     if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
@@ -655,11 +679,15 @@ export default function App(): ReactNode {
   };
 
   const enterVoiceChannel = async (voiceConnection: RoomConnection): Promise<void> => {
+    if (connection !== null) playVoiceCue('leave');
+    participantConnectionRef.current = null;
+    previousRemoteParticipantsRef.current = null;
     await media.connect(voiceConnection, settings);
     setConnection(voiceConnection);
     setConnectedVoiceChannelName(serverDetail?.channels.find((channel) => channel.id === voiceConnection.channelId)?.name ?? 'Голосовой канал');
     setActiveChannelId(voiceConnection.channelId);
     setScreen('server');
+    playVoiceCue('join');
     await refreshDevices(true);
   };
 
@@ -667,6 +695,9 @@ export default function App(): ReactNode {
 
   const leaveRoom = (): void => {
     void run(async () => {
+      if (connection !== null) playVoiceCue('leave');
+      participantConnectionRef.current = null;
+      previousRemoteParticipantsRef.current = null;
       await media.disconnect();
       setConnection(null);
       setConnectedVoiceChannelName('');
@@ -676,6 +707,9 @@ export default function App(): ReactNode {
 
   const logout = (): void => {
     void run(async () => {
+      if (connection !== null) playVoiceCue('leave');
+      participantConnectionRef.current = null;
+      previousRemoteParticipantsRef.current = null;
       await media.disconnect();
       await apiClient.logout();
       updateUser(null);

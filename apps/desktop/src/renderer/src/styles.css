@@ -81,20 +81,6 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .vui-auth-page--profile .vui-auth-benefits,
 .vui-auth-page--profile .vui-auth-preview { display: none; }
 
-.vui-home-context { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; width: 100%; height: 100%; border-right: 1px solid var(--color-border-subtle); background: var(--color-surface-0); }
-.vui-home-context > header { display: flex; align-items: center; gap: var(--space-3); min-height: 76px; padding: var(--space-4); border-bottom: 1px solid var(--color-border-subtle); }
-.vui-home-context > header > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: var(--radius-sm); background: var(--color-primary-soft); color: var(--color-cyan); }
-.vui-home-context > header > div { display: grid; min-width: 0; }
-.vui-home-context > header strong { font: var(--text-heading-sm); }
-.vui-home-context > header small { color: var(--color-text-muted); font: var(--text-caption); }
-.vui-home-context nav { display: grid; align-content: start; gap: var(--space-1); padding: var(--space-4) var(--space-3); }
-.vui-home-context nav a { display: flex; align-items: center; gap: var(--space-3); min-height: 42px; padding: 0 var(--space-3); border-radius: var(--radius-sm); color: var(--color-text-secondary); font: var(--text-label-md); text-decoration: none; }
-.vui-home-context nav a:hover { background: var(--color-surface-2); color: var(--color-text-primary); }
-.vui-home-context nav .vui-badge { margin-left: auto; }
-.vui-home-context__summary { display: flex; gap: var(--space-3); margin: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--gradient-active-server); color: var(--color-cyan); }
-.vui-home-context__summary span { display: grid; gap: var(--space-1); }
-.vui-home-context__summary strong { color: var(--color-text-primary); font: var(--text-label-md); }
-.vui-home-context__summary small { color: var(--color-text-muted); font: var(--text-caption); line-height: 1.45; }
 .vui-home-topbar { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-width: 0; }
 .vui-home-topbar > span:not(.vui-badge) { display: grid; min-width: 0; }
 .vui-home-topbar strong { font: var(--text-heading-sm); }
