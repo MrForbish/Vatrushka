@@ -1,5 +1,6 @@
-import type { PublicUser, ServerDetail, ServerPermission, ServerSummary } from '@vatrushka/shared';
+import type { LocalSettings, PublicUser, ServerDetail, ServerPermission, ServerSummary } from '@vatrushka/shared';
 
+import { SecurityCenter, type SecurityTab } from '../../features/security';
 import { SettingsPageState, SettingsPlaceholderPage, SettingsShell } from '../../features/settings';
 import { WorkspaceLibrary, type WorkspaceNavigationItem } from '../../ui';
 import type { SettingsRoute } from './route-paths';
@@ -12,6 +13,7 @@ export interface SettingsRoutePageProps {
   error: string | null;
   loading: boolean;
   route: SettingsRoute;
+  settings: LocalSettings;
   server: ServerDetail | null;
   servers: ServerSummary[];
   user: PublicUser;
@@ -20,7 +22,10 @@ export interface SettingsRoutePageProps {
   onDirectMessages(): void;
   onHome(): void;
   onNavigate(path: string): void;
+  onNotificationSettingsChange(settings: Pick<LocalSettings, 'desktopNotificationsEnabled' | 'messageSoundsEnabled'>): void;
   onOpenServer(serverId: string): void;
+  onCurrentSessionRevoked(): void;
+  onUserChange(user: PublicUser): void;
 }
 
 const sectionPermission: Partial<Record<(typeof serverSettingsNavigation)[number]['section'], ServerPermission>> = {
@@ -35,15 +40,31 @@ const sectionPermission: Partial<Record<(typeof serverSettingsNavigation)[number
   danger: 'MANAGE_SERVER',
 };
 
+const userSecurityTabs = {
+  notifications: 'notifications',
+  security: 'protection',
+  sessions: 'sessions',
+  activity: 'activity',
+} as const satisfies Partial<Record<(typeof userSettingsNavigation)[number]['section'], SecurityTab>>;
+
+function securityTabPath(tab: SecurityTab): string {
+  if (tab === 'recovery') return userSettingsPath('security', 'backup-codes');
+  if (tab === 'protection') return userSettingsPath('security');
+  return userSettingsPath(tab === 'notifications' ? 'notifications' : tab === 'sessions' ? 'sessions' : 'activity');
+}
+
 export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Element {
   const workspaces: WorkspaceNavigationItem[] = props.servers.map((server) => ({ id: server.id, name: server.name, memberCount: server.memberCount, activeVoice: false }));
   const workspaceLibrary = <WorkspaceLibrary {...(props.route.kind === 'server' ? { activeWorkspaceId: props.route.serverId } : {})} directUnreadCount={props.directUnreadCount} onCreate={props.onCreateServer} onDirectMessages={props.onDirectMessages} onHome={props.onHome} onSelect={props.onOpenServer} workspaces={workspaces} />;
 
   if (props.route.kind === 'user') {
     const item = userSettingsNavigation.find((candidate) => candidate.section === props.route.section)!;
+    const securityTab = props.route.subpage === 'backup-codes' ? 'recovery' : userSecurityTabs[props.route.section as keyof typeof userSecurityTabs];
     return (
       <SettingsShell activeSection={props.route.section} entityLabel="Личные настройки" entityName={props.user.displayName ?? props.user.email} items={userSettingsNavigation} onBack={props.onBack} onSelect={(section) => props.onNavigate(userSettingsPath(section))} workspaceLibrary={workspaceLibrary}>
-        <SettingsPlaceholderPage description={item.description} scope="user" title={item.label} />
+        {securityTab === undefined
+          ? <SettingsPlaceholderPage description={item.description} scope="user" title={item.label} />
+          : <SecurityCenter onClose={props.onBack} onCurrentSessionRevoked={props.onCurrentSessionRevoked} onSectionChange={(tab) => props.onNavigate(securityTabPath(tab))} onSettingsChange={props.onNotificationSettingsChange} onUserChange={props.onUserChange} open presentation="page" section={securityTab} settings={props.settings} user={props.user} />}
       </SettingsShell>
     );
   }

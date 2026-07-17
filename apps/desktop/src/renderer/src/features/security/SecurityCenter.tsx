@@ -8,7 +8,7 @@ import { Badge, Button, Input, PasswordInput, Switch } from '../../ui/primitives
 import { ConfirmDialog, Modal } from '../../ui/overlays';
 import './security-center.css';
 
-type SecurityTab = 'protection' | 'notifications' | 'sessions' | 'recovery' | 'activity';
+export type SecurityTab = 'protection' | 'notifications' | 'sessions' | 'recovery' | 'activity';
 type ProtectionFlow = 'overview' | 'password' | 'totp-enable' | 'totp-disable' | 'recovery-regenerate';
 
 export interface SecurityClient {
@@ -28,6 +28,9 @@ export interface SecurityClient {
 export interface SecurityCenterProps {
   open: boolean;
   user: PublicUser;
+  presentation?: 'modal' | 'page';
+  section?: SecurityTab;
+  onSectionChange?: (section: SecurityTab) => void;
   onClose: () => void;
   onUserChange: (user: PublicUser) => void;
   onCurrentSessionRevoked: () => void;
@@ -54,7 +57,7 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Не удалось выполнить действие';
 }
 
-export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRevoked, onSettingsChange = () => undefined, onUserChange, open, settings = { volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }, user }: SecurityCenterProps): React.JSX.Element {
+export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRevoked, onSectionChange, onSettingsChange = () => undefined, onUserChange, open, presentation = 'modal', section, settings = { volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }, user }: SecurityCenterProps): React.JSX.Element {
   const [tab, setTab] = useState<SecurityTab>('protection');
   const [flow, setFlow] = useState<ProtectionFlow>('overview');
   const [sessions, setSessions] = useState<UserSession[]>([]);
@@ -70,6 +73,14 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
   const [error, setError] = useState<string | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<UserSession | null>(null);
   const [revokeOthersOpen, setRevokeOthersOpen] = useState(false);
+  const activeTab = section ?? tab;
+
+  const selectTab = (nextTab: SecurityTab): void => {
+    if (section === undefined) setTab(nextTab);
+    onSectionChange?.(nextTab);
+    setFlow('overview');
+    setError(null);
+  };
 
   const loadSecurityData = async (): Promise<void> => {
     setLoading(true);
@@ -86,7 +97,7 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
 
   useEffect(() => {
     if (!open) return;
-    setTab('protection');
+    if (section === undefined) setTab('protection');
     setFlow('overview');
     setCode('');
     setPassword('');
@@ -94,6 +105,12 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
     setError(null);
     void loadSecurityData();
   }, [open]);
+
+  useEffect(() => {
+    if (section === undefined) return;
+    setFlow('overview');
+    setError(null);
+  }, [section]);
 
   const run = async (action: () => Promise<void>): Promise<void> => {
     setBusy(true);
@@ -145,8 +162,7 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
       const result = await client.enableTwoFactor(code);
       onUserChange(result.user);
       setRecoveryCodes(result.recoveryCodes);
-      setTab('recovery');
-      setFlow('overview');
+      selectTab('recovery');
       setCode('');
       await loadSecurityData();
     });
@@ -169,8 +185,7 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
       const result = await client.regenerateRecoveryCodes(code);
       setRecoveryCodes(result.recoveryCodes);
       setCode('');
-      setFlow('overview');
-      setTab('recovery');
+      selectTab('recovery');
       await loadSecurityData();
     });
   };
@@ -208,16 +223,15 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
     void window.desktop.copyToClipboard(recoveryCodes.join('\n'));
   };
 
-  return <>
-    <Modal description="Пароль, 2FA, активные устройства и события аккаунта" onClose={onClose} open={open} size="xl" title="Безопасность аккаунта">
-      <div className="security-center">
-        <nav aria-label="Разделы безопасности" className="security-center__tabs">
+  const center = (
+    <div className="security-center" data-presentation={presentation}>
+        {presentation === 'modal' ? <nav aria-label="Разделы безопасности" className="security-center__tabs">
           {([['protection', 'Защита'], ['notifications', 'Уведомления'], ['sessions', 'Сессии'], ['recovery', 'Резервные коды'], ['activity', 'Активность']] as const).map(([value, label]) =>
-            <button aria-current={tab === value ? 'page' : undefined} key={value} onClick={() => { setTab(value); setFlow('overview'); setError(null); }} type="button">{label}</button>)}
-        </nav>
+            <button aria-current={activeTab === value ? 'page' : undefined} key={value} onClick={() => selectTab(value)} type="button">{label}</button>)}
+        </nav> : null}
 
         <section className="security-center__content">
-          {tab === 'protection' && flow === 'overview' && <div className="security-stack">
+          {activeTab === 'protection' && flow === 'overview' && <div className="security-stack">
             <article className="security-card">
               <div><div className="security-card__title"><h3>Пароль</h3><Badge tone="success">Настроен</Badge></div><p>Пароль всегда подтверждается вторым фактором и хранится только как стойкий хеш.</p></div>
               <Button disabled={busy} onClick={startPassword} variant="secondary">Изменить пароль</Button>
@@ -226,10 +240,14 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
               <div><div className="security-card__title"><h3>Приложение 2FA</h3><Badge tone={user.twoFactorEnabled ? 'success' : 'neutral'}>{user.twoFactorEnabled ? 'Включено' : 'Выключено'}</Badge></div><p>Коды TOTP работают без доступа к почте. При включении выдаются десять одноразовых recovery-кодов.</p></div>
               <Button disabled={busy} onClick={user.twoFactorEnabled ? () => { setCode(''); setFlow('totp-disable'); } : startTotp} variant="secondary">{user.twoFactorEnabled ? 'Отключить' : 'Подключить 2FA'}</Button>
             </article>
+            <article className="security-card">
+              <div><div className="security-card__title"><h3>Резервные коды</h3><Badge tone={user.twoFactorEnabled ? 'success' : 'neutral'}>{user.twoFactorEnabled ? 'Доступны' : 'Нужна 2FA'}</Badge></div><p>Одноразовые коды помогут войти, если приложение-аутентификатор временно недоступно.</p></div>
+              <Button disabled={busy || !user.twoFactorEnabled} onClick={() => selectTab('recovery')} variant="secondary">Управлять кодами</Button>
+            </article>
             <aside className="security-notice"><strong>Уведомления включены</strong><span>При входе и критичных изменениях событие появится здесь, а уведомление уйдёт на {user.email}.</span></aside>
           </div>}
 
-          {tab === 'protection' && flow === 'password' && <form className="security-form" onSubmit={savePassword}>
+          {activeTab === 'protection' && flow === 'password' && <form className="security-form" onSubmit={savePassword}>
             <h3>Изменить пароль</h3><p>Шестизначный код отправлен на {user.email}.</p>
             <Input autoComplete="one-time-code" inputMode="numeric" label="Код из письма" maxLength={6} onChange={(event) => setCode(event.target.value.replace(/\D/gu, '').slice(0, 6))} value={code} />
             <PasswordInput autoComplete="new-password" label="Новый пароль" maxLength={128} minLength={10} onChange={(event) => setPassword(event.target.value)} value={password} />
@@ -237,13 +255,13 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
             <div className="security-form__actions"><Button onClick={() => setFlow('overview')} type="button" variant="quiet">Назад</Button><Button disabled={code.length !== 6 || password.length < 10} loading={busy}>Сохранить</Button></div>
           </form>}
 
-          {tab === 'notifications' && <div className="security-stack">
+          {activeTab === 'notifications' && <div className="security-stack">
             <div className="security-section-heading"><div><h3>Уведомления о сообщениях</h3><p>Настройки хранятся только на этом компьютере и применяются сразу.</p></div></div>
             <article className="security-card"><div><h3>Push-уведомления Windows</h3><p>Показывать автора, канал и текст нового сообщения, даже когда окно приложения открыто.</p></div><Switch checked={settings.desktopNotificationsEnabled} label="Push-уведомления" onCheckedChange={(checked) => onSettingsChange({ desktopNotificationsEnabled: checked, messageSoundsEnabled: settings.messageSoundsEnabled })} /></article>
             <article className="security-card"><div><h3>Звук сообщения</h3><p>Проигрывать короткий ненавязчивый сигнал на выбранном устройстве вывода.</p></div><Switch checked={settings.messageSoundsEnabled} label="Звуковые уведомления" onCheckedChange={(checked) => onSettingsChange({ desktopNotificationsEnabled: settings.desktopNotificationsEnabled, messageSoundsEnabled: checked })} /></article>
           </div>}
 
-          {tab === 'protection' && flow === 'totp-enable' && <form className="security-form" onSubmit={enableTotp}>
+          {activeTab === 'protection' && flow === 'totp-enable' && <form className="security-form" onSubmit={enableTotp}>
             <h3>Подключить 2FA</h3><p>Отсканируйте QR-код, затем введите код из приложения.</p>
             {qrDataUrl && <img alt="QR-код для настройки 2FA" className="security-qr" src={qrDataUrl} />}
             {setup && <div className="security-secret"><span>Ключ для ручного ввода</span><code>{setup.secret}</code><Button onClick={() => void window.desktop.copyToClipboard(setup.secret)} size="sm" type="button" variant="quiet">Копировать</Button></div>}
@@ -251,13 +269,13 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
             <div className="security-form__actions"><Button onClick={() => setFlow('overview')} type="button" variant="quiet">Назад</Button><Button disabled={code.length !== 6} loading={busy}>Включить 2FA</Button></div>
           </form>}
 
-          {tab === 'protection' && flow === 'totp-disable' && <form className="security-form" onSubmit={disableTotp}>
+          {activeTab === 'protection' && flow === 'totp-disable' && <form className="security-form" onSubmit={disableTotp}>
             <h3>Отключить 2FA?</h3><p>Все recovery-коды будут удалены. Введите текущий код из приложения.</p>
             <Input autoComplete="one-time-code" inputMode="numeric" label="Код из приложения" maxLength={6} onChange={(event) => setCode(event.target.value.replace(/\D/gu, '').slice(0, 6))} value={code} />
             <div className="security-form__actions"><Button onClick={() => setFlow('overview')} type="button" variant="quiet">Назад</Button><Button disabled={code.length !== 6} loading={busy} variant="danger">Отключить 2FA</Button></div>
           </form>}
 
-          {tab === 'sessions' && <div className="security-stack">
+          {activeTab === 'sessions' && <div className="security-stack">
             <div className="security-section-heading"><div><h3>Активные устройства</h3><p>Отметка «Доверенное» подтверждает, что вы узнаёте устройство, но не отключает 2FA. Ротация токена не создаёт здесь дубликаты.</p></div><div className="security-section-actions"><Button disabled={busy || sessions.every((session) => session.current)} onClick={() => setRevokeOthersOpen(true)} size="sm" variant="danger">Завершить остальные</Button><Button disabled={loading} icon="refresh" onClick={() => void loadSecurityData()} size="sm" variant="quiet">Обновить</Button></div></div>
             {sessions.map((session) => <article className="session-card" key={session.id}>
               <div className="session-card__icon" aria-hidden="true">◈</div>
@@ -267,20 +285,20 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
             {!loading && sessions.length === 0 && <p className="security-empty">Активных сессий не найдено.</p>}
           </div>}
 
-          {tab === 'recovery' && flow !== 'recovery-regenerate' && <div className="security-stack">
+          {activeTab === 'recovery' && flow !== 'recovery-regenerate' && <div className="security-stack">
             <div className="security-section-heading"><div><h3>Резервные коды</h3><p>Каждый код работает один раз. На сервере хранятся только их хеши.</p></div>{user.twoFactorEnabled && <Button onClick={() => { setCode(''); setFlow('recovery-regenerate'); }} variant="secondary">Создать новый набор</Button>}</div>
             {!user.twoFactorEnabled && <aside className="security-notice"><strong>Сначала включите 2FA</strong><span>Резервные коды создаются вместе с приложением-аутентификатором.</span></aside>}
             {recoveryCodes.length > 0 && <><div className="recovery-grid">{recoveryCodes.map((recoveryCode) => <code key={recoveryCode}>{recoveryCode}</code>)}</div><div className="recovery-actions"><Button icon="copy" onClick={copyCodes} variant="secondary">Копировать все</Button><span>Сохраните коды сейчас — повторно этот набор не показывается.</span></div></>}
             {user.twoFactorEnabled && recoveryCodes.length === 0 && <p className="security-empty">Действующие коды скрыты. Если они потеряны, создайте новый набор — старый будет отозван.</p>}
           </div>}
 
-          {tab === 'recovery' && flow === 'recovery-regenerate' && <form className="security-form" onSubmit={regenerateCodes}>
+          {activeTab === 'recovery' && flow === 'recovery-regenerate' && <form className="security-form" onSubmit={regenerateCodes}>
             <h3>Новый набор recovery-кодов</h3><p>Подтвердите действие кодом из приложения-аутентификатора.</p>
             <Input autoComplete="one-time-code" inputMode="numeric" label="Код из приложения" maxLength={6} onChange={(event) => setCode(event.target.value.replace(/\D/gu, '').slice(0, 6))} value={code} />
             <div className="security-form__actions"><Button onClick={() => setFlow('overview')} type="button" variant="quiet">Назад</Button><Button disabled={code.length !== 6} loading={busy}>Обновить коды</Button></div>
           </form>}
 
-          {tab === 'activity' && <div className="security-stack">
+          {activeTab === 'activity' && <div className="security-stack">
             <div className="security-section-heading"><div><h3>События безопасности</h3><p>Последние 50 действий, связанных с доступом к аккаунту.</p></div><Button disabled={loading} icon="refresh" onClick={() => void loadSecurityData()} size="sm" variant="quiet">Обновить</Button></div>
             <div className="security-timeline">{events.map((securityEvent) => { const copy = eventCopy[securityEvent.type]; return <article key={securityEvent.id}><span className={`security-timeline__dot security-timeline__dot--${copy.tone}`} /><div><div><strong>{copy.title}</strong><Badge tone={copy.tone}>{formatDate(securityEvent.createdAt)}</Badge></div><p>{copy.description}{securityEvent.deviceName ? ` · ${securityEvent.deviceName}` : ''}</p></div></article>; })}</div>
             {!loading && events.length === 0 && <p className="security-empty">Событий пока нет.</p>}
@@ -289,7 +307,10 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
           {error && <div className="security-error" role="alert">{error}</div>}
         </section>
       </div>
-    </Modal>
+  );
+
+  return <>
+    {presentation === 'modal' ? <Modal description="Пароль, 2FA, активные устройства и события аккаунта" onClose={onClose} open={open} size="xl" title="Безопасность аккаунта">{center}</Modal> : open ? center : null}
     <ConfirmDialog confirmLabel={revokeTarget?.current ? 'Выйти' : 'Завершить'} danger description={revokeTarget?.current ? 'Это текущая сессия. Приложение вернётся на экран входа.' : `Устройство «${revokeTarget?.deviceName ?? ''}» потеряет доступ и должно будет войти снова.`} loading={busy} onClose={() => setRevokeTarget(null)} onConfirm={confirmRevoke} open={revokeTarget !== null} title="Завершить сессию?" />
     <ConfirmDialog confirmLabel="Завершить остальные" danger description="Все устройства, кроме текущего, потеряют доступ и должны будут войти снова." loading={busy} onClose={() => setRevokeOthersOpen(false)} onConfirm={confirmRevokeOthers} open={revokeOthersOpen} title="Завершить остальные сессии?" />
   </>;

@@ -1,4 +1,6 @@
 .security-center { display: grid; grid-template-columns: 190px minmax(0, 1fr); min-height: 540px; margin: calc(var(--space-2) * -1); }
+.security-center[data-presentation='page'] { display: block; min-height: 0; margin: 0; }
+.security-center[data-presentation='page'] .security-center__content { padding: 0; }
 .security-center__tabs { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-3); border-right: 1px solid var(--color-border-subtle); background: var(--color-surface-0); }
 .security-center__tabs button { min-height: 40px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); text-align: left; font: var(--text-label-md); }
 .security-center__tabs button:hover { background: var(--color-surface-2); color: var(--color-text-primary); }

@@ -24,9 +24,10 @@ export const serverSettingsSections = [
 
 export type UserSettingsSection = (typeof userSettingsSections)[number];
 export type ServerSettingsSection = (typeof serverSettingsSections)[number];
+export type UserSettingsSubpage = 'backup-codes';
 
 export type SettingsRoute =
-  | { kind: 'user'; section: UserSettingsSection; canonicalPath: string }
+  | { kind: 'user'; section: UserSettingsSection; subpage?: UserSettingsSubpage; canonicalPath: string }
   | { kind: 'server'; serverId: string; section: ServerSettingsSection; canonicalPath: string };
 
 export interface InvalidSettingsRoute {
@@ -34,8 +35,8 @@ export interface InvalidSettingsRoute {
   canonicalPath: string;
 }
 
-export function userSettingsPath(section: UserSettingsSection = 'profile'): string {
-  return `/settings/${section}`;
+export function userSettingsPath(section: UserSettingsSection = 'profile', subpage?: UserSettingsSubpage): string {
+  return subpage === undefined ? `/settings/${section}` : `/settings/${section}/${subpage}`;
 }
 
 export function serverSettingsPath(serverId: string, section: ServerSettingsSection = 'overview'): string {
@@ -61,6 +62,15 @@ function decodePathSegment(value: string): string | null {
 export function parseSettingsRoute(pathname: string): SettingsRoute | InvalidSettingsRoute | null {
   if (pathname === '/settings' || pathname === '/settings/') {
     return { kind: 'invalid', canonicalPath: userSettingsPath() };
+  }
+  const userSubpageMatch = /^\/settings\/([^/]+)\/([^/]+)\/?$/u.exec(pathname);
+  if (userSubpageMatch !== null) {
+    const section = userSubpageMatch[1]!;
+    const subpage = userSubpageMatch[2]!;
+    if (section === 'security' && subpage === 'backup-codes') {
+      return { kind: 'user', section, subpage, canonicalPath: userSettingsPath(section, subpage) };
+    }
+    return { kind: 'invalid', canonicalPath: isUserSection(section) ? userSettingsPath(section) : userSettingsPath() };
   }
   const userMatch = /^\/settings\/([^/]+)\/?$/u.exec(pathname);
   if (userMatch !== null) {
