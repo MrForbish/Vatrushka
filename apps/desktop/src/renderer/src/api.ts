@@ -11,6 +11,7 @@ import {
   type RoomConnection,
   type ServerChannel,
   type ServerDetail,
+  type ServerAuditLogEntry,
   type ServerPermission,
   type ServerRole,
   type ServerSummary,
@@ -175,8 +176,24 @@ export class ApiClient {
     return this.request(`/servers/${serverId}/roles/${roleId}`, { method: 'PATCH', body: values, auth: true });
   }
 
+  reorderServerRole(serverId: string, roleId: string, position: number): Promise<ServerRole> {
+    return this.request(`/servers/${serverId}/roles/${roleId}/position`, { method: 'PATCH', body: { position }, auth: true });
+  }
+
+  async deleteServerRole(serverId: string, roleId: string): Promise<void> {
+    await this.request(`/servers/${serverId}/roles/${roleId}`, { method: 'DELETE', auth: true });
+  }
+
   async assignServerMemberRoles(serverId: string, userId: string, roleIds: string[]): Promise<void> {
     await this.request(`/servers/${serverId}/members/${userId}/roles`, { method: 'PUT', body: { roleIds }, auth: true });
+  }
+
+  async setChannelPermissionOverwrite(channelId: string, targetType: 'ROLE' | 'MEMBER', targetId: string, allow: ServerPermission[], deny: ServerPermission[]): Promise<void> {
+    await this.request(`/channels/${channelId}/overwrites/${targetType}/${targetId}`, { method: 'PUT', body: { allow, deny }, auth: true });
+  }
+
+  listServerAuditLog(serverId: string): Promise<ServerAuditLogEntry[]> {
+    return this.request(`/servers/${serverId}/audit-log`, { auth: true });
   }
 
   async kickServerMember(serverId: string, userId: string): Promise<void> {

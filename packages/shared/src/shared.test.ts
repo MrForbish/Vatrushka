@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ChannelPermissionOverwrite } from './contracts.js';
+
 import {
   createApiError,
   decideScreenShareLease,
@@ -8,7 +10,10 @@ import {
   generateRoomCode,
   isExpired,
   normalizeEmail,
+  resolveChannelPermissions,
+  resolveServerPermissions,
   roomCodeSchema,
+  serverPermissions,
 } from './index.js';
 
 describe('shared domain helpers', () => {
@@ -54,5 +59,42 @@ describe('shared domain helpers', () => {
     if (!first.ok) throw new Error('Expected lease');
     expect(decideScreenShareLease(first.lease, 'user_2_b', 'Bob', new Date(now.getTime() + 1_000), 30).ok).toBe(false);
     expect(decideScreenShareLease(first.lease, 'user_2_b', 'Bob', new Date(now.getTime() + 31_000), 30).ok).toBe(true);
+  });
+
+  it('resolves default and assigned server permissions without platform privileges', () => {
+    const roles = [
+      { id: 'everyone', isDefault: true, position: 0, permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] as const },
+      { id: 'writer', isDefault: false, position: 10, permissions: ['SEND_MESSAGES'] as const },
+    ];
+    expect([...resolveServerPermissions({ isOwner: false, userId: 'member', roles, assignedRoleIds: ['writer'] })]).toEqual(['VIEW_SERVER', 'VIEW_CHANNEL', 'SEND_MESSAGES']);
+  });
+
+  it('applies channel overwrites in everyone, roles, then member order', () => {
+    const roles = [
+      { id: 'everyone', isDefault: true, position: 0, permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'SEND_MESSAGES'] as const },
+      { id: 'muted', isDefault: false, position: 10, permissions: [] },
+      { id: 'speaker', isDefault: false, position: 20, permissions: [] },
+    ];
+    const permissions = resolveChannelPermissions({
+      isOwner: false,
+      userId: 'member',
+      roles,
+      assignedRoleIds: ['muted', 'speaker'],
+      overwrites: [
+        { channelId: 'channel', targetType: 'ROLE', targetId: 'everyone', allow: [], deny: ['SEND_MESSAGES'] },
+        { channelId: 'channel', targetType: 'ROLE', targetId: 'muted', allow: [], deny: ['VIEW_CHANNEL'] },
+        { channelId: 'channel', targetType: 'ROLE', targetId: 'speaker', allow: ['VIEW_CHANNEL', 'SEND_MESSAGES'], deny: [] },
+        { channelId: 'channel', targetType: 'MEMBER', targetId: 'member', allow: [], deny: ['SEND_MESSAGES'] },
+      ],
+    });
+    expect(permissions.has('VIEW_CHANNEL')).toBe(true);
+    expect(permissions.has('SEND_MESSAGES')).toBe(false);
+  });
+
+  it('lets Administrator bypass channel overwrites while owner always has every permission', () => {
+    const adminRole = { id: 'admin', isDefault: false, position: 50, permissions: ['ADMINISTRATOR'] as const };
+    const overwrite = { channelId: 'channel', targetType: 'ROLE', targetId: 'admin', allow: [], deny: ['VIEW_CHANNEL'] } satisfies ChannelPermissionOverwrite;
+    expect(resolveChannelPermissions({ isOwner: false, userId: 'admin-user', roles: [adminRole], assignedRoleIds: ['admin'], overwrites: [overwrite] }).has('VIEW_CHANNEL')).toBe(true);
+    expect(resolveServerPermissions({ isOwner: true, userId: 'owner', roles: [], assignedRoleIds: [] }).size).toBe(serverPermissions.length);
   });
 });

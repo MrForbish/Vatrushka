@@ -1,5 +1,5 @@
 import { decideScreenShareLease, expiresAt, isExpired } from '@vatrushka/shared';
-import type { PlatformRole } from '@vatrushka/shared';
+import type { PermissionOverwriteTargetType, PlatformRole } from '@vatrushka/shared';
 
 import type {
   AuthCodeRecord,
@@ -17,6 +17,8 @@ import type {
   ServerMemberProfile,
   ServerRoleRecord,
   ServerChannelRecord,
+  ChannelPermissionOverwriteRecord,
+  ServerAuditLogRecord,
   TextMessageRecord,
   TextMessageWithAuthor,
   MessageReactionRecord,
@@ -48,6 +50,8 @@ export class MemoryStore implements DataStore {
   readonly serverRoles = new Map<string, ServerRoleRecord>();
   readonly serverMemberRoles = new Set<string>();
   readonly serverChannels = new Map<string, ServerChannelRecord>();
+  readonly channelPermissionOverwrites = new Map<string, ChannelPermissionOverwriteRecord>();
+  readonly serverAuditLogs = new Map<string, ServerAuditLogRecord>();
   readonly textMessages = new Map<string, TextMessageRecord>();
   readonly messageReactions = new Map<string, MessageReactionRecord>();
   readonly channelReadStates = new Map<string, ChannelReadStateRecord>();
@@ -372,11 +376,34 @@ export class MemoryStore implements DataStore {
     this.serverRoles.set(role.id, structuredClone(role));
   }
 
-  async updateServerRole(id: string, values: Partial<Pick<ServerRoleRecord, 'name' | 'color' | 'permissions'>>, now: Date): Promise<ServerRoleRecord | null> {
+  async updateServerRole(id: string, values: Partial<Pick<ServerRoleRecord, 'name' | 'color' | 'permissions' | 'position'>>, now: Date): Promise<ServerRoleRecord | null> {
     const role = this.serverRoles.get(id);
     if (!role) return null;
     Object.assign(role, structuredClone(values), { updatedAt: now });
     return structuredClone(role);
+  }
+
+  async reorderServerRole(serverId: string, id: string, currentPosition: number, position: number, now: Date): Promise<ServerRoleRecord | null> {
+    for (const role of this.serverRoles.values()) {
+      if (role.serverId !== serverId || role.kind !== 'CUSTOM' || role.id === id) continue;
+      if (position > currentPosition && role.position > currentPosition && role.position <= position) {
+        role.position -= 1;
+        role.updatedAt = now;
+      }
+      if (position < currentPosition && role.position >= position && role.position < currentPosition) {
+        role.position += 1;
+        role.updatedAt = now;
+      }
+    }
+    return this.updateServerRole(id, { position }, now);
+  }
+
+  async deleteServerRole(id: string): Promise<boolean> {
+    const role = this.serverRoles.get(id);
+    if (!role) return false;
+    for (const key of this.serverMemberRoles) if (key.endsWith(`:${id}`)) this.serverMemberRoles.delete(key);
+    for (const [key, overwrite] of this.channelPermissionOverwrites) if (overwrite.targetType === 'ROLE' && overwrite.targetId === id) this.channelPermissionOverwrites.delete(key);
+    return this.serverRoles.delete(id);
   }
 
   async assignMemberRoles(serverId: string, userId: string, roleIds: string[]): Promise<void> {
@@ -406,7 +433,33 @@ export class MemoryStore implements DataStore {
     }
     for (const [key, state] of this.channelReadStates) if (state.channelId === id) this.channelReadStates.delete(key);
     this.channelLeases.delete(id);
+    for (const [key, overwrite] of this.channelPermissionOverwrites) if (overwrite.channelId === id) this.channelPermissionOverwrites.delete(key);
     return this.serverChannels.delete(id);
+  }
+
+  async listChannelPermissionOverwrites(channelIds: string[]): Promise<ChannelPermissionOverwriteRecord[]> {
+    const selected = new Set(channelIds);
+    return [...this.channelPermissionOverwrites.values()].filter((overwrite) => selected.has(overwrite.channelId)).map((overwrite) => structuredClone(overwrite));
+  }
+
+  async upsertChannelPermissionOverwrite(overwrite: ChannelPermissionOverwriteRecord): Promise<void> {
+    this.channelPermissionOverwrites.set(`${overwrite.channelId}:${overwrite.targetType}:${overwrite.targetId}`, structuredClone(overwrite));
+  }
+
+  async deleteChannelPermissionOverwrite(channelId: string, targetType: PermissionOverwriteTargetType, targetId: string): Promise<boolean> {
+    return this.channelPermissionOverwrites.delete(`${channelId}:${targetType}:${targetId}`);
+  }
+
+  async createServerAuditLog(entry: ServerAuditLogRecord): Promise<void> {
+    this.serverAuditLogs.set(entry.id, structuredClone(entry));
+  }
+
+  async listServerAuditLog(serverId: string, limit: number): Promise<Array<ServerAuditLogRecord & { actorDisplayName: string | null }>> {
+    return [...this.serverAuditLogs.values()]
+      .filter((entry) => entry.serverId === serverId)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      .slice(0, limit)
+      .map((entry) => ({ ...structuredClone(entry), actorDisplayName: entry.actorUserId === null ? null : this.users.get(entry.actorUserId)?.displayName ?? null }));
   }
 
   async listTextMessages(channelId: string, before: Date | null, limit: number): Promise<TextMessageWithAuthor[]> {

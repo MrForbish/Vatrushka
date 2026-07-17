@@ -11,6 +11,7 @@ export interface SourcePickerProps {
   sources: DesktopSourceInfo[];
   includeAudio: boolean;
   platform: string;
+  audioAllowed?: boolean;
   busy?: boolean;
   onAudio(value: boolean): void;
   onSelect(source: DesktopSourceInfo): void;
@@ -27,7 +28,7 @@ function sourceDescription(source: DesktopSourceInfo): string {
   return source.type === 'screen' ? 'Весь монитор' : 'Только выбранное окно';
 }
 
-export function SourcePicker({ busy = false, includeAudio, onAudio, onCancel, onSelect, platform, sources }: SourcePickerProps): React.JSX.Element {
+export function SourcePicker({ audioAllowed = true, busy = false, includeAudio, onAudio, onCancel, onSelect, platform, sources }: SourcePickerProps): React.JSX.Element {
   const initialTab: SourceTab = sources.some((source) => source.type === 'screen') ? 'screen' : 'window';
   const initialSource = sources.find((source) => source.type === initialTab) ?? sources[0];
   const [tab, setTab] = useState<SourceTab>(initialTab);
@@ -35,7 +36,7 @@ export function SourcePicker({ busy = false, includeAudio, onAudio, onCancel, on
   const dialogRef = useRef<HTMLElement>(null);
   const visibleSources = useMemo(() => sources.filter((source) => source.type === tab), [sources, tab]);
   const selectedSource = sources.find((source) => source.id === selectedId) ?? null;
-  const audioAvailable = selectedSource?.audioAvailable === true;
+  const audioAvailable = audioAllowed && selectedSource?.audioAvailable === true;
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
@@ -121,7 +122,7 @@ export function SourcePicker({ busy = false, includeAudio, onAudio, onCancel, on
             name="screen-share-audio"
             onChange={(value) => onAudio(value === 'with-audio')}
             options={[
-              { value: 'with-audio', label: 'Передавать звук приложения', description: audioAvailable ? 'Зрители смогут регулировать и отключать его.' : platform === 'win32' ? 'Для этого источника звук недоступен.' : 'Системный звук доступен только в приложении для Windows.', disabled: !audioAvailable },
+              { value: 'with-audio', label: 'Передавать звук приложения', description: audioAvailable ? 'Зрители смогут регулировать и отключать его.' : !audioAllowed ? 'Ваша роль не разрешает передачу звука приложения.' : platform === 'win32' ? 'Для этого источника звук недоступен.' : 'Системный звук доступен только в приложении для Windows.', disabled: !audioAvailable },
               { value: 'silent', label: 'Без звука', description: 'Передавать только изображение.' },
             ]}
             value={includeAudio && audioAvailable ? 'with-audio' : 'silent'}

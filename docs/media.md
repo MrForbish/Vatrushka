@@ -4,7 +4,7 @@
 
 LiveKit JS SDK подключается с auto-subscribe, echo cancellation, noise suppression и auto gain control. Отказ микрофона не выбрасывает пользователя из комнаты: клиент остаётся muted и показывает понятную ошибку. `devicechange` обновляет списки. `Room.switchActiveDevice` переключает input/output по установленным SDK types.
 
-Пользователь явно выбирает устройство записи и воспроизведения. В постоянном голосовом канале права `SPEAK` и `STREAM` отражаются не только в UI: API выпускает LiveKit-токен без соответствующих publish sources, если роль запрещает микрофон или демонстрацию.
+Пользователь явно выбирает устройство записи и воспроизведения. В постоянном голосовом канале права `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` отражаются не только в UI: API выпускает LiveKit-токен без соответствующих publish sources, если роль запрещает микрофон, изображение демонстрации или звук приложения.
 
 Participant UI показывает имя, guest/owner, mute текстом и icon, speaking текстом и visual outline, connection quality и screen badge. Удалённые audio tracks attach/detach явно; autoplay gate вызывает `Room.startAudio` только из user gesture.
 

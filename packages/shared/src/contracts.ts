@@ -3,23 +3,61 @@ import type { LocalSettings } from './schemas.js';
 export type PlatformRole = 'member' | 'admin' | 'owner';
 
 export const serverPermissions = [
+  'ADMINISTRATOR',
   'VIEW_SERVER',
   'MANAGE_SERVER',
   'MANAGE_CHANNELS',
   'MANAGE_ROLES',
-  'CREATE_INVITES',
+  'MANAGE_INVITES',
+  'MANAGE_INTEGRATIONS',
+  'VIEW_AUDIT_LOG',
+  'MANAGE_SERVER_SECURITY',
   'KICK_MEMBERS',
+  'BAN_MEMBERS',
+  'TIMEOUT_MEMBERS',
+  'MANAGE_NICKNAMES',
+  'VIEW_MODERATION_NOTES',
+  'MANAGE_REPORTS',
   'VIEW_CHANNEL',
+  'READ_MESSAGE_HISTORY',
   'SEND_MESSAGES',
+  'SEND_ATTACHMENTS',
+  'ADD_REACTIONS',
+  'EMBED_LINKS',
+  'MENTION_EVERYONE',
+  'MANAGE_OWN_MESSAGES',
   'MANAGE_MESSAGES',
+  'PIN_MESSAGES',
+  'CREATE_THREADS',
   'CONNECT_VOICE',
   'SPEAK',
-  'STREAM',
+  'STREAM_SCREEN',
+  'STREAM_APPLICATION_AUDIO',
+  'USE_PRIORITY_VOICE',
   'MUTE_MEMBERS',
+  'DEAFEN_MEMBERS',
+  'MOVE_MEMBERS',
+  'STOP_OTHERS_STREAM',
+  'CREATE_TEMPORARY_VOICE',
+  'MANAGE_2FA_POLICY',
+  'MANAGE_SESSIONS',
+  'VIEW_TECHNICAL_LOGS',
+  'EXPORT_SERVER_DATA',
 ] as const;
 
 export type ServerPermission = (typeof serverPermissions)[number];
 export type ServerChannelType = 'text' | 'voice';
+export type ServerRoleKind = 'EVERYONE' | 'OWNER' | 'CUSTOM';
+
+export type PermissionOverwriteTargetType = 'ROLE' | 'MEMBER';
+
+export interface ChannelPermissionOverwrite {
+  channelId: string;
+  targetType: PermissionOverwriteTargetType;
+  targetId: string;
+  allow: ServerPermission[];
+  deny: ServerPermission[];
+}
 
 export interface ServerSummary {
   id: string;
@@ -37,6 +75,8 @@ export interface ServerChannel {
   type: ServerChannelType;
   position: number;
   unreadCount: number;
+  permissions?: ServerPermission[];
+  permissionOverwrites?: ChannelPermissionOverwrite[];
 }
 
 export interface ServerRole {
@@ -46,7 +86,21 @@ export interface ServerRole {
   color: string;
   position: number;
   isDefault: boolean;
+  kind?: ServerRoleKind;
   permissions: ServerPermission[];
+}
+
+export interface ServerAuditLogEntry {
+  id: string;
+  serverId: string;
+  actorUserId: string | null;
+  actorDisplayName: string;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  before: unknown;
+  after: unknown;
+  createdAt: string;
 }
 
 export interface ServerMember {
@@ -206,6 +260,7 @@ export interface RoomConnection {
   channelId?: string;
   canSpeak?: boolean;
   canStream?: boolean;
+  canStreamApplicationAudio?: boolean;
   guestSessionToken?: string;
 }
 

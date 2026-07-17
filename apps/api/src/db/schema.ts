@@ -1,6 +1,6 @@
 import { boolean, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import type { PlatformRole, ServerChannelType, ServerPermission } from '@vatrushka/shared';
+import type { PermissionOverwriteTargetType, PlatformRole, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
 
@@ -91,6 +91,7 @@ export const serverRoles = pgTable(
     color: text('color').notNull(),
     position: integer('position').notNull(),
     isDefault: boolean('is_default').notNull().default(false),
+    kind: text('kind').$type<ServerRoleKind>().notNull().default('CUSTOM'),
     permissions: jsonb('permissions').$type<ServerPermission[]>().notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
@@ -121,6 +122,36 @@ export const serverChannels = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
   (table) => [index('server_channels_server_position_idx').on(table.serverId, table.position), uniqueIndex('server_channels_livekit_name_unique').on(table.livekitRoomName)],
+);
+
+export const channelPermissionOverwrites = pgTable(
+  'channel_permission_overwrites',
+  {
+    channelId: uuid('channel_id').notNull().references(() => serverChannels.id, { onDelete: 'cascade' }),
+    targetType: text('target_type').$type<PermissionOverwriteTargetType>().notNull(),
+    targetId: uuid('target_id').notNull(),
+    allow: jsonb('allow').$type<ServerPermission[]>().notNull(),
+    deny: jsonb('deny').$type<ServerPermission[]>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.channelId, table.targetType, table.targetId] }), index('channel_overwrites_target_idx').on(table.targetType, table.targetId)],
+);
+
+export const serverAuditLogs = pgTable(
+  'server_audit_logs',
+  {
+    id: uuid('id').primaryKey(),
+    serverId: uuid('server_id').notNull().references(() => servers.id, { onDelete: 'cascade' }),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    action: text('action').notNull(),
+    targetType: text('target_type').notNull(),
+    targetId: uuid('target_id'),
+    before: jsonb('before'),
+    after: jsonb('after'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('server_audit_logs_server_created_idx').on(table.serverId, table.createdAt), index('server_audit_logs_actor_idx').on(table.actorUserId)],
 );
 
 export const textMessages = pgTable(

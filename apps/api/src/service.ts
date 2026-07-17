@@ -11,6 +11,9 @@ import {
   type PublicUser,
   type RoomConnection,
   type ServerChannel,
+  type ChannelPermissionOverwrite,
+  type PermissionOverwriteTargetType,
+  type ServerAuditLogEntry,
   type ServerDetail,
   type ServerMember,
   type ServerPermission,
@@ -24,6 +27,9 @@ import {
   type DirectMessageCandidate,
   type TwoFactorSetup,
   serverPermissions,
+  highestRolePosition,
+  resolveChannelPermissions,
+  resolveServerPermissions,
   expiresAt,
   generateRoomCode,
   isExpired,
@@ -76,11 +82,17 @@ function publicUser(user: UserRecord): PublicUser {
 const DEFAULT_SERVER_PERMISSIONS: ServerPermission[] = [
   'VIEW_SERVER',
   'VIEW_CHANNEL',
+  'READ_MESSAGE_HISTORY',
   'SEND_MESSAGES',
+  'SEND_ATTACHMENTS',
+  'ADD_REACTIONS',
+  'EMBED_LINKS',
+  'MANAGE_OWN_MESSAGES',
   'CONNECT_VOICE',
   'SPEAK',
-  'STREAM',
-  'CREATE_INVITES',
+  'STREAM_SCREEN',
+  'STREAM_APPLICATION_AUDIO',
+  'MANAGE_INVITES',
 ];
 
 const SERVER_INVITE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -91,11 +103,11 @@ function generateServerInviteCode(): string {
 }
 
 function publicServerRole(role: ServerRoleRecord): ServerRole {
-  return { id: role.id, serverId: role.serverId, name: role.name, color: role.color, position: role.position, isDefault: role.isDefault, permissions: role.permissions };
+  return { id: role.id, serverId: role.serverId, name: role.name, color: role.color, position: role.position, isDefault: role.isDefault, kind: role.kind, permissions: role.permissions };
 }
 
-function publicServerChannel(channel: ServerChannelRecord, unreadCount = 0): ServerChannel {
-  return { id: channel.id, serverId: channel.serverId, name: channel.name, type: channel.type, position: channel.position, unreadCount };
+function publicServerChannel(channel: ServerChannelRecord, unreadCount = 0, permissions?: ServerPermission[], permissionOverwrites?: ChannelPermissionOverwrite[]): ServerChannel {
+  return { id: channel.id, serverId: channel.serverId, name: channel.name, type: channel.type, position: channel.position, unreadCount, ...(permissions === undefined ? {} : { permissions }), ...(permissionOverwrites === undefined ? {} : { permissionOverwrites }) };
 }
 
 export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
@@ -384,10 +396,12 @@ export class VatrushkaService {
       const candidate: ServerRecord = { id: randomUUID(), name, inviteCode: generateServerInviteCode(), ownerUserId: user.id, createdAt: now, updatedAt: now };
       const everyone: ServerRoleRecord = {
         id: randomUUID(), serverId: candidate.id, name: '@everyone', color: '#8d7a72', position: 0, isDefault: true,
+        kind: 'EVERYONE',
         permissions: DEFAULT_SERVER_PERMISSIONS, createdAt: now, updatedAt: now,
       };
       const ownerRole: ServerRoleRecord = {
         id: randomUUID(), serverId: candidate.id, name: 'Владелец', color: '#e38b54', position: 100, isDefault: false,
+        kind: 'OWNER',
         permissions: [...serverPermissions], createdAt: now, updatedAt: now,
       };
       const textChannel: ServerChannelRecord = {
@@ -435,6 +449,7 @@ export class VatrushkaService {
       livekitRoomName: type === 'voice' ? `channel_${randomUUID()}` : null, createdAt: now, updatedAt: now,
     };
     await this.store.createServerChannel(channel);
+    await this.recordServerAudit(server.id, user, 'CHANNEL_CREATED', 'CHANNEL', channel.id, null, { name: channel.name, type: channel.type });
     return publicServerChannel(channel);
   }
 
@@ -444,6 +459,7 @@ export class VatrushkaService {
     const server = await this.requireServer(channel.serverId);
     await this.requireServerPermission(server, user, 'MANAGE_CHANNELS');
     if (!(await this.store.deleteServerChannel(channel.id))) throw new AppError('CHANNEL_NOT_FOUND', 404);
+    await this.recordServerAudit(server.id, user, 'CHANNEL_DELETED', 'CHANNEL', channel.id, { name: channel.name, type: channel.type }, null);
     if (channel.livekitRoomName) {
       try { await this.media.deleteRoom(channel.livekitRoomName); } catch { /* The database deletion is authoritative. */ }
     }
@@ -459,12 +475,14 @@ export class VatrushkaService {
     const now = this.now();
     const role: ServerRoleRecord = {
       id: randomUUID(), serverId: server.id, name, color, permissions, isDefault: false,
+      kind: 'CUSTOM',
       position: Number.isFinite(actorTopPosition)
         ? Math.max(1, Math.min(actorTopPosition - 1, Math.max(0, ...roles.filter((current) => current.position < actorTopPosition).map((current) => current.position)) + 1))
-        : Math.min(99, Math.max(0, ...roles.filter((current) => current.name !== 'Владелец').map((current) => current.position)) + 1),
+        : Math.min(99, Math.max(0, ...roles.filter((current) => current.kind !== 'OWNER').map((current) => current.position)) + 1),
       createdAt: now, updatedAt: now,
     };
     await this.store.createServerRole(role);
+    await this.recordServerAudit(server.id, user, 'ROLE_CREATED', 'ROLE', role.id, null, publicServerRole(role));
     return publicServerRole(role);
   }
 
@@ -476,7 +494,8 @@ export class VatrushkaService {
     const roles = await this.store.listServerRoles(server.id);
     const role = roles.find((candidate) => candidate.id === roleId);
     if (!role) throw new AppError('ROLE_NOT_FOUND', 404);
-    if (role.name === 'Владелец') throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    if (role.kind === 'OWNER') throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    if (role.kind === 'EVERYONE' && (values.name !== undefined || values.color !== undefined)) throw new AppError('SERVER_PERMISSION_DENIED', 403);
     if (role.position >= await this.serverRolePositionFor(server, user, roles)) throw new AppError('SERVER_PERMISSION_DENIED', 403);
     const changes: Partial<Pick<ServerRoleRecord, 'name' | 'color' | 'permissions'>> = {};
     if (values.name !== undefined) changes.name = values.name;
@@ -484,7 +503,38 @@ export class VatrushkaService {
     if (values.permissions !== undefined) changes.permissions = values.permissions;
     const updated = await this.store.updateServerRole(role.id, changes, this.now());
     if (!updated) throw new AppError('ROLE_NOT_FOUND', 404);
+    await this.recordServerAudit(server.id, user, 'ROLE_UPDATED', 'ROLE', role.id, publicServerRole(role), publicServerRole(updated));
     return publicServerRole(updated);
+  }
+
+  async reorderServerRole(authorization: string | undefined, serverId: string, roleId: string, position: number): Promise<ServerRole> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_ROLES');
+    const roles = await this.store.listServerRoles(server.id);
+    const role = roles.find((candidate) => candidate.id === roleId);
+    if (!role) throw new AppError('ROLE_NOT_FOUND', 404);
+    if (role.kind !== 'CUSTOM') throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    const actorPosition = await this.serverRolePositionFor(server, user, roles);
+    const ownerPosition = Math.min(...roles.filter((candidate) => candidate.kind === 'OWNER').map((candidate) => candidate.position), 100);
+    const ceiling = Math.min(actorPosition, ownerPosition);
+    if (role.position >= ceiling || position >= ceiling || position < 1) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    const updated = await this.store.reorderServerRole(server.id, role.id, role.position, position, this.now());
+    if (!updated) throw new AppError('ROLE_NOT_FOUND', 404);
+    await this.recordServerAudit(server.id, user, 'ROLE_REORDERED', 'ROLE', role.id, { position: role.position }, { position: updated.position });
+    return publicServerRole(updated);
+  }
+
+  async deleteServerRole(authorization: string | undefined, serverId: string, roleId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MANAGE_ROLES');
+    const roles = await this.store.listServerRoles(server.id);
+    const role = roles.find((candidate) => candidate.id === roleId);
+    if (!role) throw new AppError('ROLE_NOT_FOUND', 404);
+    if (role.kind !== 'CUSTOM' || role.position >= await this.serverRolePositionFor(server, user, roles)) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    if (!(await this.store.deleteServerRole(role.id))) throw new AppError('ROLE_NOT_FOUND', 404);
+    await this.recordServerAudit(server.id, user, 'ROLE_DELETED', 'ROLE', role.id, publicServerRole(role), null);
   }
 
   async assignServerMemberRoles(authorization: string | undefined, serverId: string, memberUserId: string, roleIds: string[]): Promise<void> {
@@ -497,9 +547,57 @@ export class VatrushkaService {
     const targetRoleIds = new Set(await this.store.listMemberRoleIds(server.id, memberUserId));
     const targetTopPosition = Math.max(0, ...roles.filter((role) => targetRoleIds.has(role.id)).map((role) => role.position));
     if (targetTopPosition >= actorTopPosition) throw new AppError('SERVER_PERMISSION_DENIED', 403);
-    const assignable = new Set(roles.filter((role) => !role.isDefault && role.name !== 'Владелец' && role.position < actorTopPosition).map((role) => role.id));
+    const assignable = new Set(roles.filter((role) => role.kind === 'CUSTOM' && role.position < actorTopPosition).map((role) => role.id));
     if (roleIds.some((roleId) => !assignable.has(roleId))) throw new AppError('ROLE_NOT_FOUND', 404);
     await this.store.assignMemberRoles(server.id, memberUserId, [...new Set(roleIds)]);
+    await this.recordServerAudit(server.id, user, 'MEMBER_ROLES_UPDATED', 'MEMBER', memberUserId, { roleIds: [...targetRoleIds] }, { roleIds: [...new Set(roleIds)] });
+  }
+
+  async setChannelPermissionOverwrite(authorization: string | undefined, channelId: string, targetType: PermissionOverwriteTargetType, targetId: string, allow: ServerPermission[], deny: ServerPermission[]): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const channel = await this.requireServerChannel(channelId);
+    const server = await this.requireServer(channel.serverId);
+    const actorPermissions = await this.requireServerPermission(server, user, 'MANAGE_ROLES');
+    if (allow.some((permission) => !actorPermissions.has(permission))) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    const roles = await this.store.listServerRoles(server.id);
+    const actorPosition = await this.serverRolePositionFor(server, user, roles);
+    if (targetType === 'ROLE') {
+      const role = roles.find((candidate) => candidate.id === targetId);
+      if (!role) throw new AppError('ROLE_NOT_FOUND', 404);
+      if (role.kind === 'OWNER' || (role.kind === 'CUSTOM' && role.position >= actorPosition)) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    } else {
+      if (!(await this.store.findServerMember(server.id, targetId))) throw new AppError('SERVER_NOT_FOUND', 404);
+      if (targetId === server.ownerUserId) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+      const targetRoleIds = await this.store.listMemberRoleIds(server.id, targetId);
+      if (highestRolePosition(false, roles, targetRoleIds) >= actorPosition) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    }
+    const current = (await this.store.listChannelPermissionOverwrites([channel.id])).find((overwrite) => overwrite.targetType === targetType && overwrite.targetId === targetId) ?? null;
+    const nextAllow = [...new Set(allow)];
+    const nextDeny = [...new Set(deny)];
+    if (nextAllow.length === 0 && nextDeny.length === 0) await this.store.deleteChannelPermissionOverwrite(channel.id, targetType, targetId);
+    else {
+      const now = this.now();
+      await this.store.upsertChannelPermissionOverwrite({ channelId: channel.id, targetType, targetId, allow: nextAllow, deny: nextDeny, createdAt: current?.createdAt ?? now, updatedAt: now });
+    }
+    await this.recordServerAudit(server.id, user, 'CHANNEL_OVERWRITE_UPDATED', targetType, targetId, current && { allow: current.allow, deny: current.deny }, nextAllow.length === 0 && nextDeny.length === 0 ? null : { channelId: channel.id, allow: nextAllow, deny: nextDeny });
+  }
+
+  async listServerAuditLog(authorization: string | undefined, serverId: string): Promise<ServerAuditLogEntry[]> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'VIEW_AUDIT_LOG');
+    return (await this.store.listServerAuditLog(server.id, 100)).map((entry) => ({
+      id: entry.id,
+      serverId: entry.serverId,
+      actorUserId: entry.actorUserId,
+      actorDisplayName: entry.actorDisplayName ?? 'Системное действие',
+      action: entry.action,
+      targetType: entry.targetType,
+      targetId: entry.targetId,
+      before: entry.before,
+      after: entry.after,
+      createdAt: entry.createdAt.toISOString(),
+    }));
   }
 
   async kickServerMember(authorization: string | undefined, serverId: string, memberUserId: string): Promise<void> {
@@ -509,12 +607,12 @@ export class VatrushkaService {
     if (memberUserId === server.ownerUserId || memberUserId === user.id) throw new AppError('SERVER_PERMISSION_DENIED', 403);
     const [roles, targetUser] = await Promise.all([this.store.listServerRoles(server.id), this.store.findUserById(memberUserId)]);
     if (!targetUser) throw new AppError('SERVER_NOT_FOUND', 404);
-    if (targetUser.platformRole !== 'member' && user.platformRole === 'member') throw new AppError('SERVER_PERMISSION_DENIED', 403);
     const actorTopPosition = await this.serverRolePositionFor(server, user, roles);
     const targetRoleIds = new Set(await this.store.listMemberRoleIds(server.id, memberUserId));
     const targetTopPosition = Math.max(0, ...roles.filter((role) => targetRoleIds.has(role.id)).map((role) => role.position));
     if (targetTopPosition >= actorTopPosition) throw new AppError('SERVER_PERMISSION_DENIED', 403);
     if (!(await this.store.removeServerMember(server.id, memberUserId))) throw new AppError('SERVER_NOT_FOUND', 404);
+    await this.recordServerAudit(server.id, user, 'MEMBER_KICKED', 'MEMBER', memberUserId, { displayName: targetUser.displayName }, null);
     try {
       const channels = await this.store.listServerChannels(server.id);
       for (const channel of channels) {
@@ -534,7 +632,8 @@ export class VatrushkaService {
     const user = await this.authenticate(authorization);
     const channel = await this.requireTextChannel(channelId);
     const server = await this.requireServer(channel.serverId);
-    await this.requireServerPermission(server, user, 'VIEW_CHANNEL');
+    await this.requireChannelPermission(server, channel, user, 'VIEW_CHANNEL');
+    await this.requireChannelPermission(server, channel, user, 'READ_MESSAGE_HISTORY');
     return this.hydrateMessages(await this.store.listTextMessages(channel.id, before ? new Date(before) : null, limit), user.id);
   }
 
@@ -542,16 +641,13 @@ export class VatrushkaService {
     const user = await this.authenticate(authorization);
     if (since === undefined) return { items: [], cursor: { createdAt: this.now().toISOString(), id: null } };
     const records = await this.store.listMessageNotifications(user.id, new Date(since), afterId ?? null, limit);
-    const permissionsByServer = new Map<string, Set<ServerPermission>>();
-    for (const serverId of new Set(records.map((notification) => notification.serverId))) {
-      const server = await this.store.findServerById(serverId);
-      permissionsByServer.set(serverId, server ? await this.serverPermissionsFor(server, user) : new Set());
+    const visibleChannelIds = new Set<string>();
+    for (const notification of records) {
+      const [server, channel] = await Promise.all([this.store.findServerById(notification.serverId), this.store.findServerChannel(notification.channelId)]);
+      if (server && channel && (await this.channelPermissionsFor(server, channel, user)).has('VIEW_CHANNEL')) visibleChannelIds.add(notification.channelId);
     }
     const items: MessageNotification[] = records
-      .filter((notification) => {
-        const permissions = permissionsByServer.get(notification.serverId);
-        return permissions?.has('VIEW_SERVER') === true && permissions.has('VIEW_CHANNEL');
-      })
+      .filter((notification) => visibleChannelIds.has(notification.channelId))
       .map((notification: MessageNotificationRecord) => ({
         id: notification.id,
         serverId: notification.serverId,
@@ -572,7 +668,7 @@ export class VatrushkaService {
     this.requireCompleteProfile(user);
     const channel = await this.requireTextChannel(channelId);
     const server = await this.requireServer(channel.serverId);
-    await this.requireServerPermission(server, user, 'SEND_MESSAGES');
+    await this.requireChannelPermission(server, channel, user, 'SEND_MESSAGES');
     if (replyToMessageId !== null) {
       const replyTarget = await this.store.findTextMessage(replyToMessageId);
       if (!replyTarget || replyTarget.channelId !== channel.id) throw new AppError('MESSAGE_NOT_FOUND', 404);
@@ -589,7 +685,7 @@ export class VatrushkaService {
     if (!message) throw new AppError('MESSAGE_NOT_FOUND', 404);
     const channel = await this.requireTextChannel(message.channelId);
     const server = await this.requireServer(channel.serverId);
-    if (message.authorUserId !== user.id) await this.requireServerPermission(server, user, 'MANAGE_MESSAGES');
+    await this.requireChannelPermission(server, channel, user, message.authorUserId === user.id ? 'MANAGE_OWN_MESSAGES' : 'MANAGE_MESSAGES');
     const updated = await this.store.updateTextMessage(message.id, content, this.now());
     if (!updated) throw new AppError('MESSAGE_NOT_FOUND', 404);
     const author = await this.store.findUserById(updated.authorUserId);
@@ -603,7 +699,7 @@ export class VatrushkaService {
     if (!message) throw new AppError('MESSAGE_NOT_FOUND', 404);
     const channel = await this.requireTextChannel(message.channelId);
     const server = await this.requireServer(channel.serverId);
-    await this.requireServerPermission(server, user, 'SEND_MESSAGES');
+    await this.requireChannelPermission(server, channel, user, 'ADD_REACTIONS');
     if (active) await this.store.addMessageReaction({ messageId: message.id, userId: user.id, emoji, createdAt: this.now() });
     else await this.store.removeMessageReaction(message.id, user.id, emoji);
     const [withAuthor] = await this.store.findTextMessagesWithAuthors([message.id]);
@@ -618,7 +714,7 @@ export class VatrushkaService {
     if (!message) throw new AppError('MESSAGE_NOT_FOUND', 404);
     const channel = await this.requireTextChannel(message.channelId);
     const server = await this.requireServer(channel.serverId);
-    await this.requireServerPermission(server, user, 'SEND_MESSAGES');
+    await this.requireChannelPermission(server, channel, user, 'SEND_ATTACHMENTS');
     if (message.authorUserId !== user.id) throw new AppError('SERVER_PERMISSION_DENIED', 403);
     if (input.content.length === 0) throw new AppError('VALIDATION_ERROR', 400);
     if (input.content.length > MAX_ATTACHMENT_BYTES) throw new AppError('ATTACHMENT_TOO_LARGE', 413);
@@ -650,7 +746,8 @@ export class VatrushkaService {
     if (!message) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
     const channel = await this.requireTextChannel(message.channelId);
     const server = await this.requireServer(channel.serverId);
-    await this.requireServerPermission(server, user, 'VIEW_CHANNEL');
+    await this.requireChannelPermission(server, channel, user, 'VIEW_CHANNEL');
+    await this.requireChannelPermission(server, channel, user, 'READ_MESSAGE_HISTORY');
     return attachment;
   }
 
@@ -662,7 +759,7 @@ export class VatrushkaService {
     if (!message) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
     const channel = await this.requireTextChannel(message.channelId);
     const server = await this.requireServer(channel.serverId);
-    if (message.authorUserId !== user.id && attachment.uploaderUserId !== user.id) await this.requireServerPermission(server, user, 'MANAGE_MESSAGES');
+    await this.requireChannelPermission(server, channel, user, message.authorUserId === user.id || attachment.uploaderUserId === user.id ? 'MANAGE_OWN_MESSAGES' : 'MANAGE_MESSAGES');
     await this.store.deleteMessageAttachment(attachment.id);
     const [withAuthor] = await this.store.findTextMessagesWithAuthors([message.id]);
     if (!withAuthor) throw new AppError('MESSAGE_NOT_FOUND', 404);
@@ -673,7 +770,7 @@ export class VatrushkaService {
     const user = await this.authenticate(authorization);
     const channel = await this.requireTextChannel(channelId);
     const server = await this.requireServer(channel.serverId);
-    await this.requireServerPermission(server, user, 'VIEW_CHANNEL');
+    await this.requireChannelPermission(server, channel, user, 'VIEW_CHANNEL');
     const message = await this.store.findTextMessage(messageId);
     if (!message || message.channelId !== channel.id) throw new AppError('MESSAGE_NOT_FOUND', 404);
     await this.store.markChannelRead({ channelId: channel.id, userId: user.id, readAt: message.createdAt });
@@ -685,7 +782,7 @@ export class VatrushkaService {
     if (!message) throw new AppError('MESSAGE_NOT_FOUND', 404);
     const channel = await this.requireTextChannel(message.channelId);
     const server = await this.requireServer(channel.serverId);
-    if (message.authorUserId !== user.id) await this.requireServerPermission(server, user, 'MANAGE_MESSAGES');
+    await this.requireChannelPermission(server, channel, user, message.authorUserId === user.id ? 'MANAGE_OWN_MESSAGES' : 'MANAGE_MESSAGES');
     await this.store.deleteTextMessage(message.id);
   }
 
@@ -861,7 +958,7 @@ export class VatrushkaService {
     this.requireCompleteProfile(user);
     const channel = await this.requireVoiceChannel(channelId);
     const server = await this.requireServer(channel.serverId);
-    const permissions = await this.requireServerPermission(server, user, 'CONNECT_VOICE');
+    const permissions = await this.requireChannelPermission(server, channel, user, 'CONNECT_VOICE');
     if (!channel.livekitRoomName) throw new AppError('CHANNEL_NOT_FOUND', 404);
     try {
       await this.media.createRoom({ id: channel.id, ownerUserId: server.ownerUserId, name: channel.livekitRoomName, maxParticipants: 25 });
@@ -872,7 +969,8 @@ export class VatrushkaService {
         displayName: user.displayName,
         metadata: { serverId: server.id, channelId: channel.id, kind: 'user', platformRole: user.platformRole },
         canPublishMicrophone: permissions.has('SPEAK'),
-        canPublishScreen: permissions.has('STREAM'),
+        canPublishScreen: permissions.has('STREAM_SCREEN'),
+        canPublishScreenAudio: permissions.has('STREAM_APPLICATION_AUDIO'),
       });
       return {
         roomId: channel.id,
@@ -887,7 +985,8 @@ export class VatrushkaService {
         serverId: server.id,
         channelId: channel.id,
         canSpeak: permissions.has('SPEAK'),
-        canStream: permissions.has('STREAM'),
+        canStream: permissions.has('STREAM_SCREEN'),
+        canStreamApplicationAudio: permissions.has('STREAM_APPLICATION_AUDIO'),
       };
     } catch {
       throw new AppError('LIVEKIT_UNAVAILABLE', 503);
@@ -898,7 +997,7 @@ export class VatrushkaService {
     const user = await this.authenticate(authorization);
     const channel = await this.requireVoiceChannel(channelId);
     const server = await this.requireServer(channel.serverId);
-    await this.requireServerPermission(server, user, 'MUTE_MEMBERS');
+    await this.requireChannelPermission(server, channel, user, 'MUTE_MEMBERS');
     if (participantIdentity.startsWith(`user_${user.id}_`)) throw new AppError('SERVER_PERMISSION_DENIED', 403);
     try {
       if (!channel.livekitRoomName || !(await this.media.participantExists(channel.livekitRoomName, participantIdentity))) throw new AppError('PARTICIPANT_NOT_FOUND', 404);
@@ -911,14 +1010,14 @@ export class VatrushkaService {
   }
 
   async claimChannelScreenShare(authorization: string | undefined, channelId: string, participantIdentity: string): Promise<{ expiresAt: string }> {
-    const { channel, displayName } = await this.validateChannelMediaParticipant(authorization, channelId, participantIdentity, 'STREAM');
+    const { channel, displayName } = await this.validateChannelMediaParticipant(authorization, channelId, participantIdentity, 'STREAM_SCREEN');
     const result = await this.store.claimChannelLease(channel.id, participantIdentity, displayName, this.now(), this.config.SCREEN_SHARE_LEASE_SECONDS);
     if (result.status === 'busy') throw new AppError('SCREEN_SHARE_BUSY', 409, undefined, { participantDisplayName: result.lease.participantDisplayName });
     return { expiresAt: result.lease.expiresAt.toISOString() };
   }
 
   async heartbeatChannelScreenShare(authorization: string | undefined, channelId: string, participantIdentity: string): Promise<{ expiresAt: string }> {
-    await this.validateChannelMediaParticipant(authorization, channelId, participantIdentity, 'STREAM');
+    await this.validateChannelMediaParticipant(authorization, channelId, participantIdentity, 'STREAM_SCREEN');
     const lease = await this.store.heartbeatChannelLease(channelId, participantIdentity, this.now(), this.config.SCREEN_SHARE_LEASE_SECONDS);
     if (!lease) throw new AppError('SCREEN_SHARE_BUSY', 409, 'Право на демонстрацию экрана утрачено');
     return { expiresAt: lease.expiresAt.toISOString() };
@@ -927,7 +1026,7 @@ export class VatrushkaService {
   async releaseChannelScreenShare(authorization: string | undefined, channelId: string, participantIdentity: string): Promise<void> {
     const user = await this.authenticate(authorization);
     const channel = await this.requireVoiceChannel(channelId);
-    await this.requireServerPermission(await this.requireServer(channel.serverId), user, 'STREAM');
+    await this.requireChannelPermission(await this.requireServer(channel.serverId), channel, user, 'STREAM_SCREEN');
     if (!participantIdentity.startsWith(`user_${user.id}_`)) throw new AppError('UNAUTHORIZED', 401);
     await this.store.releaseChannelLease(channelId, participantIdentity);
   }
@@ -1356,21 +1455,41 @@ export class VatrushkaService {
   }
 
   private async serverPermissionsFor(server: ServerRecord, user: UserRecord): Promise<Set<ServerPermission>> {
-    if (server.ownerUserId === user.id || user.platformRole === 'owner' || user.platformRole === 'admin') return new Set(serverPermissions);
+    if (server.ownerUserId === user.id) return new Set(serverPermissions);
     if (!(await this.store.findServerMember(server.id, user.id))) return new Set();
     const [roles, roleIds] = await Promise.all([this.store.listServerRoles(server.id), this.store.listMemberRoleIds(server.id, user.id)]);
-    const assigned = new Set(roleIds);
-    return new Set(roles.filter((role) => role.isDefault || assigned.has(role.id)).flatMap((role) => role.permissions));
+    return resolveServerPermissions({ isOwner: false, userId: user.id, roles, assignedRoleIds: roleIds });
+  }
+
+  private async channelPermissionsFor(server: ServerRecord, channel: ServerChannelRecord, user: UserRecord): Promise<Set<ServerPermission>> {
+    if (!(await this.store.findServerMember(server.id, user.id))) return new Set();
+    const [roles, roleIds, overwrites] = await Promise.all([
+      this.store.listServerRoles(server.id),
+      this.store.listMemberRoleIds(server.id, user.id),
+      this.store.listChannelPermissionOverwrites([channel.id]),
+    ]);
+    return resolveChannelPermissions({
+      isOwner: server.ownerUserId === user.id,
+      userId: user.id,
+      roles,
+      assignedRoleIds: roleIds,
+      overwrites: overwrites.map((overwrite) => ({ channelId: overwrite.channelId, targetType: overwrite.targetType, targetId: overwrite.targetId, allow: overwrite.allow, deny: overwrite.deny })),
+    });
   }
 
   private async serverRolePositionFor(server: ServerRecord, user: UserRecord, roles: ServerRoleRecord[]): Promise<number> {
-    if (server.ownerUserId === user.id || user.platformRole === 'owner' || user.platformRole === 'admin') return Number.POSITIVE_INFINITY;
     const assigned = new Set(await this.store.listMemberRoleIds(server.id, user.id));
-    return Math.max(0, ...roles.filter((role) => role.isDefault || assigned.has(role.id)).map((role) => role.position));
+    return highestRolePosition(server.ownerUserId === user.id, roles, assigned);
   }
 
   private async requireServerPermission(server: ServerRecord, user: UserRecord, permission: ServerPermission): Promise<Set<ServerPermission>> {
     const permissions = await this.serverPermissionsFor(server, user);
+    if (!permissions.has(permission)) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    return permissions;
+  }
+
+  private async requireChannelPermission(server: ServerRecord, channel: ServerChannelRecord, user: UserRecord, permission: ServerPermission): Promise<Set<ServerPermission>> {
+    const permissions = await this.channelPermissionsFor(server, channel, user);
     if (!permissions.has(permission)) throw new AppError('SERVER_PERMISSION_DENIED', 403);
     return permissions;
   }
@@ -1386,7 +1505,17 @@ export class VatrushkaService {
     const publicRoles = roles.map(publicServerRole);
     const membership = members.find((member) => member.userId === user.id);
     if (!membership) throw new AppError('SERVER_PERMISSION_DENIED', 403);
-    const unreadCounts = new Map((await this.store.listChannelUnreadCounts(channels.filter((channel) => channel.type === 'text').map((channel) => channel.id), user.id, membership.joinedAt)).map((entry) => [entry.channelId, entry.count]));
+    const overwrites = await this.store.listChannelPermissionOverwrites(channels.map((channel) => channel.id));
+    const currentRoleIds = assignments.filter((assignment) => assignment.userId === user.id).map((assignment) => assignment.roleId);
+    const effectiveByChannel = new Map(channels.map((channel) => [channel.id, resolveChannelPermissions({
+      isOwner: server.ownerUserId === user.id,
+      userId: user.id,
+      roles,
+      assignedRoleIds: currentRoleIds,
+      overwrites: overwrites.filter((overwrite) => overwrite.channelId === channel.id).map((overwrite) => ({ channelId: overwrite.channelId, targetType: overwrite.targetType, targetId: overwrite.targetId, allow: overwrite.allow, deny: overwrite.deny })),
+    })]));
+    const visibleChannels = channels.filter((channel) => effectiveByChannel.get(channel.id)?.has('VIEW_CHANNEL') === true);
+    const unreadCounts = new Map((await this.store.listChannelUnreadCounts(visibleChannels.filter((channel) => channel.type === 'text').map((channel) => channel.id), user.id, membership.joinedAt)).map((entry) => [entry.channelId, entry.count]));
     const roleById = new Map(publicRoles.map((role) => [role.id, role]));
     const defaultRoles = publicRoles.filter((role) => role.isDefault);
     const publicMembers: ServerMember[] = members.map((member) => ({
@@ -1406,7 +1535,12 @@ export class VatrushkaService {
       ownerUserId: server.ownerUserId,
       memberCount: members.length,
       createdAt: server.createdAt.toISOString(),
-      channels: channels.map((channel) => publicServerChannel(channel, unreadCounts.get(channel.id) ?? 0)),
+      channels: visibleChannels.map((channel) => publicServerChannel(
+        channel,
+        unreadCounts.get(channel.id) ?? 0,
+        [...(effectiveByChannel.get(channel.id) ?? [])],
+        permissions.has('MANAGE_ROLES') ? overwrites.filter((overwrite) => overwrite.channelId === channel.id).map((overwrite) => ({ channelId: overwrite.channelId, targetType: overwrite.targetType, targetId: overwrite.targetId, allow: overwrite.allow, deny: overwrite.deny })) : undefined,
+      )),
       roles: publicRoles,
       members: publicMembers,
       permissions: [...permissions],
@@ -1422,7 +1556,7 @@ export class VatrushkaService {
     const user = await this.authenticate(authorization);
     this.requireCompleteProfile(user);
     const channel = await this.requireVoiceChannel(channelId);
-    await this.requireServerPermission(await this.requireServer(channel.serverId), user, permission);
+    await this.requireChannelPermission(await this.requireServer(channel.serverId), channel, user, permission);
     if (!participantIdentity.startsWith(`user_${user.id}_`)) throw new AppError('UNAUTHORIZED', 401);
     try {
       if (!channel.livekitRoomName || !(await this.media.participantExists(channel.livekitRoomName, participantIdentity))) throw new AppError('PARTICIPANT_NOT_FOUND', 404);
@@ -1431,6 +1565,20 @@ export class VatrushkaService {
       throw new AppError('LIVEKIT_UNAVAILABLE', 503);
     }
     return { channel, displayName: user.displayName, user };
+  }
+
+  private async recordServerAudit(serverId: string, actor: UserRecord, action: string, targetType: string, targetId: string | null, before: unknown, after: unknown): Promise<void> {
+    await this.store.createServerAuditLog({
+      id: randomUUID(),
+      serverId,
+      actorUserId: actor.id,
+      action,
+      targetType,
+      targetId,
+      before,
+      after,
+      createdAt: this.now(),
+    });
   }
 
   private requireCompleteProfile(user: UserRecord): asserts user is UserRecord & { displayName: string } {

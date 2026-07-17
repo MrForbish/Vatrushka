@@ -1,8 +1,9 @@
-import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
 import {
-  serverPermissions,
+  type PermissionOverwriteTargetType,
   type PublicUser,
+  type ServerAuditLogEntry,
   type ServerDetail,
   type ServerPermission,
   type ServerSummary,
@@ -13,7 +14,6 @@ import {
   AppShell,
   Badge,
   Button,
-  Checkbox,
   Icon,
   IconButton,
   Input,
@@ -22,7 +22,6 @@ import {
   MemberPanel,
   Modal,
   SegmentedControl,
-  Select,
   ServerContext,
   ServerTopBar,
   UserProfileDock,
@@ -32,6 +31,7 @@ import {
   type MessageViewModel,
   type WorkspaceNavigationItem,
 } from '../../ui';
+import { ServerSettings } from '../roles';
 import './server-view.css';
 
 export interface ServerViewProps {
@@ -45,6 +45,7 @@ export interface ServerViewProps {
   serverInvite: string;
   busy: boolean;
   error: string | null;
+  auditLog: ServerAuditLogEntry[];
   directUnreadCount?: number;
   onBack(): void;
   onDirectMessages?(): void;
@@ -62,7 +63,12 @@ export interface ServerViewProps {
   onCreateChannel(name: string, type: 'text' | 'voice'): void;
   onDeleteChannel(channelId: string): void;
   onCreateRole(name: string, color: string, permissions: ServerPermission[]): void;
+  onUpdateRole(roleId: string, values: { name?: string; color?: string; permissions?: ServerPermission[] }): void;
+  onDeleteRole(roleId: string): void;
+  onReorderRole(roleId: string, position: number): void;
   onAssignRoles(userId: string, roleIds: string[]): void;
+  onSetChannelOverwrite(channelId: string, targetType: PermissionOverwriteTargetType, targetId: string, allow: ServerPermission[], deny: ServerPermission[]): void;
+  onLoadAudit(): void;
   onKickMember(userId: string): void;
   onServerName(value: string): void;
   onServerInvite(value: string): void;
@@ -71,22 +77,6 @@ export interface ServerViewProps {
   onSecurity(): void;
   onLogout(): void;
 }
-
-const permissionLabels: Record<ServerPermission, string> = {
-  VIEW_SERVER: 'Видеть сервер',
-  MANAGE_SERVER: 'Управлять сервером',
-  MANAGE_CHANNELS: 'Управлять каналами',
-  MANAGE_ROLES: 'Управлять ролями',
-  CREATE_INVITES: 'Создавать приглашения',
-  KICK_MEMBERS: 'Исключать участников',
-  VIEW_CHANNEL: 'Видеть каналы',
-  SEND_MESSAGES: 'Отправлять сообщения',
-  MANAGE_MESSAGES: 'Управлять сообщениями',
-  CONNECT_VOICE: 'Подключаться к голосу',
-  SPEAK: 'Говорить',
-  STREAM: 'Демонстрировать экран',
-  MUTE_MEMBERS: 'Отключать участников в голосе',
-};
 
 const allowedAttachmentTypes = new Set(['application/pdf', 'application/zip', 'image/gif', 'image/jpeg', 'image/png', 'image/webp', 'text/plain']);
 const maxAttachmentBytes = 8 * 1024 * 1024;
@@ -100,11 +90,6 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const [channelName, setChannelName] = useState('');
   const [channelType, setChannelType] = useState<'text' | 'voice'>('text');
   const [rolesOpen, setRolesOpen] = useState(false);
-  const [roleName, setRoleName] = useState('');
-  const [roleColor, setRoleColor] = useState('#a86b4b');
-  const [rolePermissions, setRolePermissions] = useState<ServerPermission[]>(['VIEW_SERVER', 'VIEW_CHANNEL']);
-  const [memberId, setMemberId] = useState('');
-  const [memberRoles, setMemberRoles] = useState<string[]>([]);
   const [serverAction, setServerAction] = useState<'create' | 'join' | null>(null);
   const [editingMessage, setEditingMessage] = useState<MessageViewModel | null>(null);
   const [replyingMessage, setReplyingMessage] = useState<MessageViewModel | null>(null);
@@ -128,9 +113,9 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const activeChannel = props.server.channels.find((channel) => channel.id === props.activeChannelId) ?? props.server.channels[0] ?? null;
   const canManageChannels = props.server.permissions.includes('MANAGE_CHANNELS');
   const canManageRoles = props.server.permissions.includes('MANAGE_ROLES');
-  const canManageMessages = props.server.permissions.includes('MANAGE_MESSAGES');
+  const activeChannelPermissions = activeChannel?.permissions ?? props.server.permissions;
+  const canManageMessages = activeChannelPermissions.includes('MANAGE_MESSAGES');
   const canKickMembers = props.server.permissions.includes('KICK_MEMBERS');
-  const assignableRoles = props.server.roles.filter((role) => !role.isDefault && role.name !== 'Владелец');
 
   const channels: ChannelNavigationItem[] = props.server.channels.map((channel) => ({
     id: channel.id,
@@ -166,11 +151,6 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     setChannelType(type);
     setChannelName('');
     setChannelFormOpen(true);
-  };
-  const selectMember = (userId: string): void => {
-    setMemberId(userId);
-    const member = props.server.members.find((candidate) => candidate.userId === userId);
-    setMemberRoles(member?.roles.filter((role) => assignableRoles.some((candidate) => candidate.id === role.id)).map((role) => role.id) ?? []);
   };
   const submitChannel = (event: FormEvent): void => {
     event.preventDefault();
@@ -244,28 +224,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
         </form>
       </Modal>
 
-      <Modal onClose={() => setRolesOpen(false)} open={rolesOpen} size="lg" title="Роли и права">
-        <div className="vui-role-editor">
-          <section>
-            <h3>Роли сервера</h3>
-            <div className="vui-role-list">
-              {props.server.roles.map((role) => <div key={role.id}><i style={{ '--role-color': role.color } as CSSProperties} /><span><strong>{role.name}</strong><small>{role.permissions.length} прав</small></span>{role.isDefault ? <Badge>Базовая</Badge> : null}</div>)}
-            </div>
-            <form className="vui-server-form" onSubmit={(event) => { event.preventDefault(); props.onCreateRole(roleName, roleColor, rolePermissions); setRoleName(''); }}>
-              <h3>Новая роль</h3>
-              <div className="vui-role-name"><Input label="Название" maxLength={40} onChange={(event) => setRoleName(event.target.value)} value={roleName} /><label><span>Цвет</span><input aria-label="Цвет роли" onChange={(event) => setRoleColor(event.target.value)} type="color" value={roleColor} /></label></div>
-              <div className="vui-permission-grid">{serverPermissions.map((permission) => <Checkbox checked={rolePermissions.includes(permission)} key={permission} label={permissionLabels[permission]} onChange={(event) => setRolePermissions((current) => event.target.checked ? [...current, permission] : current.filter((item) => item !== permission))} />)}</div>
-              <Button disabled={roleName.trim().length === 0} loading={props.busy} type="submit" variant="secondary">Создать роль</Button>
-            </form>
-          </section>
-          <section>
-            <h3>Назначить участнику</h3>
-            <Select label="Участник" onChange={(event) => selectMember(event.target.value)} options={[{ value: '', label: 'Выберите участника' }, ...props.server.members.filter((member) => member.userId !== props.server.ownerUserId).map((member) => ({ value: member.userId, label: member.displayName }))]} value={memberId} />
-            {memberId === '' ? null : <div className="vui-role-assignment">{assignableRoles.length === 0 ? <p>Сначала создайте назначаемую роль.</p> : assignableRoles.map((role) => <Checkbox checked={memberRoles.includes(role.id)} key={role.id} label={role.name} onChange={(event) => setMemberRoles((current) => event.target.checked ? [...current, role.id] : current.filter((id) => id !== role.id))} />)}<Button loading={props.busy} onClick={() => props.onAssignRoles(memberId, memberRoles)} type="button">Сохранить роли</Button></div>}
-          </section>
-        </div>
-        {props.error === null ? null : <div className="vui-server-error" role="alert">{props.error}</div>}
-      </Modal>
+      <ServerSettings auditLog={props.auditLog} busy={props.busy} currentUserId={props.user.id} error={props.error} onAssignRoles={props.onAssignRoles} onClose={() => setRolesOpen(false)} onCreateRole={props.onCreateRole} onDeleteRole={props.onDeleteRole} onLoadAudit={props.onLoadAudit} onReorderRole={props.onReorderRole} onSetChannelOverwrite={props.onSetChannelOverwrite} onUpdateRole={props.onUpdateRole} open={rolesOpen} server={props.server} />
     </>
   );
 }
@@ -292,8 +251,10 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
     return <div className="vui-voice-lobby"><Icon name="message" size={40} /><h1>На сервере пока нет каналов</h1>{canManageChannels ? <Button onClick={onOpenChannel}>Создать канал</Button> : null}</div>;
   }
   if (activeChannel.type === 'voice') {
-    return <div className="vui-voice-lobby"><span className="vui-voice-lobby__orb"><Icon name="voice" size={34} /></span><Badge tone="primary">Голосовой канал</Badge><h1>{activeChannel.name}</h1><p>Подключитесь к разговору. Внутри доступны выбранные аудиоустройства, демонстрация экрана и системный звук.</p><Button disabled={!props.server.permissions.includes('CONNECT_VOICE')} icon="headphones" loading={props.busy} onClick={() => props.onConnectVoice(activeChannel.id)}>Подключиться</Button></div>;
+    return <div className="vui-voice-lobby"><span className="vui-voice-lobby__orb"><Icon name="voice" size={34} /></span><Badge tone="primary">Голосовой канал</Badge><h1>{activeChannel.name}</h1><p>Подключитесь к разговору. Внутри доступны выбранные аудиоустройства, демонстрация экрана и системный звук.</p><Button disabled={!(activeChannel.permissions ?? props.server.permissions).includes('CONNECT_VOICE')} icon="headphones" loading={props.busy} onClick={() => props.onConnectVoice(activeChannel.id)}>Подключиться</Button></div>;
   }
+  const channelPermissions = activeChannel.permissions ?? props.server.permissions;
+  const canManageOwnMessages = channelPermissions.includes('MANAGE_OWN_MESSAGES');
   const messageModels: MessageViewModel[] = props.messages.map((message) => ({
     id: message.id,
     authorId: message.authorUserId,
@@ -302,9 +263,9 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
     createdAt: message.createdAt,
     edited: message.editedAt !== null,
     own: message.authorUserId === props.user.id,
-    canEdit: message.authorUserId === props.user.id,
-    canDelete: message.authorUserId === props.user.id || canManageMessages,
-    attachments: message.attachments.map((attachment) => ({ ...attachment, canDelete: message.authorUserId === props.user.id || canManageMessages })),
+    canEdit: (message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages,
+    canDelete: (message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages,
+    attachments: message.attachments.map((attachment) => ({ ...attachment, canDelete: (message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages })),
     ...(message.replyTo === null ? {} : { replyPreview: { authorName: message.replyTo.authorDisplayName, content: message.replyTo.content } }),
     reactions: message.reactions,
     ...(message.authorPlatformRole === 'owner' ? { authorBadge: 'founder' as const } : message.authorPlatformRole === 'admin' ? { authorBadge: 'admin' as const } : {}),
@@ -322,8 +283,8 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
   };
   return (
     <section className="vui-message-stage">
-      <MessageList channelName={activeChannel.name} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onEdit={onEdit} onReaction={props.onMessageReaction} onReply={onReply} />
-      <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} canSend={props.server.permissions.includes('SEND_MESSAGES')} channelName={activeChannel.name} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} {...(editingMessage === null ? { onFilesSelected: onAddAttachments } : {})} onChange={props.onMessageDraft} onRemoveAttachment={onRemoveAttachment} onSubmit={submitMessage} value={props.messageDraft} />
+      <MessageList channelName={activeChannel.name} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onEdit={onEdit} {...(channelPermissions.includes('ADD_REACTIONS') ? { onReaction: props.onMessageReaction } : {})} {...(channelPermissions.includes('SEND_MESSAGES') ? { onReply } : {})} />
+      <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} canSend={editingMessage === null ? channelPermissions.includes('SEND_MESSAGES') : editingMessage.canEdit === true} channelName={activeChannel.name} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} {...(editingMessage === null && channelPermissions.includes('SEND_ATTACHMENTS') ? { onFilesSelected: onAddAttachments } : {})} onChange={props.onMessageDraft} onRemoveAttachment={onRemoveAttachment} onSubmit={submitMessage} value={props.messageDraft} />
       {attachmentError === null ? null : <div className="vui-server-error vui-server-error--attachment" role="alert">{attachmentError}</div>}
       {props.error === null ? null : <div className="vui-server-error vui-server-error--floating" role="alert">{props.error}</div>}
     </section>

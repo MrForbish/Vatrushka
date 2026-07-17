@@ -73,8 +73,17 @@ export const createRoleSchema = z.object({
   color: z.string().regex(/^#[0-9a-f]{6}$/iu).default('#a86b4b'),
   permissions: z.array(z.enum(serverPermissions)).max(serverPermissions.length),
 }).strict();
-export const updateRoleSchema = createRoleSchema.partial().strict();
+export const updateRoleSchema = z.object({
+  name: roleNameSchema.optional(),
+  color: z.string().regex(/^#[0-9a-f]{6}$/iu).optional(),
+  permissions: z.array(z.enum(serverPermissions)).max(serverPermissions.length).optional(),
+}).strict();
 export const assignMemberRolesSchema = z.object({ roleIds: z.array(uuidSchema).max(20) }).strict();
+export const reorderRoleSchema = z.object({ position: z.number().int().min(1).max(99) }).strict();
+export const channelPermissionOverwriteSchema = z.object({
+  allow: z.array(z.enum(serverPermissions)).max(serverPermissions.length),
+  deny: z.array(z.enum(serverPermissions)).max(serverPermissions.length),
+}).strict().refine((value) => value.allow.every((permission) => !value.deny.includes(permission)), 'Permission cannot be allowed and denied at the same time');
 export const createMessageSchema = z.object({ content: messageContentSchema, replyToMessageId: uuidSchema.nullish() }).strict();
 export const updateMessageSchema = z.object({ content: messageContentSchema }).strict();
 export const messageQuerySchema = z.object({ before: z.iso.datetime().optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }).strict();

@@ -18,6 +18,7 @@ import {
 } from '@vatrushka/shared';
 
 import type { MediaSnapshot, ParticipantView } from './media.js';
+import { permissionLabels } from './features/roles/permission-catalog.js';
 
 type IconName = 'mic' | 'micOff' | 'screen' | 'copy' | 'leave' | 'lock' | 'unlock' | 'close' | 'users' | 'spark' | 'headphones' | 'chevron' | 'volume' | 'volumeOff' | 'refresh' | 'hash' | 'voice' | 'plus' | 'settings' | 'send' | 'message';
 
@@ -187,22 +188,6 @@ interface ServerViewProps {
   onAssignRoles(userId: string, roleIds: string[]): void;
   onKickMember(userId: string): void;
 }
-
-const permissionLabels: Record<ServerPermission, string> = {
-  VIEW_SERVER: 'Видеть сервер',
-  MANAGE_SERVER: 'Управлять сервером',
-  MANAGE_CHANNELS: 'Управлять каналами',
-  MANAGE_ROLES: 'Управлять ролями',
-  CREATE_INVITES: 'Создавать приглашения',
-  KICK_MEMBERS: 'Исключать участников',
-  VIEW_CHANNEL: 'Видеть каналы',
-  SEND_MESSAGES: 'Отправлять сообщения',
-  MANAGE_MESSAGES: 'Управлять сообщениями',
-  CONNECT_VOICE: 'Подключаться к голосу',
-  SPEAK: 'Говорить',
-  STREAM: 'Демонстрировать экран',
-  MUTE_MEMBERS: 'Отключать участников в голосе',
-};
 
 export function ServerView(props: ServerViewProps): ReactNode {
   const [channelFormOpen, setChannelFormOpen] = useState(false);

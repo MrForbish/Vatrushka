@@ -46,6 +46,8 @@ import {
   updateMessageSchema,
   updateRoleSchema,
   assignMemberRolesSchema,
+  channelPermissionOverwriteSchema,
+  reorderRoleSchema,
   verifyCodeSchema,
   verifyRegistrationSchema,
 } from '@vatrushka/shared';
@@ -67,6 +69,7 @@ const attachmentIdParams = z.object({ attachmentId: z.uuid() });
 const directConversationIdParams = z.object({ conversationId: z.uuid() });
 const messageReactionParams = z.object({ messageId: z.uuid(), emoji: messageReactionSchema });
 const channelParticipantParams = z.object({ channelId: z.uuid(), participantIdentity: z.string().min(3).max(200) });
+const channelOverwriteParams = z.object({ channelId: z.uuid(), targetType: z.enum(['ROLE', 'MEMBER']), targetId: z.uuid() });
 
 const errorResponseSchema = z.object({
   code: z.string(),
@@ -104,14 +107,17 @@ const connectionSchema = z.object({
   channelId: z.string().optional(),
   canSpeak: z.boolean().optional(),
   canStream: z.boolean().optional(),
+  canStreamApplicationAudio: z.boolean().optional(),
   guestSessionToken: z.string().optional(),
 });
 const permissionSchema = z.enum(serverPermissions);
-const serverRoleResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), color: z.string(), position: z.number(), isDefault: z.boolean(), permissions: z.array(permissionSchema) });
-const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), unreadCount: z.number() });
+const serverRoleResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), color: z.string(), position: z.number(), isDefault: z.boolean(), kind: z.enum(['EVERYONE', 'OWNER', 'CUSTOM']).optional(), permissions: z.array(permissionSchema) });
+const permissionOverwriteResponseSchema = z.object({ channelId: z.string(), targetType: z.enum(['ROLE', 'MEMBER']), targetId: z.string(), allow: z.array(permissionSchema), deny: z.array(permissionSchema) });
+const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), unreadCount: z.number(), permissions: z.array(permissionSchema).optional(), permissionOverwrites: z.array(permissionOverwriteResponseSchema).optional() });
 const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema) });
 const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteCode: z.string(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
 const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
+const serverAuditLogResponseSchema = z.object({ id: z.string(), serverId: z.string(), actorUserId: z.string().nullable(), actorDisplayName: z.string(), action: z.string(), targetType: z.string(), targetId: z.string().nullable(), before: z.unknown(), after: z.unknown(), createdAt: z.string() });
 const messageAttachmentResponseSchema = z.object({ id: z.string(), messageId: z.string(), fileName: z.string(), mimeType: z.string(), size: z.number(), createdAt: z.string() });
 const messageNotificationResponseSchema = z.object({ id: z.string(), serverId: z.string(), serverName: z.string(), channelId: z.string(), channelName: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string(), createdAt: z.string() });
 const messageNotificationPageResponseSchema = z.object({ items: z.array(messageNotificationResponseSchema), cursor: z.object({ createdAt: z.string(), id: z.string().nullable() }).nullable() });
@@ -367,12 +373,34 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     schema: { tags: ['roles'], security: [{ bearerAuth: [] }], params: serverRoleParams, body: updateRoleSchema, response: { 200: serverRoleResponseSchema, ...routeErrors() } },
   }, async (request) => service.updateServerRole(request.headers.authorization, request.params.serverId, request.params.roleId, request.body));
 
+  api.patch(`${API_PREFIX}/servers/:serverId/roles/:roleId/position`, {
+    schema: { tags: ['roles'], security: [{ bearerAuth: [] }], params: serverRoleParams, body: reorderRoleSchema, response: { 200: serverRoleResponseSchema, ...routeErrors() } },
+  }, async (request) => service.reorderServerRole(request.headers.authorization, request.params.serverId, request.params.roleId, request.body.position));
+
+  api.delete(`${API_PREFIX}/servers/:serverId/roles/:roleId`, {
+    schema: { tags: ['roles'], security: [{ bearerAuth: [] }], params: serverRoleParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.deleteServerRole(request.headers.authorization, request.params.serverId, request.params.roleId);
+    return reply.status(204).send(null);
+  });
+
   api.put(`${API_PREFIX}/servers/:serverId/members/:userId/roles`, {
     schema: { tags: ['roles'], security: [{ bearerAuth: [] }], params: serverMemberParams, body: assignMemberRolesSchema, response: { 204: z.null(), ...routeErrors() } },
   }, async (request, reply) => {
     await service.assignServerMemberRoles(request.headers.authorization, request.params.serverId, request.params.userId, request.body.roleIds);
     return reply.status(204).send(null);
   });
+
+  api.put(`${API_PREFIX}/channels/:channelId/overwrites/:targetType/:targetId`, {
+    schema: { tags: ['roles'], security: [{ bearerAuth: [] }], params: channelOverwriteParams, body: channelPermissionOverwriteSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.setChannelPermissionOverwrite(request.headers.authorization, request.params.channelId, request.params.targetType, request.params.targetId, request.body.allow, request.body.deny);
+    return reply.status(204).send(null);
+  });
+
+  api.get(`${API_PREFIX}/servers/:serverId/audit-log`, {
+    schema: { tags: ['roles'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: z.array(serverAuditLogResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listServerAuditLog(request.headers.authorization, request.params.serverId));
 
   api.delete(`${API_PREFIX}/servers/:serverId/members/:userId`, {
     schema: { tags: ['servers'], security: [{ bearerAuth: [] }], params: serverMemberParams, response: { 204: z.null(), ...routeErrors() } },

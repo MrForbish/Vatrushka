@@ -67,6 +67,7 @@ export class LiveKitMediaService implements MediaService {
   async issueToken(options: MediaTokenOptions): Promise<string> {
     const canPublishMicrophone = options.canPublishMicrophone ?? true;
     const canPublishScreen = options.canPublishScreen ?? true;
+    const canPublishScreenAudio = canPublishScreen && (options.canPublishScreenAudio ?? true);
     const token = new AccessToken(this.config.LIVEKIT_API_KEY, this.config.LIVEKIT_API_SECRET, {
       identity: options.identity,
       name: options.displayName,
@@ -81,7 +82,8 @@ export class LiveKitMediaService implements MediaService {
       canPublishData: false,
       canPublishSources: [
         ...(canPublishMicrophone ? [TrackSource.MICROPHONE] : []),
-        ...(canPublishScreen ? [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO] : []),
+        ...(canPublishScreen ? [TrackSource.SCREEN_SHARE] : []),
+        ...(canPublishScreenAudio ? [TrackSource.SCREEN_SHARE_AUDIO] : []),
       ],
     });
     return token.toJwt();

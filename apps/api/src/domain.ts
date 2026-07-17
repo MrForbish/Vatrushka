@@ -1,4 +1,4 @@
-import type { PlatformRole, ServerChannelType, ServerPermission } from '@vatrushka/shared';
+import type { PermissionOverwriteTargetType, PlatformRole, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
 
 export interface UserRecord {
   id: string;
@@ -94,9 +94,32 @@ export interface ServerRoleRecord {
   color: string;
   position: number;
   isDefault: boolean;
+  kind: ServerRoleKind;
   permissions: ServerPermission[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface ChannelPermissionOverwriteRecord {
+  channelId: string;
+  targetType: PermissionOverwriteTargetType;
+  targetId: string;
+  allow: ServerPermission[];
+  deny: ServerPermission[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ServerAuditLogRecord {
+  id: string;
+  serverId: string;
+  actorUserId: string | null;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  before: unknown;
+  after: unknown;
+  createdAt: Date;
 }
 
 export interface ServerChannelRecord {

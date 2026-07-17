@@ -24,6 +24,7 @@
 .vui-modal--sm { width: min(440px, calc(100vw - var(--space-12))); }
 .vui-modal--md { width: min(600px, calc(100vw - var(--space-12))); }
 .vui-modal--lg { width: min(840px, calc(100vw - var(--space-12))); }
+.vui-modal--xl { width: min(1240px, calc(100vw - var(--space-12))); }
 
 .vui-overlay__header {
   display: flex;

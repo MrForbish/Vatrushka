@@ -14,6 +14,8 @@ import type {
   ServerMemberProfile,
   ServerRoleRecord,
   ServerChannelRecord,
+  ChannelPermissionOverwriteRecord,
+  ServerAuditLogRecord,
   TextMessageRecord,
   TextMessageWithAuthor,
   MessageReactionRecord,
@@ -31,7 +33,7 @@ import type {
   DirectMessageAttachmentMetadata,
   ChannelLeaseRecord,
 } from './domain.js';
-import type { PlatformRole } from '@vatrushka/shared';
+import type { PermissionOverwriteTargetType, PlatformRole } from '@vatrushka/shared';
 
 export interface DataStore {
   healthCheck(): Promise<void>;
@@ -85,12 +87,19 @@ export interface DataStore {
   listMemberRoleIds(serverId: string, userId: string): Promise<string[]>;
   listAllMemberRoles(serverId: string): Promise<Array<{ userId: string; roleId: string }>>;
   createServerRole(role: ServerRoleRecord): Promise<void>;
-  updateServerRole(id: string, values: Partial<Pick<ServerRoleRecord, 'name' | 'color' | 'permissions'>>, now: Date): Promise<ServerRoleRecord | null>;
+  updateServerRole(id: string, values: Partial<Pick<ServerRoleRecord, 'name' | 'color' | 'permissions' | 'position'>>, now: Date): Promise<ServerRoleRecord | null>;
+  reorderServerRole(serverId: string, id: string, currentPosition: number, position: number, now: Date): Promise<ServerRoleRecord | null>;
+  deleteServerRole(id: string): Promise<boolean>;
   assignMemberRoles(serverId: string, userId: string, roleIds: string[]): Promise<void>;
   listServerChannels(serverId: string): Promise<ServerChannelRecord[]>;
   findServerChannel(id: string): Promise<ServerChannelRecord | null>;
   createServerChannel(channel: ServerChannelRecord): Promise<void>;
   deleteServerChannel(id: string): Promise<boolean>;
+  listChannelPermissionOverwrites(channelIds: string[]): Promise<ChannelPermissionOverwriteRecord[]>;
+  upsertChannelPermissionOverwrite(overwrite: ChannelPermissionOverwriteRecord): Promise<void>;
+  deleteChannelPermissionOverwrite(channelId: string, targetType: PermissionOverwriteTargetType, targetId: string): Promise<boolean>;
+  createServerAuditLog(entry: ServerAuditLogRecord): Promise<void>;
+  listServerAuditLog(serverId: string, limit: number): Promise<Array<ServerAuditLogRecord & { actorDisplayName: string | null }>>;
   listTextMessages(channelId: string, before: Date | null, limit: number): Promise<TextMessageWithAuthor[]>;
   findTextMessagesWithAuthors(ids: string[]): Promise<TextMessageWithAuthor[]>;
   listMessageReactionSummaries(messageIds: string[], currentUserId: string): Promise<MessageReactionSummary[]>;
@@ -148,6 +157,7 @@ export interface MediaTokenOptions {
   metadata: Record<string, string>;
   canPublishMicrophone?: boolean;
   canPublishScreen?: boolean;
+  canPublishScreenAudio?: boolean;
 }
 
 export interface MediaService {

@@ -71,6 +71,13 @@
       "when": 1784241809188,
       "tag": "0009_big_khan",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1784245907879,
+      "tag": "0010_awesome_shatterstar",
+      "breakpoints": true
     }
   ]
 }

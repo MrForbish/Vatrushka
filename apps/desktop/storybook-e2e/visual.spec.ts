@@ -64,4 +64,16 @@ test.describe('Vatrushka design system visual baseline', () => {
     await openStory(page, 'features-screen-share--visual-picker');
     await expect(page).toHaveScreenshot('screen-share-picker.png', { animations: 'disabled', fullPage: true });
   });
+
+  test('server role editor', async ({ page }) => {
+    await openStory(page, 'features-server-settings--visual-roles');
+    await expect(page.getByRole('dialog', { name: 'Настройки сервера' })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-settings-roles.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('channel permission overrides', async ({ page }) => {
+    await openStory(page, 'features-server-settings--channel-overrides');
+    await expect(page.getByRole('heading', { name: 'Права конкретного канала' })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-settings-overrides.png', { animations: 'disabled', fullPage: true });
+  });
 });

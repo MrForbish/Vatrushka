@@ -1,9 +1,9 @@
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 
 import { decideScreenShareLease, expiresAt, isExpired } from '@vatrushka/shared';
-import type { PlatformRole } from '@vatrushka/shared';
+import type { PermissionOverwriteTargetType, PlatformRole } from '@vatrushka/shared';
 
 import type {
   AuthCodeRecord,
@@ -21,6 +21,8 @@ import type {
   ServerMemberProfile,
   ServerRoleRecord,
   ServerChannelRecord,
+  ChannelPermissionOverwriteRecord,
+  ServerAuditLogRecord,
   TextMessageRecord,
   TextMessageWithAuthor,
   MessageReactionRecord,
@@ -453,9 +455,28 @@ export class PostgresStore implements DataStore {
     await this.db.insert(schema.serverRoles).values(role);
   }
 
-  async updateServerRole(id: string, values: Partial<Pick<ServerRoleRecord, 'name' | 'color' | 'permissions'>>, now: Date): Promise<ServerRoleRecord | null> {
+  async updateServerRole(id: string, values: Partial<Pick<ServerRoleRecord, 'name' | 'color' | 'permissions' | 'position'>>, now: Date): Promise<ServerRoleRecord | null> {
     const [row] = await this.db.update(schema.serverRoles).set({ ...values, updatedAt: now }).where(eq(schema.serverRoles.id, id)).returning();
     return row ?? null;
+  }
+
+  async reorderServerRole(serverId: string, id: string, currentPosition: number, position: number, now: Date): Promise<ServerRoleRecord | null> {
+    return this.db.transaction(async (tx) => {
+      const range = position > currentPosition
+        ? and(gt(schema.serverRoles.position, currentPosition), lte(schema.serverRoles.position, position))
+        : and(gte(schema.serverRoles.position, position), lt(schema.serverRoles.position, currentPosition));
+      await tx.update(schema.serverRoles).set({ position: sql`${schema.serverRoles.position} + ${position > currentPosition ? -1 : 1}`, updatedAt: now }).where(and(eq(schema.serverRoles.serverId, serverId), eq(schema.serverRoles.kind, 'CUSTOM'), ne(schema.serverRoles.id, id), range));
+      const [updated] = await tx.update(schema.serverRoles).set({ position, updatedAt: now }).where(and(eq(schema.serverRoles.serverId, serverId), eq(schema.serverRoles.id, id))).returning();
+      return updated ?? null;
+    });
+  }
+
+  async deleteServerRole(id: string): Promise<boolean> {
+    return this.db.transaction(async (tx) => {
+      await tx.delete(schema.channelPermissionOverwrites).where(and(eq(schema.channelPermissionOverwrites.targetType, 'ROLE'), eq(schema.channelPermissionOverwrites.targetId, id)));
+      const rows = await tx.delete(schema.serverRoles).where(eq(schema.serverRoles.id, id)).returning({ id: schema.serverRoles.id });
+      return rows.length === 1;
+    });
   }
 
   async assignMemberRoles(serverId: string, userId: string, roleIds: string[]): Promise<void> {
@@ -481,6 +502,32 @@ export class PostgresStore implements DataStore {
   async deleteServerChannel(id: string): Promise<boolean> {
     const rows = await this.db.delete(schema.serverChannels).where(eq(schema.serverChannels.id, id)).returning({ id: schema.serverChannels.id });
     return rows.length === 1;
+  }
+
+  async listChannelPermissionOverwrites(channelIds: string[]): Promise<ChannelPermissionOverwriteRecord[]> {
+    if (channelIds.length === 0) return [];
+    return this.db.select().from(schema.channelPermissionOverwrites).where(inArray(schema.channelPermissionOverwrites.channelId, channelIds));
+  }
+
+  async upsertChannelPermissionOverwrite(overwrite: ChannelPermissionOverwriteRecord): Promise<void> {
+    await this.db.insert(schema.channelPermissionOverwrites).values(overwrite).onConflictDoUpdate({
+      target: [schema.channelPermissionOverwrites.channelId, schema.channelPermissionOverwrites.targetType, schema.channelPermissionOverwrites.targetId],
+      set: { allow: overwrite.allow, deny: overwrite.deny, updatedAt: overwrite.updatedAt },
+    });
+  }
+
+  async deleteChannelPermissionOverwrite(channelId: string, targetType: PermissionOverwriteTargetType, targetId: string): Promise<boolean> {
+    const rows = await this.db.delete(schema.channelPermissionOverwrites).where(and(eq(schema.channelPermissionOverwrites.channelId, channelId), eq(schema.channelPermissionOverwrites.targetType, targetType), eq(schema.channelPermissionOverwrites.targetId, targetId))).returning({ channelId: schema.channelPermissionOverwrites.channelId });
+    return rows.length === 1;
+  }
+
+  async createServerAuditLog(entry: ServerAuditLogRecord): Promise<void> {
+    await this.db.insert(schema.serverAuditLogs).values(entry);
+  }
+
+  async listServerAuditLog(serverId: string, limit: number): Promise<Array<ServerAuditLogRecord & { actorDisplayName: string | null }>> {
+    const rows = await this.db.select({ entry: schema.serverAuditLogs, actorDisplayName: schema.users.displayName }).from(schema.serverAuditLogs).leftJoin(schema.users, eq(schema.users.id, schema.serverAuditLogs.actorUserId)).where(eq(schema.serverAuditLogs.serverId, serverId)).orderBy(desc(schema.serverAuditLogs.createdAt)).limit(limit);
+    return rows.map(({ entry, actorDisplayName }) => ({ ...entry, actorDisplayName }));
   }
 
   async listTextMessages(channelId: string, before: Date | null, limit: number): Promise<TextMessageWithAuthor[]> {

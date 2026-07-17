@@ -393,7 +393,7 @@ describe('servers, channels, messages, and roles API', () => {
       method: 'PATCH',
       url: `${API_PREFIX}/servers/${server.id}/roles/${defaultRole.id}`,
       headers: { authorization: `Bearer ${owner.accessToken}` },
-      payload: { permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] },
+      payload: { permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY'] },
     });
     expect(restricted.statusCode).toBe(200);
 
@@ -406,7 +406,7 @@ describe('servers, channels, messages, and roles API', () => {
       method: 'POST',
       url: `${API_PREFIX}/servers/${server.id}/roles`,
       headers: { authorization: `Bearer ${owner.accessToken}` },
-      payload: { name: 'Автор', color: '#47a878', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'SEND_MESSAGES'] },
+      payload: { name: 'Автор', color: '#47a878', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'SEND_ATTACHMENTS', 'ADD_REACTIONS', 'MANAGE_OWN_MESSAGES'] },
     });
     expect(roleResponse.statusCode).toBe(201);
     const roleId = roleResponse.json<{ id: string }>().id;
@@ -542,8 +542,11 @@ describe('servers, channels, messages, and roles API', () => {
 
   it('connects to a persistent voice channel and coordinates screen sharing', async () => {
     const owner = await login('voice-owner@example.com', 'Owner');
+    const member = await login('voice-member@example.com', 'Member');
     const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Эфирная' } });
-    const voice = created.json<{ channels: Array<{ id: string; type: string }> }>().channels.find((channel) => channel.type === 'voice');
+    const server = created.json<{ id: string; inviteCode: string; channels: Array<{ id: string; type: string }> }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/join`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { inviteCode: server.inviteCode } });
+    const voice = server.channels.find((channel) => channel.type === 'voice');
     if (!voice) throw new Error('Missing voice channel');
     const connected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/connect`, headers: { authorization: `Bearer ${owner.accessToken}` } });
     expect(connected.statusCode).toBe(200);
@@ -560,6 +563,13 @@ describe('servers, channels, messages, and roles API', () => {
     });
     expect(claimed.statusCode).toBe(200);
     expect(context.store.channelLeases.has(voice.id)).toBe(true);
+
+    const audioDenied = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/channels/${voice.id}/overwrites/MEMBER/${member.userId}`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { allow: [], deny: ['STREAM_APPLICATION_AUDIO'] } });
+    expect(audioDenied.statusCode).toBe(204);
+    const memberConnected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/connect`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(memberConnected.statusCode).toBe(200);
+    expect(memberConnected.json<{ canStream: boolean; canStreamApplicationAudio: boolean }>()).toEqual(expect.objectContaining({ canStream: true, canStreamApplicationAudio: false }));
+    expect(context.media.tokens.at(-1)).toEqual(expect.objectContaining({ canPublishScreen: true, canPublishScreenAudio: false }));
   });
 
   it('creates private one-to-one conversations only for users sharing a server', async () => {
@@ -628,6 +638,51 @@ describe('servers, channels, messages, and roles API', () => {
     const removed = await context.app.inject({ method: 'DELETE', url: `${API_PREFIX}/direct-attachments/${attachmentId}`, headers: { authorization: `Bearer ${boris.accessToken}` } });
     expect(removed.statusCode).toBe(200);
     expect(removed.json<{ attachments: unknown[] }>().attachments).toEqual([]);
+  });
+
+  it('enforces channel overwrites, protects hierarchy, and records role audit events', async () => {
+    const owner = await login('permissions-owner@example.com', 'Owner');
+    const member = await login('permissions-member@example.com', 'Member');
+    const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Закрытый клуб' } });
+    const server = created.json<{ id: string; inviteCode: string; channels: Array<{ id: string; type: string }>; roles: Array<{ id: string; kind: string }> }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/join`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { inviteCode: server.inviteCode } });
+    const channel = server.channels.find((candidate) => candidate.type === 'text');
+    if (!channel) throw new Error('Text channel was not created');
+
+    const hidden = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/channels/${channel.id}/overwrites/MEMBER/${member.userId}`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { allow: [], deny: ['VIEW_CHANNEL'] } });
+    expect(hidden.statusCode).toBe(204);
+    const hiddenDetail = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(hiddenDetail.json<{ channels: Array<{ id: string }> }>().channels.some((candidate) => candidate.id === channel.id)).toBe(false);
+    const deniedRead = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/channels/${channel.id}/messages`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(deniedRead.statusCode).toBe(403);
+
+    const restored = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/channels/${channel.id}/overwrites/MEMBER/${member.userId}`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { allow: [], deny: [] } });
+    expect(restored.statusCode).toBe(204);
+    const visibleDetail = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(visibleDetail.json<{ channels: Array<{ id: string }> }>().channels.some((candidate) => candidate.id === channel.id)).toBe(true);
+
+    const role = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/${server.id}/roles`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Модератор', color: '#47a878', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY'] } });
+    const roleId = role.json<{ id: string }>().id;
+    expect((await context.app.inject({ method: 'PATCH', url: `${API_PREFIX}/servers/${server.id}/roles/${roleId}/position`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { position: 50 } })).statusCode).toBe(200);
+    const speakerRole = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/${server.id}/roles`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Ведущий', color: '#53a6a6', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] } });
+    const speakerRoleId = speakerRole.json<{ id: string }>().id;
+    expect((await context.app.inject({ method: 'PATCH', url: `${API_PREFIX}/servers/${server.id}/roles/${speakerRoleId}/position`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { position: 50 } })).statusCode).toBe(200);
+    const reorderedDetail = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    const reorderedRoles = reorderedDetail.json<{ roles: Array<{ id: string; position: number }> }>().roles;
+    expect(reorderedRoles.find((candidate) => candidate.id === speakerRoleId)?.position).toBe(50);
+    expect(reorderedRoles.find((candidate) => candidate.id === roleId)?.position).toBe(51);
+
+    const memberRecord = context.store.users.get(member.userId);
+    if (!memberRecord) throw new Error('Member record was not created');
+    memberRecord.platformRole = 'admin';
+    const platformAdminDenied = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/${server.id}/roles`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { name: 'Обход', color: '#a86b4b', permissions: ['MANAGE_ROLES'] } });
+    expect(platformAdminDenied.statusCode).toBe(403);
+
+    expect((await context.app.inject({ method: 'DELETE', url: `${API_PREFIX}/servers/${server.id}/roles/${roleId}`, headers: { authorization: `Bearer ${owner.accessToken}` } })).statusCode).toBe(204);
+    expect((await context.app.inject({ method: 'DELETE', url: `${API_PREFIX}/servers/${server.id}/roles/${speakerRoleId}`, headers: { authorization: `Bearer ${owner.accessToken}` } })).statusCode).toBe(204);
+    const audit = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}/audit-log`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    expect(audit.statusCode).toBe(200);
+    expect(audit.json<Array<{ action: string }>>().map((entry) => entry.action)).toEqual(expect.arrayContaining(['CHANNEL_OVERWRITE_UPDATED', 'ROLE_CREATED', 'ROLE_REORDERED', 'ROLE_DELETED']));
   });
 });
 

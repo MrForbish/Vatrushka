@@ -25,7 +25,7 @@
 - Авторизация: scrypt-пароль, email/TOTP 2FA, access JWT на 15 минут; opaque refresh token на 30 дней с rotation/reuse detection.
 - Медиа: LiveKit Cloud по умолчанию; self-hosted меняется только значениями `LIVEKIT_*`.
 - Единственная демонстрация обеспечивается транзакционной lease в PostgreSQL, а не только UI.
-- Серверы хранят постоянное членство, каналы, сообщения и роли; право `SPEAK`/`STREAM` ограничивается также grant-ами LiveKit-токена.
+- Серверы хранят постоянное членство, каналы, сообщения, иерархию ролей, channel overrides и audit log; права `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` ограничиваются также grant-ами LiveKit-токена.
 
 Подробности: [архитектура](docs/architecture.md), [аутентификация](docs/auth.md), [медиа](docs/media.md), [безопасность](docs/security.md).
 

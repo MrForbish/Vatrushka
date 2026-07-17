@@ -36,4 +36,11 @@ describe('screen share source picker', () => {
     expect(screen.getByText('Системный звук доступен только в приложении для Windows.')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Без звука/u })).toBeChecked();
   });
+
+  it('disables application audio when the channel role denies it', () => {
+    render(<SourcePicker audioAllowed={false} sources={sources} includeAudio={false} platform="win32" onAudio={vi.fn()} onSelect={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByRole('radio', { name: /Передавать звук приложения/u })).toBeDisabled();
+    expect(screen.getByText('Ваша роль не разрешает передачу звука приложения.')).toBeInTheDocument();
+  });
 });

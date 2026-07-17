@@ -14,7 +14,7 @@ export interface ModalProps {
   closeLabel?: string;
   onClose: () => void;
   closeOnBackdrop?: boolean;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 export function Modal({ children, closeLabel = 'Закрыть окно', closeOnBackdrop = true, description, footer, onClose, open, size = 'md', title }: ModalProps): React.JSX.Element | null {
@@ -40,10 +40,10 @@ export function Modal({ children, closeLabel = 'Закрыть окно', closeO
         role="dialog"
         tabIndex={-1}
       >
-        <header className="vui-overlay__header">
+        <div className="vui-overlay__header">
           <div><h2 id={titleId}>{title}</h2>{description === undefined ? null : <p id={descriptionId}>{description}</p>}</div>
           <IconButton icon="close" label={closeLabel} onClick={onClose} size="sm" />
-        </header>
+        </div>
         <div className="vui-overlay__content">{children}</div>
         {footer === undefined ? null : <footer className="vui-overlay__footer">{footer}</footer>}
       </section>
@@ -106,10 +106,10 @@ export function Drawer({ children, description, footer, onClose, open, side = 'r
         role="dialog"
         tabIndex={-1}
       >
-        <header className="vui-overlay__header">
+        <div className="vui-overlay__header">
           <div><h2 id={titleId}>{title}</h2>{description === undefined ? null : <p id={descriptionId}>{description}</p>}</div>
           <IconButton icon="close" label="Закрыть панель" onClick={onClose} size="sm" />
-        </header>
+        </div>
         <div className="vui-overlay__content">{children}</div>
         {footer === undefined ? null : <footer className="vui-overlay__footer">{footer}</footer>}
       </div>
