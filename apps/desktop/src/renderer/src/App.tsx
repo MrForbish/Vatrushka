@@ -4,7 +4,7 @@ import { ConnectionState } from 'livekit-client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { channelNameSchema, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type LocalSettings, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type UserPresence } from '@vatrushka/shared';
+import { channelNameSchema, codePointLength, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type LocalSettings, type MessageMentionInput, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type UserPresence } from '@vatrushka/shared';
 
 import { apiClient, ClientError } from './api.js';
 import { parseSettingsRoute, serverSettingsPath, userSettingsPath, type ServerSettingsSection } from './app/routes';
@@ -315,7 +315,7 @@ export default function App(): ReactNode {
           if (settings.desktopNotificationsEnabled) {
             void window.desktop.showMessageNotification({
               id: notification.id,
-              title: `${notification.authorDisplayName} · #${notification.channelName}`,
+              title: `${notification.mention === true ? 'Вас упомянули · ' : ''}${notification.authorDisplayName} · #${notification.channelName}`,
               body: `${notification.content.trim().length > 0 ? notification.content.slice(0, 700) : 'Вложение'}\n${notification.serverName}`,
               serverId: notification.serverId,
               channelId: notification.channelId,
@@ -329,8 +329,12 @@ export default function App(): ReactNode {
         }
         if (fresh.length > 0) {
           const counts = new Map<string, number>();
-          for (const notification of fresh) counts.set(notification.channelId, (counts.get(notification.channelId) ?? 0) + 1);
-          setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((channel) => ({ ...channel, unreadCount: channel.unreadCount + (counts.get(channel.id) ?? 0) })) });
+          const mentions = new Map<string, number>();
+          for (const notification of fresh) {
+            counts.set(notification.channelId, (counts.get(notification.channelId) ?? 0) + 1);
+            if (notification.mention === true) mentions.set(notification.channelId, (mentions.get(notification.channelId) ?? 0) + 1);
+          }
+          setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((channel) => ({ ...channel, unreadCount: channel.unreadCount + (counts.get(channel.id) ?? 0), mentionCount: (channel.mentionCount ?? 0) + (mentions.get(channel.id) ?? 0) })) });
         }
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
@@ -554,10 +558,12 @@ export default function App(): ReactNode {
     });
   };
 
-  const sendMessage = (replyToMessageId?: string, files: File[] = []): void => {
+  const sendMessage = (replyToMessageId?: string, files: File[] = [], draftMentions: MessageMentionInput[] = []): void => {
     void run(async () => {
       if (!activeChannelId || !user) return;
       const content = messageDraft.trim().length > 0 ? messageContentSchema.parse(messageDraft) : files.length > 0 ? '' : messageContentSchema.parse(messageDraft);
+      const leadingCodePoints = codePointLength(messageDraft) - codePointLength(messageDraft.trimStart());
+      const mentions = draftMentions.map((mention) => ({ ...mention, start: mention.start - leadingCodePoints })).filter((mention) => mention.start >= 0 && mention.start + mention.length <= codePointLength(content));
       const optimisticId = `optimistic_${crypto.randomUUID()}`;
       const replyTarget = replyToMessageId === undefined ? null : messages.find((message) => message.id === replyToMessageId) ?? null;
       const optimistic: TextMessage = {
@@ -567,6 +573,7 @@ export default function App(): ReactNode {
         authorDisplayName: user.displayName ?? user.email.split('@')[0] ?? 'Пользователь',
         authorPlatformRole: user.platformRole,
         content,
+        mentions: mentions.map((mention) => ({ ...mention, displayName: serverDetail?.members.find((member) => member.userId === mention.userId)?.displayName ?? 'Участник' })),
         replyTo: replyTarget === null ? null : { messageId: replyTarget.id, authorUserId: replyTarget.authorUserId, authorDisplayName: replyTarget.authorDisplayName, content: replyTarget.content },
         reactions: [],
         attachments: files.map((file) => ({ id: `optimistic_${crypto.randomUUID()}`, messageId: optimisticId, fileName: file.name, mimeType: file.type, size: file.size, createdAt: new Date().toISOString() })),
@@ -577,7 +584,7 @@ export default function App(): ReactNode {
       setMessages((current) => [...current, optimistic]);
       let persisted: TextMessage | null = null;
       try {
-        persisted = await apiClient.createMessage(activeChannelId, content, replyToMessageId);
+        persisted = await apiClient.createMessage(activeChannelId, content, mentions, replyToMessageId);
         const created = persisted;
         setMessages((current) => [...current.filter((message) => message.id !== optimisticId && message.id !== created.id), created]);
         for (const file of files) {
@@ -623,9 +630,12 @@ export default function App(): ReactNode {
 
   const loadAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadMessageAttachment(attachmentId), []);
 
-  const updateMessage = (messageId: string, value: string): void => {
+  const updateMessage = (messageId: string, value: string, draftMentions: MessageMentionInput[] = []): void => {
     void run(async () => {
-      const updated = await apiClient.updateMessage(messageId, messageContentSchema.parse(value));
+      const content = messageContentSchema.parse(value);
+      const leadingCodePoints = codePointLength(value) - codePointLength(value.trimStart());
+      const mentions = draftMentions.map((mention) => ({ ...mention, start: mention.start - leadingCodePoints })).filter((mention) => mention.start >= 0 && mention.start + mention.length <= codePointLength(content));
+      const updated = await apiClient.updateMessage(messageId, content, mentions);
       setMessageDraft('');
       setMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
     });

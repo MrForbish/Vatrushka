@@ -143,6 +143,17 @@ export interface TextMessageRecord {
   editedAt: Date | null;
 }
 
+export interface MessageMentionRecord {
+  messageId: string;
+  mentionedUserId: string;
+  start: number;
+  length: number;
+}
+
+export interface MessageMentionWithUser extends MessageMentionRecord {
+  displayName: string | null;
+}
+
 export interface MessageReactionRecord {
   messageId: string;
   userId: string;
@@ -164,6 +175,11 @@ export interface ChannelReadStateRecord {
 }
 
 export interface ChannelUnreadCount {
+  channelId: string;
+  count: number;
+}
+
+export interface ChannelMentionCount {
   channelId: string;
   count: number;
 }
@@ -191,6 +207,7 @@ export interface MessageNotificationRecord {
   authorUserId: string;
   authorDisplayName: string | null;
   content: string;
+  mention: boolean;
   createdAt: Date;
 }
 

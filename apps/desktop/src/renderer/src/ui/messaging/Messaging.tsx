@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
+
+import { codePointLength, type MessageMention, type MessageMentionInput } from '@vatrushka/shared';
 
 import { Avatar, Badge, Icon, IconButton } from '../primitives';
 import './messaging.css';
@@ -24,6 +26,7 @@ export interface MessageViewModel {
   authorName: string;
   authorBadge?: 'admin' | 'founder';
   content: string;
+  mentions?: MessageMention[];
   createdAt: string;
   edited?: boolean;
   own?: boolean;
@@ -32,6 +35,21 @@ export interface MessageViewModel {
   replyPreview?: { authorName: string; content: string };
   reactions?: MessageReactionViewModel[];
   attachments?: MessageAttachmentViewModel[];
+}
+
+function renderMessageContent(content: string, mentions: MessageMention[] | undefined): ReactNode {
+  if (mentions === undefined || mentions.length === 0) return content;
+  const codePoints = [...content];
+  const result: ReactNode[] = [];
+  let cursor = 0;
+  for (const mention of [...mentions].sort((left, right) => left.start - right.start)) {
+    if (mention.start < cursor || mention.start + mention.length > codePoints.length) continue;
+    if (mention.start > cursor) result.push(codePoints.slice(cursor, mention.start).join(''));
+    result.push(<span className="vui-message__mention" data-user-id={mention.userId} key={`${mention.userId}:${mention.start}`}>@{mention.displayName}</span>);
+    cursor = mention.start + mention.length;
+  }
+  if (cursor < codePoints.length) result.push(codePoints.slice(cursor).join(''));
+  return result.length === 0 ? content : result;
 }
 
 export interface MessageListProps {
@@ -100,7 +118,7 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
             <div className="vui-message__content">
               {message.replyPreview === undefined ? null : <div className="vui-message__reply"><Icon name="reply" size={14} /><strong>{message.replyPreview.authorName}</strong><span>{message.replyPreview.content}</span></div>}
               {grouped ? <span className="vui-sr-only">{message.authorName}</span> : <header><strong>{message.authorName}</strong>{message.authorBadge === 'founder' ? <Badge tone="founder">DEV</Badge> : message.authorBadge === 'admin' ? <Badge tone="primary">ADMIN</Badge> : null}<time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</time>{message.edited === true ? <small>изменено</small> : null}</header>}
-              {message.content.trim().length === 0 ? null : <p>{message.content}</p>}
+              {message.content.trim().length === 0 ? null : <p>{renderMessageContent(message.content, message.mentions)}</p>}
               {message.attachments === undefined || message.attachments.length === 0 ? null : <div className="vui-message__attachments">{message.attachments.map((attachment) => <MessageAttachmentCard attachment={attachment} key={attachment.id} onDelete={onDeleteAttachment} onDownload={onDownloadAttachment} onLoad={onLoadAttachment} />)}</div>}
               {message.reactions === undefined || message.reactions.length === 0 ? null : <div aria-label="Реакции" className="vui-message__reactions">{message.reactions.map((reaction) => <button aria-pressed={reaction.reactedByCurrentUser} disabled={onReaction === undefined} key={reaction.emoji} onClick={() => onReaction?.(message.id, reaction.emoji)} type="button"><span>{reaction.emoji}</span><strong>{reaction.count}</strong></button>)}</div>}
             </div>
@@ -168,11 +186,46 @@ export interface MessageComposerProps {
   onRemoveAttachment?: (id: string) => void;
   leadingActions?: ReactNode;
   placeholder?: string;
+  mentions?: MessageMentionInput[];
+  mentionCandidates?: Array<{ userId: string; displayName: string }>;
+  onMentionsChange?: (mentions: MessageMentionInput[]) => void;
 }
 
-export function MessageComposer({ attachments = [], busy = false, canSend = true, channelName, context, leadingActions, onCancelContext, onChange, onFilesSelected, onRemoveAttachment, onSubmit, placeholder, value }: MessageComposerProps): React.JSX.Element {
+function mentionTrigger(value: string, caret: number): { start: number; query: string } | null {
+  const before = value.slice(0, caret);
+  const match = /(?:^|\s)@([^\s@]{0,64})$/u.exec(before);
+  if (!match) return null;
+  return { start: before.length - (match[1]?.length ?? 0) - 1, query: match[1] ?? '' };
+}
+
+function reconcileMentions(previous: string, next: string, mentions: MessageMentionInput[]): MessageMentionInput[] {
+  const left = [...previous];
+  const right = [...next];
+  let prefix = 0;
+  while (prefix < left.length && prefix < right.length && left[prefix] === right[prefix]) prefix += 1;
+  let suffix = 0;
+  while (suffix < left.length - prefix && suffix < right.length - prefix && left[left.length - 1 - suffix] === right[right.length - 1 - suffix]) suffix += 1;
+  const oldEnd = left.length - suffix;
+  const delta = right.length - left.length;
+  return mentions.flatMap((mention) => {
+    const end = mention.start + mention.length;
+    if (end <= prefix) return [mention];
+    if (mention.start >= oldEnd) return [{ ...mention, start: mention.start + delta }];
+    return [];
+  });
+}
+
+export function MessageComposer({ attachments = [], busy = false, canSend = true, channelName, context, leadingActions, mentionCandidates = [], mentions = [], onCancelContext, onChange, onFilesSelected, onMentionsChange, onRemoveAttachment, onSubmit, placeholder, value }: MessageComposerProps): React.JSX.Element {
   const fileInput = useRef<HTMLInputElement>(null);
+  const textarea = useRef<HTMLTextAreaElement>(null);
+  const [trigger, setTrigger] = useState<{ start: number; query: string } | null>(null);
+  const [activeCandidate, setActiveCandidate] = useState(0);
   const hasPayload = value.trim().length > 0 || (context?.mode !== 'edit' && attachments.length > 0);
+  const uniqueMentioned = new Set(mentions.map((mention) => mention.userId));
+  const candidates = trigger === null ? [] : mentionCandidates
+    .filter((candidate) => (uniqueMentioned.size < 10 || uniqueMentioned.has(candidate.userId)) && candidate.displayName.toLocaleLowerCase('ru-RU').includes(trigger.query.toLocaleLowerCase('ru-RU')))
+    .slice(0, 8);
+  useEffect(() => { setActiveCandidate(0); }, [trigger?.query]);
   const submit = (event?: FormEvent): void => {
     event?.preventDefault();
     if (canSend && !busy && hasPayload) onSubmit();
@@ -182,13 +235,59 @@ export function MessageComposer({ attachments = [], busy = false, canSend = true
     if (files.length > 0) onFilesSelected?.(files);
     event.target.value = '';
   };
+  const updateValue = (next: string, caret: number): void => {
+    const nextMentions = reconcileMentions(value, next, mentions);
+    onChange(next);
+    onMentionsChange?.(nextMentions);
+    setTrigger(mentionTrigger(next, caret));
+  };
+  const selectMention = (candidate: { userId: string; displayName: string }): void => {
+    if (trigger === null) return;
+    const caret = textarea.current?.selectionStart ?? value.length;
+    const before = value.slice(0, trigger.start);
+    const after = value.slice(caret);
+    const separator = after.length === 0 || /^\s/u.test(after) ? '' : ' ';
+    const label = `@${candidate.displayName}`;
+    const next = `${before}${label}${separator}${after}`;
+    const nextMentions = reconcileMentions(value, next, mentions);
+    nextMentions.push({ userId: candidate.userId, start: codePointLength(before), length: codePointLength(label) });
+    nextMentions.sort((left, right) => left.start - right.start);
+    onChange(next);
+    onMentionsChange?.(nextMentions);
+    setTrigger(null);
+    const nextCaret = before.length + label.length + separator.length;
+    window.requestAnimationFrame(() => { textarea.current?.focus(); textarea.current?.setSelectionRange(nextCaret, nextCaret); });
+  };
+  const onComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
+    if (candidates.length > 0 && trigger !== null) {
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        setActiveCandidate((current) => (current + (event.key === 'ArrowDown' ? 1 : candidates.length - 1)) % candidates.length);
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        selectMention(candidates[activeCandidate] ?? candidates[0]!);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setTrigger(null);
+        return;
+      }
+    }
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); }
+  };
   return (
     <form className="vui-message-composer" onSubmit={submit}>
       {context === undefined ? null : <div className="vui-message-composer__context"><Icon name={context.mode === 'edit' ? 'edit' : 'reply'} size={16} /><span><strong>{context.mode === 'edit' ? 'Редактирование' : 'Ответ'}</strong>{context.label}</span>{onCancelContext === undefined ? null : <IconButton icon="close" label="Отменить" onClick={onCancelContext} size="sm" type="button" />}</div>}
       {attachments.length === 0 ? null : <div aria-label="Файлы к отправке" className="vui-message-composer__attachments">{attachments.map((attachment) => <div key={attachment.id}><Icon name="attachment" size={16} /><span><strong title={attachment.name}>{attachment.name}</strong><small>{formatFileSize(attachment.size)}</small></span>{onRemoveAttachment === undefined ? null : <IconButton icon="close" label={`Убрать ${attachment.name}`} onClick={() => onRemoveAttachment(attachment.id)} size="sm" type="button" />}</div>)}</div>}
       <div className="vui-message-composer__body">
         <div className="vui-message-composer__tools">{leadingActions}<input accept=".gif,.jpg,.jpeg,.pdf,.png,.txt,.webp,.zip,application/pdf,application/zip,image/gif,image/jpeg,image/png,image/webp,text/plain" aria-label="Выбрать вложения" className="vui-sr-only" disabled={!canSend || busy || onFilesSelected === undefined} multiple onChange={selectFiles} ref={fileInput} type="file" /><IconButton disabled={!canSend || busy || onFilesSelected === undefined || attachments.length >= 4} icon="attachment" label={attachments.length >= 4 ? 'Можно прикрепить не больше четырёх файлов' : 'Прикрепить файлы'} onClick={() => fileInput.current?.click()} size="sm" type="button" /><IconButton disabled icon="emoji" label="Emoji и GIF пока недоступны" size="sm" type="button" /><IconButton disabled icon="mic" label="Голосовые сообщения появятся позже" size="sm" type="button" /></div>
-        <textarea aria-label="Сообщение" disabled={!canSend} maxLength={4000} onChange={(event) => onChange(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); submit(); } }} placeholder={canSend ? placeholder ?? `Написать в #${channelName}` : 'У вас нет права отправлять сообщения'} rows={1} value={value} />
+        <div className="vui-message-composer__editor">
+          {candidates.length === 0 ? null : <div aria-label="Упомянуть участника" className="vui-message-composer__mentions" role="listbox">{candidates.map((candidate, index) => <button aria-selected={index === activeCandidate} key={candidate.userId} onMouseDown={(event) => event.preventDefault()} onClick={() => selectMention(candidate)} role="option" type="button"><Avatar name={candidate.displayName} size="sm" /><span><strong>{candidate.displayName}</strong><small>@участник</small></span></button>)}</div>}
+          <textarea aria-label="Сообщение" disabled={!canSend} maxLength={4000} onChange={(event) => updateValue(event.target.value, event.target.selectionStart)} onClick={(event) => setTrigger(mentionTrigger(value, event.currentTarget.selectionStart))} onKeyDown={onComposerKeyDown} placeholder={canSend ? placeholder ?? `Написать в #${channelName}` : 'У вас нет права отправлять сообщения'} ref={textarea} rows={1} value={value} />
+        </div>
         <IconButton disabled={!canSend || busy || !hasPayload} icon="send" label={context?.mode === 'edit' ? 'Сохранить сообщение' : 'Отправить сообщение'} size="md" type="submit" />
       </div>
       {canSend ? null : <div className="vui-message-composer__permission"><Icon name="lock" size={14} />Отправка сообщений запрещена вашей ролью</div>}

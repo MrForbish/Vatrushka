@@ -1,17 +1,18 @@
 import { ConnectionState } from 'livekit-client';
 import type { LocalTrack } from 'livekit-client';
+import { useState } from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { RoomConnection, ServerDetail } from '@vatrushka/shared';
+import type { MessageMentionInput, RoomConnection, ServerDetail } from '@vatrushka/shared';
 
 import { AuthPanel } from './components.js';
 import { HomePage } from './features/home/index.js';
 import { ServerView } from './features/servers/index.js';
 import { RoomView } from './features/voice/index.js';
 import type { MediaSnapshot } from './media.js';
-import { MessageComposer } from './ui/index.js';
+import { MessageComposer, MessageList } from './ui/index.js';
 
 const noop = (): void => undefined;
 
@@ -177,6 +178,28 @@ describe('message composer', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Отправить сообщение' }));
     expect(onSubmit).toHaveBeenCalledOnce();
+  });
+
+  it('selects a structured member mention with keyboard navigation', async () => {
+    const changed = vi.fn();
+    function Harness(): React.JSX.Element {
+      const [value, setValue] = useState('');
+      const [mentions, setMentions] = useState<MessageMentionInput[]>([]);
+      return <MessageComposer channelName="общий" mentionCandidates={[{ userId: '11111111-1111-4111-8111-111111111111', displayName: 'Member' }]} mentions={mentions} onChange={setValue} onMentionsChange={(next) => { setMentions(next); changed(next); }} onSubmit={noop} value={value} />;
+    }
+    render(<Harness />);
+    const editor = screen.getByRole('textbox', { name: 'Сообщение' });
+    await userEvent.type(editor, '@mem');
+    expect(screen.getByRole('listbox', { name: 'Упомянуть участника' })).toBeInTheDocument();
+    await userEvent.keyboard('{Enter}');
+    expect(editor).toHaveValue('@Member');
+    expect(changed).toHaveBeenLastCalledWith([{ userId: '11111111-1111-4111-8111-111111111111', start: 0, length: 7 }]);
+  });
+
+  it('renders the current safe label over the original mention text', () => {
+    render(<MessageList channelName="общий" messages={[{ id: 'message', authorId: 'author', authorName: 'Author', content: 'Привет, @Old', mentions: [{ userId: 'member', start: 8, length: 4, displayName: 'Renamed' }], createdAt: '2026-01-01T10:00:00.000Z' }]} />);
+    expect(screen.getByText('@Renamed')).toHaveAttribute('data-user-id', 'member');
+    expect(screen.queryByText(/@Old/u)).not.toBeInTheDocument();
   });
 });
 

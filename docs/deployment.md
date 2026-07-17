@@ -28,6 +28,8 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
 
 Backup PostgreSQL выполняйте до обновления schema/image. Миграция `0012_remove_legacy_rooms_contract` намеренно удаляет только уже выведенные из эксплуатации `rooms`, `guest_sessions` и старую `screen_share_leases`; постоянные server channels и `channel_screen_share_leases` она не затрагивает. Следующая `0013_home_activity` добавляет историю для Home. После применения contract-миграции простой rollback image не восстановит удалённые legacy-таблицы, поэтому перед первым обновлением на эту версию обязателен backup.
 
+`0016_nasty_malcolm_colcord` additive-миграция добавляет `message_mentions` и индексы для message/user lookup. Она не переписывает старые сообщения: их `mentions` после rollout останутся пустыми, потому что backend не восстанавливает entities ненадёжным regex-парсингом.
+
 ## Redis для presence
 
 Compose запускает `redis:8-alpine` с паролем и публикует его только на `127.0.0.1:6379`. Не открывайте этот порт в UFW/provider firewall. Heartbeat является ephemeral-состоянием, поэтому RDB/AOF намеренно отключены; выбранный статус, custom status и privacy находятся в PostgreSQL и входят в обычный backup.

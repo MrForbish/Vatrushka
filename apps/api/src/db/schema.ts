@@ -214,6 +214,21 @@ export const textMessages = pgTable(
   (table) => [index('text_messages_channel_created_idx').on(table.channelId, table.createdAt), foreignKey({ columns: [table.replyToMessageId], foreignColumns: [table.id], name: 'text_messages_reply_to_message_id_fk' }).onDelete('set null')],
 );
 
+export const messageMentions = pgTable(
+  'message_mentions',
+  {
+    messageId: uuid('message_id').notNull().references(() => textMessages.id, { onDelete: 'cascade' }),
+    mentionedUserId: uuid('mentioned_user_id').notNull().references(() => users.id),
+    start: integer('start').notNull(),
+    length: integer('length').notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.messageId, table.start] }),
+    index('message_mentions_message_idx').on(table.messageId),
+    index('message_mentions_user_idx').on(table.mentionedUserId, table.messageId),
+  ],
+);
+
 export const messageReactions = pgTable(
   'message_reactions',
   {

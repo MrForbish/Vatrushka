@@ -683,6 +683,55 @@ describe('servers, channels, messages, and roles API', () => {
     expect(messages.json<Array<{ content: string }>>()).toEqual(expect.arrayContaining([expect.objectContaining({ content: 'Теперь можно писать' }), expect.objectContaining({ content: 'Отвечаю по теме' })]));
   });
 
+  it('stores structured mentions, validates recipients, and counts each mentioned message once', async () => {
+    const owner = await login('mention-owner@example.com', 'Owner');
+    const member = await login('mention-member@example.com', 'Member');
+    const outsider = await login('mention-outsider@example.com', 'Outsider');
+    const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Mentions' } });
+    const server = created.json<{ id: string; inviteUrl: string; channels: Array<{ id: string; type: string }> }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteTokenFromUrl(server.inviteUrl)}/accept`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    const channel = server.channels.find((candidate) => candidate.type === 'text');
+    if (!channel) throw new Error('Text channel was not created');
+
+    const content = '👋 @Member и снова @Member';
+    const sent = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/channels/${channel.id}/messages`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { content, mentions: [{ userId: member.userId, start: 2, length: 7 }, { userId: member.userId, start: 18, length: 7 }] },
+    });
+    expect(sent.statusCode).toBe(201);
+    const message = sent.json<{ id: string; mentions: Array<{ userId: string; start: number; length: number; displayName: string }> }>();
+    expect(message.mentions).toEqual([
+      { userId: member.userId, start: 2, length: 7, displayName: 'Member' },
+      { userId: member.userId, start: 18, length: 7, displayName: 'Member' },
+    ]);
+
+    const detail = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(detail.json<{ channels: Array<{ id: string; mentionCount: number }> }>().channels.find((candidate) => candidate.id === channel.id)?.mentionCount).toBe(1);
+    const notifications = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/notifications/messages?since=${encodeURIComponent('2025-12-31T23:59:59.000Z')}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(notifications.json<{ items: Array<{ id: string; mention: boolean }> }>().items).toEqual([expect.objectContaining({ id: message.id, mention: true })]);
+
+    const rejected = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/channels/${channel.id}/messages`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { content: '@Outsider', mentions: [{ userId: outsider.userId, start: 0, length: 9 }] },
+    });
+    expect(rejected.statusCode).toBe(400);
+    expect(rejected.json<{ details: { field: string } }>().details.field).toBe('mentions');
+
+    await context.app.inject({ method: 'PATCH', url: `${API_PREFIX}/me`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { displayName: 'Renamed' } });
+    const listed = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/channels/${channel.id}/messages`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(listed.json<Array<{ id: string; mentions: Array<{ displayName: string }> }>>().find((candidate) => candidate.id === message.id)?.mentions.map((mention) => mention.displayName)).toEqual(['Renamed', 'Renamed']);
+
+    const edited = await context.app.inject({ method: 'PATCH', url: `${API_PREFIX}/messages/${message.id}`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { content: 'Без упоминаний', mentions: [] } });
+    expect(edited.statusCode).toBe(200);
+    expect(edited.json<{ mentions: unknown[] }>().mentions).toEqual([]);
+    const afterEdit = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(afterEdit.json<{ channels: Array<{ id: string; mentionCount: number }> }>().channels.find((candidate) => candidate.id === channel.id)?.mentionCount).toBe(0);
+  });
+
   it('stores new attachments in private object storage and keeps authorization in the API', async () => {
     const objectStorage = new FakeObjectStorage();
     context = await makeContext(objectStorage);

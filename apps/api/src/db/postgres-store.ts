@@ -24,10 +24,13 @@ import type {
   ServerAuditLogRecord,
   TextMessageRecord,
   TextMessageWithAuthor,
+  MessageMentionRecord,
+  MessageMentionWithUser,
   MessageReactionRecord,
   MessageReactionSummary,
   ChannelReadStateRecord,
   ChannelUnreadCount,
+  ChannelMentionCount,
   MessageAttachmentRecord,
   MessageAttachmentMetadata,
   MessageNotificationRecord,
@@ -504,18 +507,36 @@ export class PostgresStore implements DataStore {
     return [...grouped.values()];
   }
 
-  async createTextMessage(message: TextMessageRecord): Promise<void> {
-    await this.db.insert(schema.textMessages).values(message);
+  async createTextMessage(message: TextMessageRecord, mentions: MessageMentionRecord[]): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.insert(schema.textMessages).values(message);
+      if (mentions.length > 0) await tx.insert(schema.messageMentions).values(mentions);
+    });
   }
 
-  async updateTextMessage(id: string, content: string, now: Date): Promise<TextMessageRecord | null> {
-    const [row] = await this.db.update(schema.textMessages).set({ content, editedAt: now }).where(eq(schema.textMessages.id, id)).returning();
-    return row ?? null;
+  async updateTextMessage(id: string, content: string, now: Date, mentions: MessageMentionRecord[]): Promise<TextMessageRecord | null> {
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx.update(schema.textMessages).set({ content, editedAt: now }).where(eq(schema.textMessages.id, id)).returning();
+      if (!row) return null;
+      await tx.delete(schema.messageMentions).where(eq(schema.messageMentions.messageId, id));
+      if (mentions.length > 0) await tx.insert(schema.messageMentions).values(mentions);
+      return row;
+    });
   }
 
   async deleteTextMessage(id: string): Promise<boolean> {
     const rows = await this.db.delete(schema.textMessages).where(eq(schema.textMessages.id, id)).returning({ id: schema.textMessages.id });
     return rows.length === 1;
+  }
+
+  async listMessageMentions(messageIds: string[]): Promise<MessageMentionWithUser[]> {
+    if (messageIds.length === 0) return [];
+    return this.db
+      .select({ messageId: schema.messageMentions.messageId, mentionedUserId: schema.messageMentions.mentionedUserId, start: schema.messageMentions.start, length: schema.messageMentions.length, displayName: schema.users.displayName })
+      .from(schema.messageMentions)
+      .leftJoin(schema.users, eq(schema.users.id, schema.messageMentions.mentionedUserId))
+      .where(inArray(schema.messageMentions.messageId, messageIds))
+      .orderBy(asc(schema.messageMentions.messageId), asc(schema.messageMentions.start));
   }
 
   async addMessageReaction(reaction: MessageReactionRecord): Promise<void> {
@@ -541,6 +562,22 @@ export class PostgresStore implements DataStore {
     ]);
     const readAt = new Map(states.map((state) => [state.channelId, state.readAt]));
     return channelIds.map((channelId) => ({ channelId, count: messages.filter((message) => message.channelId === channelId && (readAt.has(channelId) ? message.createdAt > readAt.get(channelId)! : message.createdAt >= since)).length }));
+  }
+
+  async listChannelMentionCounts(channelIds: string[], userId: string, since: Date): Promise<ChannelMentionCount[]> {
+    if (channelIds.length === 0) return [];
+    const [states, rows] = await Promise.all([
+      this.db.select().from(schema.channelReadStates).where(and(eq(schema.channelReadStates.userId, userId), inArray(schema.channelReadStates.channelId, channelIds))),
+      this.db.select({ messageId: schema.textMessages.id, channelId: schema.textMessages.channelId, createdAt: schema.textMessages.createdAt })
+        .from(schema.messageMentions)
+        .innerJoin(schema.textMessages, eq(schema.textMessages.id, schema.messageMentions.messageId))
+        .where(and(eq(schema.messageMentions.mentionedUserId, userId), ne(schema.textMessages.authorUserId, userId), inArray(schema.textMessages.channelId, channelIds), gte(schema.textMessages.createdAt, since))),
+    ]);
+    const readAt = new Map(states.map((state) => [state.channelId, state.readAt]));
+    return channelIds.map((channelId) => ({
+      channelId,
+      count: new Set(rows.filter((row) => row.channelId === channelId && (readAt.has(channelId) ? row.createdAt > readAt.get(channelId)! : row.createdAt >= since)).map((row) => row.messageId)).size,
+    }));
   }
 
   async listMessageAttachments(messageIds: string[]): Promise<MessageAttachmentMetadata[]> {
@@ -586,6 +623,7 @@ export class PostgresStore implements DataStore {
         authorUserId: schema.users.id,
         authorDisplayName: schema.users.displayName,
         content: schema.textMessages.content,
+        mention: sql<boolean>`exists (select 1 from ${schema.messageMentions} where ${schema.messageMentions.messageId} = ${schema.textMessages.id} and ${schema.messageMentions.mentionedUserId} = ${userId})`,
         createdAt: schema.textMessages.createdAt,
       })
       .from(schema.textMessages)

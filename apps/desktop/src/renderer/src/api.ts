@@ -18,6 +18,7 @@ import {
   type ServerSummary,
   type TextMessage,
   type MessageNotificationPage,
+  type MessageMentionInput,
   type TwoFactorSetup,
   type TwoFactorEnableResult,
   type UserSession,
@@ -259,12 +260,12 @@ export class ApiClient {
     return this.request(`/notifications/messages?limit=20${cursor}`, { auth: true });
   }
 
-  createMessage(channelId: string, content: string, replyToMessageId?: string): Promise<TextMessage> {
-    return this.request(`/channels/${channelId}/messages`, { method: 'POST', body: { content, ...(replyToMessageId === undefined ? {} : { replyToMessageId }) }, auth: true });
+  createMessage(channelId: string, content: string, mentions: MessageMentionInput[] = [], replyToMessageId?: string): Promise<TextMessage> {
+    return this.request(`/channels/${channelId}/messages`, { method: 'POST', body: { content, mentions, ...(replyToMessageId === undefined ? {} : { replyToMessageId }) }, auth: true });
   }
 
-  updateMessage(messageId: string, content: string): Promise<TextMessage> {
-    return this.request(`/messages/${messageId}`, { method: 'PATCH', body: { content }, auth: true });
+  updateMessage(messageId: string, content: string, mentions: MessageMentionInput[] = []): Promise<TextMessage> {
+    return this.request(`/messages/${messageId}`, { method: 'PATCH', body: { content, mentions }, auth: true });
   }
 
   setMessageReaction(messageId: string, emoji: string, active: boolean): Promise<TextMessage> {

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
+import type { MessageMentionInput } from '@vatrushka/shared';
+
 import { Button } from '../primitives';
 import { MessageComposer, MessageList, SystemMessageCard, UnreadDivider, type MessageViewModel } from './Messaging';
 
@@ -57,6 +59,26 @@ function ComposerScenario(): React.JSX.Element {
 }
 
 export const ComposerStates: Story = { render: () => <ComposerScenario /> };
+
+function MentionComposerScenario(): React.JSX.Element {
+  const [value, setValue] = useState('');
+  const [mentions, setMentions] = useState<MessageMentionInput[]>([]);
+  return <div style={{ minHeight: 360, padding: '180px 24px 24px' }}><MessageComposer channelName="общий" mentionCandidates={[{ userId: '11111111-1111-4111-8111-111111111111', displayName: 'Анна Белова' }, { userId: '22222222-2222-4222-8222-222222222222', displayName: 'Илья Форбиш' }]} mentions={mentions} onChange={setValue} onMentionsChange={setMentions} onSubmit={() => undefined} value={value} /></div>;
+}
+
+export const MentionAutocomplete: Story = { render: () => <MentionComposerScenario /> };
+
+export const MentionKeyboardSelection: Story = {
+  render: () => <MentionComposerScenario />,
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const editor = canvas.getByRole('textbox', { name: 'Сообщение' });
+    await userEvent.type(editor, '@ан');
+    await expect(canvas.getByRole('listbox', { name: 'Упомянуть участника' })).toBeVisible();
+    await userEvent.keyboard('{Enter}');
+    await expect(editor).toHaveValue('@Анна Белова');
+  },
+};
 
 export const SystemAndUnread: Story = {
   render: () => <div className="vui-story-stack" style={{ padding: 24 }}><SystemMessageCard action={<Button size="sm">Подключиться</Button>} description="Анна начала демонстрацию экрана в голосовом канале." icon="voice" title="Началась трансляция" tone="primary" /><UnreadDivider /><SystemMessageCard description="Роль «Модератор» получила право удалять сообщения." icon="warning" title="Права роли изменены" tone="warning" /></div>,

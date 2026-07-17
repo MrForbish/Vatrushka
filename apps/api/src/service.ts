@@ -22,6 +22,8 @@ import {
   type VoiceChannelParticipant,
   type MessageNotification,
   type MessageNotificationPage,
+  type MessageMention,
+  type MessageMentionInput,
   type DirectConversationSummary,
   type DirectMessage,
   type DirectMessageCandidate,
@@ -43,11 +45,13 @@ import {
   resolveServerPermissions,
   expiresAt,
   isExpired,
+  codePointLength,
+  codePointSlice,
 } from '@vatrushka/shared';
 
 import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
-import type { AuthCodeRecord, DirectConversationOverviewRecord, DirectConversationRecord, DirectMessageAttachmentMetadata, DirectMessageAttachmentRecord, DirectMessageWithAuthor, MessageAttachmentMetadata, MessageAttachmentRecord, MessageNotificationRecord, MessageReactionSummary, RecoveryCodeRecord, SecurityEventRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
+import type { AuthCodeRecord, DirectConversationOverviewRecord, DirectConversationRecord, DirectMessageAttachmentMetadata, DirectMessageAttachmentRecord, DirectMessageWithAuthor, MessageAttachmentMetadata, MessageAttachmentRecord, MessageMentionRecord, MessageMentionWithUser, MessageNotificationRecord, MessageReactionSummary, RecoveryCodeRecord, SecurityEventRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
 import type { DataStore, Mailer, MediaService, ObjectStorage, PresenceStore } from './ports.js';
 import { attachmentObjectKey } from './services/attachment-objects.js';
 import { MemoryPresenceStore } from './services/presence-store.js';
@@ -117,8 +121,8 @@ function publicServerRole(role: ServerRoleRecord): ServerRole {
   return { id: role.id, serverId: role.serverId, name: role.name, color: role.color, position: role.position, isDefault: role.isDefault, kind: role.kind, permissions: role.permissions };
 }
 
-function publicServerChannel(channel: ServerChannelRecord, unreadCount = 0, permissions?: ServerPermission[], permissionOverwrites?: ChannelPermissionOverwrite[], voiceParticipants?: VoiceChannelParticipant[]): ServerChannel {
-  return { id: channel.id, serverId: channel.serverId, name: channel.name, type: channel.type, position: channel.position, unreadCount, ...(voiceParticipants === undefined ? {} : { voiceParticipants }), ...(permissions === undefined ? {} : { permissions }), ...(permissionOverwrites === undefined ? {} : { permissionOverwrites }) };
+function publicServerChannel(channel: ServerChannelRecord, unreadCount = 0, mentionCount = 0, permissions?: ServerPermission[], permissionOverwrites?: ChannelPermissionOverwrite[], voiceParticipants?: VoiceChannelParticipant[]): ServerChannel {
+  return { id: channel.id, serverId: channel.serverId, name: channel.name, type: channel.type, position: channel.position, unreadCount, mentionCount, ...(voiceParticipants === undefined ? {} : { voiceParticipants }), ...(permissions === undefined ? {} : { permissions }), ...(permissionOverwrites === undefined ? {} : { permissionOverwrites }) };
 }
 
 export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
@@ -146,7 +150,7 @@ function safeAttachmentName(fileName: string): string {
   return printable || 'attachment';
 }
 
-function publicTextMessage(message: TextMessageWithAuthor, replyTo: TextMessageWithAuthor | null, reactions: MessageReactionSummary[], attachments: MessageAttachmentMetadata[]): TextMessage {
+function publicTextMessage(message: TextMessageWithAuthor, replyTo: TextMessageWithAuthor | null, reactions: MessageReactionSummary[], attachments: MessageAttachmentMetadata[], mentions: MessageMentionWithUser[]): TextMessage {
   return {
     id: message.id,
     channelId: message.channelId,
@@ -154,6 +158,7 @@ function publicTextMessage(message: TextMessageWithAuthor, replyTo: TextMessageW
     authorDisplayName: message.displayName ?? 'Участник',
     authorPlatformRole: message.platformRole,
     content: message.content,
+    mentions: mentions.map(({ mentionedUserId, start, length, displayName }): MessageMention => ({ userId: mentionedUserId, start, length, displayName: displayName ?? 'Удалённый участник' })),
     replyTo: replyTo === null ? null : { messageId: replyTo.id, authorUserId: replyTo.authorUserId, authorDisplayName: replyTo.displayName ?? 'Участник', content: replyTo.content },
     reactions: reactions.map(({ emoji, count, reactedByCurrentUser }) => ({ emoji, count, reactedByCurrentUser })),
     attachments: attachments.map(({ id, messageId, fileName, mimeType, size, createdAt }) => ({ id, messageId, fileName, mimeType, size, createdAt: createdAt.toISOString() })),
@@ -987,13 +992,14 @@ export class VatrushkaService {
         authorUserId: notification.authorUserId,
         authorDisplayName: notification.authorDisplayName ?? 'Участник',
         content: notification.content,
+        mention: notification.mention,
         createdAt: notification.createdAt.toISOString(),
       }));
     const lastScanned = records.at(-1);
     return { items, cursor: lastScanned ? { createdAt: lastScanned.createdAt.toISOString(), id: lastScanned.id } : null };
   }
 
-  async createMessage(authorization: string | undefined, channelId: string, content: string, replyToMessageId: string | null): Promise<TextMessage> {
+  async createMessage(authorization: string | undefined, channelId: string, content: string, mentions: MessageMentionInput[], replyToMessageId: string | null): Promise<TextMessage> {
     const user = await this.authenticate(authorization);
     this.requireCompleteProfile(user);
     const channel = await this.requireTextChannel(channelId);
@@ -1005,22 +1011,31 @@ export class VatrushkaService {
     }
     const now = this.now();
     const message = { id: randomUUID(), channelId: channel.id, authorUserId: user.id, content, replyToMessageId, createdAt: now, editedAt: null };
-    await this.store.createTextMessage(message);
+    const mentionRecords = await this.validateMessageMentions(server, channel, message.id, content, mentions);
+    await this.store.createTextMessage(message, mentionRecords);
     await this.recordUserActivity(user.id, 'sent_message', `# ${channel.name}`, server.name, server.id, channel.id);
+    for (const mentionedUserId of new Set(mentionRecords.map((mention) => mention.mentionedUserId))) {
+      if (mentionedUserId !== user.id) await this.recordUserActivity(mentionedUserId, 'mention_received', `# ${channel.name}`, user.displayName ?? 'Участник', server.id, channel.id);
+    }
     return (await this.hydrateMessages([{ ...message, displayName: user.displayName, platformRole: user.platformRole }], user.id))[0]!;
   }
 
-  async updateMessage(authorization: string | undefined, messageId: string, content: string): Promise<TextMessage> {
+  async updateMessage(authorization: string | undefined, messageId: string, content: string, mentions: MessageMentionInput[]): Promise<TextMessage> {
     const user = await this.authenticate(authorization);
     const message = await this.store.findTextMessage(messageId);
     if (!message) throw new AppError('MESSAGE_NOT_FOUND', 404);
     const channel = await this.requireTextChannel(message.channelId);
     const server = await this.requireServer(channel.serverId);
     await this.requireChannelPermission(server, channel, user, message.authorUserId === user.id ? 'MANAGE_OWN_MESSAGES' : 'MANAGE_MESSAGES');
-    const updated = await this.store.updateTextMessage(message.id, content, this.now());
+    const existingMentionUserIds = new Set((await this.store.listMessageMentions([message.id])).map((mention) => mention.mentionedUserId));
+    const mentionRecords = await this.validateMessageMentions(server, channel, message.id, content, mentions);
+    const updated = await this.store.updateTextMessage(message.id, content, this.now(), mentionRecords);
     if (!updated) throw new AppError('MESSAGE_NOT_FOUND', 404);
     const author = await this.store.findUserById(updated.authorUserId);
     if (!author) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    for (const mentionedUserId of new Set(mentionRecords.map((mention) => mention.mentionedUserId))) {
+      if (mentionedUserId !== user.id && !existingMentionUserIds.has(mentionedUserId)) await this.recordUserActivity(mentionedUserId, 'mention_received', `# ${channel.name}`, author.displayName ?? 'Участник', server.id, channel.id);
+    }
     return (await this.hydrateMessages([{ ...updated, displayName: author.displayName, platformRole: author.platformRole }], user.id))[0]!;
   }
 
@@ -1298,15 +1313,18 @@ export class VatrushkaService {
     const replyIds = [...new Set(messages.map((message) => message.replyToMessageId).filter((id): id is string => id !== null))];
     const replies = new Map((await this.store.findTextMessagesWithAuthors(replyIds)).map((message) => [message.id, message]));
     const messageIds = messages.map((message) => message.id);
-    const [reactions, attachments] = await Promise.all([
+    const [reactions, attachments, mentions] = await Promise.all([
       this.store.listMessageReactionSummaries(messageIds, currentUserId),
       this.store.listMessageAttachments(messageIds),
+      this.store.listMessageMentions(messageIds),
     ]);
     const byMessage = new Map<string, MessageReactionSummary[]>();
     for (const reaction of reactions) byMessage.set(reaction.messageId, [...(byMessage.get(reaction.messageId) ?? []), reaction]);
     const attachmentsByMessage = new Map<string, MessageAttachmentMetadata[]>();
     for (const attachment of attachments) attachmentsByMessage.set(attachment.messageId, [...(attachmentsByMessage.get(attachment.messageId) ?? []), attachment]);
-    return messages.map((message) => publicTextMessage(message, message.replyToMessageId === null ? null : replies.get(message.replyToMessageId) ?? null, byMessage.get(message.id) ?? [], attachmentsByMessage.get(message.id) ?? []));
+    const mentionsByMessage = new Map<string, MessageMentionWithUser[]>();
+    for (const mention of mentions) mentionsByMessage.set(mention.messageId, [...(mentionsByMessage.get(mention.messageId) ?? []), mention]);
+    return messages.map((message) => publicTextMessage(message, message.replyToMessageId === null ? null : replies.get(message.replyToMessageId) ?? null, byMessage.get(message.id) ?? [], attachmentsByMessage.get(message.id) ?? [], mentionsByMessage.get(message.id) ?? []));
   }
 
   async connectVoiceChannel(authorization: string | undefined, channelId: string): Promise<RoomConnection> {
@@ -1675,6 +1693,29 @@ export class VatrushkaService {
     return permissions;
   }
 
+  private async validateMessageMentions(server: ServerRecord, channel: ServerChannelRecord, messageId: string, content: string, input: MessageMentionInput[]): Promise<MessageMentionRecord[]> {
+    const invalid = (): never => { throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'mentions' }); };
+    if (new Set(input.map((mention) => mention.userId)).size > 10) invalid();
+    const contentLength = codePointLength(content);
+    const sorted = [...input].sort((left, right) => left.start - right.start || left.length - right.length);
+    let previousEnd = 0;
+    const records: MessageMentionRecord[] = [];
+    for (const mention of sorted) {
+      const end = mention.start + mention.length;
+      if (mention.start < previousEnd || end > contentLength) invalid();
+      const [member, mentionedUser] = await Promise.all([
+        this.store.findServerMember(server.id, mention.userId),
+        this.store.findUserById(mention.userId),
+      ]);
+      if (!member || !mentionedUser || !mentionedUser.displayName) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'mentions' });
+      const permissions = await this.channelPermissionsFor(server, channel, mentionedUser);
+      if (!permissions.has('VIEW_CHANNEL') || codePointSlice(content, mention.start, mention.length) !== `@${mentionedUser.displayName}`) invalid();
+      records.push({ messageId, mentionedUserId: mention.userId, start: mention.start, length: mention.length });
+      previousEnd = end;
+    }
+    return records;
+  }
+
   private async getServerDetailForUser(server: ServerRecord, user: UserRecord): Promise<ServerDetail> {
     const permissions = await this.requireServerPermission(server, user, 'VIEW_SERVER');
     const [channels, roles, members, assignments] = await Promise.all([
@@ -1696,7 +1737,13 @@ export class VatrushkaService {
       overwrites: overwrites.filter((overwrite) => overwrite.channelId === channel.id).map((overwrite) => ({ channelId: overwrite.channelId, targetType: overwrite.targetType, targetId: overwrite.targetId, allow: overwrite.allow, deny: overwrite.deny })),
     })]));
     const visibleChannels = channels.filter((channel) => effectiveByChannel.get(channel.id)?.has('VIEW_CHANNEL') === true);
-    const unreadCounts = new Map((await this.store.listChannelUnreadCounts(visibleChannels.filter((channel) => channel.type === 'text').map((channel) => channel.id), user.id, membership.joinedAt)).map((entry) => [entry.channelId, entry.count]));
+    const textChannelIds = visibleChannels.filter((channel) => channel.type === 'text').map((channel) => channel.id);
+    const [unreadEntries, mentionEntries] = await Promise.all([
+      this.store.listChannelUnreadCounts(textChannelIds, user.id, membership.joinedAt),
+      this.store.listChannelMentionCounts(textChannelIds, user.id, membership.joinedAt),
+    ]);
+    const unreadCounts = new Map(unreadEntries.map((entry) => [entry.channelId, entry.count]));
+    const mentionCounts = new Map(mentionEntries.map((entry) => [entry.channelId, entry.count]));
     const roleById = new Map(publicRoles.map((role) => [role.id, role]));
     const defaultRoles = publicRoles.filter((role) => role.isDefault);
     const publicMembers: ServerMember[] = await Promise.all(members.map(async (member) => {
@@ -1750,6 +1797,7 @@ export class VatrushkaService {
       channels: visibleChannels.map((channel) => publicServerChannel(
         channel,
         unreadCounts.get(channel.id) ?? 0,
+        mentionCounts.get(channel.id) ?? 0,
         [...(effectiveByChannel.get(channel.id) ?? [])],
         permissions.has('MANAGE_ROLES') ? overwrites.filter((overwrite) => overwrite.channelId === channel.id).map((overwrite) => ({ channelId: overwrite.channelId, targetType: overwrite.targetType, targetId: overwrite.targetId, allow: overwrite.allow, deny: overwrite.deny })) : undefined,
         channel.type === 'voice' ? voiceParticipantsByChannel.get(channel.id) ?? [] : undefined,

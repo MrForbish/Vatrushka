@@ -20,10 +20,13 @@ import type {
   ServerAuditLogRecord,
   TextMessageRecord,
   TextMessageWithAuthor,
+  MessageMentionRecord,
+  MessageMentionWithUser,
   MessageReactionRecord,
   MessageReactionSummary,
   ChannelReadStateRecord,
   ChannelUnreadCount,
+  ChannelMentionCount,
   MessageAttachmentRecord,
   MessageAttachmentMetadata,
   MessageNotificationRecord,
@@ -52,6 +55,7 @@ export class MemoryStore implements DataStore {
   readonly channelPermissionOverwrites = new Map<string, ChannelPermissionOverwriteRecord>();
   readonly serverAuditLogs = new Map<string, ServerAuditLogRecord>();
   readonly textMessages = new Map<string, TextMessageRecord>();
+  readonly messageMentions = new Map<string, MessageMentionRecord>();
   readonly messageReactions = new Map<string, MessageReactionRecord>();
   readonly channelReadStates = new Map<string, ChannelReadStateRecord>();
   readonly messageAttachments = new Map<string, MessageAttachmentRecord>();
@@ -504,23 +508,38 @@ export class MemoryStore implements DataStore {
     return [...grouped.values()].map((reaction) => structuredClone(reaction));
   }
 
-  async createTextMessage(message: TextMessageRecord): Promise<void> {
+  async createTextMessage(message: TextMessageRecord, mentions: MessageMentionRecord[]): Promise<void> {
     this.textMessages.set(message.id, structuredClone(message));
+    for (const mention of mentions) this.messageMentions.set(`${mention.messageId}:${mention.start}`, structuredClone(mention));
   }
 
-  async updateTextMessage(id: string, content: string, now: Date): Promise<TextMessageRecord | null> {
+  async updateTextMessage(id: string, content: string, now: Date, mentions: MessageMentionRecord[]): Promise<TextMessageRecord | null> {
     const message = this.textMessages.get(id);
     if (!message) return null;
     message.content = content;
     message.editedAt = now;
+    for (const [key, mention] of this.messageMentions) if (mention.messageId === id) this.messageMentions.delete(key);
+    for (const mention of mentions) this.messageMentions.set(`${mention.messageId}:${mention.start}`, structuredClone(mention));
     return structuredClone(message);
   }
 
   async deleteTextMessage(id: string): Promise<boolean> {
+    for (const [key, mention] of this.messageMentions) if (mention.messageId === id) this.messageMentions.delete(key);
     for (const [key, reaction] of this.messageReactions) if (reaction.messageId === id) this.messageReactions.delete(key);
     for (const [attachmentId, attachment] of this.messageAttachments) if (attachment.messageId === id) this.messageAttachments.delete(attachmentId);
     for (const message of this.textMessages.values()) if (message.replyToMessageId === id) message.replyToMessageId = null;
     return this.textMessages.delete(id);
+  }
+
+  async listMessageMentions(messageIds: string[]): Promise<MessageMentionWithUser[]> {
+    const allowed = new Set(messageIds);
+    return [...this.messageMentions.values()]
+      .filter((mention) => allowed.has(mention.messageId))
+      .flatMap((mention) => {
+        const user = this.users.get(mention.mentionedUserId);
+        return [{ ...structuredClone(mention), displayName: user?.displayName ?? null }];
+      })
+      .sort((left, right) => left.messageId.localeCompare(right.messageId) || left.start - right.start);
   }
 
   async addMessageReaction(reaction: MessageReactionRecord): Promise<void> {
@@ -541,6 +560,14 @@ export class MemoryStore implements DataStore {
     return channelIds.map((channelId) => {
       const state = this.channelReadStates.get(`${channelId}:${userId}`);
       return { channelId, count: [...this.textMessages.values()].filter((message) => message.channelId === channelId && message.authorUserId !== userId && (state ? message.createdAt > state.readAt : message.createdAt >= since)).length };
+    });
+  }
+
+  async listChannelMentionCounts(channelIds: string[], userId: string, since: Date): Promise<ChannelMentionCount[]> {
+    return channelIds.map((channelId) => {
+      const state = this.channelReadStates.get(`${channelId}:${userId}`);
+      const messageIds = new Set([...this.messageMentions.values()].filter((mention) => mention.mentionedUserId === userId).map((mention) => mention.messageId));
+      return { channelId, count: [...this.textMessages.values()].filter((message) => message.channelId === channelId && message.authorUserId !== userId && messageIds.has(message.id) && (state ? message.createdAt > state.readAt : message.createdAt >= since)).length };
     });
   }
 
@@ -752,6 +779,7 @@ export class MemoryStore implements DataStore {
           authorUserId: author.id,
           authorDisplayName: author.displayName,
           content: message.content,
+          mention: [...this.messageMentions.values()].some((mention) => mention.messageId === message.id && mention.mentionedUserId === userId),
           createdAt: message.createdAt,
         };
       })

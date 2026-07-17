@@ -16,6 +16,8 @@ All notable changes to Vatrushka are documented here. The project follows semant
 - Redis-backed multi-session presence with heartbeat TTL, automatic idle, invisible/offline privacy and durable status/custom-text preferences in PostgreSQL;
 - routed status and privacy settings backed by API contracts, including server-enforced direct-message and presence visibility rules;
 - DND delivery policy that suppresses message sounds, desktop notifications and future push delivery while preserving unread counters and notification history.
+- structured user mentions with keyboard/mouse autocomplete, Unicode-safe entities, rename-safe rendering, backend membership/permission validation and per-channel unread mention counters;
+- additive `message_mentions` migration with atomic create/edit persistence and repeated-mention deduplication at notification/count level.
 
 ### Operations
 

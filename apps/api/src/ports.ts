@@ -17,10 +17,13 @@ import type {
   ServerAuditLogRecord,
   TextMessageRecord,
   TextMessageWithAuthor,
+  MessageMentionRecord,
+  MessageMentionWithUser,
   MessageReactionRecord,
   MessageReactionSummary,
   ChannelReadStateRecord,
   ChannelUnreadCount,
+  ChannelMentionCount,
   MessageAttachmentRecord,
   MessageAttachmentMetadata,
   MessageNotificationRecord,
@@ -95,13 +98,15 @@ export interface DataStore {
   findTextMessagesWithAuthors(ids: string[]): Promise<TextMessageWithAuthor[]>;
   listMessageReactionSummaries(messageIds: string[], currentUserId: string): Promise<MessageReactionSummary[]>;
   findTextMessage(id: string): Promise<TextMessageRecord | null>;
-  createTextMessage(message: TextMessageRecord): Promise<void>;
-  updateTextMessage(id: string, content: string, now: Date): Promise<TextMessageRecord | null>;
+  createTextMessage(message: TextMessageRecord, mentions: MessageMentionRecord[]): Promise<void>;
+  updateTextMessage(id: string, content: string, now: Date, mentions: MessageMentionRecord[]): Promise<TextMessageRecord | null>;
   deleteTextMessage(id: string): Promise<boolean>;
+  listMessageMentions(messageIds: string[]): Promise<MessageMentionWithUser[]>;
   addMessageReaction(reaction: MessageReactionRecord): Promise<void>;
   removeMessageReaction(messageId: string, userId: string, emoji: string): Promise<void>;
   markChannelRead(state: ChannelReadStateRecord): Promise<void>;
   listChannelUnreadCounts(channelIds: string[], userId: string, since: Date): Promise<ChannelUnreadCount[]>;
+  listChannelMentionCounts(channelIds: string[], userId: string, since: Date): Promise<ChannelMentionCount[]>;
   listMessageAttachments(messageIds: string[]): Promise<MessageAttachmentMetadata[]>;
   listChannelAttachmentStorageKeys(channelId: string): Promise<string[]>;
   listLegacyMessageAttachments(limit: number): Promise<MessageAttachmentRecord[]>;
