@@ -6,6 +6,8 @@ describe('settings route paths', () => {
   it('builds and parses canonical user settings paths', () => {
     expect(userSettingsPath()).toBe('/settings/profile');
     expect(parseSettingsRoute('/settings/notifications')).toEqual({ kind: 'user', section: 'notifications', canonicalPath: '/settings/notifications' });
+    expect(userSettingsPath('security', 'backup-codes')).toBe('/settings/security/backup-codes');
+    expect(parseSettingsRoute('/settings/security/backup-codes')).toEqual({ kind: 'user', section: 'security', subpage: 'backup-codes', canonicalPath: '/settings/security/backup-codes' });
   });
 
   it('builds and parses canonical server settings paths', () => {
@@ -16,6 +18,7 @@ describe('settings route paths', () => {
   it('redirects missing and unknown sections to their safe defaults', () => {
     expect(parseSettingsRoute('/settings')).toEqual({ kind: 'invalid', canonicalPath: '/settings/profile' });
     expect(parseSettingsRoute('/settings/unknown')).toEqual({ kind: 'invalid', canonicalPath: '/settings/profile' });
+    expect(parseSettingsRoute('/settings/security/unknown')).toEqual({ kind: 'invalid', canonicalPath: '/settings/security' });
     expect(parseSettingsRoute('/servers/server-1/settings')).toEqual({ kind: 'invalid', canonicalPath: '/servers/server-1/settings/overview' });
     expect(parseSettingsRoute('/servers/server-1/settings/unknown')).toEqual({ kind: 'invalid', canonicalPath: '/servers/server-1/settings/overview' });
   });

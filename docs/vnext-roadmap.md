@@ -31,7 +31,9 @@
 
 Phase 1 — repo audit и фиксация контрактов — завершена. Принятые решения находятся в [ADR](adr/README.md): общий SettingsShell и hash routes, rollout feature flags, развитие существующего `electron-updater`, structured mentions, presence/realtime и единая DND notification policy.
 
-Следующий этап: общий SettingsShell + Storybook + routing без удаления действующих settings-модалок и без изменения их backend-контрактов.
+Phase 2 — общий `SettingsShell`, типизированные routes, staged feature flags, Storybook и Electron navigation tests — завершена. Старые модалки сохранены как production fallback до полного parity.
+
+Phase 3 выполняется вертикальными срезами без подмены API: существующие уведомления, пароль/2FA, резервные коды, сессии и security activity перенесены в routed user settings; профиль, presence, audio и privacy идут следующими независимыми PR.
 
 ## Следующие итерации
 

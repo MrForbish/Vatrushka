@@ -1,7 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
+import type { PublicUser, SecurityEvent } from '@vatrushka/shared';
 
 import { serverSettingsNavigation, userSettingsNavigation } from '../../../app/routes';
+import { SecurityCenter, type SecurityClient } from '../../security';
 import { WorkspaceLibrary, type WorkspaceNavigationItem } from '../../../ui';
 import { SettingsPageState } from '../components/SettingsPageState';
 import { SettingsSaveBar } from '../components/SettingsSaveBar';
@@ -12,6 +14,21 @@ const workspaces: WorkspaceNavigationItem[] = [
   { id: 'vatrushka', name: 'Команда Ватрушки', memberCount: 18, activeVoice: true },
   { id: 'friends', name: 'Друзья и игры', memberCount: 42 },
 ];
+
+const securityUser: PublicUser = { id: 'user-1', email: 'owner@myvatrushka.ru', displayName: 'Илья Форбиш', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true };
+const securityClient: SecurityClient = {
+  requestPasswordSetup: fn(() => Promise.resolve({ retryAfterSeconds: 60 })),
+  setPassword: fn(() => Promise.resolve(securityUser)),
+  beginTwoFactorSetup: fn(() => Promise.resolve({ secret: 'ABCDEFGHIJKLMNOP', otpauthUri: 'otpauth://totp/Vatrushka' })),
+  enableTwoFactor: fn(() => Promise.resolve({ user: securityUser, recoveryCodes: ['ABCD-EFGH-JKLM'] })),
+  disableTwoFactor: fn(() => Promise.resolve({ ...securityUser, twoFactorEnabled: false })),
+  regenerateRecoveryCodes: fn(() => Promise.resolve({ recoveryCodes: ['ABCD-EFGH-JKLM'] })),
+  listSessions: fn(() => Promise.resolve([])),
+  setSessionTrusted: fn(() => Promise.resolve()),
+  revokeSession: fn(() => Promise.resolve({ current: false })),
+  revokeOtherSessions: fn(() => Promise.resolve({ revokedCount: 0 })),
+  listSecurityEvents: fn(() => Promise.resolve<SecurityEvent[]>([])),
+};
 
 interface SettingsStoryProps {
   scope: 'server' | 'user';
@@ -45,6 +62,11 @@ export const ServerOverview: Story = {
 };
 
 export const UserProfile: Story = { args: { scope: 'user' } };
+
+export const UserSecurityLiveSection: Story = {
+  args: { scope: 'user' },
+  render: (args) => <SettingsShell activeSection="security" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><SecurityCenter client={securityClient} onClose={args.onBack} onCurrentSessionRevoked={() => undefined} onSectionChange={(section) => { args.onNavigate(section); }} onUserChange={() => undefined} open presentation="page" section="protection" user={securityUser} /></SettingsShell>,
+};
 
 export const Loading: Story = {
   render: (args) => <SettingsShell activeSection="overview" entityLabel="Настройки сервера" entityName="Команда Ватрушки" items={serverSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><SettingsPageState kind="loading" /></SettingsShell>,

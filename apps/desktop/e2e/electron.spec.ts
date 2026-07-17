@@ -150,7 +150,7 @@ test('revokes another device without exposing its refresh token to the renderer'
 });
 
 test('opens the routed settings shell without replacing the application controller', async () => {
-  const user = { id: 'settings-e2e-user', email: 'settings@myvatrushka.ru', displayName: 'Настройки E2E', platformRole: 'member', hasPassword: true, twoFactorEnabled: false };
+  const user = { id: 'settings-e2e-user', email: 'settings@myvatrushka.ru', displayName: 'Настройки E2E', platformRole: 'member', hasPassword: true, twoFactorEnabled: true };
   const home = {
     user: { id: user.id, displayName: user.displayName, email: user.email, avatarUrl: null, presence: 'online', platformBadge: null },
     readiness: { connection: 'healthy', audioSetupRequired: false },
@@ -174,6 +174,8 @@ test('opens the routed settings shell without replacing the application controll
     if (request.method === 'GET' && url.pathname === '/api/v1/home') { response.end(JSON.stringify(home)); return; }
     if (request.method === 'GET' && url.pathname === '/api/v1/notifications/messages') { response.end(JSON.stringify({ items: [], cursor: null })); return; }
     if (request.method === 'GET' && url.pathname === '/api/v1/direct-conversations') { response.end('[]'); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/auth/sessions') { response.end('[]'); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/me/security-events') { response.end('[]'); return; }
     response.statusCode = 404;
     response.end(JSON.stringify({ code: 'NOT_FOUND' }));
   });
@@ -197,6 +199,15 @@ test('opens the routed settings shell without replacing the application controll
   await expect(window.getByRole('navigation', { name: 'Разделы настроек' })).toBeVisible();
   await window.getByRole('button', { name: /Уведомления/u }).click();
   await expect(window).toHaveURL(/#\/settings\/notifications/u);
+  await expect(window.getByRole('heading', { name: 'Уведомления о сообщениях' })).toBeVisible();
+  await expect(window.getByRole('switch', { name: 'Push-уведомления' })).toBeVisible();
+  await window.getByRole('button', { name: /Безопасность/u }).click();
+  await window.getByRole('button', { name: 'Управлять кодами' }).click();
+  await expect(window).toHaveURL(/#\/settings\/security\/backup-codes/u);
+  await expect(window.getByRole('heading', { name: 'Резервные коды' })).toBeVisible();
+  await window.getByRole('button', { name: /Устройства и сессии/u }).click();
+  await expect(window).toHaveURL(/#\/settings\/sessions/u);
+  await expect(window.getByRole('heading', { name: 'Активные устройства' })).toBeVisible();
   await window.getByRole('button', { name: 'Вернуться' }).click();
   await expect(window.getByRole('heading', { name: /Добро пожаловать/u })).toBeVisible();
 });

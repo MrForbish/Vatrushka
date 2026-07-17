@@ -28,6 +28,16 @@ function client(): SecurityClient {
 }
 
 describe('SecurityCenter', () => {
+  it('renders a controlled page section and delegates nested navigation to the router', async () => {
+    const onSectionChange = vi.fn();
+    render(<SecurityCenter client={client()} onClose={vi.fn()} onCurrentSessionRevoked={vi.fn()} onSectionChange={onSectionChange} onUserChange={vi.fn()} open presentation="page" section="protection" user={user} />);
+
+    expect(screen.queryByRole('dialog', { name: 'Безопасность аккаунта' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Разделы безопасности' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Управлять кодами' }));
+    expect(onSectionChange).toHaveBeenCalledWith('recovery');
+  });
+
   it('lists sessions, changes trust, and revokes another device with confirmation', async () => {
     const mock = client();
     render(<SecurityCenter client={mock} onClose={vi.fn()} onCurrentSessionRevoked={vi.fn()} onSettingsChange={vi.fn()} onUserChange={vi.fn()} open settings={{ volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }} user={user} />);

@@ -8,7 +8,9 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 - private S3-compatible storage for channel and direct-message attachments, with API-only credentials and authenticated downloads;
 - idempotent attachment backfill and a production canary that verifies bucket access, write, read and delete;
-- additive `storage_key` migration and temporary PostgreSQL dual-write fallback for rollback-safe rollout.
+- additive `storage_key` migration and temporary PostgreSQL dual-write fallback for rollback-safe rollout;
+- routed `SettingsShell` with typed hash routes, staged production flags, Storybook states and preserved modal fallbacks;
+- real notification, password/2FA, recovery-code, session and security-activity sections inside routed user settings, including `/settings/security/backup-codes`.
 
 ### Operations
 
