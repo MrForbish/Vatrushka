@@ -9,7 +9,7 @@ const assetsDirectory = resolve(rendererDirectory, 'assets');
 const budgets = {
   javascript: 2_400_000,
   largestJavaScript: 2_200_000,
-  styles: 155_000,
+  styles: 157_000,
   fonts: 500_000,
 };
 

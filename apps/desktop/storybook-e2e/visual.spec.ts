@@ -114,6 +114,14 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('messaging-composer.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('message mention autocomplete', async ({ page }) => {
+    await openStory(page, 'messaging-text-channel--mention-autocomplete');
+    const editor = page.getByRole('textbox', { name: 'Сообщение' });
+    await editor.fill('@ан');
+    await expect(page.getByRole('listbox', { name: 'Упомянуть участника' })).toBeVisible();
+    await expect(page).toHaveScreenshot('messaging-mention-autocomplete.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('voice active speaker', async ({ page }) => {
     await openStory(page, 'voice-voice-stage--visual-stage');
     await expect(page).toHaveScreenshot('voice-active-speaker.png', { animations: 'disabled', fullPage: true });

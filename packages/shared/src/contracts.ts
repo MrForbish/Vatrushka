@@ -186,9 +186,20 @@ export interface ServerChannel {
   type: ServerChannelType;
   position: number;
   unreadCount: number;
+  mentionCount?: number;
   voiceParticipants?: VoiceChannelParticipant[];
   permissions?: ServerPermission[];
   permissionOverwrites?: ChannelPermissionOverwrite[];
+}
+
+export interface MessageMentionInput {
+  userId: string;
+  start: number;
+  length: number;
+}
+
+export interface MessageMention extends MessageMentionInput {
+  displayName: string;
 }
 
 export interface VoiceChannelParticipant {
@@ -246,6 +257,7 @@ export interface TextMessage {
   authorDisplayName: string;
   authorPlatformRole: PlatformRole;
   content: string;
+  mentions?: MessageMention[];
   replyTo: {
     messageId: string;
     authorUserId: string;
@@ -280,6 +292,7 @@ export interface MessageNotification {
   authorUserId: string;
   authorDisplayName: string;
   content: string;
+  mention?: boolean;
   createdAt: string;
 }
 

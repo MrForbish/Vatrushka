@@ -143,7 +143,7 @@ const permissionSchema = z.enum(serverPermissions);
 const serverRoleResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), color: z.string(), position: z.number(), isDefault: z.boolean(), kind: z.enum(['EVERYONE', 'OWNER', 'CUSTOM']).optional(), permissions: z.array(permissionSchema) });
 const permissionOverwriteResponseSchema = z.object({ channelId: z.string(), targetType: z.enum(['ROLE', 'MEMBER']), targetId: z.string(), allow: z.array(permissionSchema), deny: z.array(permissionSchema) });
 const voiceChannelParticipantResponseSchema = z.object({ identity: z.string(), userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']) });
-const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), unreadCount: z.number(), voiceParticipants: z.array(voiceChannelParticipantResponseSchema).optional(), permissions: z.array(permissionSchema).optional(), permissionOverwrites: z.array(permissionOverwriteResponseSchema).optional() });
+const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), unreadCount: z.number(), mentionCount: z.number().optional(), voiceParticipants: z.array(voiceChannelParticipantResponseSchema).optional(), permissions: z.array(permissionSchema).optional(), permissionOverwrites: z.array(permissionOverwriteResponseSchema).optional() });
 const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema), presence: z.enum(['online', 'idle', 'dnd', 'offline']).optional(), customStatusText: z.string().nullable().optional() });
 const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteUrl: z.url(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
 const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
@@ -165,9 +165,10 @@ const homeDashboardResponseSchema = z.object({
 });
 const serverAuditLogResponseSchema = z.object({ id: z.string(), serverId: z.string(), actorUserId: z.string().nullable(), actorDisplayName: z.string(), action: z.string(), targetType: z.string(), targetId: z.string().nullable(), before: z.unknown(), after: z.unknown(), createdAt: z.string() });
 const messageAttachmentResponseSchema = z.object({ id: z.string(), messageId: z.string(), fileName: z.string(), mimeType: z.string(), size: z.number(), createdAt: z.string() });
-const messageNotificationResponseSchema = z.object({ id: z.string(), serverId: z.string(), serverName: z.string(), channelId: z.string(), channelName: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string(), createdAt: z.string() });
+const messageNotificationResponseSchema = z.object({ id: z.string(), serverId: z.string(), serverName: z.string(), channelId: z.string(), channelName: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string(), mention: z.boolean().optional(), createdAt: z.string() });
 const messageNotificationPageResponseSchema = z.object({ items: z.array(messageNotificationResponseSchema), cursor: z.object({ createdAt: z.string(), id: z.string().nullable() }).nullable() });
-const textMessageResponseSchema = z.object({ id: z.string(), channelId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), authorPlatformRole: z.enum(['member', 'admin', 'owner']), content: z.string(), replyTo: z.object({ messageId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string() }).nullable(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reactedByCurrentUser: z.boolean() })), attachments: z.array(messageAttachmentResponseSchema), createdAt: z.string(), editedAt: z.string().nullable() });
+const messageMentionResponseSchema = z.object({ userId: z.string(), start: z.number(), length: z.number(), displayName: z.string() });
+const textMessageResponseSchema = z.object({ id: z.string(), channelId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), authorPlatformRole: z.enum(['member', 'admin', 'owner']), content: z.string(), mentions: z.array(messageMentionResponseSchema).optional(), replyTo: z.object({ messageId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string() }).nullable(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reactedByCurrentUser: z.boolean() })), attachments: z.array(messageAttachmentResponseSchema), createdAt: z.string(), editedAt: z.string().nullable() });
 const directMessageParticipantResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']) });
 const directConversationResponseSchema = z.object({ id: z.string(), participant: directMessageParticipantResponseSchema, lastMessage: z.object({ authorUserId: z.string(), content: z.string(), createdAt: z.string() }).nullable(), unreadCount: z.number(), createdAt: z.string(), updatedAt: z.string() });
 const directMessageCandidateResponseSchema = directMessageParticipantResponseSchema.extend({ sharedServerNames: z.array(z.string()) });
@@ -610,12 +611,13 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   }, async (request) => service.listMessageNotifications(request.headers.authorization, request.query.since, request.query.afterId, request.query.limit));
 
   api.post(`${API_PREFIX}/channels/:channelId/messages`, {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
     schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: channelIdParams, body: createMessageSchema, response: { 201: textMessageResponseSchema, ...routeErrors() } },
-  }, async (request, reply) => reply.status(201).send(await service.createMessage(request.headers.authorization, request.params.channelId, request.body.content, request.body.replyToMessageId ?? null)));
+  }, async (request, reply) => reply.status(201).send(await service.createMessage(request.headers.authorization, request.params.channelId, request.body.content, request.body.mentions, request.body.replyToMessageId ?? null)));
 
   api.patch(`${API_PREFIX}/messages/:messageId`, {
     schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: messageIdParams, body: updateMessageSchema, response: { 200: textMessageResponseSchema, ...routeErrors() } },
-  }, async (request) => service.updateMessage(request.headers.authorization, request.params.messageId, request.body.content));
+  }, async (request) => service.updateMessage(request.headers.authorization, request.params.messageId, request.body.content, request.body.mentions));
 
   api.delete(`${API_PREFIX}/messages/:messageId`, {
     schema: { tags: ['messages'], security: [{ bearerAuth: [] }], params: messageIdParams, response: { 204: z.null(), ...routeErrors() } },

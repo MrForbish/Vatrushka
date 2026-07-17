@@ -22,6 +22,7 @@ Fastify — единственный компонент, имеющий PostgreS
 12. User/server settings используют hash routes внутри packaged `file://` renderer. `SettingsShell` загружается отдельным chunk и переиспользует `AppShell`; top-level media controller не размонтируется при переходе в настройки. До API parity новые входы контролируются независимыми build-time feature flags, а старые модалки остаются fallback.
 13. Attachment upload → проверка auth/permissions/типа/размера → приватный S3 → metadata и rollback-копия в PostgreSQL. Download повторно проверяет права, предпочитает S3 и на expand-фазе использует DB fallback при временной ошибке хранилища.
 14. Desktop отправляет presence heartbeat для текущей session каждые 20 секунд и передаёт auto-idle как device signal. Redis объединяет активные сессии с TTL 75 секунд; PostgreSQL хранит выбранный статус, custom status и privacy. API до сериализации преобразует invisible в offline и применяет DND к доставке, не изменяя unread/history.
+15. Composer создаёт structured user mentions вместе с текстом. API проверяет Unicode code-point ranges, членство адресата и `VIEW_CHANNEL`; `text_messages` и `message_mentions` пишутся одной транзакцией. Renderer получает stable user ID и текущее safe display name, поэтому rename не меняет адресата. Repeated mentions дают один unread mention на message.
 
 ## Консистентность
 
@@ -30,6 +31,7 @@ Fastify — единственный компонент, имеющий PostgreS
 - Сервер, его каналы, роли и членство создаются одной транзакцией. Удаление канала каскадно удаляет сообщения, permission overwrites, dashboard activity этого канала и channel lease.
 - Объект пишется до строки вложения; при ошибке DB API best-effort удаляет уже загруженный объект. Additive `storage_key` и временная dual-write схема позволяют откатить образ без потери старых и новых вложений.
 - Redis хранит только восстановимые heartbeat без persistence. При его ошибке публичный presence закрывается в offline, а readiness становится незелёным; выбранные пользователем статусы не теряются, поскольку находятся в PostgreSQL.
+- Редактирование message атомарно заменяет весь набор mention entities; счётчики вычисляются по текущим entities и channel read state, а не по regex из текста.
 - Системные роли `OWNER`/`EVERYONE` защищены от удаления, пользовательские роли ограничены иерархией, а административные изменения записываются в append-only audit log.
 
 ## Packages

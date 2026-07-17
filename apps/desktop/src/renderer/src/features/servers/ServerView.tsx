@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
 import {
+  materializeMentionLabels,
   type PermissionOverwriteTargetType,
   type PublicUser,
   type ServerAuditLogEntry,
@@ -8,6 +9,7 @@ import {
   type ServerPermission,
   type ServerSummary,
   type TextMessage,
+  type MessageMentionInput,
 } from '@vatrushka/shared';
 
 import {
@@ -55,8 +57,8 @@ export interface ServerViewProps {
   onSwitchServer(serverId: string): void;
   onChannel(channelId: string): void;
   onMessageDraft(value: string): void;
-  onSendMessage(replyToMessageId?: string, files?: File[]): void;
-  onUpdateMessage(messageId: string, content: string): void;
+  onSendMessage(replyToMessageId?: string, files?: File[], mentions?: MessageMentionInput[]): void;
+  onUpdateMessage(messageId: string, content: string, mentions?: MessageMentionInput[]): void;
   onMessageReaction(messageId: string, emoji: string): void;
   onDeleteMessage(messageId: string): void;
   onDeleteAttachment(attachmentId: string): void;
@@ -101,12 +103,14 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const [replyingMessage, setReplyingMessage] = useState<MessageViewModel | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<Array<{ id: string; file: File }>>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [draftMentions, setDraftMentions] = useState<MessageMentionInput[]>([]);
 
   useEffect(() => {
     setEditingMessage(null);
     setReplyingMessage(null);
     setPendingAttachments([]);
     setAttachmentError(null);
+    setDraftMentions([]);
   }, [props.activeChannelId, props.server.id]);
 
   const addAttachments = (files: File[]): void => {
@@ -130,6 +134,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     type: channel.type,
     unread: channel.unreadCount > 0,
     unreadCount: channel.unreadCount,
+    ...(channel.mentionCount === undefined ? {} : { mentionCount: channel.mentionCount }),
     participantCount: channel.voiceParticipants?.length ?? 0,
     participants: channel.voiceParticipants?.map((participant) => ({
       identity: participant.identity,
@@ -238,7 +243,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
           : <ServerTopBar channelName={activeChannel.name} channelType={activeChannel.type} description={activeChannel.type === 'text' ? 'История сохраняется' : activeChannel.id === props.connectedVoiceChannelId ? 'Вы подключены · навигация остаётся доступной' : 'Голосовая сессия'} memberCount={props.server.memberCount} />}
         workspaceLibrary={workspaceLibrary}
       >
-        <ServerStage {...props} activeChannel={activeChannel} attachmentError={attachmentError} canManageChannels={canManageChannels} canManageMessages={canManageMessages} editingMessage={editingMessage} pendingAttachments={pendingAttachments} replyingMessage={replyingMessage} onAddAttachments={addAttachments} onCancelContext={() => { setEditingMessage(null); setReplyingMessage(null); props.onMessageDraft(''); }} onEdit={(message) => { setReplyingMessage(null); setEditingMessage(message); setPendingAttachments([]); setAttachmentError(null); props.onMessageDraft(message.content); }} onOpenChannel={() => openChannelForm('text')} onRemoveAttachment={(id) => { setPendingAttachments((current) => current.filter((attachment) => attachment.id !== id)); setAttachmentError(null); }} onReply={(message) => { setEditingMessage(null); setReplyingMessage(message); }} onSentAttachments={() => { setPendingAttachments([]); setAttachmentError(null); }} />
+        <ServerStage {...props} activeChannel={activeChannel} attachmentError={attachmentError} canManageChannels={canManageChannels} canManageMessages={canManageMessages} draftMentions={draftMentions} editingMessage={editingMessage} pendingAttachments={pendingAttachments} replyingMessage={replyingMessage} onAddAttachments={addAttachments} onCancelContext={() => { setEditingMessage(null); setReplyingMessage(null); setDraftMentions([]); props.onMessageDraft(''); }} onEdit={(message) => { const draft = materializeMentionLabels(message.content, message.mentions ?? []); setReplyingMessage(null); setEditingMessage(message); setPendingAttachments([]); setAttachmentError(null); setDraftMentions(draft.mentions); props.onMessageDraft(draft.content); }} onMentionsChange={setDraftMentions} onOpenChannel={() => openChannelForm('text')} onRemoveAttachment={(id) => { setPendingAttachments((current) => current.filter((attachment) => attachment.id !== id)); setAttachmentError(null); }} onReply={(message) => { setEditingMessage(null); setReplyingMessage(message); }} onSentAttachments={() => { setPendingAttachments([]); setAttachmentError(null); }} />
       </AppShell>
 
       <Modal onClose={() => setChannelFormOpen(false)} open={channelFormOpen} title="Новый канал">
@@ -270,6 +275,7 @@ interface ServerStageProps extends ServerViewProps {
   attachmentError: string | null;
   canManageChannels: boolean;
   canManageMessages: boolean;
+  draftMentions: MessageMentionInput[];
   editingMessage: MessageViewModel | null;
   pendingAttachments: Array<{ id: string; file: File }>;
   replyingMessage: MessageViewModel | null;
@@ -277,12 +283,13 @@ interface ServerStageProps extends ServerViewProps {
   onCancelContext(): void;
   onEdit(message: MessageViewModel): void;
   onOpenChannel(): void;
+  onMentionsChange(mentions: MessageMentionInput[]): void;
   onRemoveAttachment(id: string): void;
   onReply(message: MessageViewModel): void;
   onSentAttachments(): void;
 }
 
-function ServerStage({ activeChannel, attachmentError, canManageChannels, canManageMessages, editingMessage, onAddAttachments, onCancelContext, onEdit, onOpenChannel, onRemoveAttachment, onReply, onSentAttachments, pendingAttachments, replyingMessage, ...props }: ServerStageProps): ReactNode {
+function ServerStage({ activeChannel, attachmentError, canManageChannels, canManageMessages, draftMentions, editingMessage, onAddAttachments, onCancelContext, onEdit, onMentionsChange, onOpenChannel, onRemoveAttachment, onReply, onSentAttachments, pendingAttachments, replyingMessage, ...props }: ServerStageProps): ReactNode {
   if (activeChannel === null) {
     return <div className="vui-voice-lobby"><Icon name="message" size={40} /><h1>На сервере пока нет каналов</h1>{canManageChannels ? <Button onClick={onOpenChannel}>Создать канал</Button> : null}</div>;
   }
@@ -297,6 +304,7 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
     authorId: message.authorUserId,
     authorName: message.authorDisplayName,
     content: message.content,
+    mentions: message.mentions ?? [],
     createdAt: message.createdAt,
     edited: message.editedAt !== null,
     own: message.authorUserId === props.user.id,
@@ -309,19 +317,19 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
   }));
   const submitMessage = (): void => {
     if (editingMessage === null) {
-      props.onSendMessage(replyingMessage?.id, pendingAttachments.map((attachment) => attachment.file));
+      props.onSendMessage(replyingMessage?.id, pendingAttachments.map((attachment) => attachment.file), draftMentions);
       onSentAttachments();
       onCancelContext();
     }
     else {
-      props.onUpdateMessage(editingMessage.id, props.messageDraft);
+      props.onUpdateMessage(editingMessage.id, props.messageDraft, draftMentions);
       onCancelContext();
     }
   };
   return (
     <section className="vui-message-stage">
       <MessageList channelName={activeChannel.name} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onLoadAttachment={props.onLoadAttachment} onEdit={onEdit} {...(channelPermissions.includes('ADD_REACTIONS') ? { onReaction: props.onMessageReaction } : {})} {...(channelPermissions.includes('SEND_MESSAGES') ? { onReply } : {})} />
-      <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} canSend={editingMessage === null ? channelPermissions.includes('SEND_MESSAGES') : editingMessage.canEdit === true} channelName={activeChannel.name} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} {...(editingMessage === null && channelPermissions.includes('SEND_ATTACHMENTS') ? { onFilesSelected: onAddAttachments } : {})} onChange={props.onMessageDraft} onRemoveAttachment={onRemoveAttachment} onSubmit={submitMessage} value={props.messageDraft} />
+      <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} canSend={editingMessage === null ? channelPermissions.includes('SEND_MESSAGES') : editingMessage.canEdit === true} channelName={activeChannel.name} mentionCandidates={props.server.members.map((member) => ({ userId: member.userId, displayName: member.displayName }))} mentions={draftMentions} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} {...(editingMessage === null && channelPermissions.includes('SEND_ATTACHMENTS') ? { onFilesSelected: onAddAttachments } : {})} onChange={props.onMessageDraft} onMentionsChange={onMentionsChange} onRemoveAttachment={onRemoveAttachment} onSubmit={submitMessage} value={props.messageDraft} />
       {attachmentError === null ? null : <div className="vui-server-error vui-server-error--attachment" role="alert">{attachmentError}</div>}
       {props.error === null ? null : <div className="vui-server-error vui-server-error--floating" role="alert">{props.error}</div>}
     </section>

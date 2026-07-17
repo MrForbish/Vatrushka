@@ -88,8 +88,13 @@ export const channelPermissionOverwriteSchema = z.object({
   allow: z.array(z.enum(serverPermissions)).max(serverPermissions.length),
   deny: z.array(z.enum(serverPermissions)).max(serverPermissions.length),
 }).strict().refine((value) => value.allow.every((permission) => !value.deny.includes(permission)), 'Permission cannot be allowed and denied at the same time');
-export const createMessageSchema = z.object({ content: newMessageContentSchema, replyToMessageId: uuidSchema.nullish() }).strict();
-export const updateMessageSchema = z.object({ content: messageContentSchema }).strict();
+export const messageMentionInputSchema = z.object({
+  userId: uuidSchema,
+  start: z.number().int().min(0).max(4_000),
+  length: z.number().int().min(2).max(257),
+}).strict();
+export const createMessageSchema = z.object({ content: newMessageContentSchema, mentions: z.array(messageMentionInputSchema).max(20).default([]), replyToMessageId: uuidSchema.nullish() }).strict();
+export const updateMessageSchema = z.object({ content: messageContentSchema, mentions: z.array(messageMentionInputSchema).max(20).default([]) }).strict();
 export const messageQuerySchema = z.object({ before: z.iso.datetime().optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }).strict();
 export const messageNotificationQuerySchema = z.object({ since: z.iso.datetime().optional(), afterId: uuidSchema.optional(), limit: z.coerce.number().int().min(1).max(50).default(20) }).strict();
 export const markChannelReadSchema = z.object({ messageId: uuidSchema }).strict();

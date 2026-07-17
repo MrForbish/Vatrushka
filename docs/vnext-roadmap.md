@@ -35,12 +35,14 @@ Phase 2 — общий `SettingsShell`, типизированные routes, sta
 
 Phase 3 выполняется вертикальными срезами без подмены API: существующие уведомления, пароль/2FA, резервные коды, сессии, security activity, редактирование отображаемого имени и реальные локальные аудиоустройства перенесены в routed user settings. Presence и privacy также подключены к реальному API: Redis агрегирует multi-session heartbeat, PostgreSQL хранит пользовательские предпочтения, invisible закрывается в offline, а DND подавляет доставку без потери unread. Аватар/username/bio не имитируются до появления backend-контрактов.
 
+Этап mentions завершён как полный polling-compatible срез: `@` autocomplete работает с клавиатурой и мышью, API хранит stable user entities с Unicode code-point offsets, проверяет membership/channel access и ограничивает 10 unique recipients. Rename-safe rendering, repeated mentions, atomic edit replacement, mention activity и отдельные channel counters подключены к PostgreSQL. Authenticated WebSocket остаётся следующим transport-этапом; до него новые messages доставляются существующим polling reconciliation.
+
 ## Следующие итерации
 
 ### P0 — эксплуатационная готовность
 
 1. Восстановление забытого пароля через отдельный ограниченный email-flow.
-2. Mention-счётчики и доставка событий через WebSocket без polling; локальные настройки push/звука уже реализованы.
+2. Authenticated WebSocket event gateway для `mention.created`/`mention.read` и presence/typing; polling остаётся reconciliation до production stability.
 3. Code signing автообновляемого Windows-клиента и отдельные release channels stable/beta.
 4. Нагрузочные тесты PostgreSQL/LiveKit и метрики Prometheus/Grafana.
 

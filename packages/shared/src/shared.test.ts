@@ -4,6 +4,10 @@ import type { ChannelPermissionOverwrite } from './contracts.js';
 
 import {
   createApiError,
+  codePointIndexToUtf16,
+  codePointLength,
+  codePointSlice,
+  materializeMentionLabels,
   decideScreenShareLease,
   displayNameSchema,
   expiresAt,
@@ -16,6 +20,23 @@ import {
 
 describe('shared domain helpers', () => {
   it('normalizes an email', () => expect(normalizeEmail('  USER@Example.COM ')).toBe('user@example.com'));
+
+  it('uses Unicode code-point offsets for structured message entities', () => {
+    const content = '👋 @Анна, привет';
+    expect(codePointLength(content)).toBe(15);
+    expect(codePointSlice(content, 2, 5)).toBe('@Анна');
+    expect(codePointIndexToUtf16(content, 2)).toBe(3);
+  });
+
+  it('materializes current mention labels before editing a renamed recipient', () => {
+    expect(materializeMentionLabels('Hi @Old and @Old', [
+      { userId: 'member', start: 3, length: 4, displayName: 'Renamed' },
+      { userId: 'member', start: 12, length: 4, displayName: 'Renamed' },
+    ])).toEqual({
+      content: 'Hi @Renamed and @Renamed',
+      mentions: [{ userId: 'member', start: 3, length: 8 }, { userId: 'member', start: 16, length: 8 }],
+    });
+  });
 
   it('validates multilingual display names', () => {
     expect(displayNameSchema.parse('  Анна-Мария  ')).toBe('Анна-Мария');
