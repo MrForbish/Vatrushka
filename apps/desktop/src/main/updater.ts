@@ -1,0 +1,116 @@
+import { app } from 'electron';
+import log from 'electron-log/main';
+import electronUpdater, { type ProgressInfo, type UpdateInfo } from 'electron-updater';
+
+import type { DesktopUpdateState } from '@vatrushka/shared';
+
+const UPDATE_INTERVAL_MS = 4 * 60 * 60 * 1_000;
+const { autoUpdater } = electronUpdater;
+
+export class DesktopUpdater {
+  private state: DesktopUpdateState = { status: 'idle', currentVersion: app.getVersion() };
+  private startTimer: NodeJS.Timeout | null = null;
+  private interval: NodeJS.Timeout | null = null;
+  private started = false;
+
+  constructor(private readonly publish: (state: DesktopUpdateState) => void) {}
+
+  start(): void {
+    if (this.started) return;
+    this.started = true;
+    if (!app.isPackaged || process.platform !== 'win32' || Boolean(process.env.PORTABLE_EXECUTABLE_FILE)) {
+      this.setState({
+        status: 'unsupported',
+        currentVersion: app.getVersion(),
+        message: app.isPackaged ? 'Автообновление доступно в установленной Windows-версии.' : 'Автообновление отключено в режиме разработки.',
+      });
+      return;
+    }
+
+    autoUpdater.logger = log;
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on('checking-for-update', this.onChecking);
+    autoUpdater.on('update-available', this.onAvailable);
+    autoUpdater.on('update-not-available', this.onNotAvailable);
+    autoUpdater.on('download-progress', this.onProgress);
+    autoUpdater.on('update-downloaded', this.onDownloaded);
+    autoUpdater.on('error', this.onError);
+
+    this.startTimer = setTimeout(() => { void this.check(); }, 10_000);
+    this.startTimer.unref();
+    this.interval = setInterval(() => { void this.check(); }, UPDATE_INTERVAL_MS);
+    this.interval.unref();
+  }
+
+  getState(): DesktopUpdateState {
+    return { ...this.state };
+  }
+
+  async check(): Promise<void> {
+    if (!this.started) this.start();
+    if (this.state.status === 'unsupported' || this.state.status === 'checking' || this.state.status === 'downloading' || this.state.status === 'ready') return;
+    try {
+      await autoUpdater.checkForUpdates();
+    } catch (error) {
+      this.onError(error instanceof Error ? error : new Error('Unknown updater error'));
+    }
+  }
+
+  install(): void {
+    if (this.state.status !== 'ready') return;
+    setImmediate(() => autoUpdater.quitAndInstall(false, true));
+  }
+
+  dispose(): void {
+    if (this.startTimer) clearTimeout(this.startTimer);
+    if (this.interval) clearInterval(this.interval);
+    this.startTimer = null;
+    this.interval = null;
+    autoUpdater.removeListener('checking-for-update', this.onChecking);
+    autoUpdater.removeListener('update-available', this.onAvailable);
+    autoUpdater.removeListener('update-not-available', this.onNotAvailable);
+    autoUpdater.removeListener('download-progress', this.onProgress);
+    autoUpdater.removeListener('update-downloaded', this.onDownloaded);
+    autoUpdater.removeListener('error', this.onError);
+  }
+
+  private readonly onChecking = (): void => {
+    this.setState({ status: 'checking', currentVersion: app.getVersion() });
+  };
+
+  private readonly onAvailable = (info: UpdateInfo): void => {
+    this.setState({ status: 'available', currentVersion: app.getVersion(), version: info.version });
+  };
+
+  private readonly onNotAvailable = (info: UpdateInfo): void => {
+    this.setState({ status: 'up-to-date', currentVersion: app.getVersion(), version: info.version });
+  };
+
+  private readonly onProgress = (progress: ProgressInfo): void => {
+    this.setState({
+      status: 'downloading',
+      currentVersion: app.getVersion(),
+      ...(this.state.version ? { version: this.state.version } : {}),
+      percent: Math.max(0, Math.min(100, Math.round(progress.percent))),
+    });
+  };
+
+  private readonly onDownloaded = (info: UpdateInfo): void => {
+    this.setState({ status: 'ready', currentVersion: app.getVersion(), version: info.version, percent: 100 });
+  };
+
+  private readonly onError = (error: Error): void => {
+    log.error('Automatic update failed', { error });
+    this.setState({
+      status: 'error',
+      currentVersion: app.getVersion(),
+      message: 'Не удалось проверить или загрузить обновление. Повторите попытку позже.',
+    });
+  };
+
+  private setState(state: DesktopUpdateState): void {
+    this.state = state;
+    this.publish({ ...state });
+  }
+}

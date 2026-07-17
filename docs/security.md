@@ -20,8 +20,8 @@ Windows DPAPI protects against other OS users but not every process already runn
 - OTP HMAC pepper, refresh SHA-256 hashes, JWT issuer/audience/expiry;
 - route rate limits covered by integration tests, attempt limits, immediate access-token checks and session family revocation;
 - single-use hashed 2FA recovery codes, active-session management and an append-only security event feed;
-- least-privilege room tokens: microphone/screen sources, no camera;
-- owner checks server-side, guest room binding, room state checks;
+- least-privilege channel tokens: microphone/screen sources, no camera;
+- server membership, effective permissions and moderation checks выполняются server-side; гостевой media-доступ отсутствует;
 - webhook signature and body checksum validation;
 - Pino redaction for auth headers/code/refresh/secrets.
 

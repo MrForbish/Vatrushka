@@ -1,6 +1,6 @@
 # Ватрушка
 
-«Ватрушка» — настольное приложение для общения на Windows 10/11 x64. Помимо быстрых голосовых комнат до пяти человек, в нём есть постоянные серверы, текстовые и голосовые каналы, история сообщений, роли и права. Регистрация поддерживает пароль с подтверждением по email, вход — email-код или пароль со вторым фактором email/TOTP/recovery-кодом. В голосе доступны выбор аудиоустройств и демонстрация монитора либо окна с управляемым системным звуком.
+«Ватрушка» — настольное приложение для общения на Windows 10/11 x64. Основная модель — постоянные серверы с текстовыми и голосовыми каналами, историей сообщений, ролями и правами. Новый аккаунт создаётся с паролем и подтверждением email; каждый вход требует пароль и второй фактор email/TOTP/recovery. В голосе доступны выбор аудиоустройств и демонстрация монитора либо окна с управляемым системным звуком.
 
 ## Архитектура
 
@@ -59,7 +59,7 @@ docs/                   operating and design documentation
 
 ## Как попробовать на своём Windows-ПК
 
-Клиенту нужен работающий API и LiveKit: один установленный `.exe` без backend сможет показать форму входа, но не создаст голосовую комнату.
+Клиенту нужен работающий API и LiveKit: один установленный `.exe` без backend сможет показать форму входа, но не подключится к серверным голосовым каналам.
 
 ### Вариант 1: запуск из исходников
 
@@ -90,7 +90,7 @@ docs/                   operating and design documentation
 
    API: `http://localhost:3000`; Swagger: `http://localhost:3000/docs` (только не-production).
 
-5. Зарегистрируйте аккаунт с паролем либо используйте вход по email для legacy-аккаунта. В development используется код `123456`; письмо также появится в Mailpit на `http://localhost:8025`.
+5. Зарегистрируйте аккаунт с паролем. Вход без пароля удалён; после проверки пароля всегда требуется email-код, TOTP или recovery-код. В development используется код `123456`; письмо также появится в Mailpit на `http://localhost:8025`.
 
 Без Docker можно запустить PostgreSQL любым способом и поменять `DATABASE_URL`. Production flow не содержит in-memory заглушек; `MemoryStore`, `FakeMailer` и `FakeMediaService` импортируются только тестами.
 
@@ -104,7 +104,7 @@ docs/                   operating and design documentation
    npm run package:win
    ```
 
-3. Запустите `apps/desktop/release/Vatrushka-Setup-<version>-x64.exe`. Он установит «Ватрушку» в профиль текущего пользователя и добавит ярлыки. `Vatrushka-Portable-<version>-x64.exe` запускается без установки.
+3. Запустите `apps/desktop/release/Vatrushka-Setup-<version>-x64.exe`. Он установит «Ватрушку» в профиль текущего пользователя, добавит ярлыки и сможет получать последующие обновления без переустановки. `Vatrushka-Portable-<version>-x64.exe` запускается без установки, но автообновление в portable-режиме отключено.
 
 Сборки MVP не подписаны code-signing сертификатом. Windows SmartScreen может показать предупреждение; подписывать публичные релизы нужно до распространения среди пользователей.
 
@@ -128,14 +128,14 @@ npm run db:migrate
 npm run db:studio
 ```
 
-`npm run package:win` генерирует иконку и собирает `Vatrushka-Setup-<version>-x64.exe` и `Vatrushka-Portable-<version>-x64.exe` в `apps/desktop/release/`.
+`npm run package:win` генерирует иконку и собирает `Vatrushka-Setup-<version>-x64.exe`, его `.blockmap`, `latest.yml` для автообновления и `Vatrushka-Portable-<version>-x64.exe` в `apps/desktop/release/`.
 
 ### Deep link в development
 
 После запуска `npm run dev:desktop` протокол регистрируется для текущего пользователя. Проверка из PowerShell:
 
 ```powershell
-Start-Process 'vatrushka://join/ABC234'
+Start-Process 'vatrushka://server/ABCD2345'
 ```
 
 Приложение использует single-instance lock, валидирует protocol/host/code и передаёт только нормализованный код существующему окну.
@@ -165,6 +165,7 @@ cp .env.example .env
 # NODE_ENV=production, DOMAIN=api.example.com, PUBLIC_API_URL=https://api.example.com
 # удалить DEV_FIXED_OTP, указать SMTP_* и LIVEKIT_*
 # сгенерировать ACCESS_TOKEN_SECRET и OTP_PEPPER: openssl rand -hex 32
+mkdir -p updates
 docker compose --env-file .env -f infra/docker/docker-compose.yml config
 docker compose --env-file .env -f infra/docker/docker-compose.yml build --pull api
 docker compose --env-file .env -f infra/docker/docker-compose.yml up -d postgres api caddy
@@ -172,7 +173,7 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml ps
 curl https://api.example.com/health/ready
 ```
 
-Откройте входящие 80/TCP и 443/TCP+UDP. Caddy автоматически запросит TLS-сертификат после правильной настройки DNS. Затем добавьте в LiveKit webhook `https://api.example.com/api/v1/webhooks/livekit`, соберите Windows-клиент с `VITE_PUBLIC_API_BASE_URL=https://api.example.com` и раздайте NSIS-файл пользователям.
+Откройте входящие 80/TCP и 443/TCP+UDP. Caddy автоматически запросит TLS-сертификат после правильной настройки DNS. Затем добавьте в LiveKit webhook `https://api.example.com/api/v1/webhooks/livekit`, соберите Windows-клиент с `VITE_PUBLIC_API_BASE_URL=https://api.example.com` и раздайте NSIS-файл пользователям. Для следующих релизов сначала загрузите setup/blockmap, а затем `latest.yml` в каталог `updates/`; клиент проверяет `https://api.example.com/updates/latest.yml`.
 
 API наружу не публикуется напрямую; доступен только через Caddy. Миграции выполняются при старте API. PostgreSQL и Caddy используют named volumes, сервисы имеют healthchecks, restart policy и log rotation. Полный runbook: [docs/deployment.md](docs/deployment.md).
 
@@ -189,11 +190,11 @@ API наружу не публикуется напрямую; доступен 
 | OTP | `OTP_PEPPER`, `OTP_TTL_SECONDS`, `OTP_RESEND_SECONDS`, `DEV_FIXED_OTP` |
 | SMTP | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` |
 | LiveKit | `LIVEKIT_URL`, `LIVEKIT_HTTP_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
-| Rooms | `ROOM_MAX_PARTICIPANTS`, `ROOM_TTL_HOURS`, `SCREEN_SHARE_LEASE_SECONDS`, `SCREEN_SHARE_HEARTBEAT_SECONDS` |
+| Media coordination | `SCREEN_SHARE_LEASE_SECONDS`, `SCREEN_SHARE_HEARTBEAT_SECONDS` |
 | Network | `CORS_ALLOWED_ORIGINS`, `DOMAIN`, `LIVEKIT_DOMAIN`, `TURN_DOMAIN` |
 | Desktop public | `VITE_PUBLIC_API_BASE_URL` |
 
-Production API отклоняет development secrets и `DEV_FIXED_OTP`; обязательные настройки валидируются Zod до открытия порта. `ROOM_MAX_PARTICIPANTS` должен быть ровно `5`.
+Production API отклоняет development secrets и `DEV_FIXED_OTP`; обязательные настройки валидируются Zod до открытия порта.
 
 ## Диагностика desktop media
 
@@ -220,12 +221,12 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 ## Существенные допущения и ограничения
 
 - Production поддерживает LiveKit Cloud и self-hosted single-node; текущий сервер проекта использует self-hosted режим.
-- Истечение 12-часовой комнаты проверяется при каждом API-доступе; LiveKit дополнительно закрывает пустые комнаты. Отдельный scheduler для массовой уборки не нужен при MVP-нагрузке.
-- Исключение удаляет текущего LiveKit participant. Постоянного ban list в требованиях нет.
+- Отдельные временные комнаты и гостевой вход удалены; голос доступен только авторизованным участникам серверных каналов.
+- Исключение удаляет текущего LiveKit participant или участника сервера. Постоянного ban list пока нет.
 - Зритель может отдельно выключать и регулировать громкость звука демонстрации; значение сохраняется локально.
 - Реальные SMTP delivery, LiveKit Cloud/WebRTC через NAT, Windows microphone/loopback/display capture требуют внешних credentials и устройств и не заменяются unit-тестами.
 - E2E не захватывает реальный микрофон/экран. Оно проверяет Electron shell, sandbox/preload allowlist и deep link.
-- Нет code signing, auto-update, E2EE, recording, telemetry и tray mode.
+- NSIS-клиент обновляется автоматически из generic update feed; portable-сборка не обновляется. Пока нет code signing, E2EE, recording, telemetry и tray mode.
 
 ## Документация
 
@@ -237,5 +238,6 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 - [Security](docs/security.md)
 - [Testing](docs/testing.md)
 - [Performance](docs/performance.md)
+- [Release 0.4.0](docs/releases/0.4.0.md)
 - [Release 0.3.0](docs/releases/0.3.0.md)
 - [vNext roadmap](docs/vnext-roadmap.md)

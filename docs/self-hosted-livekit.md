@@ -1,6 +1,6 @@
 # Self-hosted LiveKit: одна Ubuntu VM
 
-Этот профиль необязателен и не включён в основной compose. Он не использует Redis, Kubernetes, Egress, Ingress, SIP, recording или transcoding. Это разумно только для одной/нескольких комнат до пяти участников на машине с достаточной исходящей полосой.
+Этот профиль необязателен и не включён в основной compose. Он не использует Redis, Kubernetes, Egress, Ingress, SIP, recording или transcoding. Это разумно для небольшой инсталляции с несколькими активными голосовыми каналами на машине с достаточной исходящей полосой.
 
 LiveKit рекомендует host networking для VM и предупреждает, что WebRTC требует публичного IP, trusted certificates и открытых UDP ports. Для production-first установки предпочтителен официальный `livekit/generate`; файлы здесь дают проверяемую минимальную конфигурацию проекта.
 
@@ -58,7 +58,7 @@ sudo tcpdump -ni any udp portrange 50000-60000
 
 1. Зафиксируйте текущий image digest: `docker image inspect livekit/livekit-server:v1.13.1`.
 2. Измените tag на проверенный release, `docker compose pull livekit`, `up -d livekit`.
-3. Проверьте новую тестовую комнату и logs.
+3. Проверьте новый тестовый голосовой канал и logs.
 4. Для rollback верните прежний tag/digest и снова `up -d livekit`.
 
-Остановка LiveKit разрывает активные комнаты; rolling update для одной node отсутствует.
+Остановка LiveKit разрывает активные голосовые каналы; rolling update для одной node отсутствует.

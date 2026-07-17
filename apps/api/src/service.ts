@@ -7,7 +7,6 @@ import {
   type AuthResponse,
   type ApiErrorCode,
   type PasswordLoginChallenge,
-  type PublicRoom,
   type PublicUser,
   type RoomConnection,
   type ServerChannel,
@@ -35,13 +34,12 @@ import {
   resolveChannelPermissions,
   resolveServerPermissions,
   expiresAt,
-  generateRoomCode,
   isExpired,
 } from '@vatrushka/shared';
 
 import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
-import type { AuthCodeRecord, DirectConversationOverviewRecord, DirectConversationRecord, DirectMessageAttachmentMetadata, DirectMessageAttachmentRecord, DirectMessageWithAuthor, GuestSessionRecord, MessageAttachmentMetadata, MessageAttachmentRecord, MessageNotificationRecord, MessageReactionSummary, RecoveryCodeRecord, RoomRecord, SecurityEventRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
+import type { AuthCodeRecord, DirectConversationOverviewRecord, DirectConversationRecord, DirectMessageAttachmentMetadata, DirectMessageAttachmentRecord, DirectMessageWithAuthor, MessageAttachmentMetadata, MessageAttachmentRecord, MessageNotificationRecord, MessageReactionSummary, RecoveryCodeRecord, SecurityEventRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
 import type { DataStore, Mailer, MediaService } from './ports.js';
 import {
   hashOpaqueToken,
@@ -67,10 +65,6 @@ export interface ServiceDependencies {
   media: MediaService;
   clock?: () => Date;
 }
-
-export type RoomPrincipal =
-  | { kind: 'user'; user: UserRecord }
-  | { kind: 'guest'; guest: GuestSessionRecord };
 
 const RECOVERY_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -207,24 +201,6 @@ export class VatrushkaService {
 
   now(): Date {
     return this.clock();
-  }
-
-  async requestCode(email: string): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
-    const user = await this.store.findUserByEmail(email);
-    if (user?.passwordHash) throw new AppError('PASSWORD_REQUIRED', 409);
-    return this.issueEmailCode(email, 'login');
-  }
-
-  async verifyCode(email: string, code: string, deviceName: string): Promise<AuthResponse> {
-    const now = this.now();
-    await this.consumeEmailCode(email, code, 'login', 'INVALID_OTP');
-
-    const created = await this.store.getOrCreateUser(email, now);
-    const user = email === this.config.PLATFORM_OWNER_EMAIL && created.user.platformRole !== 'owner'
-      ? (await this.store.setPlatformRoleByEmail(email, 'owner', now)) ?? created.user
-      : created.user;
-    const tokens = await this.createSessionTokens(user, deviceName, now);
-    return { ...tokens, user: publicUser(user), isNewUser: created.isNewUser };
   }
 
   async requestRegistration(email: string, password: string): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
@@ -365,6 +341,10 @@ export class VatrushkaService {
     if (rotation.status === 'not_found') throw new AppError('UNAUTHORIZED', 401);
     const user = await this.store.findUserById(rotation.newSession.userId);
     if (!user) throw new AppError('UNAUTHORIZED', 401);
+    if (!user.passwordHash) {
+      await this.store.revokeSessionFamily(rotation.newSession.tokenFamilyId, now);
+      throw new AppError('SESSION_REVOKED', 401);
+    }
     return {
       accessToken: await issueAccessToken({ userId: user.id, sessionId: rotation.newSession.id }, this.config),
       refreshToken: replacementToken,
@@ -386,7 +366,7 @@ export class VatrushkaService {
     try {
       const claims = await verifyAccessToken(authorization.slice('Bearer '.length), this.config);
       const [user, session] = await Promise.all([this.store.findUserById(claims.userId), this.store.findSessionById(claims.sessionId)]);
-      if (!user || !session || session.userId !== user.id) throw new AppError('UNAUTHORIZED', 401);
+      if (!user || !user.passwordHash || !session || session.userId !== user.id) throw new AppError('UNAUTHORIZED', 401);
       if (session.revokedAt || isExpired(session.expiresAt, this.now())) throw new AppError('SESSION_REVOKED', 401);
       return { user, session };
     } catch (error) {
@@ -452,15 +432,6 @@ export class VatrushkaService {
       deviceName: event.deviceName,
       createdAt: event.createdAt.toISOString(),
     }));
-  }
-
-  async authenticateRoomPrincipal(authorization: string | undefined): Promise<RoomPrincipal> {
-    if (authorization?.startsWith('Guest ')) {
-      const guest = await this.store.findGuestSessionByTokenHash(hashOpaqueToken(authorization.slice('Guest '.length)));
-      if (!guest || guest.revokedAt || isExpired(guest.expiresAt, this.now())) throw new AppError('SESSION_EXPIRED', 401);
-      return { kind: 'guest', guest };
-    }
-    return { kind: 'user', user: await this.authenticate(authorization) };
   }
 
   async getMe(authorization: string | undefined): Promise<PublicUser> {
@@ -1130,212 +1101,6 @@ export class VatrushkaService {
     await this.store.releaseChannelLease(channelId, participantIdentity);
   }
 
-  async createRoom(authorization: string | undefined): Promise<RoomConnection> {
-    const owner = await this.authenticate(authorization);
-    this.requireCompleteProfile(owner);
-    const now = this.now();
-    let room: RoomRecord | null = null;
-    for (let attempt = 0; attempt < 10 && !room; attempt += 1) {
-      const candidate: RoomRecord = {
-        id: randomUUID(),
-        code: generateRoomCode(),
-        ownerUserId: owner.id,
-        livekitRoomName: `room_${randomUUID()}`,
-        status: 'active',
-        isLocked: false,
-        maxParticipants: this.config.ROOM_MAX_PARTICIPANTS,
-        expiresAt: expiresAt(now, this.config.ROOM_TTL_HOURS * 3600),
-        closedAt: null,
-        createdAt: now,
-        updatedAt: now,
-      };
-      if (await this.store.createRoom(candidate)) room = candidate;
-    }
-    if (!room) throw new AppError('INTERNAL_ERROR', 500);
-    try {
-      await this.media.createRoom({
-        id: room.id,
-        ownerUserId: room.ownerUserId,
-        name: room.livekitRoomName,
-        maxParticipants: room.maxParticipants,
-      });
-      return this.connectionForUser(room, owner, true);
-    } catch {
-      await this.store.closeRoom(room.id, now);
-      throw new AppError('LIVEKIT_UNAVAILABLE', 503);
-    }
-  }
-
-  async publicRoom(code: string): Promise<PublicRoom> {
-    const room = await this.requireRoomByCode(code, false);
-    const owner = await this.store.findUserById(room.ownerUserId);
-    let count: number;
-    try {
-      count = await this.media.participantCount(room.livekitRoomName);
-    } catch {
-      throw new AppError('LIVEKIT_UNAVAILABLE', 503);
-    }
-    return {
-      code: room.code,
-      status: room.status,
-      isLocked: room.isLocked,
-      currentParticipantCount: count,
-      maxParticipants: room.maxParticipants,
-      ownerDisplayName: owner?.displayName ?? 'Владелец',
-    };
-  }
-
-  async joinRoom(authorization: string | undefined, roomId: string): Promise<RoomConnection> {
-    const user = await this.authenticate(authorization);
-    this.requireCompleteProfile(user);
-    const room = await this.requireRoomById(roomId, true);
-    await this.ensureCapacity(room);
-    return this.connectionForUser(room, user, room.ownerUserId === user.id);
-  }
-
-  async joinRoomByCode(authorization: string | undefined, code: string): Promise<RoomConnection> {
-    const user = await this.authenticate(authorization);
-    this.requireCompleteProfile(user);
-    const room = await this.requireRoomByCode(code, true);
-    await this.ensureCapacity(room);
-    return this.connectionForUser(room, user, room.ownerUserId === user.id);
-  }
-
-  async joinGuest(code: string, displayName: string): Promise<RoomConnection> {
-    const room = await this.requireRoomByCode(code, true);
-    await this.ensureCapacity(room);
-    const now = this.now();
-    const guestToken = randomOpaqueToken();
-    const guest: GuestSessionRecord = {
-      id: randomUUID(),
-      roomId: room.id,
-      displayName,
-      tokenHash: hashOpaqueToken(guestToken),
-      expiresAt: room.expiresAt,
-      revokedAt: null,
-      createdAt: now,
-    };
-    await this.store.createGuestSession(guest);
-    const identity = `guest_${guest.id}_${randomOpaqueToken(6)}`;
-    return {
-      roomId: room.id,
-      ownerUserId: room.ownerUserId,
-      code: room.code,
-      livekitUrl: this.config.LIVEKIT_URL,
-      livekitToken: await this.issueMediaToken(room, identity, displayName, 'guest'),
-      participantIdentity: identity,
-      participantDisplayName: displayName,
-      isOwner: false,
-      guestSessionToken: guestToken,
-    };
-  }
-
-  async reissueRoomToken(
-    authorization: string | undefined,
-    roomId: string,
-    participantIdentity: string,
-  ): Promise<{ livekitUrl: string; livekitToken: string }> {
-    const principal = await this.authenticateRoomPrincipal(authorization);
-    const room = await this.requireRoomById(roomId, true);
-    this.assertPrincipalIdentity(principal, room, participantIdentity);
-    const displayName = principal.kind === 'user' ? principal.user.displayName : principal.guest.displayName;
-    if (!displayName) throw new AppError('PROFILE_INCOMPLETE', 409);
-    return {
-      livekitUrl: this.config.LIVEKIT_URL,
-      livekitToken: await this.issueMediaToken(room, participantIdentity, displayName, principal.kind),
-    };
-  }
-
-  async setRoomLock(authorization: string | undefined, roomId: string, isLocked: boolean): Promise<{ isLocked: boolean }> {
-    const user = await this.authenticate(authorization);
-    const room = await this.requireRoomById(roomId, false);
-    this.requireOwner(room, user);
-    const updated = await this.store.setRoomLocked(room.id, isLocked, this.now());
-    if (!updated) throw new AppError('ROOM_NOT_FOUND', 404);
-    return { isLocked: updated.isLocked };
-  }
-
-  async closeRoom(authorization: string | undefined, roomId: string): Promise<void> {
-    const user = await this.authenticate(authorization);
-    const room = await this.requireRoomById(roomId, false);
-    this.requireOwner(room, user);
-    const now = this.now();
-    await this.store.closeRoom(room.id, now);
-    await this.store.revokeGuestSessionsForRoom(room.id, now);
-    await this.store.releaseLeaseByRoom(room.id);
-    try {
-      await this.media.deleteRoom(room.livekitRoomName);
-    } catch {
-      throw new AppError('LIVEKIT_UNAVAILABLE', 503);
-    }
-  }
-
-  async kickParticipant(authorization: string | undefined, roomId: string, participantIdentity: string): Promise<void> {
-    const user = await this.authenticate(authorization);
-    const room = await this.requireRoomById(roomId, false);
-    this.requireOwner(room, user);
-    if (participantIdentity.startsWith(`user_${user.id}_`)) throw new AppError('NOT_ROOM_OWNER', 403, 'Владелец не может исключить себя');
-    try {
-      if (!(await this.media.participantExists(room.livekitRoomName, participantIdentity))) {
-        throw new AppError('PARTICIPANT_NOT_FOUND', 404);
-      }
-      await this.media.removeParticipant(room.livekitRoomName, participantIdentity);
-      await this.store.releaseLeaseByParticipant(participantIdentity);
-      if (participantIdentity.startsWith('guest_')) {
-        const guestId = participantIdentity.split('_')[1];
-        if (guestId) await this.store.revokeGuestSessionById(guestId, this.now());
-      }
-    } catch (error) {
-      if (error instanceof AppError) throw error;
-      throw new AppError('LIVEKIT_UNAVAILABLE', 503);
-    }
-  }
-
-  async claimScreenShare(
-    authorization: string | undefined,
-    roomId: string,
-    participantIdentity: string,
-  ): Promise<{ expiresAt: string }> {
-    const { principal, room, displayName } = await this.validateMediaParticipant(authorization, roomId, participantIdentity);
-    void principal;
-    const result = await this.store.claimLease(
-      room.id,
-      participantIdentity,
-      displayName,
-      this.now(),
-      this.config.SCREEN_SHARE_LEASE_SECONDS,
-    );
-    if (result.status === 'busy') {
-      throw new AppError('SCREEN_SHARE_BUSY', 409, undefined, {
-        participantDisplayName: result.lease.participantDisplayName,
-      });
-    }
-    return { expiresAt: result.lease.expiresAt.toISOString() };
-  }
-
-  async heartbeatScreenShare(
-    authorization: string | undefined,
-    roomId: string,
-    participantIdentity: string,
-  ): Promise<{ expiresAt: string }> {
-    await this.validateMediaParticipant(authorization, roomId, participantIdentity);
-    const lease = await this.store.heartbeatLease(
-      roomId,
-      participantIdentity,
-      this.now(),
-      this.config.SCREEN_SHARE_LEASE_SECONDS,
-    );
-    if (!lease) throw new AppError('SCREEN_SHARE_BUSY', 409, 'Право на демонстрацию экрана утрачено');
-    return { expiresAt: lease.expiresAt.toISOString() };
-  }
-
-  async releaseScreenShare(authorization: string | undefined, roomId: string, participantIdentity: string): Promise<void> {
-    const principal = await this.authenticateRoomPrincipal(authorization);
-    const room = await this.requireRoomById(roomId, false);
-    this.assertPrincipalIdentity(principal, room, participantIdentity);
-    await this.store.releaseLease(roomId, participantIdentity);
-  }
-
   async handleWebhookEvent(event: { event?: string; participant?: { identity?: string }; room?: { metadata?: string }; track?: { source?: TrackSource } }): Promise<void> {
     const identity = event.participant?.identity;
     if ((event.event === 'participant_left' || (event.event === 'track_unpublished' && event.track?.source === TrackSource.SCREEN_SHARE)) && identity) {
@@ -1475,84 +1240,6 @@ export class VatrushkaService {
     } catch {
       // The in-app audit event is authoritative; SMTP outages must not break security actions.
     }
-  }
-
-  private async connectionForUser(room: RoomRecord, user: UserRecord, isOwner: boolean): Promise<RoomConnection> {
-    const displayName = user.displayName;
-    if (!displayName) throw new AppError('PROFILE_INCOMPLETE', 409);
-    const identity = `user_${user.id}_${randomOpaqueToken(6)}`;
-    return {
-      roomId: room.id,
-      ownerUserId: room.ownerUserId,
-      code: room.code,
-      livekitUrl: this.config.LIVEKIT_URL,
-      livekitToken: await this.issueMediaToken(room, identity, displayName, 'user', user.platformRole),
-      participantIdentity: identity,
-      participantDisplayName: displayName,
-      isOwner,
-    };
-  }
-
-  private async issueMediaToken(
-    room: RoomRecord,
-    identity: string,
-    displayName: string,
-    kind: 'user' | 'guest',
-    platformRole: UserRecord['platformRole'] = 'member',
-  ): Promise<string> {
-    try {
-      return await this.media.issueToken({
-        roomName: room.livekitRoomName,
-        identity,
-        displayName,
-        metadata: { appRoomId: room.id, kind, platformRole },
-      });
-    } catch {
-      throw new AppError('LIVEKIT_UNAVAILABLE', 503);
-    }
-  }
-
-  private async ensureCapacity(room: RoomRecord): Promise<void> {
-    try {
-      if ((await this.media.participantCount(room.livekitRoomName)) >= room.maxParticipants) {
-        throw new AppError('ROOM_FULL', 409);
-      }
-    } catch (error) {
-      if (error instanceof AppError) throw error;
-      throw new AppError('LIVEKIT_UNAVAILABLE', 503);
-    }
-  }
-
-  private async requireRoomById(id: string, joining: boolean): Promise<RoomRecord> {
-    const room = await this.store.findRoomById(id);
-    if (!room) throw new AppError('ROOM_NOT_FOUND', 404);
-    await this.assertRoomState(room, joining);
-    return room;
-  }
-
-  private async requireRoomByCode(code: string, joining: boolean): Promise<RoomRecord> {
-    const room = await this.store.findRoomByCode(code);
-    if (!room) throw new AppError('ROOM_NOT_FOUND', 404);
-    await this.assertRoomState(room, joining);
-    return room;
-  }
-
-  private async assertRoomState(room: RoomRecord, joining: boolean): Promise<void> {
-    if (room.status === 'closed') throw new AppError('ROOM_CLOSED', 410);
-    if (room.status === 'expired') throw new AppError('ROOM_EXPIRED', 410);
-    if (isExpired(room.expiresAt, this.now())) {
-      const now = this.now();
-      await this.store.expireRoom(room.id, now);
-      await this.store.revokeGuestSessionsForRoom(room.id, now);
-      await this.store.releaseLeaseByRoom(room.id);
-      try {
-        await this.media.deleteRoom(room.livekitRoomName);
-      } catch {
-        // The room remains expired even if LiveKit cleanup is temporarily unavailable.
-      }
-      throw new AppError('ROOM_EXPIRED', 410);
-    }
-    if (joining && room.isLocked) throw new AppError('ROOM_LOCKED', 409);
   }
 
   private async requireServer(id: string): Promise<ServerRecord> {
@@ -1716,35 +1403,4 @@ export class VatrushkaService {
     if (!user.displayName) throw new AppError('PROFILE_INCOMPLETE', 409);
   }
 
-  private requireOwner(room: RoomRecord, user: UserRecord): void {
-    if (room.ownerUserId !== user.id) throw new AppError('NOT_ROOM_OWNER', 403);
-  }
-
-  private assertPrincipalIdentity(principal: RoomPrincipal, room: RoomRecord, participantIdentity: string): void {
-    if (principal.kind === 'user') {
-      if (!participantIdentity.startsWith(`user_${principal.user.id}_`)) throw new AppError('UNAUTHORIZED', 401);
-    } else if (principal.guest.roomId !== room.id || !participantIdentity.startsWith(`guest_${principal.guest.id}_`)) {
-      throw new AppError('UNAUTHORIZED', 401);
-    }
-  }
-
-  private async validateMediaParticipant(
-    authorization: string | undefined,
-    roomId: string,
-    participantIdentity: string,
-  ): Promise<{ principal: RoomPrincipal; room: RoomRecord; displayName: string }> {
-    const principal = await this.authenticateRoomPrincipal(authorization);
-    const room = await this.requireRoomById(roomId, false);
-    this.assertPrincipalIdentity(principal, room, participantIdentity);
-    let exists: boolean;
-    try {
-      exists = await this.media.participantExists(room.livekitRoomName, participantIdentity);
-    } catch {
-      throw new AppError('LIVEKIT_UNAVAILABLE', 503);
-    }
-    if (!exists) throw new AppError('PARTICIPANT_NOT_FOUND', 404);
-    const displayName = principal.kind === 'user' ? principal.user.displayName : principal.guest.displayName;
-    if (!displayName) throw new AppError('PROFILE_INCOMPLETE', 409);
-    return { principal, room, displayName };
-  }
 }

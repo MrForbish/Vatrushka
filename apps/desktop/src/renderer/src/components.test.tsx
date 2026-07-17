@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { RoomConnection, ServerDetail } from '@vatrushka/shared';
 
-import { AuthPanel, GuestJoinPanel, HomePanel } from './components.js';
+import { AuthPanel, HomePanel } from './components.js';
 import { ServerView } from './features/servers/index.js';
 import { RoomView } from './features/voice/index.js';
 import type { MediaSnapshot } from './media.js';
@@ -14,39 +14,33 @@ import type { MediaSnapshot } from './media.js';
 const noop = (): void => undefined;
 
 describe('authentication screens', () => {
-  it('renders an accessible email form', async () => {
+  it('renders an accessible password form', async () => {
     const onRequest = vi.fn();
-    render(<AuthPanel mode="email" stage="credentials" factor="email" totpAvailable={false} email="" code="" password="" passwordConfirmation="" retrySeconds={0} busy={false} error={null} onMode={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRequest={onRequest} onVerify={noop} onFactor={noop} onBack={noop} />);
-    expect(screen.getByRole('heading', { name: 'Войдите по email' })).toBeInTheDocument();
+    render(<AuthPanel mode="password" stage="credentials" factor="email" totpAvailable={false} email="" code="" password="secure-pass-42" passwordConfirmation="" retrySeconds={0} busy={false} error={null} onMode={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRequest={onRequest} onVerify={noop} onFactor={noop} onBack={noop} />);
+    expect(screen.getByRole('heading', { name: 'С возвращением' })).toBeInTheDocument();
     expect(screen.getByLabelText('Email')).toHaveAttribute('type', 'email');
-    await userEvent.click(screen.getByRole('button', { name: /Получить код/u }));
+    expect(screen.getByLabelText('Пароль')).toHaveAttribute('type', 'password');
+    await userEvent.click(screen.getByRole('button', { name: /Продолжить/u }));
     expect(onRequest).toHaveBeenCalledOnce();
   });
 
   it('renders OTP state, retry countdown, and an error alert', () => {
-    render(<AuthPanel mode="email" stage="otp" factor="email" totpAvailable={false} email="test@example.com" code="123" password="" passwordConfirmation="" retrySeconds={42} busy={false} error="Неверный код" onMode={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRequest={noop} onVerify={noop} onFactor={noop} onBack={noop} />);
+    render(<AuthPanel mode="password" stage="otp" factor="email" totpAvailable={false} email="test@example.com" code="123" password="secure-pass-42" passwordConfirmation="" retrySeconds={42} busy={false} error="Неверный код" onMode={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRequest={noop} onVerify={noop} onFactor={noop} onBack={noop} />);
     expect(screen.getByLabelText('Код из письма')).toHaveAttribute('inputmode', 'numeric');
     expect(screen.getByRole('button', { name: 'Отправить снова через 42 с' })).toBeDisabled();
     expect(screen.getByRole('alert')).toHaveTextContent('Неверный код');
   });
 });
 
-describe('main and guest screens', () => {
-  it('shows user identity, room actions, audio settings, and app version', () => {
-    render(<HomePanel user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: false, twoFactorEnabled: false }} version="1.2.3" roomCode="ABC234" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="" serverInvite="" onRoomCode={noop} onCreate={noop} onJoin={noop} onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onOpenServer={noop} />);
+describe('main screen', () => {
+  it('shows user identity, server actions, audio settings, and app version', () => {
+    render(<HomePanel user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="Команда" serverInvite="ABCD2345" onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onOpenServer={noop} />);
     expect(screen.getByText('Anna')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Создать комнату/u })).toBeEnabled();
-    expect(screen.getByLabelText('Код комнаты')).toHaveValue('ABC234');
+    expect(screen.getByRole('button', { name: /Создать сервер/u })).toBeEnabled();
+    expect(screen.getByLabelText('Код приглашения')).toHaveValue('ABCD2345');
     expect(screen.getByLabelText('Устройство записи')).toBeInTheDocument();
     expect(screen.getByLabelText('Устройство воспроизведения')).toBeInTheDocument();
     expect(screen.getByText(/Ватрушка 1.2.3/u)).toBeInTheDocument();
-  });
-
-  it('renders a guest-only join flow', () => {
-    render(<GuestJoinPanel code="ABC234" name="Guest" busy={false} error={null} onName={noop} onJoin={noop} onBack={noop} />);
-    expect(screen.getByText(/Гостевой вход · ABC234/u)).toBeInTheDocument();
-    expect(screen.getByLabelText('Ваше имя')).toHaveAttribute('maxlength', '30');
-    expect(screen.getByRole('button', { name: /Войти в комнату/u })).toBeEnabled();
   });
 });
 
@@ -60,13 +54,16 @@ describe('room UI', () => {
     participantIdentity: 'user_owner-1_local',
     participantDisplayName: 'Owner',
     isOwner: true,
+    contextType: 'channel',
+    serverId: 'server-1',
+    channelId: 'channel-1',
   };
 
   const baseSnapshot: MediaSnapshot = {
     connectionState: ConnectionState.Connected,
     participants: [
       { identity: 'user_owner-1_local', displayName: 'Owner', isLocal: true, isOwner: true, isGuest: false, isMuted: true, isSpeaking: false, audioLevel: 0, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'owner', connectionQuality: 'Отличное' },
-      { identity: 'guest_guest-1_remote', displayName: 'Visitor', isLocal: false, isOwner: false, isGuest: true, isMuted: false, isSpeaking: true, audioLevel: 0.7, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
+      { identity: 'user_visitor-1_remote', displayName: 'Visitor', isLocal: false, isOwner: false, isGuest: false, isMuted: false, isSpeaking: true, audioLevel: 0.7, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
     ],
     isMuted: true,
     isScreenSharing: false,
@@ -89,16 +86,16 @@ describe('room UI', () => {
     const onMicrophone = vi.fn();
     const onOutput = vi.fn();
     const onRefreshDevices = vi.fn();
-    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={voiceDevices} microphoneId={undefined} outputId={undefined} locked={false} busy={false} error={null} onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={onMicrophone} onOutput={onOutput} onRefreshDevices={onRefreshDevices} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={onParticipantMute} onParticipantVolume={noop} />);
+    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={voiceDevices} microphoneId={undefined} outputId={undefined} busy={false} error={null} onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onKick={noop} onMicrophone={onMicrophone} onOutput={onOutput} onRefreshDevices={onRefreshDevices} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={onParticipantMute} onParticipantVolume={noop} />);
     expect(screen.getAllByText('Owner (вы)').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Visitor/u).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/говорит/ui).length).toBeGreaterThan(0);
     expect(screen.getByTestId('mute-control')).toHaveAccessibleName('Включить микрофон');
     expect(screen.getByTestId('screen-share-control')).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Закрыть вход' })).toBeEnabled();
+    expect(screen.getByText('Код сервера')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Исключить Visitor' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Заглушить локально' }));
-    expect(onParticipantMute).toHaveBeenCalledWith('guest_guest-1_remote', true);
+    expect(onParticipantMute).toHaveBeenCalledWith('user_visitor-1_remote', true);
     await userEvent.selectOptions(screen.getByLabelText('Устройство ввода'), 'microphone-studio');
     await userEvent.selectOptions(screen.getByLabelText('Устройство вывода'), 'headphones-usb');
     expect(onMicrophone).toHaveBeenCalledWith('microphone-studio');
@@ -109,10 +106,9 @@ describe('room UI', () => {
 
   it('shows reconnect, busy, and error states without relying only on color', () => {
     const snapshot = { ...baseSnapshot, connectionState: ConnectionState.Reconnecting };
-    render(<RoomView connection={connection} snapshot={snapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} locked={true} busy error="Другой участник уже показывает экран" onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={noop} onParticipantVolume={noop} />);
+    render(<RoomView connection={connection} snapshot={snapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy error="Другой участник уже показывает экран" onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={noop} onParticipantVolume={noop} />);
     expect(screen.getByText('Переподключение…')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Другой участник уже показывает экран');
-    expect(screen.getByRole('button', { name: 'Открыть вход' })).toBeDisabled();
     expect(screen.getByTestId('screen-share-control')).toBeDisabled();
   });
 
@@ -121,7 +117,7 @@ describe('room UI', () => {
     const onScreenAudioVolume = vi.fn();
     const track = { attach: vi.fn(), detach: vi.fn(() => []) } as unknown as LocalTrack;
     const snapshot = { ...baseSnapshot, screenTrack: track, screenSharerName: 'Visitor', screenShareIsLocal: false, hasScreenShareAudio: true, screenShareAudioVolume: 0.7 };
-    render(<RoomView connection={connection} snapshot={snapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} locked={false} busy={false} error={null} onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onLock={noop} onClose={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onStartAudio={noop} onScreenAudioMute={onScreenAudioMute} onScreenAudioVolume={onScreenAudioVolume} onParticipantMute={noop} onParticipantVolume={noop} />);
+    render(<RoomView connection={connection} snapshot={snapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onStartAudio={noop} onScreenAudioMute={onScreenAudioMute} onScreenAudioVolume={onScreenAudioVolume} onParticipantMute={noop} onParticipantVolume={noop} />);
 
     expect(screen.getByText('Звук трансляции')).toBeInTheDocument();
     expect(screen.getByText('Громкость меняется только для вас')).toBeInTheDocument();

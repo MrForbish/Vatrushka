@@ -16,10 +16,10 @@ import {
   desktopSourceSelectionSchema,
   completePasswordLoginSchema,
   localSettingsSchema,
-  verifyCodeSchema,
   verifyRegistrationSchema,
   type DesktopAuthSession,
   type DesktopAuthCompletionResult,
+  type DesktopUpdateState,
   type DesktopSourceInfo,
   type DesktopMessageNotification,
 } from '@vatrushka/shared';
@@ -28,6 +28,10 @@ import type { DesktopStorage } from './storage.js';
 
 export const IPC_CHANNELS = {
   appVersion: 'app:get-version',
+  updateStateGet: 'update:get-state',
+  updateCheck: 'update:check',
+  updateInstall: 'update:install',
+  updateState: 'update:state',
   authComplete: 'session:complete-auth',
   authRefresh: 'session:refresh-auth',
   authLogout: 'session:logout-auth',
@@ -49,6 +53,11 @@ interface IpcOptions {
   storage: DesktopStorage;
   setSelectedSource(selection: { sourceId: string; includeAudio: boolean } | null): void;
   showMessageNotification(notification: DesktopMessageNotification): void;
+  updater: {
+    getState(): DesktopUpdateState;
+    check(): Promise<void>;
+    install(): void;
+  };
 }
 
 const desktopMessageNotificationSchema = z.object({
@@ -72,10 +81,9 @@ const desktopAuthSessionSchema = z.object({
   isNewUser: z.boolean().default(false),
 });
 
-const authCompletionPathSchema = z.enum(['/auth/verify-code', '/auth/register/verify-code', '/auth/password/complete']);
+const authCompletionPathSchema = z.enum(['/auth/register/verify-code', '/auth/password/complete']);
 
 function validateAuthCompletionBody(path: z.infer<typeof authCompletionPathSchema>, body: unknown): unknown {
-  if (path === '/auth/verify-code') return verifyCodeSchema.parse(body);
   if (path === '/auth/register/verify-code') return verifyRegistrationSchema.parse(body);
   return completePasswordLoginSchema.parse(body);
 }
@@ -150,7 +158,8 @@ async function listSources(): Promise<DesktopSourceInfo[]> {
 }
 
 export function registerIpc(options: IpcOptions): () => void {
-  const channels = Object.values(IPC_CHANNELS).filter((channel) => channel !== IPC_CHANNELS.deepLink && channel !== IPC_CHANNELS.notificationClick);
+  const outgoingChannels = new Set<string>([IPC_CHANNELS.deepLink, IPC_CHANNELS.notificationClick, IPC_CHANNELS.updateState]);
+  const channels = Object.values(IPC_CHANNELS).filter((channel) => !outgoingChannels.has(channel));
   const handle = <TArgs extends unknown[], TResult>(
     channel: string,
     listener: (event: IpcMainInvokeEvent, ...args: TArgs) => Promise<TResult> | TResult,
@@ -170,6 +179,9 @@ export function registerIpc(options: IpcOptions): () => void {
   };
 
   handle(IPC_CHANNELS.appVersion, () => app.getVersion());
+  handle(IPC_CHANNELS.updateStateGet, () => options.updater.getState());
+  handle(IPC_CHANNELS.updateCheck, () => options.updater.check());
+  handle(IPC_CHANNELS.updateInstall, () => options.updater.install());
   handle(IPC_CHANNELS.authComplete, (_event, path: unknown, body: unknown, apiBaseUrl: unknown) => completeAuthSession(options.storage, path, body, apiBaseUrl));
   handle(IPC_CHANNELS.authRefresh, () => refreshAuthSession(options.storage));
   handle(IPC_CHANNELS.authLogout, async () => {

@@ -16,6 +16,7 @@ import { APP_NAME, APP_PROTOCOL, type DesktopMessageNotification } from '@vatrus
 import { findDeepLink } from './deep-link.js';
 import { configureLogging, IPC_CHANNELS, registerIpc } from './ipc.js';
 import { DesktopStorage } from './storage.js';
+import { DesktopUpdater } from './updater.js';
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const productionRendererDirectory = normalize(join(currentDirectory, '../renderer'));
@@ -26,6 +27,7 @@ let mainWindow: BrowserWindow | null = null;
 let pendingDeepLink = findDeepLink(process.argv, APP_PROTOCOL);
 let selectedSource: { sourceId: string; includeAudio: boolean } | null = null;
 let removeIpcHandlers: (() => void) | null = null;
+let desktopUpdater: DesktopUpdater | null = null;
 const activeNotifications = new Set<Notification>();
 
 function isTrustedUrl(value: string): boolean {
@@ -234,6 +236,10 @@ if (!hasLock) {
     await configureLogging();
     log.info('Application started', { version: app.getVersion(), platform: process.platform });
     configureSession();
+    desktopUpdater = new DesktopUpdater((state) => {
+      if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isLoading()) return;
+      mainWindow.webContents.send(IPC_CHANNELS.updateState, state);
+    });
     removeIpcHandlers = registerIpc({
       isTrustedSender,
       storage,
@@ -241,8 +247,10 @@ if (!hasLock) {
         selectedSource = selection;
       },
       showMessageNotification,
+      updater: desktopUpdater,
     });
     await createWindow();
+    desktopUpdater.start();
   });
 }
 
@@ -253,4 +261,6 @@ app.on('before-quit', () => {
   activeNotifications.clear();
   removeIpcHandlers?.();
   removeIpcHandlers = null;
+  desktopUpdater?.dispose();
+  desktopUpdater = null;
 });

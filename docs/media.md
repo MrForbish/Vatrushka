@@ -2,11 +2,11 @@
 
 ## Voice
 
-LiveKit JS SDK подключается с auto-subscribe, echo cancellation, noise suppression и auto gain control. Отказ микрофона не выбрасывает пользователя из комнаты: клиент остаётся muted и показывает понятную ошибку. `devicechange` обновляет списки. `Room.switchActiveDevice` переключает input/output по установленным SDK types.
+LiveKit JS SDK подключается с auto-subscribe, echo cancellation, noise suppression и auto gain control. Отказ микрофона не выбрасывает пользователя из голосового канала: клиент остаётся muted и показывает понятную ошибку. `devicechange` обновляет списки. `Room.switchActiveDevice` немедленно переключает input/output.
 
 Пользователь явно выбирает устройство записи и воспроизведения. В постоянном голосовом канале права `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` отражаются не только в UI: API выпускает LiveKit-токен без соответствующих publish sources, если роль запрещает микрофон, изображение демонстрации или звук приложения.
 
-Participant UI показывает имя, guest/owner, mute текстом и icon, speaking текстом и visual outline, connection quality и screen badge. Удалённые audio tracks attach/detach явно; autoplay gate вызывает `Room.startAudio` только из user gesture.
+Participant UI показывает имя, владельца/администратора, mute текстом и icon, speaking текстом и visual outline, connection quality и screen badge. Гостевых media identities больше нет. Удалённые audio tracks attach/detach явно; autoplay gate вызывает `Room.startAudio` только из user gesture.
 
 ## Screen capture
 
@@ -18,9 +18,9 @@ Participant UI показывает имя, guest/owner, mute текстом и 
 6. LiveKit публикует максимум 1920×1080/30 FPS с ориентиром 3.5 Mbps.
 7. Heartbeat идёт каждые 10 секунд; failure останавливает local track.
 
-Удалённый `ScreenShareAudio` имеет отдельные mute и volume, не влияющие на громкость голосов участников. Быстрые комнаты и постоянные голосовые каналы используют раздельные lease-таблицы.
+Удалённый `ScreenShareAudio` имеет отдельные mute и volume, не влияющие на громкость голосов участников. Координация выполняется channel lease в PostgreSQL.
 
-Cancel, publish failure, normal stop, room leave, window close, `participant_left`, screen `track_unpublished`, room finish и lease expiry освобождают ресурс. При ошибочном появлении нескольких screen tracks клиент логирует диагностику и показывает первый.
+Cancel, publish failure, normal stop, channel leave, window close, `participant_left`, screen `track_unpublished`, LiveKit room finish и lease expiry освобождают ресурс. При ошибочном появлении нескольких screen tracks клиент логирует диагностику и показывает первый.
 
 ## Provider switching
 

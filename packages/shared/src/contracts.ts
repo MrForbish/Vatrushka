@@ -208,6 +208,24 @@ export interface DesktopMessageNotification {
   channelId: string;
 }
 
+export type DesktopUpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'available'
+  | 'downloading'
+  | 'ready'
+  | 'up-to-date'
+  | 'unsupported'
+  | 'error';
+
+export interface DesktopUpdateState {
+  status: DesktopUpdateStatus;
+  currentVersion: string;
+  version?: string;
+  percent?: number;
+  message?: string;
+}
+
 export interface PublicUser {
   id: string;
   email: string;
@@ -267,16 +285,6 @@ export interface AuthResponse {
   isNewUser: boolean;
 }
 
-export interface PublicRoom {
-  id?: string;
-  code: string;
-  status: 'active' | 'closed' | 'expired';
-  isLocked: boolean;
-  currentParticipantCount: number;
-  maxParticipants: number;
-  ownerDisplayName: string;
-}
-
 export interface RoomConnection {
   roomId: string;
   ownerUserId: string;
@@ -286,13 +294,12 @@ export interface RoomConnection {
   participantIdentity: string;
   participantDisplayName: string;
   isOwner: boolean;
-  contextType?: 'room' | 'channel';
-  serverId?: string;
-  channelId?: string;
+  contextType: 'channel';
+  serverId: string;
+  channelId: string;
   canSpeak?: boolean;
   canStream?: boolean;
   canStreamApplicationAudio?: boolean;
-  guestSessionToken?: string;
 }
 
 export interface DesktopSourceInfo {
@@ -309,6 +316,10 @@ export interface DesktopSourceInfo {
 
 export interface DesktopBridge {
   getAppVersion(): Promise<string>;
+  getUpdateState(): Promise<DesktopUpdateState>;
+  checkForUpdates(): Promise<void>;
+  installUpdate(): Promise<void>;
+  onUpdateState(callback: (state: DesktopUpdateState) => void): () => void;
   completeAuthSession(path: DesktopAuthCompletionPath, body: unknown, apiBaseUrl: string): Promise<DesktopAuthCompletionResult>;
   refreshAuthSession(): Promise<DesktopAuthSession | null>;
   logoutAuthSession(): Promise<void>;
@@ -319,7 +330,7 @@ export interface DesktopBridge {
   copyToClipboard(text: string): Promise<void>;
   showMessageNotification(notification: DesktopMessageNotification): Promise<void>;
   onMessageNotificationClick(callback: (target: Pick<DesktopMessageNotification, 'serverId' | 'channelId'>) => void): () => void;
-  onDeepLink(callback: (roomCode: string) => void): () => void;
+  onDeepLink(callback: (serverInviteCode: string) => void): () => void;
   getPlatform(): Promise<string>;
   getLocalSettings(): Promise<LocalSettings>;
   updateLocalSettings(settings: LocalSettings): Promise<void>;
@@ -331,7 +342,7 @@ export interface DesktopAuthSession {
   user: PublicUser;
 }
 
-export type DesktopAuthCompletionPath = '/auth/verify-code' | '/auth/register/verify-code' | '/auth/password/complete';
+export type DesktopAuthCompletionPath = '/auth/register/verify-code' | '/auth/password/complete';
 
 export type DesktopAuthCompletionResult =
   | { ok: true; session: DesktopAuthSession & { isNewUser: boolean } }

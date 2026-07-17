@@ -37,14 +37,6 @@ export const passwordSchema = z
   .refine((value) => /\p{L}/u.test(value) && /\p{N}/u.test(value), 'Пароль должен содержать букву и цифру');
 export const uuidSchema = z.uuid();
 
-export const requestCodeSchema = z.object({ email: emailSchema }).strict();
-export const verifyCodeSchema = z
-  .object({
-    email: emailSchema,
-    code: otpCodeSchema,
-    deviceName: z.string().trim().min(1).max(100),
-  })
-  .strict();
 export const requestRegistrationSchema = z.object({ email: emailSchema, password: passwordSchema }).strict();
 export const verifyRegistrationSchema = z.object({ email: emailSchema, code: otpCodeSchema, deviceName: z.string().trim().min(1).max(100) }).strict();
 export const beginPasswordLoginSchema = z.object({ email: emailSchema, password: passwordSchema, factor: z.enum(['auto', 'email', 'totp', 'recovery']).default('auto') }).strict();
@@ -63,9 +55,6 @@ export const twoFactorCodeSchema = z.object({ code: otpCodeSchema }).strict();
 export const sessionTrustSchema = z.object({ trusted: z.boolean() }).strict();
 export const refreshSchema = z.object({ refreshToken: z.string().min(32).max(512) }).strict();
 export const updateProfileSchema = z.object({ displayName: displayNameSchema }).strict();
-export const guestJoinSchema = z.object({ code: roomCodeSchema, displayName: displayNameSchema }).strict();
-export const roomJoinSchema = z.object({}).strict();
-export const roomLockSchema = z.object({ isLocked: z.boolean() }).strict();
 export const screenShareActionSchema = z
   .object({ participantIdentity: z.string().min(3).max(200) })
   .strict();
@@ -125,9 +114,6 @@ export const localSettingsSchema = z
   .strict();
 
 export type LocalSettings = z.infer<typeof localSettingsSchema>;
-export type RequestCodeInput = z.infer<typeof requestCodeSchema>;
-export type VerifyCodeInput = z.infer<typeof verifyCodeSchema>;
 export type RequestRegistrationInput = z.infer<typeof requestRegistrationSchema>;
 export type BeginPasswordLoginInput = z.infer<typeof beginPasswordLoginSchema>;
 export type CompletePasswordLoginInput = z.infer<typeof completePasswordLoginSchema>;
-export type GuestJoinInput = z.infer<typeof guestJoinSchema>;

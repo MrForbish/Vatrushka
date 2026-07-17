@@ -45,7 +45,7 @@ describe('MediaSession screen share', () => {
       refreshSnapshot(): void;
     };
     internals.room = { localParticipant: { setScreenShareEnabled } };
-    internals.connection = { roomId: 'room-1', ownerUserId: 'owner-1', code: 'ABC234', livekitUrl: 'ws://test', livekitToken: 'token', participantIdentity: 'local', participantDisplayName: 'Local', isOwner: true };
+    internals.connection = { roomId: 'channel-1', ownerUserId: 'owner-1', code: 'ABCD2345', livekitUrl: 'ws://test', livekitToken: 'token', participantIdentity: 'local', participantDisplayName: 'Local', isOwner: true, contextType: 'channel', serverId: 'server-1', channelId: 'channel-1' };
     vi.spyOn(internals, 'startHeartbeat').mockImplementation(() => undefined);
     vi.spyOn(internals, 'refreshSnapshot').mockImplementation(() => undefined);
     return session;

@@ -217,18 +217,18 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
         <section className="security-center__content">
           {tab === 'protection' && flow === 'overview' && <div className="security-stack">
             <article className="security-card">
-              <div><div className="security-card__title"><h3>Пароль</h3><Badge tone={user.hasPassword ? 'success' : 'warning'}>{user.hasPassword ? 'Настроен' : 'Не задан'}</Badge></div><p>Пароль всегда подтверждается вторым фактором и хранится только как стойкий хеш.</p></div>
-              <Button disabled={busy} onClick={startPassword} variant="secondary">{user.hasPassword ? 'Изменить пароль' : 'Задать пароль'}</Button>
+              <div><div className="security-card__title"><h3>Пароль</h3><Badge tone="success">Настроен</Badge></div><p>Пароль всегда подтверждается вторым фактором и хранится только как стойкий хеш.</p></div>
+              <Button disabled={busy} onClick={startPassword} variant="secondary">Изменить пароль</Button>
             </article>
             <article className="security-card">
               <div><div className="security-card__title"><h3>Приложение 2FA</h3><Badge tone={user.twoFactorEnabled ? 'success' : 'neutral'}>{user.twoFactorEnabled ? 'Включено' : 'Выключено'}</Badge></div><p>Коды TOTP работают без доступа к почте. При включении выдаются десять одноразовых recovery-кодов.</p></div>
-              <Button disabled={busy || !user.hasPassword} onClick={user.twoFactorEnabled ? () => { setCode(''); setFlow('totp-disable'); } : startTotp} variant="secondary">{user.twoFactorEnabled ? 'Отключить' : 'Подключить 2FA'}</Button>
+              <Button disabled={busy} onClick={user.twoFactorEnabled ? () => { setCode(''); setFlow('totp-disable'); } : startTotp} variant="secondary">{user.twoFactorEnabled ? 'Отключить' : 'Подключить 2FA'}</Button>
             </article>
             <aside className="security-notice"><strong>Уведомления включены</strong><span>При входе и критичных изменениях событие появится здесь, а уведомление уйдёт на {user.email}.</span></aside>
           </div>}
 
           {tab === 'protection' && flow === 'password' && <form className="security-form" onSubmit={savePassword}>
-            <h3>{user.hasPassword ? 'Изменить пароль' : 'Задать пароль'}</h3><p>Шестизначный код отправлен на {user.email}.</p>
+            <h3>Изменить пароль</h3><p>Шестизначный код отправлен на {user.email}.</p>
             <Input autoComplete="one-time-code" inputMode="numeric" label="Код из письма" maxLength={6} onChange={(event) => setCode(event.target.value.replace(/\D/gu, '').slice(0, 6))} value={code} />
             <PasswordInput autoComplete="new-password" label="Новый пароль" maxLength={128} minLength={10} onChange={(event) => setPassword(event.target.value)} value={password} />
             <PasswordInput autoComplete="new-password" label="Повторите пароль" maxLength={128} minLength={10} onChange={(event) => setConfirmation(event.target.value)} value={confirmation} />

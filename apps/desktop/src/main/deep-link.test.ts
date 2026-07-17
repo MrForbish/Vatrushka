@@ -3,14 +3,15 @@ import { describe, expect, it } from 'vitest';
 import { findDeepLink, parseDeepLink } from './deep-link.js';
 
 describe('deep link validation', () => {
-  it('accepts only the configured join URI and normalizes room code', () => {
-    expect(parseDeepLink('vatrushka://join/abc234', 'vatrushka')).toBe('ABC234');
-    expect(parseDeepLink('vatrushka://other/ABC234', 'vatrushka')).toBeNull();
-    expect(parseDeepLink('https://join/ABC234', 'vatrushka')).toBeNull();
-    expect(parseDeepLink('vatrushka://join/ABO120', 'vatrushka')).toBeNull();
+  it('accepts only server invite links and normalizes the invite code', () => {
+    expect(parseDeepLink('vatrushka://server/abc234xy', 'vatrushka')).toBe('ABC234XY');
+    expect(parseDeepLink('vatrushka://join/ABC234XY', 'vatrushka')).toBeNull();
+    expect(parseDeepLink('https://server/ABC234XY', 'vatrushka')).toBeNull();
+    expect(parseDeepLink('vatrushka://server/ABO120XY', 'vatrushka')).toBeNull();
+    expect(parseDeepLink('vatrushka://server/ABC234', 'vatrushka')).toBeNull();
   });
 
   it('finds a deep link among process arguments', () => {
-    expect(findDeepLink(['electron.exe', '.', 'vatrushka://join/XYZ789'], 'vatrushka')).toBe('XYZ789');
+    expect(findDeepLink(['electron.exe', '.', 'vatrushka://server/XYZ789AB'], 'vatrushka')).toBe('XYZ789AB');
   });
 });

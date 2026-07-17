@@ -32,6 +32,10 @@ test('launches the secure auth shell with an allowlisted preload API', async () 
     'clearSelectedDesktopSource',
     'copyToClipboard',
     'getAppVersion',
+    'getUpdateState',
+    'checkForUpdates',
+    'installUpdate',
+    'onUpdateState',
     'getLocalSettings',
     'getPlatform',
     'listDesktopSources',
@@ -59,11 +63,11 @@ test('supports keyboard-only authentication with a visible focus indicator', asy
   await expect(password).toBeFocused();
   expect(await password.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
 
-  const emailTab = window.getByRole('tab', { name: 'Код из почты' });
-  await emailTab.focus();
+  const registrationTab = window.getByRole('tab', { name: 'Регистрация' });
+  await registrationTab.focus();
   await window.keyboard.press('Enter');
-  await expect(emailTab).toHaveAttribute('aria-selected', 'true');
-  await expect(password).toHaveCount(0);
+  await expect(registrationTab).toHaveAttribute('aria-selected', 'true');
+  await expect(window.getByLabel('Повторите пароль')).toBeVisible();
 });
 
 test('revokes another device without exposing its refresh token to the renderer', async () => {
@@ -74,11 +78,11 @@ test('revokes another device without exposing its refresh token to the renderer'
     response.setHeader('Content-Type', 'application/json');
     if (request.method === 'OPTIONS') { response.statusCode = 204; response.end(); return; }
     const url = new URL(request.url ?? '/', 'http://localhost:3000');
-    if (request.method === 'POST' && url.pathname === '/api/v1/auth/request-code') {
-      response.end(JSON.stringify({ status: 'CODE_SENT', retryAfterSeconds: 60 }));
+    if (request.method === 'POST' && url.pathname === '/api/v1/auth/password/begin') {
+      response.end(JSON.stringify({ status: 'SECOND_FACTOR_REQUIRED', factor: 'email', retryAfterSeconds: 60 }));
       return;
     }
-    if (request.method === 'POST' && url.pathname === '/api/v1/auth/verify-code') {
+    if (request.method === 'POST' && url.pathname === '/api/v1/auth/password/complete') {
       response.end(JSON.stringify({ accessToken: 'access-token-for-e2e-user-1234567890', refreshToken: 'rotated-refresh-token-for-e2e-user-1234567890', expiresIn: 900, user: { id: 'user-e2e', email: 'owner@myvatrushka.ru', displayName: 'Илья', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true } }));
       return;
     }
@@ -104,9 +108,9 @@ test('revokes another device without exposing its refresh token to the renderer'
 
   application = await electron.launch({ args: ['.', '--user-data-dir=.e2e-user-data-security'], cwd: process.cwd(), env: electronEnvironment() });
   const window = await application.firstWindow();
-  await window.getByRole('tab', { name: 'Код из почты' }).click();
   await window.getByRole('textbox', { name: 'Email' }).fill('owner@myvatrushka.ru');
-  await window.getByRole('button', { name: /Получить код/u }).click();
+  await window.getByLabel('Пароль').fill('secure-vatrushka-42');
+  await window.getByRole('button', { name: /Продолжить/u }).click();
   await window.getByLabel('Код из письма').fill('123456');
   await window.getByRole('button', { name: /Подтвердить вход/u }).click();
   await expect(window.getByRole('button', { name: 'Безопасность' })).toBeVisible();
@@ -122,10 +126,10 @@ test('revokes another device without exposing its refresh token to the renderer'
   await expect(remote).toHaveCount(0);
 });
 
-test('handles a validated room deep link at startup', async () => {
-  application = await electron.launch({ args: ['.', 'vatrushka://join/ABC234', '--user-data-dir=.e2e-user-data-link'], cwd: process.cwd(), env: electronEnvironment() });
-  expect(await application.evaluate(() => process.argv)).toContain('vatrushka://join/ABC234');
+test('accepts a validated server invite deep link at startup without exposing a guest room flow', async () => {
+  application = await electron.launch({ args: ['.', 'vatrushka://server/ABCD2345', '--user-data-dir=.e2e-user-data-link'], cwd: process.cwd(), env: electronEnvironment() });
+  expect(await application.evaluate(() => process.argv)).toContain('vatrushka://server/ABCD2345');
   const window = await application.firstWindow();
-  await expect(window.getByRole('heading', { name: /Комната ABC234/u })).toBeVisible();
-  await expect(window.getByRole('button', { name: /Войти по email/u })).toBeVisible();
+  await expect(window.getByRole('heading', { name: 'С возвращением' })).toBeVisible();
+  await expect(window.getByText(/Гостевой вход/u)).toHaveCount(0);
 });

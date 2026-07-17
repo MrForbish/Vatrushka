@@ -8,7 +8,6 @@ import {
   APP_PROTOCOL,
   OTP_RESEND_SECONDS,
   OTP_TTL_SECONDS,
-  ROOM_MAX_PARTICIPANTS,
   SCREEN_SHARE_HEARTBEAT_SECONDS,
   SCREEN_SHARE_LEASE_SECONDS,
 } from '@vatrushka/shared';
@@ -47,17 +46,12 @@ const envSchema = z
     LIVEKIT_HTTP_URL: z.url().default('http://localhost:7880'),
     LIVEKIT_API_KEY: z.string().min(1).default('devkey'),
     LIVEKIT_API_SECRET: z.string().min(1).default('secret'),
-    ROOM_MAX_PARTICIPANTS: z.coerce.number().int().default(ROOM_MAX_PARTICIPANTS),
-    ROOM_TTL_HOURS: z.coerce.number().int().positive().default(12),
     SCREEN_SHARE_LEASE_SECONDS: z.coerce.number().int().positive().default(SCREEN_SHARE_LEASE_SECONDS),
     SCREEN_SHARE_HEARTBEAT_SECONDS: z.coerce.number().int().positive().default(SCREEN_SHARE_HEARTBEAT_SECONDS),
     CORS_ALLOWED_ORIGINS: z.string().default(''),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   })
   .superRefine((env, context) => {
-    if (env.ROOM_MAX_PARTICIPANTS !== ROOM_MAX_PARTICIPANTS) {
-      context.addIssue({ code: 'custom', path: ['ROOM_MAX_PARTICIPANTS'], message: 'MVP supports exactly 5 participants' });
-    }
     if (env.NODE_ENV === 'production') {
       const required: Array<keyof typeof env> = [
         'DATABASE_URL',

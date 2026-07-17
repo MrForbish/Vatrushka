@@ -2,6 +2,32 @@
 
 All notable changes to Vatrushka are documented here. The project follows semantic versioning for desktop and API release artifacts.
 
+## [0.4.0] - 2026-07-17
+
+### Added
+
+- in-app NSIS updates from the self-hosted generic feed, with background progress, explicit restart and install-on-quit;
+- Caddy `/updates` file endpoint and deployment procedure that publishes `latest.yml` only after its setup/blockmap artifacts;
+- regression coverage for retired endpoints, server invite deep links and updater UI states.
+
+### Changed
+
+- servers and their text/voice channels are now the only collaboration model;
+- deep links now use `vatrushka://server/<8-character-invite>`;
+- all workspace packages and Windows artifacts now report version 0.4.0.
+
+### Removed
+
+- passwordless `/auth/request-code` and `/auth/verify-code` login;
+- standalone room creation/join/moderation, guest access and their desktop flows;
+- legacy room screen-share endpoints; voice channels retain permission-enforced screen-share leases.
+
+### Operations
+
+- 0.3.0 users must install 0.4.0 manually once; future installed NSIS releases can update in place;
+- historical standalone-room tables are retained but unreachable, avoiding a destructive database migration;
+- portable and unsigned installer limitations remain; public distribution still needs code signing.
+
 ## [0.3.0] - 2026-07-17
 
 ### Added

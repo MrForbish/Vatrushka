@@ -10,12 +10,12 @@ npm run perf:bundle
 
 ## Release budgets
 
-| Asset | 0.3.0 baseline | Blocking budget |
+| Asset | 0.4.0 baseline | Blocking budget |
 |---|---:|---:|
-| Renderer JavaScript, raw total | about 2.0 MiB | 2,300,000 bytes |
-| Largest JavaScript chunk | about 2.0 MiB | 2,200,000 bytes |
-| Renderer CSS, raw total | about 135 KiB | 155,000 bytes |
-| Local fonts, raw total | about 432 KiB | 500,000 bytes |
+| Renderer JavaScript, raw total | 2,027.7 KiB | 2,300,000 bytes |
+| Largest JavaScript chunk | 2,027.7 KiB | 2,200,000 bytes |
+| Renderer CSS, raw total | 135.9 KiB | 155,000 bytes |
+| Local fonts, raw total | 431.8 KiB | 500,000 bytes |
 
 The script also prints gzip sizes for comparison. Raw sizes are the blocking metric because Electron loads local assets from the packaged application rather than transferring them over HTTP with content encoding. Budgets intentionally leave a small margin for fixes while still detecting an accidental large dependency, font family or stylesheet.
 

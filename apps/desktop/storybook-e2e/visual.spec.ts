@@ -32,6 +32,12 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('app-shell-desktop.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('server home', async ({ page }) => {
+    await openStory(page, 'screens-current--server-home');
+    await expect(page.getByRole('heading', { name: 'Серверы' })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-home.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('app shell compact drawers', async ({ page }) => {
     await page.setViewportSize({ width: 1100, height: 760 });
     await openStory(page, 'layouts-app-shell--full-server');
@@ -63,6 +69,12 @@ test.describe('Vatrushka design system visual baseline', () => {
   test('screen share source picker', async ({ page }) => {
     await openStory(page, 'features-screen-share--visual-picker');
     await expect(page).toHaveScreenshot('screen-share-picker.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('client update ready', async ({ page }) => {
+    await openStory(page, 'features-client-update--ready');
+    await expect(page.getByRole('button', { name: 'Перезапустить' })).toBeVisible();
+    await expect(page).toHaveScreenshot('client-update-ready.png', { animations: 'disabled', fullPage: true });
   });
 
   test('server role editor', async ({ page }) => {

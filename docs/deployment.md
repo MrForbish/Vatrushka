@@ -5,7 +5,7 @@
 1. Ubuntu 22.04/24.04, Docker Engine, Compose v2, public IPv4.
 2. DNS A/AAAA для `DOMAIN`; 80/443 разрешены в provider firewall и UFW.
 3. Скопировать `.env.example` в `.env`, установить `NODE_ENV=production`, HTTPS URLs и случайные secrets (минимум 32 bytes).
-4. `docker compose --env-file .env -f infra/docker/docker-compose.yml config`.
+4. Создать `updates/` рядом с `.env`, затем выполнить `docker compose --env-file .env -f infra/docker/docker-compose.yml config`.
 5. `docker compose ... build --pull api`.
 6. `docker compose ... up -d postgres api caddy`.
 7. Проверить `https://$DOMAIN/health/live` и `/health/ready`.
@@ -25,6 +25,19 @@ Backup PostgreSQL выполняйте до обновления schema/image. R
 
 API не имеет host `ports`, Swagger отключён production config, Caddy получает TLS автоматически. Не копируйте `.env` в image; Compose передаёт его runtime.
 
+## Публикация desktop-обновления
+
+NSIS-клиент читает generic feed `https://api.myvatrushka.ru/updates`. Caddy раздаёт bind-mounted каталог `updates/` только на чтение. После `npm run package:win` публикуйте файлы атомарно: сначала `Vatrushka-Setup-<version>-x64.exe` и `.blockmap`, затем последним `latest.yml`. Это не позволяет клиенту увидеть metadata до появления артефакта.
+
+```bash
+mkdir -p /opt/vatrushka/updates
+# скопируйте setup и blockmap
+# скопируйте latest.yml во временное имя и затем mv в latest.yml
+curl -fsS https://api.myvatrushka.ru/updates/latest.yml
+```
+
+Клиент проверяет обновления после запуска, затем раз в четыре часа; скачанное обновление устанавливается только после нажатия «Перезапустить» либо при штатном выходе. Автообновление работает для установленного NSIS-варианта. Portable build и development mode показываются updater-слою как unsupported. Переход с 0.3.0 на 0.4.0 требует одной ручной установки, поскольку в 0.3.0 updater ещё отсутствовал.
+
 ## Сборка клиента для production API
 
 Desktop-клиент использует публичный адрес API во время сборки. На Windows-машине сборщика:
@@ -36,12 +49,12 @@ npm ci
 npm run package:win
 ```
 
-Раздавайте `apps/desktop/release/Vatrushka-Setup-<version>-x64.exe`. После изменения домена API клиент нужно пересобрать. `LIVEKIT_API_SECRET`, SMTP credentials и остальные server secrets в desktop env добавлять нельзя.
+Раздавайте `apps/desktop/release/Vatrushka-Setup-<version>-x64.exe`; именно установленная версия поддерживает дальнейшие обновления без переустановки. После изменения домена API или update feed клиент нужно пересобрать. `LIVEKIT_API_SECRET`, SMTP credentials и остальные server secrets в desktop env добавлять нельзя.
 
 ## Что именно хостится
 
-- `api` — HTTPS API, auth, комнаты и выдача краткоживущих LiveKit participant tokens;
-- `postgres` — пользователи, сессии, комнаты и screen-share leases;
-- `caddy` — TLS и reverse proxy;
+- `api` — HTTPS API, auth, серверы/каналы и выдача краткоживущих LiveKit participant tokens;
+- `postgres` — пользователи, сессии, серверы, сообщения, permissions и channel screen-share leases;
+- `caddy` — TLS, reverse proxy и статический desktop update feed;
 - LiveKit — отдельный Cloud-проект либо отдельный self-hosted media server;
 - Windows-клиент не запускается на VPS: это устанавливаемый артефакт для компьютеров пользователей.

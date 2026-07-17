@@ -4,6 +4,10 @@ import type { DesktopBridge } from '@vatrushka/shared';
 
 const desktop: DesktopBridge = {
   getAppVersion: async () => '0.1.0-test',
+  getUpdateState: async () => ({ status: 'unsupported', currentVersion: '0.1.0-test' }),
+  checkForUpdates: async () => undefined,
+  installUpdate: async () => undefined,
+  onUpdateState: () => () => undefined,
   completeAuthSession: async () => ({ ok: false, status: 401, error: null }),
   refreshAuthSession: async () => null,
   logoutAuthSession: async () => undefined,

@@ -7,7 +7,6 @@ import {
   type DirectMessage,
   type DirectMessageCandidate,
   type PasswordLoginChallenge,
-  type PublicRoom,
   type PublicUser,
   type RoomConnection,
   type ServerChannel,
@@ -42,7 +41,6 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
   formData?: FormData;
   auth?: boolean;
-  guestToken?: string;
   retry?: boolean;
   responseType?: 'blob' | 'json';
 }
@@ -65,14 +63,6 @@ export class ApiClient {
     } catch {
       return null;
     }
-  }
-
-  requestCode(email: string): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
-    return this.request('/auth/request-code', { method: 'POST', body: { email } });
-  }
-
-  async verifyCode(email: string, code: string): Promise<DesktopAuthSession & { isNewUser: boolean }> {
-    return this.completeAuth('/auth/verify-code', { email, code, deviceName: await this.deviceName() });
   }
 
   requestRegistration(email: string, password: string): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
@@ -311,57 +301,27 @@ export class ApiClient {
     return this.request(`/channels/${channelId}/connect`, { method: 'POST', auth: true });
   }
 
-  createRoom(): Promise<RoomConnection> {
-    return this.request('/rooms', { method: 'POST', auth: true });
-  }
-
-  getRoom(code: string): Promise<PublicRoom> {
-    return this.request(`/rooms/by-code/${encodeURIComponent(code)}`);
-  }
-
-  joinRoom(code: string): Promise<RoomConnection> {
-    return this.request(`/rooms/by-code/${encodeURIComponent(code)}/join`, { method: 'POST', auth: true });
-  }
-
-  joinGuest(code: string, displayName: string): Promise<RoomConnection> {
-    return this.request('/rooms/guest/join', { method: 'POST', body: { code, displayName } });
-  }
-
-  setRoomLock(roomId: string, isLocked: boolean): Promise<{ isLocked: boolean }> {
-    return this.request(`/rooms/${roomId}/lock`, { method: 'PATCH', body: { isLocked }, auth: true });
-  }
-
-  async closeRoom(roomId: string): Promise<void> {
-    await this.request(`/rooms/${roomId}/close`, { method: 'POST', auth: true });
-  }
-
-  async kickParticipant(roomId: string, participantIdentity: string): Promise<void> {
-    await this.request(`/rooms/${roomId}/participants/${encodeURIComponent(participantIdentity)}`, { method: 'DELETE', auth: true });
-  }
-
   async kickMediaParticipant(connection: RoomConnection, participantIdentity: string): Promise<void> {
-    const resource = connection.contextType === 'channel' ? 'channels' : 'rooms';
-    await this.request(`/${resource}/${connection.roomId}/participants/${encodeURIComponent(participantIdentity)}`, { method: 'DELETE', auth: true });
+    await this.request(`/channels/${connection.channelId}/participants/${encodeURIComponent(participantIdentity)}`, { method: 'DELETE', auth: true });
   }
 
   claimScreenShare(connection: RoomConnection): Promise<{ expiresAt: string }> {
-    return this.roomAction(connection, 'claim');
+    return this.channelScreenShareAction(connection, 'claim');
   }
 
   heartbeatScreenShare(connection: RoomConnection): Promise<{ expiresAt: string }> {
-    return this.roomAction(connection, 'heartbeat');
+    return this.channelScreenShareAction(connection, 'heartbeat');
   }
 
   async releaseScreenShare(connection: RoomConnection): Promise<void> {
-    await this.roomAction(connection, 'release');
+    await this.channelScreenShareAction(connection, 'release');
   }
 
-  private roomAction(connection: RoomConnection, action: 'claim' | 'heartbeat' | 'release'): Promise<{ expiresAt: string }> {
-    const resource = connection.contextType === 'channel' ? 'channels' : 'rooms';
-    return this.request(`/${resource}/${connection.roomId}/screen-share/${action}`, {
+  private channelScreenShareAction(connection: RoomConnection, action: 'claim' | 'heartbeat' | 'release'): Promise<{ expiresAt: string }> {
+    return this.request(`/channels/${connection.channelId}/screen-share/${action}`, {
       method: 'POST',
       body: { participantIdentity: connection.participantIdentity },
-      ...(connection.guestSessionToken ? { guestToken: connection.guestSessionToken } : { auth: true }),
+      auth: true,
     });
   }
 
@@ -403,12 +363,11 @@ export class ApiClient {
   }
 
   private async request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-    const { body, formData, auth = false, guestToken, retry = true, responseType = 'json', headers, ...init } = options;
+    const { body, formData, auth = false, retry = true, responseType = 'json', headers, ...init } = options;
     const requestHeaders = new Headers(headers);
     requestHeaders.set('Accept', 'application/json');
     if (body !== undefined) requestHeaders.set('Content-Type', 'application/json');
-    if (guestToken) requestHeaders.set('Authorization', `Guest ${guestToken}`);
-    else if (auth && this.accessToken) requestHeaders.set('Authorization', `Bearer ${this.accessToken}`);
+    if (auth && this.accessToken) requestHeaders.set('Authorization', `Bearer ${this.accessToken}`);
 
     let response: Response;
     try {

@@ -27,7 +27,6 @@ import {
   createServerSchema,
   createApiError,
   errorMessages,
-  guestJoinSchema,
   joinServerSchema,
   messageQuerySchema,
   messageNotificationQuerySchema,
@@ -35,9 +34,6 @@ import {
   markChannelReadSchema,
   refreshSchema,
   requestRegistrationSchema,
-  requestCodeSchema,
-  roomCodeSchema,
-  roomLockSchema,
   screenShareActionSchema,
   sessionTrustSchema,
   serverPermissions,
@@ -49,7 +45,6 @@ import {
   assignMemberRolesSchema,
   channelPermissionOverwriteSchema,
   reorderRoleSchema,
-  verifyCodeSchema,
   verifyRegistrationSchema,
 } from '@vatrushka/shared';
 
@@ -57,10 +52,6 @@ import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
 import { MAX_ATTACHMENT_BYTES, type VatrushkaService } from './service.js';
 
-const roomIdParams = z.object({ roomId: z.uuid() });
-const roomCodeParams = z.object({ code: roomCodeSchema });
-const participantParams = z.object({ roomId: z.uuid(), participantIdentity: z.string().min(3).max(200) });
-const tokenBody = z.object({ participantIdentity: z.string().min(3).max(200) }).strict();
 const serverIdParams = z.object({ serverId: z.uuid() });
 const channelIdParams = z.object({ channelId: z.uuid() });
 const serverRoleParams = z.object({ serverId: z.uuid(), roleId: z.uuid() });
@@ -120,13 +111,12 @@ const connectionSchema = z.object({
   participantIdentity: z.string(),
   participantDisplayName: z.string(),
   isOwner: z.boolean(),
-  contextType: z.enum(['room', 'channel']).optional(),
-  serverId: z.string().optional(),
-  channelId: z.string().optional(),
+  contextType: z.literal('channel'),
+  serverId: z.string(),
+  channelId: z.string(),
   canSpeak: z.boolean().optional(),
   canStream: z.boolean().optional(),
   canStreamApplicationAudio: z.boolean().optional(),
-  guestSessionToken: z.string().optional(),
 });
 const permissionSchema = z.enum(serverPermissions);
 const serverRoleResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), color: z.string(), position: z.number(), isDefault: z.boolean(), kind: z.enum(['EVERYONE', 'OWNER', 'CUSTOM']).optional(), permissions: z.array(permissionSchema) });
@@ -261,27 +251,6 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       return reply.status(503).send(createApiError('LIVEKIT_UNAVAILABLE', request.id));
     }
   });
-
-  api.post(`${API_PREFIX}/auth/request-code`, {
-    config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
-    schema: {
-      tags: ['auth'],
-      body: requestCodeSchema,
-      response: { 200: z.object({ status: z.literal('CODE_SENT'), retryAfterSeconds: z.number() }), ...routeErrors() },
-    },
-  }, async (request) => service.requestCode(request.body.email));
-
-  api.post(`${API_PREFIX}/auth/verify-code`, {
-    config: { rateLimit: { max: 15, timeWindow: '10 minutes' } },
-    schema: {
-      tags: ['auth'],
-      body: verifyCodeSchema,
-      response: {
-        200: authResponseSchema,
-        ...routeErrors(),
-      },
-    },
-  }, async (request) => service.verifyCode(request.body.email, request.body.code, request.body.deviceName));
 
   api.post(`${API_PREFIX}/auth/register/request-code`, {
     config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
@@ -619,66 +588,6 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       if (action === 'claim') return service.claimChannelScreenShare(request.headers.authorization, request.params.channelId, request.body.participantIdentity);
       if (action === 'heartbeat') return service.heartbeatChannelScreenShare(request.headers.authorization, request.params.channelId, request.body.participantIdentity);
       await service.releaseChannelScreenShare(request.headers.authorization, request.params.channelId, request.body.participantIdentity);
-      return { released: true as const };
-    });
-  }
-
-  api.post(`${API_PREFIX}/rooms`, {
-    schema: { tags: ['rooms'], security: [{ bearerAuth: [] }], response: { 201: connectionSchema, ...routeErrors() } },
-  }, async (request, reply) => reply.status(201).send(await service.createRoom(request.headers.authorization)));
-
-  api.get(`${API_PREFIX}/rooms/by-code/:code`, {
-    schema: {
-      tags: ['rooms'],
-      params: roomCodeParams,
-      response: {
-        200: z.object({ code: z.string(), status: z.enum(['active', 'closed', 'expired']), isLocked: z.boolean(), currentParticipantCount: z.number(), maxParticipants: z.number(), ownerDisplayName: z.string() }),
-        ...routeErrors(),
-      },
-    },
-  }, async (request) => service.publicRoom(request.params.code));
-
-  api.post(`${API_PREFIX}/rooms/:roomId/join`, {
-    schema: { tags: ['rooms'], security: [{ bearerAuth: [] }], params: roomIdParams, response: { 200: connectionSchema, ...routeErrors() } },
-  }, async (request) => service.joinRoom(request.headers.authorization, request.params.roomId));
-
-  api.post(`${API_PREFIX}/rooms/by-code/:code/join`, {
-    schema: { tags: ['rooms'], security: [{ bearerAuth: [] }], params: roomCodeParams, response: { 200: connectionSchema, ...routeErrors() } },
-  }, async (request) => service.joinRoomByCode(request.headers.authorization, request.params.code));
-
-  api.post(`${API_PREFIX}/rooms/guest/join`, {
-    schema: { tags: ['rooms'], body: guestJoinSchema, response: { 200: connectionSchema, ...routeErrors() } },
-  }, async (request) => service.joinGuest(request.body.code, request.body.displayName));
-
-  api.post(`${API_PREFIX}/rooms/:roomId/token`, {
-    schema: { tags: ['rooms'], params: roomIdParams, body: tokenBody, response: { 200: z.object({ livekitUrl: z.string(), livekitToken: z.string() }), ...routeErrors() } },
-  }, async (request) => service.reissueRoomToken(request.headers.authorization, request.params.roomId, request.body.participantIdentity));
-
-  api.patch(`${API_PREFIX}/rooms/:roomId/lock`, {
-    schema: { tags: ['rooms'], security: [{ bearerAuth: [] }], params: roomIdParams, body: roomLockSchema, response: { 200: z.object({ isLocked: z.boolean() }), ...routeErrors() } },
-  }, async (request) => service.setRoomLock(request.headers.authorization, request.params.roomId, request.body.isLocked));
-
-  api.post(`${API_PREFIX}/rooms/:roomId/close`, {
-    schema: { tags: ['rooms'], security: [{ bearerAuth: [] }], params: roomIdParams, response: { 204: z.null(), ...routeErrors() } },
-  }, async (request, reply) => {
-    await service.closeRoom(request.headers.authorization, request.params.roomId);
-    return reply.status(204).send(null);
-  });
-
-  api.delete(`${API_PREFIX}/rooms/:roomId/participants/:participantIdentity`, {
-    schema: { tags: ['rooms'], security: [{ bearerAuth: [] }], params: participantParams, response: { 204: z.null(), ...routeErrors() } },
-  }, async (request, reply) => {
-    await service.kickParticipant(request.headers.authorization, request.params.roomId, request.params.participantIdentity);
-    return reply.status(204).send(null);
-  });
-
-  for (const action of ['claim', 'heartbeat', 'release'] as const) {
-    api.post(`${API_PREFIX}/rooms/:roomId/screen-share/${action}`, {
-      schema: { tags: ['screen-share'], params: roomIdParams, body: screenShareActionSchema, response: { 200: action === 'release' ? z.object({ released: z.literal(true) }) : z.object({ expiresAt: z.string() }), ...routeErrors() } },
-    }, async (request) => {
-      if (action === 'claim') return service.claimScreenShare(request.headers.authorization, request.params.roomId, request.body.participantIdentity);
-      if (action === 'heartbeat') return service.heartbeatScreenShare(request.headers.authorization, request.params.roomId, request.body.participantIdentity);
-      await service.releaseScreenShare(request.headers.authorization, request.params.roomId, request.body.participantIdentity);
       return { released: true as const };
     });
   }

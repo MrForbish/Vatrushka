@@ -3,6 +3,7 @@ dist/
 out/
 coverage/
 release/
+updates/
 .env
 .env.*
 !.env.example

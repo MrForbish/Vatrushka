@@ -55,6 +55,7 @@ services:
       TURN_DOMAIN: ${TURN_DOMAIN:-turn.example.com}
     volumes:
       - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../../updates:/srv/updates:ro
       - caddy_data:/data
       - caddy_config:/config
       - /var/www/certbot:/var/www/certbot:ro
