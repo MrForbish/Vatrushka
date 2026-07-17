@@ -1,29 +1,43 @@
+import { useEffect, useRef, useState } from 'react';
+
 import type { LocalSettings, PublicUser, ServerDetail, ServerPermission, ServerSummary } from '@vatrushka/shared';
 
+import type { AudioDevices } from '../../audio-devices';
 import { SecurityCenter, type SecurityTab } from '../../features/security';
-import { SettingsPageState, SettingsPlaceholderPage, SettingsShell } from '../../features/settings';
-import { WorkspaceLibrary, type WorkspaceNavigationItem } from '../../ui';
+import { SettingsPageState, SettingsPlaceholderPage, SettingsShell, UserAudioSettingsPage, UserProfileSettingsPage } from '../../features/settings';
+import { ConfirmDialog, WorkspaceLibrary, type WorkspaceNavigationItem } from '../../ui';
 import type { SettingsRoute } from './route-paths';
 import { serverSettingsPath, userSettingsPath } from './route-paths';
 import { serverSettingsNavigation } from './server-settings.routes';
 import { userSettingsNavigation } from './user-settings.routes';
 
 export interface SettingsRoutePageProps {
+  busy: boolean;
+  devices: AudioDevices;
   directUnreadCount: number;
   error: string | null;
+  inputLevel: number;
   loading: boolean;
+  microphoneId: string | undefined;
+  outputId: string | undefined;
   route: SettingsRoute;
   settings: LocalSettings;
   server: ServerDetail | null;
   servers: ServerSummary[];
   user: PublicUser;
+  voiceConnected: boolean;
   onBack(): void;
   onCreateServer(): void;
   onDirectMessages(): void;
   onHome(): void;
   onNavigate(path: string): void;
+  onMicrophone(deviceId: string): void;
   onNotificationSettingsChange(settings: Pick<LocalSettings, 'desktopNotificationsEnabled' | 'messageSoundsEnabled'>): void;
   onOpenServer(serverId: string): void;
+  onOutput(deviceId: string): void;
+  onRefreshDevices(): void;
+  onTestOutput(): void;
+  onUpdateProfile(displayName: string): Promise<PublicUser>;
   onCurrentSessionRevoked(): void;
   onUserChange(user: PublicUser): void;
 }
@@ -54,18 +68,53 @@ function securityTabPath(tab: SecurityTab): string {
 }
 
 export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Element {
+  const [profileDirty, setProfileDirty] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const pendingNavigationRef = useRef<(() => void) | null>(null);
+  const requestNavigation = (action: () => void): void => {
+    if (!profileDirty) {
+      action();
+      return;
+    }
+    pendingNavigationRef.current = action;
+    setDiscardOpen(true);
+  };
+  const discardAndContinue = (): void => {
+    const action = pendingNavigationRef.current;
+    pendingNavigationRef.current = null;
+    setProfileDirty(false);
+    setDiscardOpen(false);
+    action?.();
+  };
+
+  useEffect(() => {
+    if (!profileDirty) return undefined;
+    const blockWindowClose = (event: BeforeUnloadEvent): void => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', blockWindowClose);
+    return () => window.removeEventListener('beforeunload', blockWindowClose);
+  }, [profileDirty]);
+
   const workspaces: WorkspaceNavigationItem[] = props.servers.map((server) => ({ id: server.id, name: server.name, memberCount: server.memberCount, activeVoice: false }));
-  const workspaceLibrary = <WorkspaceLibrary {...(props.route.kind === 'server' ? { activeWorkspaceId: props.route.serverId } : {})} directUnreadCount={props.directUnreadCount} onCreate={props.onCreateServer} onDirectMessages={props.onDirectMessages} onHome={props.onHome} onSelect={props.onOpenServer} workspaces={workspaces} />;
+  const workspaceLibrary = <WorkspaceLibrary {...(props.route.kind === 'server' ? { activeWorkspaceId: props.route.serverId } : {})} directUnreadCount={props.directUnreadCount} onCreate={() => requestNavigation(props.onCreateServer)} onDirectMessages={() => requestNavigation(props.onDirectMessages)} onHome={() => requestNavigation(props.onHome)} onSelect={(serverId) => requestNavigation(() => props.onOpenServer(serverId))} workspaces={workspaces} />;
 
   if (props.route.kind === 'user') {
     const item = userSettingsNavigation.find((candidate) => candidate.section === props.route.section)!;
     const securityTab = props.route.subpage === 'backup-codes' ? 'recovery' : userSecurityTabs[props.route.section as keyof typeof userSecurityTabs];
-    return (
-      <SettingsShell activeSection={props.route.section} entityLabel="Личные настройки" entityName={props.user.displayName ?? props.user.email} items={userSettingsNavigation} onBack={props.onBack} onSelect={(section) => props.onNavigate(userSettingsPath(section))} workspaceLibrary={workspaceLibrary}>
-        {securityTab === undefined
+    const content = props.route.section === 'profile'
+      ? <UserProfileSettingsPage onDirtyChange={setProfileDirty} onSave={props.onUpdateProfile} onUserChange={props.onUserChange} user={props.user} />
+      : props.route.section === 'audio'
+        ? <UserAudioSettingsPage busy={props.busy} devices={props.devices} inputLevel={props.inputLevel} microphoneId={props.microphoneId} onMicrophone={props.onMicrophone} onOutput={props.onOutput} onRefresh={props.onRefreshDevices} onTestOutput={props.onTestOutput} outputId={props.outputId} voiceConnected={props.voiceConnected} />
+        : securityTab === undefined
           ? <SettingsPlaceholderPage description={item.description} scope="user" title={item.label} />
-          : <SecurityCenter onClose={props.onBack} onCurrentSessionRevoked={props.onCurrentSessionRevoked} onSectionChange={(tab) => props.onNavigate(securityTabPath(tab))} onSettingsChange={props.onNotificationSettingsChange} onUserChange={props.onUserChange} open presentation="page" section={securityTab} settings={props.settings} user={props.user} />}
-      </SettingsShell>
+          : <SecurityCenter onClose={props.onBack} onCurrentSessionRevoked={props.onCurrentSessionRevoked} onSectionChange={(tab) => props.onNavigate(securityTabPath(tab))} onSettingsChange={props.onNotificationSettingsChange} onUserChange={props.onUserChange} open presentation="page" section={securityTab} settings={props.settings} user={props.user} />;
+    return (
+      <>
+        <SettingsShell activeSection={props.route.section} entityLabel="Личные настройки" entityName={props.user.displayName ?? props.user.email} items={userSettingsNavigation} onBack={() => requestNavigation(props.onBack)} onSelect={(section) => requestNavigation(() => props.onNavigate(userSettingsPath(section)))} workspaceLibrary={workspaceLibrary}>{content}</SettingsShell>
+        <ConfirmDialog confirmLabel="Не сохранять" danger description="Внесённые изменения отображаемого имени будут потеряны." onClose={() => { pendingNavigationRef.current = null; setDiscardOpen(false); }} onConfirm={discardAndContinue} open={discardOpen} title="Отменить изменения профиля?" />
+      </>
     );
   }
 

@@ -150,7 +150,7 @@ test('revokes another device without exposing its refresh token to the renderer'
 });
 
 test('opens the routed settings shell without replacing the application controller', async () => {
-  const user = { id: 'settings-e2e-user', email: 'settings@myvatrushka.ru', displayName: 'Настройки E2E', platformRole: 'member', hasPassword: true, twoFactorEnabled: true };
+  let user = { id: 'settings-e2e-user', email: 'settings@myvatrushka.ru', displayName: 'Настройки E2E', platformRole: 'member', hasPassword: true, twoFactorEnabled: true };
   const home = {
     user: { id: user.id, displayName: user.displayName, email: user.email, avatarUrl: null, presence: 'online', platformBadge: null },
     readiness: { connection: 'healthy', audioSetupRequired: false },
@@ -176,12 +176,13 @@ test('opens the routed settings shell without replacing the application controll
     if (request.method === 'GET' && url.pathname === '/api/v1/direct-conversations') { response.end('[]'); return; }
     if (request.method === 'GET' && url.pathname === '/api/v1/auth/sessions') { response.end('[]'); return; }
     if (request.method === 'GET' && url.pathname === '/api/v1/me/security-events') { response.end('[]'); return; }
+    if (request.method === 'PATCH' && url.pathname === '/api/v1/me') { user = { ...user, displayName: 'Новое имя' }; response.end(JSON.stringify(user)); return; }
     response.statusCode = 404;
     response.end(JSON.stringify({ code: 'NOT_FOUND' }));
   });
   await new Promise<void>((resolve, reject) => apiServer?.listen(3000, () => resolve()).once('error', reject));
 
-  application = await electron.launch({ args: ['.', `--user-data-dir=.e2e-user-data-settings-routes-${process.pid}`], cwd: process.cwd(), env: electronEnvironment() });
+  application = await electron.launch({ args: ['.', '--use-fake-device-for-media-stream', `--user-data-dir=.e2e-user-data-settings-routes-${process.pid}`], cwd: process.cwd(), env: electronEnvironment() });
   let window = await application.firstWindow();
   await window.getByRole('textbox', { name: 'Email' }).fill(user.email);
   await window.getByRole('textbox', { name: 'Пароль', exact: true }).fill('secure-vatrushka-42');
@@ -197,6 +198,19 @@ test('opens the routed settings shell without replacing the application controll
   window = await application.firstWindow();
   await expect(window.getByRole('heading', { name: 'Мой профиль' })).toBeVisible();
   await expect(window.getByRole('navigation', { name: 'Разделы настроек' })).toBeVisible();
+  await window.getByRole('textbox', { name: 'Отображаемое имя' }).fill('Новое имя');
+  await window.getByRole('button', { name: /Уведомления/u }).click();
+  const discardDialog = window.getByRole('dialog', { name: 'Отменить изменения профиля?' });
+  await expect(discardDialog).toBeVisible();
+  await discardDialog.getByRole('button', { name: 'Отмена' }).click();
+  await expect(window).toHaveURL(/#\/settings\/profile/u);
+  await window.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(window.locator('.vui-user-profile-preview').getByText('Новое имя', { exact: true })).toBeVisible();
+  await window.getByRole('button', { name: /Голос и звук/u }).click();
+  await expect(window).toHaveURL(/#\/settings\/audio/u);
+  await expect(window.getByRole('heading', { name: 'Голос и звук' })).toBeVisible();
+  await expect(window.getByRole('button', { name: 'Устройство ввода' })).toContainText('Fake Default Audio Input');
+  await expect(window.getByRole('button', { name: 'Динамики / наушники' })).toContainText('Fake Default Audio Output');
   await window.getByRole('button', { name: /Уведомления/u }).click();
   await expect(window).toHaveURL(/#\/settings\/notifications/u);
   await expect(window.getByRole('heading', { name: 'Уведомления о сообщениях' })).toBeVisible();

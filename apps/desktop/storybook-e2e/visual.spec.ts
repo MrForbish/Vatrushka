@@ -46,6 +46,21 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('settings-shell-user-security.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('routed user profile settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--user-profile');
+    await expect(page.getByRole('heading', { name: 'Мой профиль' })).toBeVisible();
+    await expect(page.getByRole('textbox', { name: 'Отображаемое имя' })).toHaveValue('Илья Форбиш');
+    await expect(page).toHaveScreenshot('settings-shell-user-profile.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('routed user audio settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--user-audio-devices');
+    await expect(page.getByRole('heading', { name: 'Голос и звук' })).toBeVisible();
+    await expect(page.getByText('Shure MV7 — рабочий стол')).toBeVisible();
+    await expect(page.getByText('Наушники Arctis Nova 7')).toBeVisible();
+    await expect(page).toHaveScreenshot('settings-shell-user-audio.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('personal Home dashboard', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await openStory(page, 'home-homepage--returning-user');
