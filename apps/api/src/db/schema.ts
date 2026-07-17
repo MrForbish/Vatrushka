@@ -13,7 +13,10 @@ export const users = pgTable(
   {
     id: uuid('id').primaryKey(),
     email: text('email').notNull(),
+    username: text('username'),
     displayName: text('display_name'),
+    bio: text('bio'),
+    avatarObjectKey: text('avatar_object_key'),
     platformRole: text('platform_role').$type<PlatformRole>().notNull().default('member'),
     passwordHash: text('password_hash'),
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
@@ -25,10 +28,37 @@ export const users = pgTable(
     directMessagePrivacy: text('direct_message_privacy').$type<DirectMessagePrivacy>().notNull().default('shared_servers'),
     presenceVisibility: text('presence_visibility').$type<PresenceVisibility>().notNull().default('shared_servers'),
     activityVisible: boolean('activity_visible').notNull().default(true),
+    usernameChangedAt: timestamp('username_changed_at', { withTimezone: true }),
+    deactivationScheduledAt: timestamp('deactivation_scheduled_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
-  (table) => [uniqueIndex('users_email_unique').on(table.email)],
+  (table) => [uniqueIndex('users_email_unique').on(table.email), uniqueIndex('users_username_unique').on(table.username)],
+);
+
+export const blockedUsers = pgTable(
+  'blocked_users',
+  {
+    blockerUserId: uuid('blocker_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    blockedUserId: uuid('blocked_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.blockerUserId, table.blockedUserId] }), index('blocked_users_blocked_idx').on(table.blockedUserId)],
+);
+
+export const pendingEmailChanges = pgTable(
+  'pending_email_changes',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    newEmail: text('new_email').notNull(),
+    codeHash: text('code_hash').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('pending_email_changes_new_email_unique').on(table.newEmail), index('pending_email_changes_user_idx').on(table.userId, table.createdAt)],
 );
 
 export const authCodes = pgTable(
@@ -99,6 +129,23 @@ export const servers = pgTable(
   {
     id: uuid('id').primaryKey(),
     name: text('name').notNull(),
+    description: text('description'),
+    language: text('language').notNull().default('ru'),
+    timezone: text('timezone').notNull().default('Europe/Moscow'),
+    systemChannelId: uuid('system_channel_id'),
+    welcomeChannelId: uuid('welcome_channel_id'),
+    iconObjectKey: text('icon_object_key'),
+    bannerObjectKey: text('banner_object_key'),
+    accentColor: text('accent_color'),
+    defaultNotificationLevel: text('default_notification_level').notNull().default('mentions'),
+    defaultVoiceInactivitySeconds: integer('default_voice_inactivity_seconds').notNull().default(300),
+    verificationLevel: text('verification_level').notNull().default('email_verified'),
+    newMemberRestrictionMinutes: integer('new_member_restriction_minutes').notNull().default(0),
+    messageRateLimitPerMinute: integer('message_rate_limit_per_minute').notNull().default(60),
+    mentionLimitPerMessage: integer('mention_limit_per_message').notNull().default(10),
+    rules: text('rules'),
+    version: integer('version').notNull().default(1),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
     inviteToken: text('invite_code').notNull(),
     ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
@@ -113,6 +160,10 @@ export const serverMembers = pgTable(
     serverId: uuid('server_id').notNull().references(() => servers.id, { onDelete: 'cascade' }),
     userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
     joinedAt: timestamp('joined_at', { withTimezone: true }).notNull(),
+    nickname: text('nickname'),
+    mutedUntil: timestamp('muted_until', { withTimezone: true }),
+    deafened: boolean('deafened').notNull().default(false),
+    lastActiveAt: timestamp('last_active_at', { withTimezone: true }),
   },
   (table) => [primaryKey({ columns: [table.serverId, table.userId] }), index('server_members_user_idx').on(table.userId)],
 );
@@ -153,10 +204,61 @@ export const serverChannels = pgTable(
     type: text('type').$type<ServerChannelType>().notNull(),
     position: integer('position').notNull(),
     livekitRoomName: text('livekit_room_name'),
+    categoryId: uuid('category_id'),
+    slowModeSeconds: integer('slow_mode_seconds').notNull().default(0),
+    maxParticipants: integer('max_participants'),
+    bitrate: integer('bitrate'),
+    version: integer('version').notNull().default(1),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
   (table) => [index('server_channels_server_position_idx').on(table.serverId, table.position), uniqueIndex('server_channels_livekit_name_unique').on(table.livekitRoomName)],
+);
+
+export const serverChannelCategories = pgTable(
+  'server_channel_categories',
+  {
+    id: uuid('id').primaryKey(),
+    serverId: uuid('server_id').notNull().references(() => servers.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    position: integer('position').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('server_channel_categories_server_position_idx').on(table.serverId, table.position)],
+);
+
+export const serverInvites = pgTable(
+  'server_invites',
+  {
+    id: uuid('id').primaryKey(),
+    serverId: uuid('server_id').notNull().references(() => servers.id, { onDelete: 'cascade' }),
+    createdByUserId: uuid('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+    destinationChannelId: uuid('destination_channel_id').references(() => serverChannels.id, { onDelete: 'set null' }),
+    tokenHash: text('token_hash').notNull(),
+    tokenPreview: text('token_preview').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    maxUses: integer('max_uses'),
+    useCount: integer('use_count').notNull().default(0),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('server_invites_token_hash_unique').on(table.tokenHash), index('server_invites_server_active_idx').on(table.serverId, table.revokedAt, table.expiresAt)],
+);
+
+export const serverBans = pgTable(
+  'server_bans',
+  {
+    serverId: uuid('server_id').notNull().references(() => servers.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    reason: text('reason').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    revokedByUserId: uuid('revoked_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  },
+  (table) => [primaryKey({ columns: [table.serverId, table.userId] }), index('server_bans_user_idx').on(table.userId), index('server_bans_server_active_idx').on(table.serverId, table.revokedAt)],
 );
 
 export const userActivity = pgTable(
@@ -199,6 +301,7 @@ export const serverAuditLogs = pgTable(
     targetId: uuid('target_id'),
     before: jsonb('before'),
     after: jsonb('after'),
+    correlationId: uuid('correlation_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (table) => [index('server_audit_logs_server_created_idx').on(table.serverId, table.createdAt), index('server_audit_logs_actor_idx').on(table.actorUserId)],

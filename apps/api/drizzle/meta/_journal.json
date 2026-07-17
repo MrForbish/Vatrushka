@@ -127,6 +127,20 @@
       "when": 1784327052530,
       "tag": "0017_canonical_messaging_expand",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784327515715,
+      "tag": "0018_identity_server_settings_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784327549197,
+      "tag": "0019_server_default_channels_expand",
+      "breakpoints": true
     }
   ]
 }
