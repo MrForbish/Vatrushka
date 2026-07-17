@@ -4,16 +4,17 @@ import type { ReactNode } from 'react';
 import { channelNameSchema, displayNameSchema, messageContentSchema, passwordSchema, roleNameSchema, serverInviteCodeSchema, serverNameSchema, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type LocalSettings, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage } from '@vatrushka/shared';
 
 import { apiClient, ClientError } from './api.js';
+import { splitAudioDevices, type AudioDevices } from './audio-devices.js';
 import { AuthPanel, HomePanel, ProfilePanel } from './components.js';
 import { DirectMessagesView } from './features/direct-messages/index.js';
 import { SourcePicker } from './features/screen-share/index.js';
 import { SecurityCenter } from './features/security/index.js';
 import { ServerView } from './features/servers/index.js';
 import { UpdateStatus } from './features/update/index.js';
-import { RoomView } from './features/voice/index.js';
+import { RoomView, VoiceConnectionPanel } from './features/voice/index.js';
 import { MediaSession } from './media.js';
 
-type Screen = 'boot' | 'auth' | 'profile' | 'home' | 'server' | 'direct' | 'voice';
+type Screen = 'boot' | 'auth' | 'profile' | 'home' | 'server' | 'direct';
 const media = new MediaSession(apiClient);
 
 export default function App(): ReactNode {
@@ -30,8 +31,9 @@ export default function App(): ReactNode {
   const [totpAvailable, setTotpAvailable] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [connection, setConnection] = useState<RoomConnection | null>(null);
+  const [connectedVoiceChannelName, setConnectedVoiceChannelName] = useState('');
   const [settings, setSettings] = useState<LocalSettings>({ volume: 1 });
-  const [devices, setDevices] = useState<{ inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[] }>({ inputs: [], outputs: [] });
+  const [devices, setDevices] = useState<AudioDevices>({ inputs: [], outputs: [] });
   const [version, setVersion] = useState('0.4.0');
   const [updateState, setUpdateState] = useState<DesktopUpdateState>({ status: 'idle', currentVersion: '0.4.0' });
   const [platform, setPlatform] = useState('win32');
@@ -70,7 +72,7 @@ export default function App(): ReactNode {
     try {
       if (requestPermission) permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const all = await navigator.mediaDevices.enumerateDevices();
-      setDevices({ inputs: all.filter((device) => device.kind === 'audioinput'), outputs: all.filter((device) => device.kind === 'audiooutput') });
+      setDevices(splitAudioDevices(all));
     } catch (caught) {
       if (requestPermission) throw new Error('Не удалось получить доступ к аудиоустройствам. Проверьте разрешение на микрофон в Windows.', { cause: caught });
       setDevices({ inputs: [], outputs: [] });
@@ -110,6 +112,11 @@ export default function App(): ReactNode {
   }, [refreshDevices]);
 
   useEffect(() => {
+    if (!user) return;
+    void refreshDevices(true).catch((caught) => setError(userMessage(caught)));
+  }, [refreshDevices, user?.id]);
+
+  useEffect(() => {
     let active = true;
     const unsubscribe = window.desktop.onUpdateState((state) => { if (active) setUpdateState(state); });
     void window.desktop.getUpdateState().then((state) => { if (active) setUpdateState(state); }).catch(() => undefined);
@@ -131,13 +138,13 @@ export default function App(): ReactNode {
     if (outputMissing) delete next.outputDeviceId;
     setSettings(next);
     void window.desktop.updateLocalSettings(next).catch((caught) => setError(userMessage(caught)));
-    if (screen === 'voice') {
+    if (connection !== null) {
       const fallbacks: Array<Promise<void>> = [];
       if (microphoneMissing) fallbacks.push(media.switchMicrophone('default'));
       if (outputMissing) fallbacks.push(media.switchOutput('default'));
       void Promise.all(fallbacks).catch((caught) => setError(userMessage(caught)));
     }
-  }, [devices.inputs, devices.outputs, screen, settings]);
+  }, [connection, devices.inputs, devices.outputs, settings]);
 
   useEffect(() => {
     if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
@@ -650,8 +657,10 @@ export default function App(): ReactNode {
   const enterVoiceChannel = async (voiceConnection: RoomConnection): Promise<void> => {
     await media.connect(voiceConnection, settings);
     setConnection(voiceConnection);
-    setScreen('voice');
-    await refreshDevices();
+    setConnectedVoiceChannelName(serverDetail?.channels.find((channel) => channel.id === voiceConnection.channelId)?.name ?? 'Голосовой канал');
+    setActiveChannelId(voiceConnection.channelId);
+    setScreen('server');
+    await refreshDevices(true);
   };
 
   const connectVoiceChannel = (channelId: string): void => { void run(async () => enterVoiceChannel(await apiClient.connectVoiceChannel(channelId))); };
@@ -660,6 +669,7 @@ export default function App(): ReactNode {
     void run(async () => {
       await media.disconnect();
       setConnection(null);
+      setConnectedVoiceChannelName('');
       setScreen(serverDetail ? 'server' : userRef.current ? 'home' : 'auth');
     });
   };
@@ -670,6 +680,7 @@ export default function App(): ReactNode {
       await apiClient.logout();
       updateUser(null);
       setConnection(null);
+      setConnectedVoiceChannelName('');
       setServerDetail(null);
       setServers([]);
       setDirectConversations([]);
@@ -687,11 +698,11 @@ export default function App(): ReactNode {
     const next = { ...settings };
     if (deviceId) next[key] = deviceId; else delete next[key];
     const apply = async (): Promise<void> => {
-      if (screen === 'voice') await (key === 'microphoneDeviceId' ? media.switchMicrophone(value) : media.switchOutput(value));
+      if (connection !== null) await (key === 'microphoneDeviceId' ? media.switchMicrophone(value) : media.switchOutput(value));
       setSettings(next);
       await window.desktop.updateLocalSettings(next);
     };
-    if (screen === 'voice') void run(apply);
+    if (connection !== null) void run(apply);
     else void apply().catch((caught) => setError(userMessage(caught)));
   };
 
@@ -751,16 +762,33 @@ export default function App(): ReactNode {
   };
 
   const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityCenter open user={user} onClose={() => setSecurityOpen(false)} onUserChange={updateUser} onCurrentSessionRevoked={() => { updateUser(null); setScreen('auth'); }} /> : null;
-  const withUpdateStatus = (content: ReactNode): ReactNode => <>{content}<UpdateStatus state={updateState} onCheck={() => void window.desktop.checkForUpdates().catch((caught) => setError(userMessage(caught)))} onInstall={() => void window.desktop.installUpdate().catch((caught) => setError(userMessage(caught)))} /></>;
+  const withUpdateStatus = (content: ReactNode): ReactNode => <>{content}<UpdateStatus state={updateState} onInstall={() => void window.desktop.installUpdate().catch((caught) => setError(userMessage(caught)))} /></>;
   const directUnreadCount = directConversations.reduce((count, conversation) => count + conversation.unreadCount, 0);
+  const openConnectedVoice = (): void => {
+    if (!connection) return;
+    if (serverDetail?.id === connection.serverId) {
+      setActiveChannelId(connection.channelId);
+      setScreen('server');
+      return;
+    }
+    void run(async () => {
+      const detail = await apiClient.getServer(connection.serverId);
+      setServerDetail(detail);
+      setServerAuditLog([]);
+      setActiveChannelId(connection.channelId);
+      setMessages([]);
+      setScreen('server');
+    });
+  };
+  const voiceStage = connection ? <RoomView connection={connection} snapshot={mediaSnapshot} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))} onShare={showSourcePicker} onCopy={copyInvite} onLeave={leaveRoom} onKick={(identity) => void run(() => apiClient.kickMediaParticipant(connection, identity))} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onStartAudio={() => void media.startAudio()} onScreenAudioMute={() => media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)} onScreenAudioVolume={setScreenShareVolume} onParticipantMute={(identity, muted) => media.setParticipantMuted(identity, muted)} onParticipantVolume={(identity, volume) => media.setParticipantVolume(identity, volume)} /> : undefined;
+  const voiceConnectionPanel = connection ? <VoiceConnectionPanel canShare={connection.canStream !== false} channelName={connectedVoiceChannelName} snapshot={mediaSnapshot} onLeave={leaveRoom} onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))} onOpen={openConnectedVoice} onShare={showSourcePicker} /> : undefined;
 
   if (screen === 'boot') return withUpdateStatus(<main className="bootScreen"><div className="pulseLogo"><span /></div><span>Подключаем «Ватрушку»…</span></main>);
   if (screen === 'auth') return withUpdateStatus(<AuthPanel mode={authMode} stage={authStage} factor={secondFactor} totpAvailable={totpAvailable} email={email} code={otp} password={password} passwordConfirmation={passwordConfirmation} retrySeconds={retrySeconds} busy={busy} error={error} onMode={(mode) => { setAuthMode(mode); setAuthStage('credentials'); setOtp(''); setError(null); }} onEmailChange={setEmail} onCodeChange={setOtp} onPasswordChange={setPasswordValue} onPasswordConfirmationChange={setPasswordConfirmation} onRequest={requestCode} onVerify={verifyCode} onFactor={switchPasswordFactor} onBack={() => { setAuthStage('credentials'); setOtp(''); setError(null); }} />);
   if (screen === 'profile') return withUpdateStatus(<ProfilePanel value={displayName} busy={busy} error={error} onChange={setDisplayName} onSave={saveProfile} />);
   if (screen === 'home' && user) return withUpdateStatus(<><HomePanel user={user} version={version} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} servers={servers} serverName={serverName} serverInvite={serverInvite} directUnreadCount={directUnreadCount} onLogout={logout} onSecurity={() => setSecurityOpen(true)} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onOpenServer={openServer} onDirectMessages={openDirectMessages} />{renderSecurityPanel()}</>);
-  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onConnectVoice={connectVoiceChannel} onCopyInvite={() => void window.desktop.copyToClipboard(`Присоединяйтесь к серверу «${serverDetail.name}»\nКод приглашения: ${serverDetail.inviteCode}`)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => setSecurityOpen(true)} onLogout={logout} />{renderSecurityPanel()}</>);
+  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onConnectVoice={connectVoiceChannel} onCopyInvite={() => void window.desktop.copyToClipboard(`Присоединяйтесь к серверу «${serverDetail.name}»\nКод приглашения: ${serverDetail.inviteCode}`)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => setSecurityOpen(true)} onLogout={logout} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} busy={busy} sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}{renderSecurityPanel()}</>);
   if (screen === 'direct' && user) return withUpdateStatus(<><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => setSecurityOpen(true)} onLogout={logout} />{renderSecurityPanel()}</>);
-  if (screen === 'voice' && connection) return withUpdateStatus(<><RoomView connection={connection} snapshot={mediaSnapshot} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))} onShare={showSourcePicker} onCopy={copyInvite} onLeave={leaveRoom} onKick={(identity) => void run(() => apiClient.kickMediaParticipant(connection, identity))} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onStartAudio={() => void media.startAudio()} onScreenAudioMute={() => media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)} onScreenAudioVolume={setScreenShareVolume} onParticipantMute={(identity, muted) => media.setParticipantMuted(identity, muted)} onParticipantVolume={(identity, volume) => media.setParticipantVolume(identity, volume)} />{sources && <SourcePicker audioAllowed={connection.canStreamApplicationAudio !== false} busy={busy} sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}</>);
   return withUpdateStatus(<main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>);
 }
 

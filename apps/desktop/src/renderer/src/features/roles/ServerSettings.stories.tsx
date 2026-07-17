@@ -66,7 +66,8 @@ export const ChannelOverrides: Story = {
     const dialog = await screen.findByRole('dialog', { name: 'Настройки сервера' });
     const canvas = within(dialog);
     await userEvent.click(canvas.getByRole('button', { name: 'Права каналов' }));
-    await userEvent.selectOptions(canvas.getByLabelText('Роль'), 'role-speaker');
+    await userEvent.click(canvas.getByLabelText('Роль'));
+    await userEvent.click(canvas.getByRole('option', { name: 'Ведущий' }));
     const mentions = canvas.getByRole('group', { name: 'Право Упоминать всех' });
     await expect(within(mentions).getByRole('button', { name: 'Запретить' })).toHaveAttribute('aria-pressed', 'true');
     await userEvent.click(canvas.getByRole('button', { name: 'Сохранить права канала' }));

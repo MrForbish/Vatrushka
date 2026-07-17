@@ -27,7 +27,7 @@ describe('authentication screens', () => {
   it('renders OTP state, retry countdown, and an error alert', () => {
     render(<AuthPanel mode="password" stage="otp" factor="email" totpAvailable={false} email="test@example.com" code="123" password="secure-pass-42" passwordConfirmation="" retrySeconds={42} busy={false} error="Неверный код" onMode={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRequest={noop} onVerify={noop} onFactor={noop} onBack={noop} />);
     expect(screen.getByLabelText('Код из письма')).toHaveAttribute('inputmode', 'numeric');
-    expect(screen.getByRole('button', { name: 'Отправить снова через 42 с' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Повторить через 42 с' })).toBeDisabled();
     expect(screen.getByRole('alert')).toHaveTextContent('Неверный код');
   });
 });
@@ -35,12 +35,12 @@ describe('authentication screens', () => {
 describe('main screen', () => {
   it('shows user identity, server actions, audio settings, and app version', () => {
     render(<HomePanel user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="Команда" serverInvite="ABCD2345" onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onOpenServer={noop} />);
-    expect(screen.getByText('Anna')).toBeInTheDocument();
+    expect(screen.getAllByText('Anna').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Создать сервер/u })).toBeEnabled();
     expect(screen.getByLabelText('Код приглашения')).toHaveValue('ABCD2345');
-    expect(screen.getByLabelText('Устройство записи')).toBeInTheDocument();
-    expect(screen.getByLabelText('Устройство воспроизведения')).toBeInTheDocument();
-    expect(screen.getByText(/Ватрушка 1.2.3/u)).toBeInTheDocument();
+    expect(screen.getByLabelText('Микрофон')).toBeInTheDocument();
+    expect(screen.getByLabelText('Динамики / наушники')).toBeInTheDocument();
+    expect(screen.getByText('v1.2.3')).toBeInTheDocument();
   });
 });
 
@@ -92,12 +92,15 @@ describe('room UI', () => {
     expect(screen.getAllByText(/говорит/ui).length).toBeGreaterThan(0);
     expect(screen.getByTestId('mute-control')).toHaveAccessibleName('Включить микрофон');
     expect(screen.getByTestId('screen-share-control')).toBeEnabled();
-    expect(screen.getByText('Код сервера')).toBeInTheDocument();
+    expect(screen.getByText('Голосовая связь активна')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Исключить Visitor' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Заглушить локально' }));
     expect(onParticipantMute).toHaveBeenCalledWith('user_visitor-1_remote', true);
-    await userEvent.selectOptions(screen.getByLabelText('Устройство ввода'), 'microphone-studio');
-    await userEvent.selectOptions(screen.getByLabelText('Устройство вывода'), 'headphones-usb');
+    await userEvent.click(screen.getByRole('button', { name: 'Устройства' }));
+    await userEvent.click(screen.getByLabelText('Устройство ввода'));
+    await userEvent.click(screen.getByRole('option', { name: 'Studio Microphone' }));
+    await userEvent.click(screen.getByLabelText('Устройство вывода'));
+    await userEvent.click(screen.getByRole('option', { name: 'USB Headphones' }));
     expect(onMicrophone).toHaveBeenCalledWith('microphone-studio');
     expect(onOutput).toHaveBeenCalledWith('headphones-usb');
     await userEvent.click(screen.getByRole('button', { name: 'Обновить список аудиоустройств' }));
@@ -166,5 +169,15 @@ describe('server UI', () => {
     expect(onChannel).toHaveBeenCalledWith('voice-1');
     await userEvent.click(screen.getByRole('button', { name: /Роли и права/u }));
     expect(screen.getByRole('heading', { name: 'Настройки сервера' })).toBeInTheDocument();
+  });
+
+  it('keeps the server and channel navigation visible inside a connected voice channel', async () => {
+    const onChannel = vi.fn();
+    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="voice-1" connectedVoiceChannelId="voice-1" connectedVoiceServerId="server-1" voiceStage={<div>Активная голосовая сцена</div>} voiceConnectionPanel={<div>Голосовая связь подключена</div>} messages={[]} messageDraft="" serverName="" serverInvite="" busy={false} error={null} auditLog={[]} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={noop} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={noop} onCopyInvite={noop} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onUpdateRole={noop} onDeleteRole={noop} onReorderRole={noop} onAssignRoles={noop} onSetChannelOverwrite={noop} onLoadAudit={noop} onKickMember={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onSecurity={noop} onLogout={noop} />);
+
+    expect(screen.getByText('Активная голосовая сцена')).toBeInTheDocument();
+    expect(screen.getByText('Голосовая связь подключена')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'общий' }));
+    expect(onChannel).toHaveBeenCalledWith('text-1');
   });
 });

@@ -4,7 +4,9 @@
 
 LiveKit JS SDK подключается с auto-subscribe, echo cancellation, noise suppression и auto gain control. Отказ микрофона не выбрасывает пользователя из голосового канала: клиент остаётся muted и показывает понятную ошибку. `devicechange` обновляет списки. `Room.switchActiveDevice` немедленно переключает input/output.
 
-Пользователь явно выбирает устройство записи и воспроизведения. В постоянном голосовом канале права `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` отражаются не только в UI: API выпускает LiveKit-токен без соответствующих publish sources, если роль запрещает микрофон, изображение демонстрации или звук приложения.
+После авторизации renderer делает audio-only `getUserMedia`, затем `enumerateDevices`; Electron main разрешает его только главному доверенному frame. Поэтому custom-select показывает реальные labels Windows, а не сгенерированные «Микрофон 1»/«Динамики 1». Псевдоустройство `communications` скрывается, `default` остаётся отдельным пунктом с названием текущего системного устройства. Если Windows не раскрыла label, UI прямо сообщает об этом и предлагает повторно запросить доступ.
+
+Пользователь явно выбирает устройство записи и воспроизведения. Выбор доступен на главной и в компактном popover голосового dock, сохраняется локально и применяется к активной LiveKit-сессии сразу. Подключение к голосу не заменяет экран сервера: workspace rail, список текстовых/голосовых каналов и участники остаются доступны. В постоянном голосовом канале права `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` отражаются не только в UI: API выпускает LiveKit-токен без соответствующих publish sources, если роль запрещает микрофон, изображение демонстрации или звук приложения.
 
 Participant UI показывает имя, владельца/администратора, mute текстом и icon, speaking текстом и visual outline, connection quality и screen badge. Гостевых media identities больше нет. Удалённые audio tracks attach/detach явно; autoplay gate вызывает `Room.startAudio` только из user gesture.
 

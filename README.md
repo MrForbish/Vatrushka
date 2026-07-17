@@ -202,7 +202,8 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 
 - Windows → Параметры → Конфиденциальность и безопасность → Микрофон: разрешите доступ desktop apps.
 - Закройте программы, эксклюзивно удерживающие устройство.
-- Выберите «Системное устройство», затем переключите устройство повторно.
+- Нажмите «Обновить» в блоке аудиоустройств: клиент кратко запрашивает audio-only доступ, после чего показывает названия, которые вернула Windows.
+- «Системное устройство» означает текущий Windows default; рядом выводится его реальное название, когда Chromium его предоставляет. Нумерованных заглушек «Микрофон 1»/«Динамики 1» нет.
 - Логи: `%APPDATA%\Ватрушка\logs\main.log`; токены и OTP туда не пишутся.
 
 ### Screen share
@@ -225,7 +226,7 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 - Исключение удаляет текущего LiveKit participant или участника сервера. Постоянного ban list пока нет.
 - Зритель может отдельно выключать и регулировать громкость звука демонстрации; значение сохраняется локально.
 - Реальные SMTP delivery, LiveKit Cloud/WebRTC через NAT, Windows microphone/loopback/display capture требуют внешних credentials и устройств и не заменяются unit-тестами.
-- E2E не захватывает реальный микрофон/экран. Оно проверяет Electron shell, sandbox/preload allowlist и deep link.
+- E2E использует виртуальное Chromium-аудиоустройство для проверки разрешения и раскрытия labels; матрица с физическими устройствами и экраном выполняется вручную на Windows.
 - NSIS-клиент обновляется автоматически из generic update feed; portable-сборка не обновляется. Пока нет code signing, E2EE, recording, telemetry и tray mode.
 
 ## Документация
@@ -238,6 +239,7 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 - [Security](docs/security.md)
 - [Testing](docs/testing.md)
 - [Performance](docs/performance.md)
+- [Release 0.4.1](docs/releases/0.4.1.md)
 - [Release 0.4.0](docs/releases/0.4.0.md)
 - [Release 0.3.0](docs/releases/0.3.0.md)
 - [vNext roadmap](docs/vnext-roadmap.md)

@@ -101,9 +101,20 @@
 .vui-input-with-action .vui-input { padding-right: var(--space-8); }
 .vui-input-with-action__button { position: absolute; right: var(--space-1); bottom: var(--space-1); }
 
-.vui-select-frame { min-height: var(--control-height-md); }
-.vui-select { appearance: none; height: 100%; }
-.vui-select-frame > svg { pointer-events: none; }
+.vui-select-root { position: relative; min-width: 0; }
+.vui-select-frame { width: 100%; min-height: var(--control-height-md); justify-content: space-between; text-align: left; cursor: pointer; }
+.vui-select-frame:disabled { cursor: not-allowed; color: var(--color-text-disabled); background: var(--color-surface-0); }
+.vui-select-frame[aria-expanded='true'] { border-color: var(--color-focus); box-shadow: var(--shadow-focus); }
+.vui-select__value { min-width: 0; overflow: hidden; color: var(--color-text-primary); font: var(--text-body-md); text-overflow: ellipsis; white-space: nowrap; }
+.vui-select-frame > svg { flex: 0 0 auto; transition: transform var(--duration-fast) var(--easing-standard); }
+.vui-select-frame[aria-expanded='true'] > svg { transform: rotate(180deg); }
+.vui-select-menu { position: absolute; z-index: var(--z-popover); top: calc(100% + var(--space-2)); right: 0; left: 0; display: grid; max-height: 260px; padding: var(--space-1); overflow-y: auto; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-elevated); box-shadow: var(--shadow-float); }
+.vui-select-menu > button { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); min-height: 38px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--color-text-secondary); font: var(--text-body-md); text-align: left; cursor: pointer; }
+.vui-select-menu > button:hover:not(:disabled),
+.vui-select-menu > button:focus-visible { outline: 0; background: var(--color-surface-3); color: var(--color-text-primary); }
+.vui-select-menu > button[aria-selected='true'] { background: var(--color-primary-soft); color: var(--color-text-primary); }
+.vui-select-menu > button:disabled { color: var(--color-text-disabled); cursor: not-allowed; }
+.vui-select-menu > button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .vui-segmented {
   display: inline-flex;

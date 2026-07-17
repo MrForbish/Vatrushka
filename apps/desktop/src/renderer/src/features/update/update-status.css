@@ -5,15 +5,15 @@
   bottom: 18px;
   max-width: min(390px, calc(100vw - 36px));
   display: grid;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 11px;
   padding: 11px 12px;
   border: 1px solid rgba(255, 255, 255, .12);
   border-radius: 14px;
-  color: #f8ebe5;
-  background: rgba(31, 21, 18, .94);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, .42);
+  color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-surface-elevated), transparent 4%);
+  box-shadow: var(--shadow-float);
   backdrop-filter: blur(18px);
 }
 
@@ -24,8 +24,9 @@
 .updateStatus[data-status="ready"] .updateStatusDot { background: #75d9a7; box-shadow: 0 0 0 4px rgba(117, 217, 167, .1); }
 .updateStatus[data-status="error"] .updateStatusDot { background: #ff6f82; }
 .updateStatus > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.updateStatus strong { font-size: 9px; }
-.updateStatus span { color: #a99a94; font-size: 8px; line-height: 1.35; }
+.updateStatus > div > strong { font: var(--text-label-md); }
+.updateStatus > div > span { color: var(--color-text-secondary); font: var(--text-caption); }
 .updateStatus progress { width: 100%; height: 4px; margin-top: 3px; accent-color: #efad67; }
-.updateStatus button { min-height: 31px; padding: 0 10px; border: 1px solid rgba(239, 173, 103, .2); border-radius: 9px; color: #ffe3ca; background: rgba(239, 173, 103, .1); font: inherit; font-size: 8px; cursor: pointer; }
-.updateStatus button:hover { background: rgba(239, 173, 103, .18); }
+.updateStatus .vui-button { min-height: 32px; }
+.updateStatus .vui-button > span { font: var(--text-label-md); }
+.updateStatusClose { color: var(--color-text-muted); }

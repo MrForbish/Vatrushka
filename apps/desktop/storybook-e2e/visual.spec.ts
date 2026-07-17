@@ -38,6 +38,12 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('server-home.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('password login', async ({ page }) => {
+    await openStory(page, 'screens-current--password-login');
+    await expect(page.getByRole('heading', { name: 'С возвращением' })).toBeVisible();
+    await expect(page).toHaveScreenshot('password-login.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('app shell compact drawers', async ({ page }) => {
     await page.setViewportSize({ width: 1100, height: 760 });
     await openStory(page, 'layouts-app-shell--full-server');
@@ -63,7 +69,16 @@ test.describe('Vatrushka design system visual baseline', () => {
 
   test('voice room device controls', async ({ page }) => {
     await openStory(page, 'features-voice-room--visual-room');
+    await page.getByRole('button', { name: 'Устройства' }).click();
     await expect(page).toHaveScreenshot('voice-room-devices.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('connected voice keeps server navigation', async ({ page }) => {
+    await openStory(page, 'screens-server--connected-voice');
+    await expect(page.getByRole('button', { name: 'общий' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Переговорная' })).toBeVisible();
+    await expect(page.getByText('Голосовая связь подключена', { exact: true })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-connected-voice.png', { animations: 'disabled', fullPage: true });
   });
 
   test('screen share source picker', async ({ page }) => {

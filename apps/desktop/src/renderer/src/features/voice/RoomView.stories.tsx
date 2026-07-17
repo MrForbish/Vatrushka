@@ -58,8 +58,11 @@ type Story = StoryObj<typeof meta>;
 export const DeviceSelection: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.selectOptions(canvas.getByLabelText('Устройство ввода'), 'microphone-studio');
-    await userEvent.selectOptions(canvas.getByLabelText('Устройство вывода'), 'headphones-usb');
+    await userEvent.click(canvas.getByRole('button', { name: 'Устройства' }));
+    await userEvent.click(canvas.getByLabelText('Устройство ввода'));
+    await userEvent.click(canvas.getByRole('option', { name: 'Studio Microphone' }));
+    await userEvent.click(canvas.getByLabelText('Устройство вывода'));
+    await userEvent.click(canvas.getByRole('option', { name: 'USB Headphones' }));
     await expect(args.onMicrophone).toHaveBeenCalledWith('microphone-studio');
     await expect(args.onOutput).toHaveBeenCalledWith('headphones-usb');
     await userEvent.click(canvas.getByRole('button', { name: 'Обновить список аудиоустройств' }));

@@ -1,30 +1,28 @@
+import { useEffect, useState } from 'react';
+
 import type { DesktopUpdateState } from '@vatrushka/shared';
 
+import { Button, IconButton } from '../../ui';
 import './update-status.css';
 
 export interface UpdateStatusProps {
   state: DesktopUpdateState;
-  onCheck(): void;
   onInstall(): void;
 }
 
-export function UpdateStatus({ state, onCheck, onInstall }: UpdateStatusProps): React.JSX.Element | null {
-  if (state.status === 'unsupported') return null;
+export function UpdateStatus({ state, onInstall }: UpdateStatusProps): React.JSX.Element | null {
+  const notificationKey = `${state.status}:${state.version ?? ''}`;
+  const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  useEffect(() => { setDismissedKey(null); }, [notificationKey]);
+  const visible = state.status === 'available' || state.status === 'downloading' || state.status === 'ready';
+  if (!visible || dismissedKey === notificationKey) return null;
 
   const version = state.version ? ` ${state.version}` : '';
-  const content = state.status === 'checking'
-    ? 'Проверяем обновления…'
-    : state.status === 'available'
+  const content = state.status === 'available'
       ? `Доступна версия${version}. Начинаем загрузку…`
       : state.status === 'downloading'
         ? `Загружаем версию${version}: ${state.percent ?? 0}%`
-        : state.status === 'ready'
-          ? `Версия${version} готова к установке`
-          : state.status === 'error'
-            ? state.message ?? 'Не удалось проверить обновления.'
-            : state.status === 'up-to-date'
-              ? 'Установлена актуальная версия'
-              : `Версия ${state.currentVersion}`;
+        : `Версия${version} готова к установке`;
 
   return (
     <div className="updateStatus" data-status={state.status} role="status" aria-live="polite">
@@ -37,10 +35,9 @@ export function UpdateStatus({ state, onCheck, onInstall }: UpdateStatusProps): 
           : null}
       </div>
       {state.status === 'ready'
-        ? <button onClick={onInstall} type="button">Перезапустить</button>
-        : state.status === 'idle' || state.status === 'up-to-date' || state.status === 'error'
-          ? <button onClick={onCheck} type="button">Проверить</button>
-          : null}
+        ? <Button onClick={onInstall} size="sm" type="button">Перезапустить</Button>
+        : null}
+      <IconButton className="updateStatusClose" icon="close" label="Скрыть уведомление об обновлении" onClick={() => setDismissedKey(notificationKey)} size="sm" type="button" />
     </div>
   );
 }

@@ -54,20 +54,43 @@ test('supports keyboard-only authentication with a visible focus indicator', asy
   application = await electron.launch({ args: ['.', '--user-data-dir=.e2e-user-data-keyboard'], cwd: process.cwd(), env: electronEnvironment() });
   const window = await application.firstWindow();
   const email = window.getByLabel('Email');
-  const password = window.getByLabel('Пароль');
+  const password = window.getByRole('textbox', { name: 'Пароль', exact: true });
 
   await expect(email).toBeVisible();
   await expect(email).toBeFocused();
   await email.fill('keyboard@example.com');
   await window.keyboard.press('Tab');
   await expect(password).toBeFocused();
-  expect(await password.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
+  expect(await password.evaluate((element) => getComputedStyle(element.closest('.vui-input-frame') as Element).boxShadow)).not.toBe('none');
 
-  const registrationTab = window.getByRole('tab', { name: 'Регистрация' });
+  const registrationTab = window.getByRole('button', { name: 'Регистрация' });
   await registrationTab.focus();
   await window.keyboard.press('Enter');
-  await expect(registrationTab).toHaveAttribute('aria-selected', 'true');
+  await expect(registrationTab).toHaveAttribute('aria-pressed', 'true');
   await expect(window.getByLabel('Повторите пароль')).toBeVisible();
+});
+
+test('grants audio permission and exposes device labels to the trusted renderer', async () => {
+  application = await electron.launch({
+    args: ['.', '--use-fake-device-for-media-stream', '--user-data-dir=.e2e-user-data-media'],
+    cwd: process.cwd(),
+    env: electronEnvironment(),
+  });
+  const window = await application.firstWindow();
+  const devices = await window.evaluate(async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    try {
+      return (await navigator.mediaDevices.enumerateDevices())
+        .filter((device) => device.kind === 'audioinput' || device.kind === 'audiooutput')
+        .map((device) => ({ kind: device.kind, label: device.label }));
+    } finally {
+      for (const track of stream.getTracks()) track.stop();
+    }
+  });
+
+  expect(devices.some((device) => device.kind === 'audioinput')).toBe(true);
+  expect(devices.filter((device) => device.kind === 'audioinput').every((device) => device.label.trim().length > 0)).toBe(true);
+  expect(devices.every((device) => !/^(?:Микрофон|Динамики) \d+$/u.test(device.label))).toBe(true);
 });
 
 test('revokes another device without exposing its refresh token to the renderer', async () => {
@@ -109,7 +132,7 @@ test('revokes another device without exposing its refresh token to the renderer'
   application = await electron.launch({ args: ['.', '--user-data-dir=.e2e-user-data-security'], cwd: process.cwd(), env: electronEnvironment() });
   const window = await application.firstWindow();
   await window.getByRole('textbox', { name: 'Email' }).fill('owner@myvatrushka.ru');
-  await window.getByLabel('Пароль').fill('secure-vatrushka-42');
+  await window.getByRole('textbox', { name: 'Пароль', exact: true }).fill('secure-vatrushka-42');
   await window.getByRole('button', { name: /Продолжить/u }).click();
   await window.getByLabel('Код из письма').fill('123456');
   await window.getByRole('button', { name: /Подтвердить вход/u }).click();

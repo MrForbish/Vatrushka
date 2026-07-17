@@ -1,11 +1,13 @@
 import {
+  useEffect,
   useId,
+  useRef,
   useState,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
   type InputHTMLAttributes,
+  type KeyboardEvent,
   type ReactNode,
-  type SelectHTMLAttributes,
 } from 'react';
 
 import { Icon, type IconName } from './Icon';
@@ -165,30 +167,97 @@ export interface SelectOption {
   disabled?: boolean;
 }
 
-export interface SelectProps extends SelectHTMLAttributes<HTMLSelectElement> {
+export interface SelectProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'defaultValue' | 'onChange' | 'value'> {
   label?: string;
   hint?: string;
   error?: string;
   options: SelectOption[];
+  value?: string;
+  defaultValue?: string;
+  onChange?: (event: { target: { value: string } }) => void;
+  onValueChange?: (value: string) => void;
 }
 
-export function Select({ className, error, hint, id: providedId, label, options, ...props }: SelectProps): React.JSX.Element {
+export function Select({ className, defaultValue, disabled = false, error, hint, id: providedId, label, onChange, onValueChange, options, value, ...props }: SelectProps): React.JSX.Element {
   const generatedId = useId();
   const id = providedId ?? generatedId;
+  const listboxId = `${id}-listbox`;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [uncontrolledValue, setUncontrolledValue] = useState(defaultValue ?? options.find((option) => option.disabled !== true)?.value ?? '');
+  const selectedValue = value ?? uncontrolledValue;
+  const selected = options.find((option) => option.value === selectedValue) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (event: PointerEvent): void => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [open]);
+
+  const commit = (nextValue: string): void => {
+    if (value === undefined) setUncontrolledValue(nextValue);
+    onValueChange?.(nextValue);
+    onChange?.({ target: { value: nextValue } });
+    setOpen(false);
+  };
+
+  const move = (direction: 1 | -1): void => {
+    const enabled = options.filter((option) => option.disabled !== true);
+    if (enabled.length === 0) return;
+    const currentIndex = enabled.findIndex((option) => option.value === selectedValue);
+    const nextIndex = currentIndex < 0 ? 0 : (currentIndex + direction + enabled.length) % enabled.length;
+    const next = enabled[nextIndex];
+    if (next) commit(next.value);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!open) setOpen(true);
+      else move(event.key === 'ArrowDown' ? 1 : -1);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      setOpen(false);
+    }
+  };
+
   return (
     <FieldFrame error={error} hint={hint} id={id} label={label}>
-      <span className={cx('vui-select-frame', error !== undefined && 'vui-input-frame--error')}>
-        <select
+      <div className={cx('vui-select-root', className)} ref={rootRef}>
+        <button
           {...props}
+          aria-controls={listboxId}
           aria-describedby={error === undefined && hint === undefined ? undefined : `${id}-message`}
+          aria-expanded={open}
+          aria-haspopup="listbox"
           aria-invalid={error === undefined ? undefined : true}
-          className={cx('vui-select', className)}
+          className={cx('vui-select-frame', error !== undefined && 'vui-input-frame--error')}
+          disabled={disabled}
           id={id}
+          onClick={() => setOpen((current) => !current)}
+          onKeyDown={handleKeyDown}
+          type="button"
         >
-          {options.map((option) => <option disabled={option.disabled} key={option.value} value={option.value}>{option.label}</option>)}
-        </select>
-        <Icon name="chevronDown" size={18} />
-      </span>
+          <span className="vui-select__value" title={selected?.label}>{selected?.label ?? 'Нет доступных вариантов'}</span>
+          <Icon name="chevronDown" size={18} />
+        </button>
+        {open ? <div aria-label={label} className="vui-select-menu" id={listboxId} role="listbox">{options.map((option) => (
+          <button
+            aria-selected={option.value === selectedValue}
+            disabled={option.disabled}
+            key={option.value}
+            onClick={() => commit(option.value)}
+            role="option"
+            title={option.label}
+            type="button"
+          >
+            <span>{option.label}</span>{option.value === selectedValue ? <Icon name="check" size={16} /> : null}
+          </button>
+        ))}</div> : null}
+      </div>
     </FieldFrame>
   );
 }

@@ -1,31 +1,21 @@
 import type { FormEvent, ReactNode } from 'react';
 
+import { type PublicUser, type ServerSummary } from '@vatrushka/shared';
+
+import { audioDeviceOptions, type AudioDevices } from './audio-devices';
 import {
-  colorForIdentity,
-  initials,
-  type PlatformRole,
-  type PublicUser,
-  type ServerSummary,
-} from '@vatrushka/shared';
-
-type IconName = 'chevron' | 'headphones' | 'message' | 'plus' | 'refresh' | 'spark' | 'users';
-
-export function Icon({ name }: { name: IconName }): ReactNode {
-  const paths: Record<IconName, ReactNode> = {
-    chevron: <path d="m9 18 6-6-6-6" />,
-    headphones: <><path d="M4 14v-2a8 8 0 0 1 16 0v2M18 19h1a2 2 0 0 0 2-2v-3h-3v5ZM6 19H5a2 2 0 0 1-2-2v-3h3v5Z" /></>,
-    message: <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z" />,
-    plus: <path d="M12 5v14M5 12h14" />,
-    refresh: <><path d="M20 7v5h-5" /><path d="M4 17v-5h5M6.1 8a7 7 0 0 1 11.7-2.6L20 7M4 17l2.2 1.6A7 7 0 0 0 18 16" /></>,
-    spark: <><path d="m12 3 1.4 4.1L17.5 8.5l-4.1 1.4L12 14l-1.4-4.1-4.1-1.4 4.1-1.4L12 3ZM19 15l.7 2.3L22 18l-2.3.7L19 21l-.7-2.3L16 18l2.3-.7L19 15Z" /></>,
-    users: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8" /></>,
-  };
-  return <svg aria-hidden="true" className="icon" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">{paths[name]}</svg>;
-}
-
-export function Brand(): ReactNode {
-  return <div className="brand"><span aria-hidden="true" className="brandMark"><span /></span><span>Ватрушка</span></div>;
-}
+  AppShell,
+  Badge as UiBadge,
+  Button as UiButton,
+  Icon as UiIcon,
+  Input as UiInput,
+  PasswordInput as UiPasswordInput,
+  SegmentedControl as UiSegmentedControl,
+  Select as UiSelect,
+  UserProfileDock,
+  WorkspaceLibrary,
+  type WorkspaceNavigationItem,
+} from './ui';
 
 interface AuthPanelProps {
   mode: 'password' | 'register';
@@ -68,34 +58,32 @@ export function AuthPanel(props: AuthPanelProps): ReactNode {
       ? 'Email будет подтверждён одноразовым кодом. Пароль хранится только в виде защищённого хеша.'
       : 'После проверки пароля подтвердите вход кодом из почты, приложением 2FA или recovery-кодом.';
   const invalidRegistration = props.mode === 'register' && props.passwordConfirmation !== props.password;
-  return <main className="centerPage">
-    <section aria-labelledby="auth-title" className="authCard">
-      <Brand />
-      <div className="eyebrow">Ваши серверы и каналы</div>
-      <h1 id="auth-title">{title}</h1>
-      <p className="lede">{description}</p>
-      {props.stage === 'credentials' ? <div aria-label="Режим авторизации" className="authModeTabs" role="tablist"><button aria-selected={props.mode === 'password'} className={props.mode === 'password' ? 'active' : ''} onClick={() => props.onMode('password')} role="tab" type="button">Вход</button><button aria-selected={props.mode === 'register'} className={props.mode === 'register' ? 'active' : ''} onClick={() => props.onMode('register')} role="tab" type="button">Регистрация</button></div> : null}
-      <form className="stack" onSubmit={submit}>
-        {props.stage === 'credentials' ? <>
-          <label className="field"><span>Email</span><input autoComplete="email" autoFocus onChange={(event) => props.onEmailChange(event.target.value)} placeholder="you@example.com" type="email" value={props.email} /></label>
-          <label className="field"><span>Пароль</span><input autoComplete={props.mode === 'register' ? 'new-password' : 'current-password'} maxLength={128} minLength={10} onChange={(event) => props.onPasswordChange(event.target.value)} placeholder="Минимум 10 символов" type="password" value={props.password} /></label>
-          {props.mode === 'register' ? <label className="field"><span>Повторите пароль</span><input aria-invalid={props.passwordConfirmation.length > 0 && invalidRegistration} autoComplete="new-password" maxLength={128} minLength={10} onChange={(event) => props.onPasswordConfirmationChange(event.target.value)} type="password" value={props.passwordConfirmation} /></label> : null}
-          {props.mode === 'register' && props.passwordConfirmation.length > 0 && invalidRegistration ? <p className="fieldError" role="alert">Пароли не совпадают</p> : null}
-        </> : <label className="field"><span>{props.factor === 'totp' ? 'Код 2FA' : props.factor === 'recovery' ? 'Резервный код' : 'Код из письма'}</span><input autoComplete="one-time-code" autoFocus className="otpInput" inputMode={props.factor === 'recovery' ? 'text' : 'numeric'} maxLength={props.factor === 'recovery' ? 14 : 6} onChange={(event) => props.onCodeChange(props.factor === 'recovery' ? event.target.value.toUpperCase().replace(/[^A-Z2-9-]/gu, '').slice(0, 14) : event.target.value.replace(/\D/gu, '').slice(0, 6))} placeholder={props.factor === 'recovery' ? 'XXXX-XXXX-XXXX' : '••••••'} value={props.code} /></label>}
-        {props.error ? <div className="errorBanner" role="alert">{props.error}</div> : null}
-        <button className="primaryButton" disabled={props.busy || (props.stage === 'otp' && props.code.length !== (props.factor === 'recovery' ? 14 : 6)) || (props.stage === 'credentials' && (props.password.length < 10 || invalidRegistration))} type="submit">{props.busy ? 'Подождите…' : props.stage === 'otp' ? 'Подтвердить вход' : props.mode === 'register' ? 'Создать аккаунт' : 'Продолжить'} <Icon name="chevron" /></button>
-      </form>
-      {props.stage === 'otp' ? <div className="authLinks"><button className="textButton" onClick={props.onBack} type="button">Назад</button>{props.factor === 'email' ? <button className="textButton" disabled={props.retrySeconds > 0 || props.busy} onClick={props.onRequest} type="button">{props.retrySeconds > 0 ? `Отправить снова через ${props.retrySeconds} с` : 'Отправить снова'}</button> : null}{props.mode === 'password' && props.factor !== 'email' ? <button className="textButton" disabled={props.busy} onClick={() => props.onFactor('email')} type="button">Получить код на email</button> : null}{props.mode === 'password' && props.factor !== 'totp' && props.totpAvailable ? <button className="textButton" disabled={props.busy} onClick={() => props.onFactor('totp')} type="button">Использовать 2FA</button> : null}{props.mode === 'password' && props.totpAvailable && props.factor !== 'recovery' ? <button className="textButton" disabled={props.busy} onClick={() => props.onFactor('recovery')} type="button">Ввести recovery-код</button> : null}</div> : null}
-      <p className="privacyNote">Вход без пароля не поддерживается. Коды подтверждения действуют 10 минут.</p>
+  const submitDisabled = props.busy || (props.stage === 'otp' && props.code.length !== (props.factor === 'recovery' ? 14 : 6)) || (props.stage === 'credentials' && (props.password.length < 10 || invalidRegistration));
+  return <main className="vui-auth-page">
+    <section className="vui-auth-visual">
+      <div className="vui-auth-brand"><span><UiIcon name="voice" size={22} /></span><strong>VATRUSHKA</strong></div>
+      <div className="vui-auth-visual__copy"><UiBadge tone="primary"><UiIcon name="sparkles" size={13} /> Своё пространство</UiBadge><h2>Голос, чаты и серверы.<br /><em>Без лишнего шума.</em></h2><p>Всё для общения команды — в одном защищённом desktop-клиенте.</p></div>
+      <div className="vui-auth-preview" aria-hidden="true"><span className="vui-auth-preview__rail" /><div><span /><span /><span /></div><i /><i /></div>
+      <ul className="vui-auth-benefits"><li><UiIcon name="lock" size={16} /><span><strong>Пароль + 2FA</strong><small>Защищённые сессии</small></span></li><li><UiIcon name="voice" size={16} /><span><strong>Живой голос</strong><small>С реальными устройствами</small></span></li><li><UiIcon name="screen" size={16} /><span><strong>Демонстрация</strong><small>Экран и звук приложения</small></span></li></ul>
     </section>
+    <section className="vui-auth-surface"><div aria-labelledby="auth-title" className="vui-auth-card">
+      <div className="vui-auth-card__mobile-brand"><div className="vui-auth-brand"><span><UiIcon name="voice" size={20} /></span><strong>VATRUSHKA</strong></div></div>
+      <div className="vui-auth-card__heading"><span>{props.stage === 'otp' ? 'Защищённый вход' : 'Добро пожаловать'}</span><h1 id="auth-title">{title}</h1><p>{description}</p></div>
+      {props.stage === 'credentials' ? <UiSegmentedControl label="Режим авторизации" onChange={props.onMode} options={[{ value: 'password', label: 'Вход' }, { value: 'register', label: 'Регистрация' }]} value={props.mode} /> : null}
+      <form className="vui-auth-form" onSubmit={submit}>
+        {props.stage === 'credentials' ? <><UiInput autoComplete="email" autoFocus label="Email" leadingIcon="message" onChange={(event) => props.onEmailChange(event.target.value)} placeholder="you@example.com" type="email" value={props.email} /><UiPasswordInput autoComplete={props.mode === 'register' ? 'new-password' : 'current-password'} label="Пароль" maxLength={128} minLength={10} onChange={(event) => props.onPasswordChange(event.target.value)} placeholder="Минимум 10 символов" value={props.password} />{props.mode === 'register' ? <UiPasswordInput autoComplete="new-password" {...(props.passwordConfirmation.length > 0 && invalidRegistration ? { error: 'Пароли не совпадают' } : {})} label="Повторите пароль" maxLength={128} minLength={10} onChange={(event) => props.onPasswordConfirmationChange(event.target.value)} value={props.passwordConfirmation} /> : null}</> : <UiInput autoComplete="one-time-code" autoFocus className="vui-auth-otp" inputMode={props.factor === 'recovery' ? 'text' : 'numeric'} label={props.factor === 'totp' ? 'Код 2FA' : props.factor === 'recovery' ? 'Резервный код' : 'Код из письма'} maxLength={props.factor === 'recovery' ? 14 : 6} onChange={(event) => props.onCodeChange(props.factor === 'recovery' ? event.target.value.toUpperCase().replace(/[^A-Z2-9-]/gu, '').slice(0, 14) : event.target.value.replace(/\D/gu, '').slice(0, 6))} placeholder={props.factor === 'recovery' ? 'XXXX-XXXX-XXXX' : '••••••'} value={props.code} />}
+        {props.error ? <div className="vui-auth-error" role="alert"><UiIcon name="warning" size={17} /><span>{props.error}</span></div> : null}
+        <UiButton className="vui-auth-submit" disabled={submitDisabled} icon={props.stage === 'otp' ? 'check' : 'send'} loading={props.busy} size="lg" type="submit">{props.stage === 'otp' ? 'Подтвердить вход' : props.mode === 'register' ? 'Создать аккаунт' : 'Продолжить'}</UiButton>
+      </form>
+      {props.stage === 'otp' ? <div className="vui-auth-links"><button onClick={props.onBack} type="button">Назад</button>{props.factor === 'email' ? <button disabled={props.retrySeconds > 0 || props.busy} onClick={props.onRequest} type="button">{props.retrySeconds > 0 ? `Повторить через ${props.retrySeconds} с` : 'Отправить снова'}</button> : null}{props.mode === 'password' && props.factor !== 'email' ? <button disabled={props.busy} onClick={() => props.onFactor('email')} type="button">Код на email</button> : null}{props.mode === 'password' && props.factor !== 'totp' && props.totpAvailable ? <button disabled={props.busy} onClick={() => props.onFactor('totp')} type="button">Код 2FA</button> : null}{props.mode === 'password' && props.totpAvailable && props.factor !== 'recovery' ? <button disabled={props.busy} onClick={() => props.onFactor('recovery')} type="button">Recovery-код</button> : null}</div> : null}
+      <div className="vui-auth-security"><UiIcon name="lock" size={14} /><span>Вход без пароля отключён. Код действует 10 минут.</span></div>
+    </div></section>
   </main>;
 }
 
 export function ProfilePanel({ value, busy, error, onChange, onSave }: { value: string; busy: boolean; error: string | null; onChange(value: string): void; onSave(): void }): ReactNode {
-  return <main className="centerPage"><section className="authCard"><Brand /><div className="eyebrow">Последний штрих</div><h1>Как к вам обращаться?</h1><p className="lede">Это имя увидят участники ваших серверов. Его всегда можно изменить позднее.</p><form className="stack" onSubmit={(event) => { event.preventDefault(); onSave(); }}><label className="field"><span>Отображаемое имя</span><input autoFocus maxLength={30} minLength={2} onChange={(event) => onChange(event.target.value)} placeholder="Например, Алекс" value={value} /></label>{error ? <div className="errorBanner" role="alert">{error}</div> : null}<button className="primaryButton" disabled={busy || value.trim().length < 2}>Сохранить <Icon name="chevron" /></button></form></section></main>;
+  return <main className="vui-auth-page vui-auth-page--profile"><section className="vui-auth-visual"><div className="vui-auth-brand"><span><UiIcon name="voice" size={22} /></span><strong>VATRUSHKA</strong></div><div className="vui-auth-visual__copy"><UiBadge tone="success"><UiIcon name="check" size={13} /> Email подтверждён</UiBadge><h2>Почти готово.</h2><p>Выберите имя, под которым вас увидят участники серверов.</p></div></section><section className="vui-auth-surface"><div className="vui-auth-card"><div className="vui-auth-card__heading"><span>Профиль</span><h1>Как к вам обращаться?</h1><p>Имя можно будет изменить позже.</p></div><form className="vui-auth-form" onSubmit={(event) => { event.preventDefault(); onSave(); }}><UiInput autoFocus label="Отображаемое имя" maxLength={30} minLength={2} onChange={(event) => onChange(event.target.value)} placeholder="Например, Алекс" value={value} />{error ? <div className="vui-auth-error" role="alert"><UiIcon name="warning" size={17} />{error}</div> : null}<UiButton disabled={busy || value.trim().length < 2} icon="check" loading={busy} size="lg">Сохранить и продолжить</UiButton></form></div></section></main>;
 }
-
-interface AudioDevices { inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[]; }
 
 interface HomePanelProps {
   user: PublicUser;
@@ -124,28 +112,23 @@ interface HomePanelProps {
 
 export function HomePanel(props: HomePanelProps): ReactNode {
   const name = props.user.displayName ?? props.user.email;
-  return <main className="homePage">
-    <header className="topbar"><Brand /><div className={`profileChip ${props.user.platformRole !== 'member' ? 'platformPrivileged' : ''}`}><Avatar identity={props.user.id} name={name} platformRole={props.user.platformRole} /><div><strong>{name}</strong><span>{props.user.email}</span>{props.user.platformRole !== 'member' ? <PlatformBadge role={props.user.platformRole} /> : null}</div><button className="quietButton" onClick={props.onSecurity}>Безопасность</button><button className="quietButton" onClick={props.onLogout}>Выйти</button></div></header>
-    <section className="hero"><div><div className="eyebrow"><span className="liveDot" /> Постоянное пространство для вашей компании</div><h1>Соберите сервер.<br /><em>Оставайтесь на связи.</em></h1><p>Текстовые и голосовые каналы, роли, личные сообщения и демонстрация экрана — в одном месте.</p></div><div aria-hidden="true" className="orb"><span /><span /><span /></div></section>
-    <section aria-label="Создание и подключение к серверу" className="actionGrid">
-      <article className="actionCard createCard"><div className="cardIcon"><Icon name="spark" /></div><div><h2>Новый сервер</h2><p>Создайте пространство с готовыми текстовым и голосовым каналами.</p></div><form className="homeServerForm" onSubmit={(event) => { event.preventDefault(); props.onCreateServer(); }}><label className="field"><span>Название сервера</span><input maxLength={60} minLength={2} onChange={(event) => props.onServerName(event.target.value)} placeholder="Например, Команда разработки" value={props.serverName} /></label><button className="primaryButton" disabled={props.busy || props.serverName.trim().length < 2}><Icon name="plus" /> Создать сервер</button></form></article>
-      <article className="actionCard"><div className="cardIcon secondary"><Icon name="users" /></div><div><h2>Войти по приглашению</h2><p>Введите восьмизначный код сервера или откройте ссылку-приглашение.</p></div><form className="homeServerForm" onSubmit={(event) => { event.preventDefault(); props.onJoinServer(); }}><label className="field"><span>Код приглашения</span><input className="codeInput" maxLength={8} onChange={(event) => props.onServerInvite(event.target.value.toUpperCase())} placeholder="ABCD2345" value={props.serverInvite} /></label><button className="secondaryButton" disabled={props.busy || props.serverInvite.length !== 8}>Вступить</button></form></article>
-    </section>
-    <section className="communityPanel"><header><div><div className="eyebrow">Ваши пространства</div><h2>Серверы</h2><p>Выберите сервер, чтобы открыть его каналы и участников.</p></div><div className="communityHeaderActions">{props.onDirectMessages === undefined ? null : <button className="directMessagesShortcut" onClick={props.onDirectMessages} type="button"><Icon name="message" /><span>Личные сообщения</span>{(props.directUnreadCount ?? 0) === 0 ? null : <strong>{(props.directUnreadCount ?? 0) > 99 ? '99+' : props.directUnreadCount}</strong>}</button>}<span className="communityCount">{props.servers.length}</span></div></header>{props.servers.length > 0 ? <div className="serverCards">{props.servers.map((server) => <button className="serverCard" key={server.id} onClick={() => props.onOpenServer(server.id)}><span className="serverMonogram">{server.name.slice(0, 2).toUpperCase()}</span><span><strong>{server.name}</strong><small>{server.memberCount} участников · {server.inviteCode}</small></span><Icon name="chevron" /></button>)}</div> : <div className="emptyServers"><Icon name="users" /><strong>У вас пока нет серверов</strong><span>Создайте первый сервер или войдите по коду приглашения выше.</span></div>}</section>
-    {props.error ? <div className="errorBanner homeError" role="alert">{props.error}</div> : null}
-    <section className="devicePanel"><div><h2><Icon name="headphones" /> Устройства звука</h2><p>Микрофон и динамики сохраняются только на этом компьютере.</p><button className="deviceRefresh" disabled={props.busy} onClick={props.onRefreshDevices} type="button"><Icon name="refresh" /> Разрешить доступ и обновить</button></div><DeviceSelect devices={props.devices.inputs} label="Устройство записи" onChange={props.onMicrophone} value={props.microphoneId} /><DeviceSelect devices={props.devices.outputs} label="Устройство воспроизведения" onChange={props.onOutput} value={props.outputId} /></section>
-    <footer className="footer">Ватрушка {props.version} · Windows</footer>
-  </main>;
+  const workspaces: WorkspaceNavigationItem[] = props.servers.map((server) => ({ id: server.id, name: server.name, memberCount: server.memberCount }));
+  const namedInputs = props.devices.inputs.some((device) => device.deviceId !== 'default' && device.label.trim().length > 0);
+  const namedOutputs = props.devices.outputs.some((device) => device.deviceId !== 'default' && device.label.trim().length > 0);
+  return <AppShell
+    members={<aside className="vui-home-activity"><header><span>Статус</span><UiBadge tone="success">В сети</UiBadge></header><div className="vui-home-activity__avatar">{name.slice(0, 1).toUpperCase()}</div><strong>{name}</strong><small>{props.user.email}</small><div className="vui-home-activity__tip"><UiIcon name="info" size={17} /><span>Выбор аудиоустройств хранится только на этом компьютере.</span></div></aside>}
+    serverContext={<aside className="vui-home-context"><header><span><UiIcon name="home" size={18} /></span><div><strong>Главная</strong><small>Ваше пространство</small></div></header><nav><a href="#home-servers"><UiIcon name="users" size={17} />Мои серверы<UiBadge>{props.servers.length}</UiBadge></a><a href="#home-create"><UiIcon name="plus" size={17} />Создать сервер</a><a href="#home-audio"><UiIcon name="headphones" size={17} />Аудиоустройства</a></nav><div className="vui-home-context__summary"><UiIcon name="sparkles" size={18} /><span><strong>Готовы начать?</strong><small>Откройте сервер или создайте новый.</small></span></div><UserProfileDock email={props.user.email} founder={props.user.platformRole === 'owner'} name={name} onLogout={props.onLogout} onSecurity={props.onSecurity} /></aside>}
+    topBar={<div className="vui-home-topbar"><UiIcon name="home" size={19} /><span><strong>Главная</strong><small>Серверы, личные сообщения и настройка звука</small></span><UiBadge>v{props.version}</UiBadge></div>}
+    workspaceLibrary={<WorkspaceLibrary directUnreadCount={props.directUnreadCount ?? 0} onCreate={() => document.getElementById('home-server-name')?.focus()} {...(props.onDirectMessages === undefined ? {} : { onDirectMessages: props.onDirectMessages })} onHome={() => undefined} onJoin={() => document.getElementById('home-server-invite')?.focus()} onSelect={props.onOpenServer} workspaces={workspaces} />}
+  >
+    <div className="vui-home-dashboard"><section className="vui-home-welcome"><div><UiBadge tone="primary"><span className="vui-home-live" /> Ватрушка готова</UiBadge><h1>Добро пожалова, <em>{name}</em></h1><p>Выберите сервер или создайте новое пространство для вашей команды.</p></div><span className="vui-home-welcome__mark"><UiIcon name="voice" size={34} /></span></section>
+    <section className="vui-home-section" id="home-servers"><header><div><span>Ваши пространства</span><h2>Серверы</h2></div><UiBadge>{props.servers.length}</UiBadge></header>{props.servers.length > 0 ? <div className="vui-home-server-grid">{props.servers.map((server) => <button key={server.id} onClick={() => props.onOpenServer(server.id)} type="button"><span>{server.name.slice(0, 2).toUpperCase()}</span><div><strong>{server.name}</strong><small>{server.memberCount} участников</small></div><UiIcon name="chevronDown" size={17} /></button>)}</div> : <div className="vui-home-empty"><span><UiIcon name="users" size={28} /></span><strong>Серверов пока нет</strong><p>Создайте первый или войдите по коду.</p></div>}</section>
+    <section className="vui-home-actions" id="home-create"><form onSubmit={(event) => { event.preventDefault(); props.onCreateServer(); }}><span className="vui-home-action-icon"><UiIcon name="plus" size={20} /></span><div><h2>Новый сервер</h2><p>Готовые текстовый и голосовой каналы.</p></div><UiInput id="home-server-name" label="Название" maxLength={60} minLength={2} onChange={(event) => props.onServerName(event.target.value)} placeholder="Команда разработки" value={props.serverName} /><UiButton disabled={props.busy || props.serverName.trim().length < 2} icon="plus" type="submit">Создать</UiButton></form><form onSubmit={(event) => { event.preventDefault(); props.onJoinServer(); }}><span className="vui-home-action-icon vui-home-action-icon--cyan"><UiIcon name="invite" size={20} /></span><div><h2>Войти по коду</h2><p>Код из восьми символов от владельца.</p></div><UiInput id="home-server-invite" className="vui-home-code" label="Код приглашения" maxLength={8} onChange={(event) => props.onServerInvite(event.target.value.toUpperCase())} placeholder="ABCD2345" value={props.serverInvite} /><UiButton disabled={props.busy || props.serverInvite.length !== 8} icon="link" type="submit" variant="secondary">Войти</UiButton></form></section>
+    <section className="vui-home-audio" id="home-audio"><header><div><span><UiIcon name="headphones" size={20} /></span><div><h2>Аудиоустройства</h2><p>Реальные устройства Windows. Выбор применяется сразу.</p></div></div><UiButton disabled={props.busy} icon="refresh" onClick={props.onRefreshDevices} size="sm" type="button" variant="quiet">Обновить</UiButton></header><div><DeviceSelect devices={props.devices.inputs} kind="input" label="Микрофон" onChange={props.onMicrophone} value={props.microphoneId} /><DeviceSelect devices={props.devices.outputs} kind="output" label="Динамики / наушники" onChange={props.onOutput} value={props.outputId} /></div>{namedInputs && namedOutputs ? <p className="vui-home-audio__status"><UiIcon name="check" size={14} /> Названия устройств получены от Windows</p> : <p className="vui-home-audio__status vui-home-audio__status--warning"><UiIcon name="warning" size={14} /> Если названия скрыты, нажмите «Обновить» и разрешите доступ к микрофону.</p>}</section>
+    {props.error ? <div className="vui-home-error" role="alert"><UiIcon name="warning" size={17} />{props.error}</div> : null}</div>
+  </AppShell>;
 }
 
-function PlatformBadge({ role }: { role: Exclude<PlatformRole, 'member'> }): ReactNode {
-  return <span className={`platformBadge ${role}`}>{role === 'owner' ? 'Создатель · Администратор' : 'Администратор'}</span>;
-}
-
-function Avatar({ identity, name, platformRole = 'member' }: { identity: string; name: string; platformRole?: PlatformRole }): ReactNode {
-  return <span className={`avatar ${platformRole !== 'member' ? `platformAvatar ${platformRole}` : ''}`} style={{ '--avatar-color': colorForIdentity(identity) } as React.CSSProperties}>{initials(name)}</span>;
-}
-
-function DeviceSelect({ label, value, devices, onChange }: { label: string; value: string | undefined; devices: MediaDeviceInfo[]; onChange(value: string): void }): ReactNode {
-  return <label className="deviceSelect"><span>{label}</span><select aria-label={label} onChange={(event) => onChange(event.target.value)} value={value ?? 'default'}><option value="default">Системное устройство</option>{devices.filter((device) => device.deviceId !== 'default').map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${label} ${index + 1}`}</option>)}</select></label>;
+function DeviceSelect({ kind, label, value, devices, onChange }: { kind: 'input' | 'output'; label: string; value: string | undefined; devices: MediaDeviceInfo[]; onChange(value: string): void }): ReactNode {
+  return <UiSelect label={label} onValueChange={onChange} options={audioDeviceOptions(devices, kind)} value={value ?? 'default'} />;
 }

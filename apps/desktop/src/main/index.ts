@@ -52,6 +52,16 @@ function isTrustedSender(event: IpcMainInvokeEvent): boolean {
   );
 }
 
+function isTrustedOrigin(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (developmentUrl) return url.origin === new URL(developmentUrl).origin;
+    return url.protocol === 'file:';
+  } catch {
+    return false;
+  }
+}
+
 function sendDeepLink(code: string): void {
   if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isLoading()) {
     pendingDeepLink = code;
@@ -116,9 +126,9 @@ function configureSession(): void {
     });
   });
 
-  currentSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin, details) => {
-    if (!isTrustedUrl(requestingOrigin)) return false;
-    return permission === 'media' && details.mediaType === 'audio';
+  currentSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+    const trusted = Boolean(mainWindow && webContents === mainWindow.webContents && isTrustedOrigin(requestingOrigin));
+    return trusted && permission === 'media' && details.mediaType !== 'video';
   });
   currentSession.setPermissionRequestHandler((webContents, permission, callback, details) => {
     const trusted = Boolean(mainWindow && webContents === mainWindow.webContents && isTrustedUrl(details.requestingUrl));

@@ -2,6 +2,21 @@
 
 All notable changes to Vatrushka are documented here. The project follows semantic versioning for desktop and API release artifacts.
 
+## [0.4.1] - 2026-07-17
+
+### Fixed
+
+- Windows input/output device names are disclosed after an audio-only permission request; numbered placeholder devices were removed;
+- audio selectors use the Vatrushka design-system menu and no longer overlap in the voice control dock;
+- connecting to voice now keeps the workspace, server, channel and member navigation visible;
+- authentication, profile and home screens now use the current app shell, typography and design tokens;
+- the updater notification is hidden for idle, checking, current, unsupported and failed checks, appears only for a real update and can be dismissed.
+
+### Quality
+
+- added Electron coverage for trusted audio permission and non-empty device labels;
+- added Storybook and Windows visual baselines for password login, real device controls and a connected voice channel inside the persistent server shell.
+
 ## [0.4.0] - 2026-07-17
 
 ### Added

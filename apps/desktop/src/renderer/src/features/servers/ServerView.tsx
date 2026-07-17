@@ -47,6 +47,10 @@ export interface ServerViewProps {
   error: string | null;
   auditLog: ServerAuditLogEntry[];
   directUnreadCount?: number;
+  connectedVoiceChannelId?: string | undefined;
+  connectedVoiceServerId?: string | undefined;
+  voiceStage?: ReactNode | undefined;
+  voiceConnectionPanel?: ReactNode | undefined;
   onBack(): void;
   onDirectMessages?(): void;
   onSwitchServer(serverId: string): void;
@@ -128,7 +132,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     id: server.id,
     name: server.name,
     memberCount: server.memberCount,
-    activeVoice: false,
+    activeVoice: server.id === props.connectedVoiceServerId,
   }));
   const members: MemberNavigationItem[] = props.server.members.map((member) => {
     const roleLabel = member.userId === props.server.ownerUserId
@@ -182,6 +186,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       activeChannelId={activeChannel?.id}
       canManageChannels={canManageChannels}
       canManageRoles={canManageRoles}
+      connectionPanel={props.voiceConnectionPanel}
       name={props.server.name}
       onChannel={props.onChannel}
       onCopyInvite={props.onCopyInvite}
@@ -201,7 +206,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
         serverContext={serverContext}
         topBar={activeChannel === null
           ? <ServerTopBar channelName="Обзор" channelType="text" memberCount={props.server.memberCount} />
-          : <ServerTopBar channelName={activeChannel.name} channelType={activeChannel.type} description={activeChannel.type === 'text' ? 'История сохраняется' : 'Голосовая сессия'} memberCount={props.server.memberCount} />}
+          : <ServerTopBar channelName={activeChannel.name} channelType={activeChannel.type} description={activeChannel.type === 'text' ? 'История сохраняется' : activeChannel.id === props.connectedVoiceChannelId ? 'Вы подключены · навигация остаётся доступной' : 'Голосовая сессия'} memberCount={props.server.memberCount} />}
         workspaceLibrary={workspaceLibrary}
       >
         <ServerStage {...props} activeChannel={activeChannel} attachmentError={attachmentError} canManageChannels={canManageChannels} canManageMessages={canManageMessages} editingMessage={editingMessage} pendingAttachments={pendingAttachments} replyingMessage={replyingMessage} onAddAttachments={addAttachments} onCancelContext={() => { setEditingMessage(null); setReplyingMessage(null); props.onMessageDraft(''); }} onEdit={(message) => { setReplyingMessage(null); setEditingMessage(message); setPendingAttachments([]); setAttachmentError(null); props.onMessageDraft(message.content); }} onOpenChannel={() => openChannelForm('text')} onRemoveAttachment={(id) => { setPendingAttachments((current) => current.filter((attachment) => attachment.id !== id)); setAttachmentError(null); }} onReply={(message) => { setEditingMessage(null); setReplyingMessage(message); }} onSentAttachments={() => { setPendingAttachments([]); setAttachmentError(null); }} />
@@ -251,6 +256,7 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
     return <div className="vui-voice-lobby"><Icon name="message" size={40} /><h1>На сервере пока нет каналов</h1>{canManageChannels ? <Button onClick={onOpenChannel}>Создать канал</Button> : null}</div>;
   }
   if (activeChannel.type === 'voice') {
+    if (activeChannel.id === props.connectedVoiceChannelId && props.voiceStage !== undefined) return props.voiceStage;
     return <div className="vui-voice-lobby"><span className="vui-voice-lobby__orb"><Icon name="voice" size={34} /></span><Badge tone="primary">Голосовой канал</Badge><h1>{activeChannel.name}</h1><p>Подключитесь к разговору. Внутри доступны выбранные аудиоустройства, демонстрация экрана и системный звук.</p><Button disabled={!(activeChannel.permissions ?? props.server.permissions).includes('CONNECT_VOICE')} icon="headphones" loading={props.busy} onClick={() => props.onConnectVoice(activeChannel.id)}>Подключиться</Button></div>;
   }
   const channelPermissions = activeChannel.permissions ?? props.server.permissions;

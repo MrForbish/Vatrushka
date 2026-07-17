@@ -3,12 +3,13 @@ import { ConnectionState, type LocalTrack, type RemoteTrack } from 'livekit-clie
 
 import type { RoomConnection } from '@vatrushka/shared';
 
+import { audioDeviceOptions } from '../../audio-devices';
 import type { MediaSnapshot, ParticipantView } from '../../media';
 import {
   Badge,
-  Button,
   Icon,
   IconButton,
+  Popover,
   Select,
   Slider,
   VoiceControlButton,
@@ -63,10 +64,6 @@ function participantModel(participant: ParticipantView): VoiceParticipantViewMod
   };
 }
 
-function deviceOptions(devices: MediaDeviceInfo[], label: string): Array<{ value: string; label: string }> {
-  return [{ value: 'default', label: 'Системное устройство' }, ...devices.filter((device) => device.deviceId !== 'default').map((device, index) => ({ value: device.deviceId, label: device.label || `${label} ${index + 1}` }))];
-}
-
 export function RoomView(props: RoomViewProps): React.JSX.Element {
   const reconnecting = props.snapshot.connectionState === ConnectionState.Reconnecting || props.snapshot.connectionState === ConnectionState.SignalReconnecting;
   const participantModels = props.snapshot.participants.map(participantModel);
@@ -81,15 +78,8 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
   };
 
   return (
-    <main className="vui-room">
-      <aside className="vui-room__sidebar">
-        <div className="vui-room__brand"><span aria-hidden="true">В</span><strong>Ватрушка</strong></div>
-        <section className="vui-room__meta"><Badge tone="primary">Голосовой канал</Badge><span>Код сервера</span><div><strong>{props.connection.code}</strong><Button aria-label="Копировать приглашение" icon="copy" onClick={props.onCopy} size="sm" type="button" variant="quiet" /></div><p><Icon name="users" size={16} />{props.snapshot.participants.length} участников</p></section>
-        <section className="vui-room__roster"><header><span>В канале</span><Badge>{props.snapshot.participants.length}</Badge></header>{participantModels.map((participant) => <div data-speaking={participant.isSpeaking || undefined} key={participant.id}><span aria-hidden="true">{participant.name.slice(0, 1).toUpperCase()}</span><span><strong>{participant.name}{participant.isLocal === true ? ' (вы)' : ''}</strong><small>{participant.isSpeaking === true ? 'Говорит' : participant.statusLabel}</small></span><Icon name={participant.isMuted === true ? 'micOff' : 'mic'} size={15} /></div>)}</section>
-      </aside>
-
-      <section className="vui-room__stage">
-        <header className="vui-room__topbar"><div><span className="vui-room__connection" data-state={props.snapshot.connectionState} /><strong>{reconnecting ? 'Переподключение…' : props.snapshot.connectionState === ConnectionState.Connected ? 'Связь установлена' : 'Подключение…'}</strong></div><span>Голосовой канал сервера</span></header>
+    <section className="vui-room">
+      <header className="vui-room__topbar"><div><span className="vui-room__connection" data-state={props.snapshot.connectionState} /><strong>{reconnecting ? 'Переподключение…' : props.snapshot.connectionState === ConnectionState.Connected ? 'Голосовая связь активна' : 'Подключение…'}</strong></div><span><Icon name="users" size={15} />{props.snapshot.participants.length} в канале</span></header>
         <div className="vui-room__content">
           {props.snapshot.screenTrack === null
             ? <div className="vui-room__voice-stage">{activeModel === null ? <div className="vui-room__empty"><Icon name="voice" size={38} /><h1>Ожидаем участников</h1></div> : <VoiceParticipantTile {...participantActions} featured participant={activeModel} />}{stripParticipants.length === 0 ? null : <VoiceParticipantStrip {...participantActions} participants={stripParticipants} />}</div>
@@ -97,10 +87,28 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
         </div>
         {!props.snapshot.canPlayAudio ? <button className="vui-room__audio-gate" onClick={props.onStartAudio}>Нажмите, чтобы включить звук участников</button> : null}
         {props.error || props.snapshot.error ? <div className="vui-room__error" role="alert">{props.error ?? props.snapshot.error}</div> : null}
-        <div className="vui-room__controls"><VoiceControlDock><VoiceControlButton active={props.snapshot.isMuted} disabled={props.connection.canSpeak === false} icon={props.snapshot.isMuted ? 'micOff' : 'mic'} label={props.connection.canSpeak === false ? 'Роль не разрешает говорить' : props.snapshot.isMuted ? 'Включить микрофон' : 'Выключить микрофон'} onClick={props.onMute} testId="mute-control" /><div className="vui-room__devices"><div><strong>Аудиоустройства</strong><IconButton icon="refresh" label="Обновить список аудиоустройств" onClick={props.onRefreshDevices} size="sm" type="button" /></div><Select label="Устройство ввода" onChange={(event) => props.onMicrophone(event.target.value)} options={deviceOptions(props.devices.inputs, 'Микрофон')} value={props.microphoneId ?? 'default'} /><Select label="Устройство вывода" onChange={(event) => props.onOutput(event.target.value)} options={deviceOptions(props.devices.outputs, 'Динамики')} value={props.outputId ?? 'default'} /></div><VoiceControlButton active={props.snapshot.isScreenSharing} disabled={props.busy || props.connection.canStream === false} icon="screen" label={props.connection.canStream === false ? 'Роль не разрешает показ' : props.snapshot.isScreenSharing ? 'Остановить показ' : 'Показать экран'} onClick={props.onShare} testId="screen-share-control" /><VoiceControlButton icon="copy" label="Пригласить" onClick={props.onCopy} testId="copy-invite-control" /><VoiceControlButton danger icon="logout" label="Выйти" onClick={props.onLeave} testId="leave-control" /></VoiceControlDock></div>
-      </section>
-    </main>
+        <div className="vui-room__controls"><VoiceControlDock><VoiceControlButton active={props.snapshot.isMuted} disabled={props.connection.canSpeak === false} icon={props.snapshot.isMuted ? 'micOff' : 'mic'} label={props.connection.canSpeak === false ? 'Роль не разрешает говорить' : props.snapshot.isMuted ? 'Включить микрофон' : 'Выключить микрофон'} onClick={props.onMute} testId="mute-control" /><div className="vui-room__device-popover"><Popover label="Выбор аудиоустройств" trigger={<span className="vui-room__device-trigger"><UiDeviceIcon /><small>Устройства</small></span>}><div className="vui-room__devices"><header><span><strong>Аудиоустройства</strong><small>Выбор применяется сразу</small></span><IconButton icon="refresh" label="Обновить список аудиоустройств" onClick={props.onRefreshDevices} size="sm" type="button" /></header><Select label="Устройство ввода" onValueChange={props.onMicrophone} options={audioDeviceOptions(props.devices.inputs, 'input')} value={props.microphoneId ?? 'default'} /><Select label="Устройство вывода" onValueChange={props.onOutput} options={audioDeviceOptions(props.devices.outputs, 'output')} value={props.outputId ?? 'default'} /></div></Popover></div><VoiceControlButton active={props.snapshot.isScreenSharing} disabled={props.busy || props.connection.canStream === false} icon="screen" label={props.connection.canStream === false ? 'Роль не разрешает показ' : props.snapshot.isScreenSharing ? 'Остановить показ' : 'Показать экран'} onClick={props.onShare} testId="screen-share-control" /><VoiceControlButton icon="copy" label="Пригласить" onClick={props.onCopy} testId="copy-invite-control" /><VoiceControlButton danger icon="logout" label="Выйти" onClick={props.onLeave} testId="leave-control" /></VoiceControlDock></div>
+    </section>
   );
+}
+
+function UiDeviceIcon(): React.JSX.Element {
+  return <span aria-hidden="true" className="vui-room__device-icon"><Icon name="settings" size={20} /></span>;
+}
+
+export interface VoiceConnectionPanelProps {
+  channelName: string;
+  snapshot: MediaSnapshot;
+  canShare: boolean;
+  onOpen(): void;
+  onMute(): void;
+  onShare(): void;
+  onLeave(): void;
+}
+
+export function VoiceConnectionPanel({ canShare, channelName, onLeave, onMute, onOpen, onShare, snapshot }: VoiceConnectionPanelProps): React.JSX.Element {
+  const connected = snapshot.connectionState === ConnectionState.Connected;
+  return <section className="vui-voice-connection"><button className="vui-voice-connection__summary" onClick={onOpen} type="button"><span className="vui-room__connection" data-state={snapshot.connectionState} /><span><strong>{connected ? 'Голосовая связь подключена' : 'Подключение…'}</strong><small>{channelName} · {snapshot.participants.length} участников</small></span></button><div><IconButton active={snapshot.isMuted} icon={snapshot.isMuted ? 'micOff' : 'mic'} label={snapshot.isMuted ? 'Включить микрофон' : 'Выключить микрофон'} onClick={onMute} size="sm" type="button" /><IconButton active={snapshot.isScreenSharing} disabled={!canShare} icon="screen" label={snapshot.isScreenSharing ? 'Остановить показ' : 'Показать экран'} onClick={onShare} size="sm" type="button" /><IconButton className="vui-voice-connection__leave" icon="logout" label="Выйти из голосового канала" onClick={onLeave} size="sm" type="button" /></div></section>;
 }
 
 function ScreenTrack({ track }: { track: RemoteTrack | LocalTrack }): ReactNode {

@@ -8,7 +8,6 @@ const meta = {
   component: UpdateStatus,
   args: {
     state: { status: 'downloading', currentVersion: '0.4.0', version: '0.5.0', percent: 42 },
-    onCheck: fn(),
     onInstall: fn(),
   },
   parameters: { layout: 'fullscreen' },
@@ -20,4 +19,3 @@ type Story = StoryObj<typeof meta>;
 
 export const Downloading: Story = {};
 export const Ready: Story = { args: { state: { status: 'ready', currentVersion: '0.4.0', version: '0.5.0', percent: 100 } } };
-export const Error: Story = { args: { state: { status: 'error', currentVersion: '0.4.0', message: 'Не удалось проверить обновления.' } } };

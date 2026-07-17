@@ -156,6 +156,7 @@ export interface ServerContextProps {
   canManageChannels?: boolean;
   canManageRoles?: boolean;
   connectionLabel?: string;
+  connectionPanel?: ReactNode;
   profile: ReactNode;
   onChannel: (id: string) => void;
   onCreateChannel?: ((type: ChannelNavigationItem['type']) => void) | undefined;
@@ -164,7 +165,7 @@ export interface ServerContextProps {
   onManageRoles: () => void;
 }
 
-export function ServerContext({ activeChannelId, canManageChannels = false, canManageRoles = false, connectionLabel = 'Голосовой канал не подключён', name, onChannel, onCopyInvite, onCreateChannel, onDeleteChannel, onManageRoles, privacyLabel = 'Приватный сервер', profile, textChannels, voiceChannels }: ServerContextProps): React.JSX.Element {
+export function ServerContext({ activeChannelId, canManageChannels = false, canManageRoles = false, connectionLabel = 'Голосовой канал не подключён', connectionPanel, name, onChannel, onCopyInvite, onCreateChannel, onDeleteChannel, onManageRoles, privacyLabel = 'Приватный сервер', profile, textChannels, voiceChannels }: ServerContextProps): React.JSX.Element {
   return (
     <aside aria-label="Навигация сервера" className="vui-server-context">
       <header className="vui-server-context__header">
@@ -175,7 +176,7 @@ export function ServerContext({ activeChannelId, canManageChannels = false, canM
         <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={textChannels} onCreate={onCreateChannel} onDelete={onDeleteChannel} onSelect={onChannel} title="Текстовые каналы" type="text" />
         <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={voiceChannels} onCreate={onCreateChannel} onDelete={onDeleteChannel} onSelect={onChannel} title="Голосовые каналы" type="voice" />
       </div>
-      <div className="vui-server-context__connection"><StatusDot label="Статус голосового подключения" status="offline" /><span>{connectionLabel}</span></div>
+      {connectionPanel ?? <div className="vui-server-context__connection"><StatusDot label="Статус голосового подключения" status="offline" /><span>{connectionLabel}</span></div>}
       {profile}
     </aside>
   );

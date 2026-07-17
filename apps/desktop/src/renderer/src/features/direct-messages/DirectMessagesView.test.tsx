@@ -42,7 +42,8 @@ describe('direct messages UI', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Добавить реакцию 👍' }));
     expect(onMessageReaction).toHaveBeenCalledWith('message-1', '👍');
     await userEvent.click(screen.getByRole('button', { name: /Новый/u }));
-    await userEvent.selectOptions(screen.getByLabelText('Участник общего сервера'), 'user-3');
+    await userEvent.click(screen.getByLabelText('Участник общего сервера'));
+    await userEvent.click(screen.getByRole('option', { name: 'Максим · Команда' }));
     await userEvent.click(screen.getByRole('button', { name: 'Открыть диалог' }));
     expect(onCreateConversation).toHaveBeenCalledWith('user-3');
   });
