@@ -1788,6 +1788,23 @@ export class VatrushkaService {
     }
   }
 
+  async deleteCanonicalAttachment(authorization: string | undefined, attachmentId: string): Promise<ConversationMessage> {
+    const user = await this.authenticate(authorization);
+    const attachment = await this.messaging().findAttachment(attachmentId);
+    if (!attachment?.messageId) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    const message = await this.messaging().findMessage(attachment.messageId, user.id);
+    if (!message) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    const access = await this.requireCanonicalConversation(message.conversationId, user, 'READ_MESSAGE_HISTORY');
+    let canManage = false;
+    if (access.channel) canManage = (await this.channelPermissionsFor(access.server!, access.channel, user)).has('MANAGE_MESSAGES');
+    const deleted = await this.messaging().deleteAttachment(attachmentId, user.id, canManage, this.now());
+    if (!deleted) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    await this.deleteStoredObjects([deleted.objectKey]);
+    const updated = await this.messaging().findMessage(deleted.messageId, user.id);
+    if (!updated) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    return updated;
+  }
+
   private messaging(): CanonicalMessagingStore {
     if (!this.canonicalMessagingStore) throw new AppError('INTERNAL_ERROR', 500);
     return this.canonicalMessagingStore;

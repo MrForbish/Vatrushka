@@ -6,6 +6,13 @@ import {
   type DirectConversationSummary,
   type DirectMessage,
   type DirectMessageCandidate,
+  type ConversationMessage,
+  type ConversationMessagePage,
+  type ConversationMentionType,
+  type ConversationReadState,
+  type ConversationSummary,
+  type InternalNotification,
+  type UserUnreadSummary,
   type HomeDashboardResponse,
   type PasswordLoginChallenge,
   type PublicUser,
@@ -256,6 +263,81 @@ export class ApiClient {
 
   pollVoiceMoveRequest(): Promise<RoomConnection | null> {
     return this.request('/voice/move-request', { auth: true });
+  }
+
+  listConversations(): Promise<ConversationSummary[]> {
+    return this.request('/conversations', { auth: true });
+  }
+
+  listConversationMessages(conversationId: string, options: { before?: string; after?: string; limit?: number } = {}): Promise<ConversationMessagePage> {
+    const query = new URLSearchParams();
+    if (options.before) query.set('before', options.before);
+    if (options.after) query.set('after', options.after);
+    query.set('limit', String(options.limit ?? 100));
+    return this.request(`/conversations/${conversationId}/messages?${query.toString()}`, { auth: true });
+  }
+
+  createConversationMessage(conversationId: string, input: { clientMessageId: string; content: string; replyToMessageId?: string; attachmentIds?: string[]; mentions?: Array<{ type: ConversationMentionType; userId?: string; roleId?: string; start?: number; length?: number }> }): Promise<ConversationMessage> {
+    return this.request(`/conversations/${conversationId}/messages`, { method: 'POST', body: input, auth: true });
+  }
+
+  updateConversationMessage(conversationId: string, messageId: string, content: string, mentions: Array<{ type: ConversationMentionType; userId?: string; roleId?: string; start?: number; length?: number }> = []): Promise<ConversationMessage> {
+    return this.request(`/conversations/${conversationId}/messages/${messageId}`, { method: 'PATCH', body: { content, mentions }, auth: true });
+  }
+
+  async deleteConversationMessage(conversationId: string, messageId: string): Promise<void> {
+    await this.request(`/conversations/${conversationId}/messages/${messageId}`, { method: 'DELETE', auth: true });
+  }
+
+  setConversationReaction(conversationId: string, messageId: string, emoji: string, active: boolean): Promise<ConversationMessage> {
+    return this.request(`/conversations/${conversationId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: active ? 'PUT' : 'DELETE', auth: true });
+  }
+
+  updateConversationReadState(conversationId: string, input: { lastDeliveredMessageId?: string; lastReadMessageId?: string }): Promise<ConversationReadState> {
+    return this.request(`/conversations/${conversationId}/read-state`, { method: 'PUT', body: input, auth: true });
+  }
+
+  getUnreadSummary(): Promise<UserUnreadSummary> {
+    return this.request('/me/unread', { auth: true });
+  }
+
+  listNotifications(before?: string, unreadOnly = false): Promise<InternalNotification[]> {
+    const query = new URLSearchParams({ limit: '100', unreadOnly: String(unreadOnly) });
+    if (before) query.set('before', before);
+    return this.request(`/notifications?${query.toString()}`, { auth: true });
+  }
+
+  async markNotificationRead(notificationId: string): Promise<void> {
+    await this.request(`/notifications/${notificationId}/read`, { method: 'PATCH', auth: true });
+  }
+
+  markAllNotificationsRead(): Promise<{ updated: number }> {
+    return this.request('/notifications/read-all', { method: 'POST', auth: true });
+  }
+
+  async uploadConversationAttachment(file: File): Promise<string> {
+    const intent = await this.request<{ attachmentId: string; uploadUrl: string; headers: Record<string, string>; expiresAt: string }>('/attachments/intents', {
+      method: 'POST',
+      body: { fileName: file.name, mimeType: file.type || 'application/octet-stream', sizeBytes: file.size },
+      auth: true,
+    });
+    const headers = new Headers();
+    for (const [name, value] of Object.entries(intent.headers)) if (name.toLowerCase() !== 'content-length') headers.set(name, value);
+    const uploaded = await fetch(intent.uploadUrl, { method: 'PUT', headers, body: file });
+    if (!uploaded.ok) throw new ClientError('MEDIA_UPLOAD_FAILED', 'Не удалось загрузить вложение', uploaded.status);
+    await this.request(`/attachments/${intent.attachmentId}/finalize`, { method: 'POST', auth: true });
+    return intent.attachmentId;
+  }
+
+  async downloadConversationAttachment(attachmentId: string): Promise<Blob> {
+    const target = await this.request<{ url: string; expiresAt: string }>(`/attachments/${attachmentId}/url`, { auth: true });
+    const response = await fetch(target.url);
+    if (!response.ok) throw new ClientError('MEDIA_DOWNLOAD_FAILED', 'Не удалось скачать вложение', response.status);
+    return response.blob();
+  }
+
+  deleteConversationAttachment(attachmentId: string): Promise<ConversationMessage> {
+    return this.request(`/conversation-attachments/${attachmentId}`, { method: 'DELETE', auth: true });
   }
 
   listMessages(channelId: string): Promise<TextMessage[]> {

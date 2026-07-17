@@ -650,6 +650,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     schema: { tags: ['attachments'], security: [{ bearerAuth: [] }], params: attachmentIdParams, response: { 200: z.object({ url: z.url(), expiresAt: z.string() }), ...routeErrors() } },
   }, async (request) => service.getCanonicalAttachmentUrl(request.headers.authorization, request.params.attachmentId));
 
+  api.delete(`${API_PREFIX}/conversation-attachments/:attachmentId`, {
+    schema: { tags: ['attachments'], security: [{ bearerAuth: [] }], params: attachmentIdParams, response: { 200: canonicalMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.deleteCanonicalAttachment(request.headers.authorization, request.params.attachmentId));
+
   api.get(`${API_PREFIX}/direct-conversations/candidates`, {
     schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], response: { 200: z.array(directMessageCandidateResponseSchema), ...routeErrors() } },
   }, async (request) => service.listDirectMessageCandidates(request.headers.authorization));

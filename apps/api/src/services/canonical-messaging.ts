@@ -222,6 +222,25 @@ export class CanonicalMessagingStore {
     return result.rows[0] ? this.findAttachment(id) : null;
   }
 
+  async deleteAttachment(id: string, actorId: string, canManage: boolean, now: Date): Promise<{ objectKey: string; messageId: string; conversationId: string } | null> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('begin');
+      const deleted = await client.query<{ object_key: string; message_id: string; conversation_id: string }>(`
+        delete from conversation_message_attachments attachment
+        using messages message
+        where attachment.id = $1 and attachment.message_id = message.id
+          and (attachment.uploader_user_id = $2 or message.author_id = $2 or $3)
+        returning attachment.object_key, message.id::text as message_id, message.conversation_id
+      `, [id, actorId, canManage]);
+      const row = deleted.rows[0];
+      if (!row) { await client.query('rollback'); return null; }
+      await client.query('insert into outbox_events (event_type, aggregate_type, aggregate_id, payload, created_at, available_at) values ($1, $2, $3, $4, $5, $5)', ['message.updated', 'conversation', row.conversation_id, { conversationId: row.conversation_id, messageId: row.message_id }, now]);
+      await client.query('commit');
+      return { objectKey: row.object_key, messageId: row.message_id, conversationId: row.conversation_id };
+    } catch (error) { await client.query('rollback'); throw error; } finally { client.release(); }
+  }
+
   async listConversations(userId: string): Promise<ConversationSummary[]> {
     const result = await this.pool.query<{
       id: string; type: CanonicalConversationRecord['type']; server_id: string | null; channel_id: string | null; title: string; updated_at: Date;

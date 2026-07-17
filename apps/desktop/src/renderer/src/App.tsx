@@ -4,7 +4,7 @@ import { ConnectionState } from 'livekit-client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { channelNameSchema, codePointLength, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type LocalSettings, type MessageMentionInput, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type UserPresence } from '@vatrushka/shared';
+import { channelNameSchema, codePointLength, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type ConversationMessage, type ConversationSummary, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type InternalNotification, type LocalSettings, type MessageMentionInput, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type UserPresence, type UserUnreadSummary } from '@vatrushka/shared';
 
 import { apiClient, ClientError } from './api.js';
 import { parseSettingsRoute, serverSettingsPath, userSettingsPath, type ServerSettingsSection } from './app/routes';
@@ -28,6 +28,55 @@ const SettingsRoutePage = lazy(async () => {
   const module = await import('./app/routes/SettingsRoutePage');
   return { default: module.SettingsRoutePage };
 });
+
+function toTextMessage(message: ConversationMessage, server: ServerDetail, user: PublicUser): TextMessage {
+  const author = server.members.find((member) => member.userId === message.author.id);
+  return {
+    id: message.id,
+    channelId: message.conversationId,
+    authorUserId: message.author.id,
+    authorDisplayName: message.author.displayName,
+    authorPlatformRole: author?.platformRole ?? (message.author.id === user.id ? user.platformRole : 'member'),
+    content: message.content,
+    mentions: message.mentions.flatMap((mention) => mention.type === 'user' && mention.userId && mention.start !== null && mention.length !== null ? [{ userId: mention.userId, start: mention.start, length: mention.length, displayName: server.members.find((member) => member.userId === mention.userId)?.displayName ?? 'Участник' }] : []),
+    replyTo: message.replyTo === null ? null : { messageId: message.replyTo.id, authorUserId: message.replyTo.authorId, authorDisplayName: message.replyTo.authorDisplayName, content: message.replyTo.content },
+    reactions: message.reactions,
+    attachments: message.attachments.map((attachment) => ({ id: attachment.id, messageId: message.id, fileName: attachment.fileName, mimeType: attachment.mimeType, size: Number(attachment.sizeBytes), createdAt: message.createdAt })),
+    createdAt: message.createdAt,
+    editedAt: message.editedAt,
+  };
+}
+
+function toDirectMessage(message: ConversationMessage, user: PublicUser, conversations: DirectConversationSummary[]): DirectMessage {
+  const peer = conversations.find((conversation) => conversation.id === message.conversationId)?.participant;
+  return {
+    id: message.id,
+    conversationId: message.conversationId,
+    authorUserId: message.author.id,
+    authorDisplayName: message.author.displayName,
+    authorPlatformRole: message.author.id === user.id ? user.platformRole : peer?.platformRole ?? 'member',
+    content: message.content,
+    replyTo: message.replyTo === null ? null : { messageId: message.replyTo.id, authorUserId: message.replyTo.authorId, authorDisplayName: message.replyTo.authorDisplayName, content: message.replyTo.content },
+    reactions: message.reactions,
+    attachments: message.attachments.map((attachment) => ({ id: attachment.id, messageId: message.id, fileName: attachment.fileName, mimeType: attachment.mimeType, size: Number(attachment.sizeBytes), createdAt: message.createdAt })),
+    createdAt: message.createdAt,
+    editedAt: message.editedAt,
+  };
+}
+
+function mergeDirectSummaries(legacy: DirectConversationSummary[], canonical: ConversationSummary[]): DirectConversationSummary[] {
+  const canonicalById = new Map(canonical.filter((conversation) => conversation.type === 'direct').map((conversation) => [conversation.id, conversation]));
+  return legacy.map((conversation) => {
+    const current = canonicalById.get(conversation.id);
+    if (!current) return conversation;
+    return {
+      ...conversation,
+      lastMessage: current.lastMessage === null ? null : { authorUserId: current.lastMessage.authorId, content: current.lastMessage.content, createdAt: current.lastMessage.createdAt },
+      unreadCount: current.unreadCount,
+      updatedAt: current.updatedAt,
+    };
+  }).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
 
 export default function App(): ReactNode {
   const location = useLocation();
@@ -71,12 +120,13 @@ export default function App(): ReactNode {
   const [activeDirectConversationId, setActiveDirectConversationId] = useState<string | null>(null);
   const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
   const [directMessageDraft, setDirectMessageDraft] = useState('');
+  const [, setNotifications] = useState<InternalNotification[]>([]);
+  const [unreadSummary, setUnreadSummary] = useState<UserUnreadSummary | null>(null);
   const [realtimeRevision, setRealtimeRevision] = useState(0);
   const [serverName, setServerName] = useState('');
   const [pendingInviteToken, setPendingInviteToken] = useState<string | null>(null);
-  const notificationCursorRef = useRef<string | null>(null);
-  const notificationCursorIdRef = useRef<string | null>(null);
   const notificationUserRef = useRef<string | null>(null);
+  const notificationInitializedRef = useRef(false);
   const shownNotificationIdsRef = useRef(new Set<string>());
   const voiceCuePlayerRef = useRef<VoiceCuePlayer | null>(null);
   const participantConnectionRef = useRef<RoomConnection | null>(null);
@@ -335,50 +385,59 @@ export default function App(): ReactNode {
     if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
     if (notificationUserRef.current !== user.id) {
       notificationUserRef.current = user.id;
-      notificationCursorRef.current = null;
-      notificationCursorIdRef.current = null;
       shownNotificationIdsRef.current.clear();
+      notificationInitializedRef.current = false;
     }
     let active = true;
     const poll = (): void => {
-      const since = notificationCursorRef.current;
-      void apiClient.listMessageNotifications(since, notificationCursorIdRef.current).then((page) => {
+      void Promise.all([apiClient.listNotifications(undefined, false), apiClient.listConversations()]).then(([items, conversations]) => {
         if (!active) return;
-        const notifications = page.items;
-        const fresh = notifications.filter((notification) => !shownNotificationIdsRef.current.has(notification.id));
+        setNotifications(items);
+        const firstLoad = !notificationInitializedRef.current;
+        notificationInitializedRef.current = true;
+        const fresh = firstLoad ? [] : items.filter((notification) => !shownNotificationIdsRef.current.has(notification.id));
+        for (const notification of items) shownNotificationIdsRef.current.add(notification.id);
         for (const notification of fresh) {
-          shownNotificationIdsRef.current.add(notification.id);
+          if (presence?.preference === 'do_not_disturb') continue;
+          const conversation = notification.conversationId ? conversations.find((item) => item.id === notification.conversationId) : null;
+          const preview = typeof notification.payload.preview === 'string' ? notification.payload.preview : 'Новое событие';
           if (settings.messageSoundsEnabled) playVoiceCue('message');
-          if (settings.desktopNotificationsEnabled) {
+          if (settings.desktopNotificationsEnabled && (!document.hasFocus() || document.visibilityState !== 'visible') && conversation?.serverId && conversation.channelId) {
             void window.desktop.showMessageNotification({
               id: notification.id,
-              title: `${notification.mention === true ? 'Вас упомянули · ' : ''}${notification.authorDisplayName} · #${notification.channelName}`,
-              body: `${notification.content.trim().length > 0 ? notification.content.slice(0, 700) : 'Вложение'}\n${notification.serverName}`,
-              serverId: notification.serverId,
-              channelId: notification.channelId,
+              title: notification.type === 'mention' ? `Вас упомянули · #${conversation.title}` : notification.type === 'reply' ? `Ответ · #${conversation.title}` : `Новое сообщение · #${conversation.title}`,
+              body: preview.slice(0, 700),
+              serverId: conversation.serverId,
+              channelId: conversation.channelId,
               silent: true,
             }).catch(() => undefined);
           }
-        }
-        if (page.cursor) {
-          notificationCursorRef.current = page.cursor.createdAt;
-          notificationCursorIdRef.current = page.cursor.id;
-        }
-        if (fresh.length > 0) {
-          const counts = new Map<string, number>();
-          const mentions = new Map<string, number>();
-          for (const notification of fresh) {
-            counts.set(notification.channelId, (counts.get(notification.channelId) ?? 0) + 1);
-            if (notification.mention === true) mentions.set(notification.channelId, (mentions.get(notification.channelId) ?? 0) + 1);
-          }
-          setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((channel) => ({ ...channel, unreadCount: channel.unreadCount + (counts.get(channel.id) ?? 0), mentionCount: (channel.mentionCount ?? 0) + (mentions.get(channel.id) ?? 0) })) });
         }
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     poll();
     const timer = window.setInterval(poll, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [playVoiceCue, realtimeRevision, screen, settings.desktopNotificationsEnabled, settings.messageSoundsEnabled, user]);
+  }, [playVoiceCue, presence?.preference, realtimeRevision, screen, settings.desktopNotificationsEnabled, settings.messageSoundsEnabled, user]);
+
+  useEffect(() => {
+    if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
+    let active = true;
+    void apiClient.getUnreadSummary().then((summary) => {
+      if (!active) return;
+      setUnreadSummary(summary);
+      const counts = new Map(summary.conversations.map((item) => [item.conversationId, item]));
+      setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((channel) => {
+        const unread = counts.get(channel.id);
+        return unread ? { ...channel, unreadCount: unread.unreadCount, mentionCount: unread.mentionCount } : channel;
+      }) });
+      setDirectConversations((current) => current.map((conversation) => {
+        const unread = counts.get(conversation.id);
+        return unread ? { ...conversation, unreadCount: unread.unreadCount } : conversation;
+      }));
+    }).catch((caught) => { if (active) setError(userMessage(caught)); });
+    return () => { active = false; };
+  }, [realtimeRevision, screen, user]);
 
   useEffect(() => window.desktop.onMessageNotificationClick((target) => {
     if (!userRef.current) return;
@@ -396,8 +455,9 @@ export default function App(): ReactNode {
     if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
     let active = true;
     const refresh = (): void => {
-      void apiClient.listDirectConversations().then((items) => {
+      void Promise.all([apiClient.listDirectConversations(), apiClient.listConversations()]).then(([legacy, canonical]) => {
         if (!active) return;
+        const items = mergeDirectSummaries(legacy, canonical);
         setDirectConversations(items);
         if (screen === 'direct') setActiveDirectConversationId((current) => current !== null && items.some((conversation) => conversation.id === current) ? current : items[0]?.id ?? null);
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
@@ -415,16 +475,18 @@ export default function App(): ReactNode {
   }, [screen, user]);
 
   useEffect(() => {
-    if (screen !== 'direct' || activeDirectConversationId === null) return;
+    if (!user || screen !== 'direct' || activeDirectConversationId === null) return;
     let active = true;
     const conversationId = activeDirectConversationId;
     const refresh = (): void => {
-      void apiClient.listDirectMessages(conversationId).then((items) => {
+      void apiClient.listConversationMessages(conversationId).then((page) => {
         if (!active) return;
+        const items = page.items.filter((message) => message.deletedAt === null).map((message) => toDirectMessage(message, user, directConversations));
         setDirectMessages((current) => [...items, ...current.filter((message) => message.id.startsWith('optimistic_'))]);
         const latest = items.at(-1);
         if (latest) {
-          void apiClient.markDirectConversationRead(conversationId, latest.id).catch((caught) => { if (active) setError(userMessage(caught)); });
+          if (document.visibilityState === 'visible' && document.hasFocus()) void apiClient.updateConversationReadState(conversationId, { lastDeliveredMessageId: latest.id, lastReadMessageId: latest.id }).catch((caught) => { if (active) setError(userMessage(caught)); });
+          else void apiClient.updateConversationReadState(conversationId, { lastDeliveredMessageId: latest.id }).catch(() => undefined);
           setDirectConversations((current) => current.map((conversation) => conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation));
         }
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
@@ -432,28 +494,31 @@ export default function App(): ReactNode {
     refresh();
     const timer = window.setInterval(refresh, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [realtimeRevision, screen, activeDirectConversationId]);
+  }, [realtimeRevision, screen, activeDirectConversationId, user?.id]);
 
   useEffect(() => {
-    if (screen !== 'server' || !serverDetail || !activeChannelId) return;
+    if (!user || screen !== 'server' || !serverDetail || !activeChannelId) return;
     const channel = serverDetail.channels.find((candidate) => candidate.id === activeChannelId);
     if (channel?.type !== 'text') return;
     let active = true;
     const refresh = (): void => {
-      void apiClient.listMessages(channel.id).then((items) => {
+      void apiClient.listConversationMessages(channel.id).then((page) => {
         if (!active) return;
+        const items = page.items.filter((message) => message.deletedAt === null).map((message) => toTextMessage(message, serverDetail, user));
         setMessages((current) => [...items, ...current.filter((message) => message.id.startsWith('optimistic_'))]);
         const latest = items.at(-1);
         if (latest) {
-          void apiClient.markChannelRead(channel.id, latest.id).catch((caught) => { if (active) setError(userMessage(caught)); });
-          setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((item) => item.id === channel.id ? { ...item, unreadCount: 0 } : item) });
+          if (document.visibilityState === 'visible' && document.hasFocus()) {
+            void apiClient.updateConversationReadState(channel.id, { lastDeliveredMessageId: latest.id, lastReadMessageId: latest.id }).catch((caught) => { if (active) setError(userMessage(caught)); });
+            setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((item) => item.id === channel.id ? { ...item, unreadCount: 0, mentionCount: 0 } : item) });
+          } else void apiClient.updateConversationReadState(channel.id, { lastDeliveredMessageId: latest.id }).catch(() => undefined);
         }
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     refresh();
     const timer = setInterval(refresh, 30_000);
     return () => { active = false; clearInterval(timer); };
-  }, [realtimeRevision, screen, serverDetail?.id, activeChannelId]);
+  }, [realtimeRevision, screen, serverDetail?.id, activeChannelId, user?.id]);
 
   const run = useCallback(async (action: () => Promise<void>): Promise<void> => {
     setBusy(true);
@@ -548,7 +613,8 @@ export default function App(): ReactNode {
 
   const openDirectMessages = (): void => {
     void run(async () => {
-      const [conversations, candidates] = await Promise.all([apiClient.listDirectConversations(), apiClient.listDirectMessageCandidates()]);
+      const [legacyConversations, canonicalConversations, candidates] = await Promise.all([apiClient.listDirectConversations(), apiClient.listConversations(), apiClient.listDirectMessageCandidates()]);
+      const conversations = mergeDirectSummaries(legacyConversations, canonicalConversations);
       setDirectConversations(conversations);
       setDirectCandidates(candidates);
       setActiveDirectConversationId((current) => current !== null && conversations.some((conversation) => conversation.id === current) ? current : conversations[0]?.id ?? null);
@@ -597,11 +663,12 @@ export default function App(): ReactNode {
 
   const sendMessage = (replyToMessageId?: string, files: File[] = [], draftMentions: MessageMentionInput[] = []): void => {
     void run(async () => {
-      if (!activeChannelId || !user) return;
+      if (!activeChannelId || !user || !serverDetail) return;
       const content = messageDraft.trim().length > 0 ? messageContentSchema.parse(messageDraft) : files.length > 0 ? '' : messageContentSchema.parse(messageDraft);
       const leadingCodePoints = codePointLength(messageDraft) - codePointLength(messageDraft.trimStart());
       const mentions = draftMentions.map((mention) => ({ ...mention, start: mention.start - leadingCodePoints })).filter((mention) => mention.start >= 0 && mention.start + mention.length <= codePointLength(content));
-      const optimisticId = `optimistic_${crypto.randomUUID()}`;
+      const clientMessageId = crypto.randomUUID();
+      const optimisticId = `optimistic_${clientMessageId}`;
       const replyTarget = replyToMessageId === undefined ? null : messages.find((message) => message.id === replyToMessageId) ?? null;
       const optimistic: TextMessage = {
         id: optimisticId,
@@ -619,21 +686,20 @@ export default function App(): ReactNode {
       };
       setMessageDraft('');
       setMessages((current) => [...current, optimistic]);
-      let persisted: TextMessage | null = null;
       try {
-        persisted = await apiClient.createMessage(activeChannelId, content, mentions, replyToMessageId);
-        const created = persisted;
+        const attachmentIds = await Promise.all(files.map((file) => apiClient.uploadConversationAttachment(file)));
+        const canonical = await apiClient.createConversationMessage(activeChannelId, {
+          clientMessageId,
+          content,
+          ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
+          attachmentIds,
+          mentions: mentions.map((mention) => ({ type: 'user' as const, userId: mention.userId, start: mention.start, length: mention.length })),
+        });
+        const created = toTextMessage(canonical, serverDetail, user);
         setMessages((current) => [...current.filter((message) => message.id !== optimisticId && message.id !== created.id), created]);
-        for (const file of files) {
-          persisted = await apiClient.uploadMessageAttachment(persisted.id, file);
-          const updated = persisted;
-          setMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
-        }
       } catch (caught) {
-        if (persisted === null) {
-          setMessages((current) => current.filter((message) => message.id !== optimisticId));
-          setMessageDraft(content);
-        }
+        setMessages((current) => current.filter((message) => message.id !== optimisticId));
+        setMessageDraft(content);
         throw caught;
       }
     });
@@ -641,21 +707,23 @@ export default function App(): ReactNode {
 
   const deleteMessage = (messageId: string): void => {
     void run(async () => {
-      await apiClient.deleteMessage(messageId);
+      if (!activeChannelId) return;
+      await apiClient.deleteConversationMessage(activeChannelId, messageId);
       setMessages((current) => current.filter((message) => message.id !== messageId));
     });
   };
 
   const deleteAttachment = (attachmentId: string): void => {
     void run(async () => {
-      const updated = await apiClient.deleteMessageAttachment(attachmentId);
+      if (!serverDetail || !user) return;
+      const updated = toTextMessage(await apiClient.deleteConversationAttachment(attachmentId), serverDetail, user);
       setMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
     });
   };
 
   const downloadAttachment = (attachmentId: string, fileName: string): void => {
     void run(async () => {
-      const blob = await apiClient.downloadMessageAttachment(attachmentId);
+      const blob = await apiClient.downloadConversationAttachment(attachmentId);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -665,14 +733,16 @@ export default function App(): ReactNode {
     });
   };
 
-  const loadAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadMessageAttachment(attachmentId), []);
+  const loadAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadConversationAttachment(attachmentId), []);
 
   const updateMessage = (messageId: string, value: string, draftMentions: MessageMentionInput[] = []): void => {
     void run(async () => {
       const content = messageContentSchema.parse(value);
       const leadingCodePoints = codePointLength(value) - codePointLength(value.trimStart());
       const mentions = draftMentions.map((mention) => ({ ...mention, start: mention.start - leadingCodePoints })).filter((mention) => mention.start >= 0 && mention.start + mention.length <= codePointLength(content));
-      const updated = await apiClient.updateMessage(messageId, content, mentions);
+      if (!activeChannelId || !serverDetail || !user) return;
+      const canonical = await apiClient.updateConversationMessage(activeChannelId, messageId, content, mentions.map((mention) => ({ type: 'user', userId: mention.userId, start: mention.start, length: mention.length })));
+      const updated = toTextMessage(canonical, serverDetail, user);
       setMessageDraft('');
       setMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
     });
@@ -683,7 +753,9 @@ export default function App(): ReactNode {
       const message = messages.find((candidate) => candidate.id === messageId);
       if (!message) return;
       const active = message.reactions.find((reaction) => reaction.emoji === emoji)?.reactedByCurrentUser !== true;
-      const updated = await apiClient.setMessageReaction(messageId, emoji, active);
+      if (!activeChannelId || !serverDetail || !user) return;
+      const canonical = await apiClient.setConversationReaction(activeChannelId, messageId, emoji, active);
+      const updated = toTextMessage(canonical, serverDetail, user);
       setMessages((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
     });
   };
@@ -693,7 +765,8 @@ export default function App(): ReactNode {
       if (activeDirectConversationId === null || !user) return;
       const content = directMessageDraft.trim().length > 0 ? messageContentSchema.parse(directMessageDraft) : files.length > 0 ? '' : messageContentSchema.parse(directMessageDraft);
       const conversationId = activeDirectConversationId;
-      const optimisticId = `optimistic_${crypto.randomUUID()}`;
+      const clientMessageId = crypto.randomUUID();
+      const optimisticId = `optimistic_${clientMessageId}`;
       const replyTarget = replyToMessageId === undefined ? null : directMessages.find((message) => message.id === replyToMessageId) ?? null;
       const optimistic: DirectMessage = {
         id: optimisticId,
@@ -710,22 +783,16 @@ export default function App(): ReactNode {
       };
       setDirectMessageDraft('');
       setDirectMessages((current) => [...current, optimistic]);
-      let persisted: DirectMessage | null = null;
       try {
-        persisted = await apiClient.createDirectMessage(conversationId, content, replyToMessageId);
-        const created = persisted;
+        const attachmentIds = await Promise.all(files.map((file) => apiClient.uploadConversationAttachment(file)));
+        const canonical = await apiClient.createConversationMessage(conversationId, { clientMessageId, content, ...(replyToMessageId === undefined ? {} : { replyToMessageId }), attachmentIds });
+        const created = toDirectMessage(canonical, user, directConversations);
         setDirectMessages((current) => [...current.filter((message) => message.id !== optimisticId && message.id !== created.id), created]);
-        for (const file of files) {
-          persisted = await apiClient.uploadDirectMessageAttachment(persisted.id, file);
-          const updated = persisted;
-          setDirectMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
-        }
-        setDirectConversations(await apiClient.listDirectConversations());
+        const [legacy, conversations] = await Promise.all([apiClient.listDirectConversations(), apiClient.listConversations()]);
+        setDirectConversations(mergeDirectSummaries(legacy, conversations));
       } catch (caught) {
-        if (persisted === null) {
-          setDirectMessages((current) => current.filter((message) => message.id !== optimisticId));
-          setDirectMessageDraft(content);
-        }
+        setDirectMessages((current) => current.filter((message) => message.id !== optimisticId));
+        setDirectMessageDraft(content);
         throw caught;
       }
     });
@@ -733,17 +800,22 @@ export default function App(): ReactNode {
 
   const updateDirectMessage = (messageId: string, value: string): void => {
     void run(async () => {
-      const updated = await apiClient.updateDirectMessage(messageId, messageContentSchema.parse(value));
+      if (!activeDirectConversationId || !user) return;
+      const canonical = await apiClient.updateConversationMessage(activeDirectConversationId, messageId, messageContentSchema.parse(value));
+      const updated = toDirectMessage(canonical, user, directConversations);
       setDirectMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
-      setDirectConversations(await apiClient.listDirectConversations());
+      const [legacy, conversations] = await Promise.all([apiClient.listDirectConversations(), apiClient.listConversations()]);
+      setDirectConversations(mergeDirectSummaries(legacy, conversations));
     });
   };
 
   const deleteDirectMessage = (messageId: string): void => {
     void run(async () => {
-      await apiClient.deleteDirectMessage(messageId);
+      if (!activeDirectConversationId) return;
+      await apiClient.deleteConversationMessage(activeDirectConversationId, messageId);
       setDirectMessages((current) => current.filter((message) => message.id !== messageId));
-      setDirectConversations(await apiClient.listDirectConversations());
+      const [legacy, conversations] = await Promise.all([apiClient.listDirectConversations(), apiClient.listConversations()]);
+      setDirectConversations(mergeDirectSummaries(legacy, conversations));
     });
   };
 
@@ -752,21 +824,24 @@ export default function App(): ReactNode {
       const message = directMessages.find((candidate) => candidate.id === messageId);
       if (!message) return;
       const active = message.reactions.find((reaction) => reaction.emoji === emoji)?.reactedByCurrentUser !== true;
-      const updated = await apiClient.setDirectMessageReaction(messageId, emoji, active);
+      if (!activeDirectConversationId || !user) return;
+      const canonical = await apiClient.setConversationReaction(activeDirectConversationId, messageId, emoji, active);
+      const updated = toDirectMessage(canonical, user, directConversations);
       setDirectMessages((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
     });
   };
 
   const deleteDirectAttachment = (attachmentId: string): void => {
     void run(async () => {
-      const updated = await apiClient.deleteDirectMessageAttachment(attachmentId);
+      if (!user) return;
+      const updated = toDirectMessage(await apiClient.deleteConversationAttachment(attachmentId), user, directConversations);
       setDirectMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
     });
   };
 
   const downloadDirectAttachment = (attachmentId: string, fileName: string): void => {
     void run(async () => {
-      const blob = await apiClient.downloadDirectMessageAttachment(attachmentId);
+      const blob = await apiClient.downloadConversationAttachment(attachmentId);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -776,7 +851,7 @@ export default function App(): ReactNode {
     });
   };
 
-  const loadDirectAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadDirectMessageAttachment(attachmentId), []);
+  const loadDirectAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadConversationAttachment(attachmentId), []);
 
   const createCommunityChannel = (name: string, type: 'text' | 'voice'): void => {
     void run(async () => {
@@ -1049,7 +1124,7 @@ export default function App(): ReactNode {
   };
   const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityCenter dndActive={presence?.preference === 'do_not_disturb'} open user={user} settings={settings} onSettingsChange={updateNotificationSettings} onClose={() => setSecurityOpen(false)} onUserChange={updateUser} onCurrentSessionRevoked={handleCurrentSessionRevoked} /> : null;
   const withUpdateStatus = (content: ReactNode): ReactNode => <>{content}<UpdateStatus state={updateState} onInstall={() => void window.desktop.installUpdate().catch((caught) => setError(userMessage(caught)))} /></>;
-  const directUnreadCount = directConversations.reduce((count, conversation) => count + conversation.unreadCount, 0);
+  const directUnreadCount = unreadSummary?.totalDirectUnread ?? directConversations.reduce((count, conversation) => count + conversation.unreadCount, 0);
   const localInputLevel = connection === null ? undefined : mediaSnapshot.participants.find((participant) => participant.isLocal)?.audioLevel;
   const openConnectedVoice = (): void => {
     if (!connection) return;
