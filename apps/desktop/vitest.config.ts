@@ -9,7 +9,7 @@ const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
-  optimizeDeps: { include: ['qrcode'] },
+  optimizeDeps: { include: ['aria-query', 'msw-storybook-addon', 'qrcode'] },
   test: {
     projects: [
       {
