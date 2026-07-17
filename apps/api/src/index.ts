@@ -4,9 +4,11 @@ import { createPostgresStore } from './db/postgres-store.js';
 import { VatrushkaService } from './service.js';
 import { LiveKitMediaService } from './services/livekit.js';
 import { SmtpMailer } from './services/mailer.js';
+import { createObjectStorage } from './services/object-storage.js';
 
 const config = loadConfig();
 const database = createPostgresStore(config.DATABASE_URL);
+const objectStorage = createObjectStorage(config);
 if (config.PLATFORM_OWNER_EMAIL) {
   await database.store.setPlatformRoleByEmail(config.PLATFORM_OWNER_EMAIL, 'owner', new Date());
 }
@@ -15,10 +17,14 @@ const service = new VatrushkaService({
   store: database.store,
   mailer: new SmtpMailer(config),
   media: new LiveKitMediaService(config),
+  objectStorage,
 });
 const app = await buildApp({ config, service });
 
-app.addHook('onClose', async () => database.close());
+app.addHook('onClose', async () => {
+  objectStorage?.close();
+  await database.close();
+});
 
 const shutdown = async (signal: string): Promise<void> => {
   app.log.info({ signal }, 'Shutting down');

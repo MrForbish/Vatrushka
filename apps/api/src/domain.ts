@@ -170,6 +170,7 @@ export interface MessageAttachmentRecord {
   mimeType: string;
   size: number;
   content: Buffer;
+  storageKey: string | null;
   createdAt: Date;
 }
 
@@ -226,6 +227,7 @@ export interface DirectMessageAttachmentRecord {
   mimeType: string;
   size: number;
   content: Buffer;
+  storageKey: string | null;
   createdAt: Date;
 }
 

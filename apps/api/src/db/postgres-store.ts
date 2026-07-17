@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 
@@ -531,7 +531,16 @@ export class PostgresStore implements DataStore {
 
   async listMessageAttachments(messageIds: string[]): Promise<MessageAttachmentMetadata[]> {
     if (messageIds.length === 0) return [];
-    return this.db.select({ id: schema.messageAttachments.id, messageId: schema.messageAttachments.messageId, uploaderUserId: schema.messageAttachments.uploaderUserId, fileName: schema.messageAttachments.fileName, mimeType: schema.messageAttachments.mimeType, size: schema.messageAttachments.size, createdAt: schema.messageAttachments.createdAt }).from(schema.messageAttachments).where(inArray(schema.messageAttachments.messageId, messageIds)).orderBy(asc(schema.messageAttachments.createdAt));
+    return this.db.select({ id: schema.messageAttachments.id, messageId: schema.messageAttachments.messageId, uploaderUserId: schema.messageAttachments.uploaderUserId, fileName: schema.messageAttachments.fileName, mimeType: schema.messageAttachments.mimeType, size: schema.messageAttachments.size, storageKey: schema.messageAttachments.storageKey, createdAt: schema.messageAttachments.createdAt }).from(schema.messageAttachments).where(inArray(schema.messageAttachments.messageId, messageIds)).orderBy(asc(schema.messageAttachments.createdAt));
+  }
+
+  async listChannelAttachmentStorageKeys(channelId: string): Promise<string[]> {
+    const rows = await this.db.select({ storageKey: schema.messageAttachments.storageKey }).from(schema.messageAttachments).innerJoin(schema.textMessages, eq(schema.textMessages.id, schema.messageAttachments.messageId)).where(and(eq(schema.textMessages.channelId, channelId), isNotNull(schema.messageAttachments.storageKey)));
+    return rows.flatMap(({ storageKey }) => storageKey === null ? [] : [storageKey]);
+  }
+
+  async listLegacyMessageAttachments(limit: number): Promise<MessageAttachmentRecord[]> {
+    return this.db.select().from(schema.messageAttachments).where(isNull(schema.messageAttachments.storageKey)).orderBy(asc(schema.messageAttachments.createdAt), asc(schema.messageAttachments.id)).limit(limit);
   }
 
   async findMessageAttachment(id: string): Promise<MessageAttachmentRecord | null> {
@@ -541,6 +550,11 @@ export class PostgresStore implements DataStore {
 
   async createMessageAttachment(attachment: MessageAttachmentRecord): Promise<void> {
     await this.db.insert(schema.messageAttachments).values(attachment);
+  }
+
+  async moveMessageAttachmentToStorage(id: string, storageKey: string): Promise<boolean> {
+    const rows = await this.db.update(schema.messageAttachments).set({ storageKey }).where(and(eq(schema.messageAttachments.id, id), isNull(schema.messageAttachments.storageKey))).returning({ id: schema.messageAttachments.id });
+    return rows.length === 1;
   }
 
   async deleteMessageAttachment(id: string): Promise<boolean> {
@@ -671,7 +685,11 @@ export class PostgresStore implements DataStore {
 
   async listDirectMessageAttachments(messageIds: string[]): Promise<DirectMessageAttachmentMetadata[]> {
     if (messageIds.length === 0) return [];
-    return this.db.select({ id: schema.directMessageAttachments.id, messageId: schema.directMessageAttachments.messageId, uploaderUserId: schema.directMessageAttachments.uploaderUserId, fileName: schema.directMessageAttachments.fileName, mimeType: schema.directMessageAttachments.mimeType, size: schema.directMessageAttachments.size, createdAt: schema.directMessageAttachments.createdAt }).from(schema.directMessageAttachments).where(inArray(schema.directMessageAttachments.messageId, messageIds)).orderBy(asc(schema.directMessageAttachments.createdAt));
+    return this.db.select({ id: schema.directMessageAttachments.id, messageId: schema.directMessageAttachments.messageId, uploaderUserId: schema.directMessageAttachments.uploaderUserId, fileName: schema.directMessageAttachments.fileName, mimeType: schema.directMessageAttachments.mimeType, size: schema.directMessageAttachments.size, storageKey: schema.directMessageAttachments.storageKey, createdAt: schema.directMessageAttachments.createdAt }).from(schema.directMessageAttachments).where(inArray(schema.directMessageAttachments.messageId, messageIds)).orderBy(asc(schema.directMessageAttachments.createdAt));
+  }
+
+  async listLegacyDirectMessageAttachments(limit: number): Promise<DirectMessageAttachmentRecord[]> {
+    return this.db.select().from(schema.directMessageAttachments).where(isNull(schema.directMessageAttachments.storageKey)).orderBy(asc(schema.directMessageAttachments.createdAt), asc(schema.directMessageAttachments.id)).limit(limit);
   }
 
   async findDirectMessageAttachment(id: string): Promise<DirectMessageAttachmentRecord | null> {
@@ -681,6 +699,11 @@ export class PostgresStore implements DataStore {
 
   async createDirectMessageAttachment(attachment: DirectMessageAttachmentRecord): Promise<void> {
     await this.db.insert(schema.directMessageAttachments).values(attachment);
+  }
+
+  async moveDirectMessageAttachmentToStorage(id: string, storageKey: string): Promise<boolean> {
+    const rows = await this.db.update(schema.directMessageAttachments).set({ storageKey }).where(and(eq(schema.directMessageAttachments.id, id), isNull(schema.directMessageAttachments.storageKey))).returning({ id: schema.directMessageAttachments.id });
+    return rows.length === 1;
   }
 
   async deleteDirectMessageAttachment(id: string): Promise<boolean> {

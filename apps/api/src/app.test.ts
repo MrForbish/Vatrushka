@@ -8,7 +8,7 @@ import { API_PREFIX } from '@vatrushka/shared';
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { MAX_ATTACHMENT_BYTES, VatrushkaService } from './service.js';
-import { FakeMailer, FakeMediaService } from './testing/fakes.js';
+import { FakeMailer, FakeMediaService, FakeObjectStorage } from './testing/fakes.js';
 import { MemoryStore } from './testing/memory-store.js';
 
 interface TestContext {
@@ -16,6 +16,7 @@ interface TestContext {
   store: MemoryStore;
   mailer: FakeMailer;
   media: FakeMediaService;
+  objectStorage: FakeObjectStorage | null;
   clock: { now: Date };
   config: ReturnType<typeof loadConfig>;
 }
@@ -28,7 +29,7 @@ function inviteTokenFromUrl(inviteUrl: string): string {
   return token;
 }
 
-async function makeContext(): Promise<TestContext> {
+async function makeContext(objectStorage: FakeObjectStorage | null = null): Promise<TestContext> {
   const store = new MemoryStore();
   const mailer = new FakeMailer();
   const media = new FakeMediaService();
@@ -43,9 +44,9 @@ async function makeContext(): Promise<TestContext> {
     LIVEKIT_URL: 'ws://livekit.test',
     LIVEKIT_HTTP_URL: 'http://livekit.test',
   });
-  const service = new VatrushkaService({ config, store, mailer, media, clock: () => clock.now });
+  const service = new VatrushkaService({ config, store, mailer, media, objectStorage, clock: () => clock.now });
   const app = await buildApp({ config, service, logger: false });
-  return { app, store, mailer, media, clock, config };
+  return { app, store, mailer, media, objectStorage, clock, config };
 }
 
 async function login(email = 'anna@example.com', displayName = 'Anna'): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
@@ -680,6 +681,51 @@ describe('servers, channels, messages, and roles API', () => {
     expect(removedAttachment.statusCode).toBe(200);
     expect(removedAttachment.json<{ attachments: unknown[] }>().attachments).toEqual([]);
     expect(messages.json<Array<{ content: string }>>()).toEqual(expect.arrayContaining([expect.objectContaining({ content: 'Теперь можно писать' }), expect.objectContaining({ content: 'Отвечаю по теме' })]));
+  });
+
+  it('stores new attachments in private object storage and keeps authorization in the API', async () => {
+    const objectStorage = new FakeObjectStorage();
+    context = await makeContext(objectStorage);
+    const owner = await login('storage-owner@example.com', 'Storage Owner');
+    const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Media storage' } });
+    const server = created.json<{ channels: Array<{ id: string; type: string }> }>();
+    const channel = server.channels.find((candidate) => candidate.type === 'text');
+    if (!channel) throw new Error('Text channel was not created');
+    const sent = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${channel.id}/messages`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { content: 'S3 attachment' } });
+    const messageId = sent.json<{ id: string }>().id;
+    const fileContent = Buffer.from('private object content');
+    const multipart = multipartFile('private.txt', 'text/plain', fileContent);
+
+    const uploaded = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/messages/${messageId}/attachments`, headers: { authorization: `Bearer ${owner.accessToken}`, 'content-type': multipart.contentType }, payload: multipart.payload });
+    expect(uploaded.statusCode).toBe(201);
+    const attachmentId = uploaded.json<{ attachments: Array<{ id: string }> }>().attachments[0]?.id;
+    if (!attachmentId) throw new Error('Attachment was not created');
+    const record = await context.store.findMessageAttachment(attachmentId);
+    expect(record?.storageKey).toMatch(/^prod\/attachments\/channels\//u);
+    expect(Buffer.from(record?.content ?? [])).toEqual(fileContent);
+    if (!record?.storageKey) throw new Error('Object storage key was not persisted');
+    expect(objectStorage.objects.get(record.storageKey)?.content).toEqual(fileContent);
+
+    const downloaded = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/attachments/${attachmentId}/content`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    expect(downloaded.statusCode).toBe(200);
+    expect(downloaded.rawPayload).toEqual(fileContent);
+
+    objectStorage.available = false;
+    const unavailable = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/attachments/${attachmentId}/content`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    expect(unavailable.statusCode).toBe(200);
+    expect(unavailable.rawPayload).toEqual(fileContent);
+    const readiness = await context.app.inject({ method: 'GET', url: '/health/ready' });
+    expect(readiness.statusCode).toBe(503);
+    expect(readiness.json<{ code: string }>().code).toBe('MEDIA_STORAGE_UNAVAILABLE');
+    const secondMessage = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${channel.id}/messages`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { content: 'Unavailable storage' } });
+    const failedUpload = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/messages/${secondMessage.json<{ id: string }>().id}/attachments`, headers: { authorization: `Bearer ${owner.accessToken}`, 'content-type': multipart.contentType }, payload: multipart.payload });
+    expect(failedUpload.statusCode).toBe(503);
+    expect(failedUpload.json<{ code: string }>().code).toBe('MEDIA_STORAGE_UNAVAILABLE');
+    objectStorage.available = true;
+
+    const removed = await context.app.inject({ method: 'DELETE', url: `${API_PREFIX}/attachments/${attachmentId}`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    expect(removed.statusCode).toBe(200);
+    expect(objectStorage.objects.size).toBe(0);
   });
 
   it('connects to a persistent voice channel and coordinates screen sharing', async () => {

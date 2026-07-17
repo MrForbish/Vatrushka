@@ -18,9 +18,9 @@
                          ┌─────────▼─────────┐      ┌───────────────┐
                          │ Caddy → Fastify   │─────▶│ LiveKit Cloud │
                          │        API        │      │ or one VM     │
-                         └─────────┬─────────┘      └───────────────┘
-                                   │
-                              PostgreSQL
+                         └──────┬──┴──────┬──┘      └───────────────┘
+                                │         │
+                         PostgreSQL   private S3
 ```
 
 - npm workspaces: `apps/desktop`, `apps/api`, `packages/shared`, `packages/config`.
@@ -28,10 +28,11 @@
 - API: Node.js, Fastify 5, PostgreSQL, Drizzle ORM, Nodemailer, LiveKit Server SDK.
 - Авторизация: scrypt-пароль, email/TOTP/recovery 2FA, управление устройствами, access JWT на 15 минут; opaque refresh token на 30 дней с rotation/reuse detection и хранением только в Electron main/safeStorage.
 - Медиа: LiveKit Cloud по умолчанию; self-hosted меняется только значениями `LIVEKIT_*`.
+- Вложения: приватный S3-compatible bucket в production; Fastify остаётся единственной точкой авторизации и владельцем credentials.
 - Единственная демонстрация обеспечивается транзакционной lease в PostgreSQL, а не только UI.
 - Серверы хранят постоянное членство, каналы, сообщения, иерархию ролей, channel overrides и audit log; права `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` ограничиваются также grant-ами LiveKit-токена.
 
-Подробности: [архитектура](docs/architecture.md), [Home dashboard](docs/home.md), [аутентификация](docs/auth.md), [медиа](docs/media.md), [безопасность](docs/security.md).
+Подробности: [архитектура](docs/architecture.md), [Home dashboard](docs/home.md), [аутентификация](docs/auth.md), [медиа](docs/media.md), [объектное хранилище](docs/object-storage.md), [безопасность](docs/security.md).
 
 ## Структура
 
@@ -168,7 +169,7 @@ cp .env.example .env
 # направить DNS example.com и api.example.com на IP сервера и заполнить .env
 # NODE_ENV=production, DOMAIN=api.example.com, INVITE_DOMAIN=example.com
 # PUBLIC_API_URL=https://api.example.com, PUBLIC_INVITE_URL=https://example.com
-# удалить DEV_FIXED_OTP, указать SMTP_* и LIVEKIT_*
+# удалить DEV_FIXED_OTP, указать SMTP_*, LIVEKIT_* и приватный S3
 # сгенерировать ACCESS_TOKEN_SECRET и OTP_PEPPER: openssl rand -hex 32
 mkdir -p updates
 docker compose --env-file .env -f infra/docker/docker-compose.yml config
@@ -195,6 +196,7 @@ API наружу не публикуется напрямую; доступен 
 | OTP | `OTP_PEPPER`, `OTP_TTL_SECONDS`, `OTP_RESEND_SECONDS`, `DEV_FIXED_OTP` |
 | SMTP | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` |
 | LiveKit | `LIVEKIT_URL`, `LIVEKIT_HTTP_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
+| Object storage | `MEDIA_STORAGE_DRIVER`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_KEY_PREFIX` |
 | Media coordination | `SCREEN_SHARE_LEASE_SECONDS`, `SCREEN_SHARE_HEARTBEAT_SECONDS` |
 | Network | `CORS_ALLOWED_ORIGINS`, `DOMAIN`, `INVITE_DOMAIN`, `LIVEKIT_DOMAIN`, `TURN_DOMAIN` |
 | Desktop public | `VITE_PUBLIC_API_BASE_URL` |
@@ -241,6 +243,7 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 - [Architecture](docs/architecture.md)
 - [Auth](docs/auth.md)
 - [Media](docs/media.md)
+- [Object storage](docs/object-storage.md)
 - [Deployment](docs/deployment.md)
 - [Self-hosted LiveKit](docs/self-hosted-livekit.md)
 - [Security](docs/security.md)

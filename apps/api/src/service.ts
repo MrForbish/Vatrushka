@@ -43,7 +43,8 @@ import {
 import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
 import type { AuthCodeRecord, DirectConversationOverviewRecord, DirectConversationRecord, DirectMessageAttachmentMetadata, DirectMessageAttachmentRecord, DirectMessageWithAuthor, MessageAttachmentMetadata, MessageAttachmentRecord, MessageNotificationRecord, MessageReactionSummary, RecoveryCodeRecord, SecurityEventRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
-import type { DataStore, Mailer, MediaService } from './ports.js';
+import type { DataStore, Mailer, MediaService, ObjectStorage } from './ports.js';
+import { attachmentObjectKey } from './services/attachment-objects.js';
 import {
   hashOpaqueToken,
   hashOtp,
@@ -66,6 +67,7 @@ export interface ServiceDependencies {
   store: DataStore;
   mailer: Mailer;
   media: MediaService;
+  objectStorage?: ObjectStorage | null;
   clock?: () => Date;
 }
 
@@ -184,6 +186,7 @@ export class VatrushkaService {
   readonly config: AppConfig;
   readonly store: DataStore;
   readonly media: MediaService;
+  readonly objectStorage: ObjectStorage | null;
   private readonly mailer: Mailer;
   private readonly clock: () => Date;
   private readonly pendingVoiceMoves = new Map<string, { channelId: string; expiresAt: Date; seamlesslyMoved: boolean }>();
@@ -193,6 +196,7 @@ export class VatrushkaService {
     this.store = dependencies.store;
     this.mailer = dependencies.mailer;
     this.media = dependencies.media;
+    this.objectStorage = dependencies.objectStorage ?? null;
     this.clock = dependencies.clock ?? (() => new Date());
   }
 
@@ -202,6 +206,33 @@ export class VatrushkaService {
 
   inviteUrl(inviteToken: string): string {
     return new URL(`/i/${encodeURIComponent(inviteToken)}`, this.config.PUBLIC_INVITE_URL).toString();
+  }
+
+  private async prepareAttachmentContent(scope: 'channels' | 'direct', messageId: string, attachmentId: string, content: Buffer, mimeType: string): Promise<{ content: Buffer; storageKey: string | null }> {
+    if (this.objectStorage === null) return { content, storageKey: null };
+    const storageKey = attachmentObjectKey(this.config.S3_KEY_PREFIX, scope, messageId, attachmentId);
+    try {
+      await this.objectStorage.putObject({ key: storageKey, content, mimeType });
+    } catch {
+      throw new AppError('MEDIA_STORAGE_UNAVAILABLE', 503);
+    }
+    return { content, storageKey };
+  }
+
+  private async resolveAttachmentContent(attachment: { content: Buffer; size: number; storageKey: string | null }): Promise<Buffer> {
+    if (attachment.storageKey === null || this.objectStorage === null) return attachment.content;
+    try {
+      const content = await this.objectStorage.getObject(attachment.storageKey);
+      if (content.length !== attachment.size || content.length > MAX_ATTACHMENT_BYTES) throw new Error('Stored attachment size does not match its metadata');
+      return content;
+    } catch {
+      return attachment.content;
+    }
+  }
+
+  private async deleteStoredObjects(storageKeys: Array<string | null>): Promise<void> {
+    if (this.objectStorage === null) return;
+    await Promise.allSettled(storageKeys.flatMap((storageKey) => storageKey === null ? [] : [this.objectStorage!.deleteObject(storageKey)]));
   }
 
   async requestRegistration(email: string, password: string): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
@@ -680,7 +711,9 @@ export class VatrushkaService {
     const channel = await this.requireServerChannel(channelId);
     const server = await this.requireServer(channel.serverId);
     await this.requireServerPermission(server, user, 'MANAGE_CHANNELS');
+    const attachmentStorageKeys = channel.type === 'text' ? await this.store.listChannelAttachmentStorageKeys(channel.id) : [];
     if (!(await this.store.deleteServerChannel(channel.id))) throw new AppError('CHANNEL_NOT_FOUND', 404);
+    await this.deleteStoredObjects(attachmentStorageKeys);
     await this.recordServerAudit(server.id, user, 'CHANNEL_DELETED', 'CHANNEL', channel.id, { name: channel.name, type: channel.type }, null);
     if (channel.livekitRoomName) {
       try { await this.media.deleteRoom(channel.livekitRoomName); } catch { /* The database deletion is authoritative. */ }
@@ -945,17 +978,24 @@ export class VatrushkaService {
     if (!ALLOWED_ATTACHMENT_TYPES.has(mimeType)) throw new AppError('ATTACHMENT_TYPE_NOT_ALLOWED', 400);
     const existing = await this.store.listMessageAttachments([message.id]);
     if (existing.length >= MAX_ATTACHMENTS_PER_MESSAGE) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'attachments', max: MAX_ATTACHMENTS_PER_MESSAGE });
+    const attachmentId = randomUUID();
+    const storedContent = await this.prepareAttachmentContent('channels', message.id, attachmentId, input.content, mimeType);
     const attachment: MessageAttachmentRecord = {
-      id: randomUUID(),
+      id: attachmentId,
       messageId: message.id,
       uploaderUserId: user.id,
       fileName: safeAttachmentName(input.fileName),
       mimeType,
       size: input.content.length,
-      content: input.content,
+      ...storedContent,
       createdAt: this.now(),
     };
-    await this.store.createMessageAttachment(attachment);
+    try {
+      await this.store.createMessageAttachment(attachment);
+    } catch (error) {
+      await this.deleteStoredObjects([attachment.storageKey]);
+      throw error;
+    }
     const [withAuthor] = await this.store.findTextMessagesWithAuthors([message.id]);
     if (!withAuthor) throw new AppError('MESSAGE_NOT_FOUND', 404);
     return (await this.hydrateMessages([withAuthor], user.id))[0]!;
@@ -971,7 +1011,7 @@ export class VatrushkaService {
     const server = await this.requireServer(channel.serverId);
     await this.requireChannelPermission(server, channel, user, 'VIEW_CHANNEL');
     await this.requireChannelPermission(server, channel, user, 'READ_MESSAGE_HISTORY');
-    return attachment;
+    return { ...attachment, content: await this.resolveAttachmentContent(attachment) };
   }
 
   async deleteMessageAttachment(authorization: string | undefined, attachmentId: string): Promise<TextMessage> {
@@ -984,6 +1024,7 @@ export class VatrushkaService {
     const server = await this.requireServer(channel.serverId);
     await this.requireChannelPermission(server, channel, user, message.authorUserId === user.id || attachment.uploaderUserId === user.id ? 'MANAGE_OWN_MESSAGES' : 'MANAGE_MESSAGES');
     await this.store.deleteMessageAttachment(attachment.id);
+    await this.deleteStoredObjects([attachment.storageKey]);
     const [withAuthor] = await this.store.findTextMessagesWithAuthors([message.id]);
     if (!withAuthor) throw new AppError('MESSAGE_NOT_FOUND', 404);
     return (await this.hydrateMessages([withAuthor], user.id))[0]!;
@@ -1006,7 +1047,9 @@ export class VatrushkaService {
     const channel = await this.requireTextChannel(message.channelId);
     const server = await this.requireServer(channel.serverId);
     await this.requireChannelPermission(server, channel, user, message.authorUserId === user.id ? 'MANAGE_OWN_MESSAGES' : 'MANAGE_MESSAGES');
+    const attachments = await this.store.listMessageAttachments([message.id]);
     await this.store.deleteTextMessage(message.id);
+    await this.deleteStoredObjects(attachments.map((attachment) => attachment.storageKey));
   }
 
   async listDirectMessageCandidates(authorization: string | undefined): Promise<DirectMessageCandidate[]> {
@@ -1086,7 +1129,9 @@ export class VatrushkaService {
     const message = await this.store.findDirectMessage(messageId);
     if (!message || message.authorUserId !== user.id) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
     await this.requireDirectConversation(message.conversationId, user.id);
+    const attachments = await this.store.listDirectMessageAttachments([message.id]);
     await this.store.deleteDirectMessage(message.id);
+    await this.deleteStoredObjects(attachments.map((attachment) => attachment.storageKey));
   }
 
   async setDirectMessageReaction(authorization: string | undefined, messageId: string, emoji: string, active: boolean): Promise<DirectMessage> {
@@ -1119,8 +1164,15 @@ export class VatrushkaService {
     const mimeType = input.mimeType.toLowerCase().split(';', 1)[0]?.trim() ?? '';
     if (!ALLOWED_ATTACHMENT_TYPES.has(mimeType)) throw new AppError('ATTACHMENT_TYPE_NOT_ALLOWED', 400);
     if ((await this.store.listDirectMessageAttachments([message.id])).length >= MAX_ATTACHMENTS_PER_MESSAGE) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'attachments', max: MAX_ATTACHMENTS_PER_MESSAGE });
-    const attachment: DirectMessageAttachmentRecord = { id: randomUUID(), messageId, uploaderUserId: user.id, fileName: safeAttachmentName(input.fileName), mimeType, size: input.content.length, content: input.content, createdAt: this.now() };
-    await this.store.createDirectMessageAttachment(attachment);
+    const attachmentId = randomUUID();
+    const storedContent = await this.prepareAttachmentContent('direct', message.id, attachmentId, input.content, mimeType);
+    const attachment: DirectMessageAttachmentRecord = { id: attachmentId, messageId, uploaderUserId: user.id, fileName: safeAttachmentName(input.fileName), mimeType, size: input.content.length, ...storedContent, createdAt: this.now() };
+    try {
+      await this.store.createDirectMessageAttachment(attachment);
+    } catch (error) {
+      await this.deleteStoredObjects([attachment.storageKey]);
+      throw error;
+    }
     const [withAuthor] = await this.store.findDirectMessagesWithAuthors([message.id]);
     if (!withAuthor) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
     return (await this.hydrateDirectMessages([withAuthor], user.id))[0]!;
@@ -1133,7 +1185,7 @@ export class VatrushkaService {
     const message = await this.store.findDirectMessage(attachment.messageId);
     if (!message) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
     await this.requireDirectConversation(message.conversationId, user.id);
-    return attachment;
+    return { ...attachment, content: await this.resolveAttachmentContent(attachment) };
   }
 
   async deleteDirectMessageAttachment(authorization: string | undefined, attachmentId: string): Promise<DirectMessage> {
@@ -1144,6 +1196,7 @@ export class VatrushkaService {
     if (!message) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
     await this.requireDirectConversation(message.conversationId, user.id);
     await this.store.deleteDirectMessageAttachment(attachment.id);
+    await this.deleteStoredObjects([attachment.storageKey]);
     const [withAuthor] = await this.store.findDirectMessagesWithAuthors([message.id]);
     if (!withAuthor) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
     return (await this.hydrateDirectMessages([withAuthor], user.id))[0]!;
