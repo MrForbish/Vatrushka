@@ -1258,6 +1258,19 @@ export default function App(): ReactNode {
     settingsReturnScreenRef.current = 'server';
     void navigate(serverSettingsPath(serverDetail.id, section));
   };
+  const refreshSettingsServer = async (): Promise<void> => {
+    if (settingsServerRouteId === null) return;
+    const [detail, summaries] = await Promise.all([apiClient.getServer(settingsServerRouteId), apiClient.listServers()]);
+    setServerDetail(detail);
+    setServers(summaries);
+  };
+  const handleSettingsServerDeleted = (): void => {
+    setServerDetail(null);
+    setActiveChannelId(null);
+    void apiClient.listServers().then(setServers).catch((caught) => setError(userMessage(caught)));
+    void navigate('/', { replace: true });
+    setScreen('home');
+  };
   const closeSettings = (): void => {
     const returnScreen = settingsRoute?.kind === 'server' && serverDetail?.id === settingsRoute.serverId ? 'server' : settingsReturnScreenRef.current;
     void navigate('/', { replace: true });
@@ -1298,6 +1311,8 @@ export default function App(): ReactNode {
         onNavigate={(path) => { void navigate(path); }}
         onNotificationSettingsChange={updateNotificationSettings}
         onOpenServer={leaveSettingsForServer}
+        onServerChanged={refreshSettingsServer}
+        onServerDeleted={handleSettingsServerDeleted}
         onOutput={(deviceId) => persistDevice('outputDeviceId', deviceId)}
         onRefreshDevices={() => { void run(() => refreshDevices(true)); }}
         onTestOutput={() => playVoiceCue('message')}

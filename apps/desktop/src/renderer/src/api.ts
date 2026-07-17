@@ -24,6 +24,16 @@ import {
   type ServerPermission,
   type ServerRole,
   type ServerSummary,
+  type CreatedServerInvite,
+  type ServerAppearanceSettings,
+  type ServerAuditLogPage,
+  type ServerBanSettings,
+  type ServerChannelCategory,
+  type ServerChannelSettings,
+  type ServerInviteSettings,
+  type ServerModerationSettings,
+  type ServerOverviewSettings,
+  type ServerSettingsMember,
   type TextMessage,
   type MessageNotificationPage,
   type MessageMentionInput,
@@ -216,6 +226,114 @@ export class ApiClient {
 
   getServer(serverId: string): Promise<ServerDetail> {
     return this.request(`/servers/${serverId}`, { auth: true });
+  }
+
+  getServerOverviewSettings(serverId: string): Promise<ServerOverviewSettings> {
+    return this.request(`/servers/${serverId}/settings/overview`, { auth: true });
+  }
+
+  updateServerOverviewSettings(serverId: string, input: Omit<ServerOverviewSettings, 'id' | 'ownerUserId' | 'ownerDisplayName' | 'updatedAt'>): Promise<ServerOverviewSettings> {
+    return this.request(`/servers/${serverId}/settings/overview`, { method: 'PUT', body: input, auth: true });
+  }
+
+  getServerAppearanceSettings(serverId: string): Promise<ServerAppearanceSettings> {
+    return this.request(`/servers/${serverId}/settings/appearance`, { auth: true });
+  }
+
+  async uploadServerAppearance(serverId: string, kind: 'icon' | 'banner', file: File): Promise<string> {
+    const intent = await this.request<{ objectKey: string; uploadUrl: string; headers: Record<string, string> }>(`/servers/${serverId}/settings/appearance/upload-intent`, { method: 'POST', body: { kind, mimeType: file.type, sizeBytes: file.size }, auth: true });
+    const response = await fetch(intent.uploadUrl, { method: 'PUT', headers: intent.headers, body: file });
+    if (!response.ok) throw new ClientError('MEDIA_UPLOAD_FAILED', 'Не удалось загрузить изображение', response.status);
+    return intent.objectKey;
+  }
+
+  updateServerAppearanceSettings(serverId: string, input: { iconObjectKey?: string | null; bannerObjectKey?: string | null; accentColor: string | null; version: number }): Promise<ServerAppearanceSettings> {
+    return this.request(`/servers/${serverId}/settings/appearance`, { method: 'PUT', body: input, auth: true });
+  }
+
+  listServerSettingsMembers(serverId: string, search = ''): Promise<ServerSettingsMember[]> {
+    const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+    return this.request(`/servers/${serverId}/settings/members${query}`, { auth: true });
+  }
+
+  async updateServerSettingsMember(serverId: string, userId: string, input: { nickname?: string | null; mutedUntil?: string | null; deafened?: boolean }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/members/${userId}`, { method: 'PATCH', body: input, auth: true });
+  }
+
+  getServerChannelSettings(serverId: string): Promise<{ categories: ServerChannelCategory[]; channels: ServerChannelSettings[] }> {
+    return this.request(`/servers/${serverId}/settings/channels`, { auth: true });
+  }
+
+  createServerCategory(serverId: string, name: string, position?: number): Promise<ServerChannelCategory> {
+    return this.request(`/servers/${serverId}/settings/categories`, { method: 'POST', body: { name, ...(position === undefined ? {} : { position }) }, auth: true });
+  }
+
+  async updateServerCategory(serverId: string, categoryId: string, input: { name?: string; position?: number }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/categories/${categoryId}`, { method: 'PATCH', body: input, auth: true });
+  }
+
+  async deleteServerCategory(serverId: string, categoryId: string): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/categories/${categoryId}`, { method: 'DELETE', auth: true });
+  }
+
+  async updateServerChannelSettings(serverId: string, channelId: string, input: Partial<Omit<ServerChannelSettings, 'id' | 'type' | 'archivedAt'>> & { archived?: boolean; version: number }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/channels/${channelId}`, { method: 'PATCH', body: input, auth: true });
+  }
+
+  listServerInvites(serverId: string): Promise<ServerInviteSettings[]> {
+    return this.request(`/servers/${serverId}/settings/invites`, { auth: true });
+  }
+
+  createServerInvite(serverId: string, input: { destinationChannelId: string | null; expiresInSeconds: number | null; maxUses: number | null }): Promise<CreatedServerInvite> {
+    return this.request(`/servers/${serverId}/settings/invites`, { method: 'POST', body: input, auth: true });
+  }
+
+  async revokeServerInvite(serverId: string, inviteId: string): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/invites/${inviteId}`, { method: 'DELETE', auth: true });
+  }
+
+  getServerModerationSettings(serverId: string): Promise<ServerModerationSettings> {
+    return this.request(`/servers/${serverId}/settings/moderation`, { auth: true });
+  }
+
+  updateServerModerationSettings(serverId: string, input: ServerModerationSettings): Promise<ServerModerationSettings> {
+    return this.request(`/servers/${serverId}/settings/moderation`, { method: 'PUT', body: input, auth: true });
+  }
+
+  listServerBans(serverId: string): Promise<ServerBanSettings[]> {
+    return this.request(`/servers/${serverId}/settings/bans`, { auth: true });
+  }
+
+  async banServerMember(serverId: string, userId: string, reason: string): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/bans/${userId}`, { method: 'POST', body: { reason }, auth: true });
+  }
+
+  async unbanServerMember(serverId: string, userId: string): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/bans/${userId}`, { method: 'DELETE', auth: true });
+  }
+
+  listServerSettingsAudit(serverId: string, options: { before?: string; action?: string; actorUserId?: string; limit?: number } = {}): Promise<ServerAuditLogPage> {
+    const query = new URLSearchParams({ limit: String(options.limit ?? 50) });
+    if (options.before) query.set('before', options.before);
+    if (options.action) query.set('action', options.action);
+    if (options.actorUserId) query.set('actorUserId', options.actorUserId);
+    return this.request(`/servers/${serverId}/settings/audit-log?${query.toString()}`, { auth: true });
+  }
+
+  revokeAllServerInvites(serverId: string, reauthentication: { password: string; totpCode: string | null }): Promise<{ revoked: number }> {
+    return this.request(`/servers/${serverId}/settings/revoke-invites`, { method: 'POST', body: reauthentication, auth: true });
+  }
+
+  async archiveServer(serverId: string, archived: boolean, reauthentication: { password: string; totpCode: string | null }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/archive`, { method: 'POST', body: { archived, ...reauthentication }, auth: true });
+  }
+
+  async transferServerOwnership(serverId: string, userId: string, reauthentication: { password: string; totpCode: string | null }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/transfer-ownership`, { method: 'POST', body: { userId, ...reauthentication }, auth: true });
+  }
+
+  async deleteServerPermanently(serverId: string, confirmation: string, reauthentication: { password: string; totpCode: string | null }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings`, { method: 'DELETE', body: { confirmation, ...reauthentication }, auth: true });
   }
 
   createServerChannel(serverId: string, name: string, type: 'text' | 'voice'): Promise<ServerChannel> {

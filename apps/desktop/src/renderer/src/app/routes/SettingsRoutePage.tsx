@@ -4,7 +4,7 @@ import type { LocalSettings, PublicUser, ServerDetail, ServerPermission, ServerS
 
 import type { AudioDevices } from '../../audio-devices';
 import { SecurityCenter, type SecurityTab } from '../../features/security';
-import { SettingsPageState, SettingsPlaceholderPage, SettingsShell, UserAudioSettingsPage, UserNotificationSettingsPage, UserPresenceSettingsPage, UserPrivacySettingsPage, UserProfileSettingsPage } from '../../features/settings';
+import { ServerSettingsPage, SettingsPageState, SettingsPlaceholderPage, SettingsShell, UserAudioSettingsPage, UserNotificationSettingsPage, UserPresenceSettingsPage, UserPrivacySettingsPage, UserProfileSettingsPage } from '../../features/settings';
 import { ConfirmDialog, WorkspaceLibrary, type WorkspaceNavigationItem } from '../../ui';
 import type { SettingsRoute } from './route-paths';
 import { serverSettingsPath, userSettingsPath } from './route-paths';
@@ -36,6 +36,8 @@ export interface SettingsRoutePageProps {
   onMicrophone(deviceId: string): void;
   onNotificationSettingsChange(settings: Pick<LocalSettings, 'desktopNotificationsEnabled' | 'messageSoundsEnabled'>): void;
   onOpenServer(serverId: string): void;
+  onServerChanged(): Promise<void>;
+  onServerDeleted(): void;
   onOutput(deviceId: string): void;
   onRefreshDevices(): void;
   onTestOutput(): void;
@@ -141,7 +143,6 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
     const permission = sectionPermission[item.section];
     return permission === undefined || props.server?.permissions.includes(permission) === true;
   });
-  const activeItem = serverSettingsNavigation.find((candidate) => candidate.section === serverRoute.section)!;
   const hasAccess = isOwner || availableItems.some((item) => item.section === serverRoute.section);
   const navigationItems = availableItems.length > 0 ? availableItems : serverSettingsNavigation.slice(0, 1);
   const navigationSection = hasAccess ? serverRoute.section : navigationItems[0]!.section;
@@ -151,7 +152,8 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
       {props.loading ? <SettingsPageState kind="loading" />
         : props.error !== null ? <SettingsPageState description={props.error} kind="error" />
           : !hasAccess ? <SettingsPageState kind="permission" />
-            : <SettingsPlaceholderPage description={activeItem.description} scope="server" title={activeItem.label} />}
+            : props.server === null ? <SettingsPageState kind="loading" />
+              : <ServerSettingsPage key={`${serverRoute.serverId}:${serverRoute.section}`} onChanged={props.onServerChanged} onDeleted={props.onServerDeleted} section={serverRoute.section} server={props.server} />}
     </SettingsShell>
   );
 }

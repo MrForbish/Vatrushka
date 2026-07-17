@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import type { PublicUser, SecurityEvent } from '@vatrushka/shared';
+import type { PublicUser, SecurityEvent, ServerDetail } from '@vatrushka/shared';
 
 import { serverSettingsNavigation, userSettingsNavigation } from '../../../app/routes';
 import type { AudioDevices } from '../../../audio-devices';
@@ -13,12 +13,17 @@ import { UserAudioSettingsPage } from '../pages/UserAudioSettingsPage';
 import { UserProfileSettingsPage } from '../pages/UserProfileSettingsPage';
 import { UserPresenceSettingsPage } from '../pages/UserPresenceSettingsPage';
 import { UserPrivacySettingsPage } from '../pages/UserPrivacySettingsPage';
+import { ServerSettingsPage } from '../pages/ServerSettingsPage';
 import { SettingsShell } from './SettingsShell';
 
 const workspaces: WorkspaceNavigationItem[] = [
   { id: 'vatrushka', name: 'Команда Ватрушки', memberCount: 18, activeVoice: true },
   { id: 'friends', name: 'Друзья и игры', memberCount: 42 },
 ];
+const storyServer: ServerDetail = {
+  id: 'vatrushka', name: 'Команда Ватрушки', inviteUrl: 'https://myvatrushka.ru/i/example', ownerUserId: 'owner', memberCount: 18, createdAt: '2026-01-01T00:00:00.000Z',
+  channels: [{ id: 'general', serverId: 'vatrushka', name: 'общий', type: 'text', position: 0, unreadCount: 0 }], roles: [], members: [], permissions: ['VIEW_SERVER', 'MANAGE_SERVER'],
+};
 
 const securityUser: PublicUser = { id: 'user-1', email: 'owner@myvatrushka.ru', displayName: 'Илья Форбиш', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true };
 const audioDevices: AudioDevices = {
@@ -55,7 +60,7 @@ interface SettingsStoryProps {
 
 function SettingsStory({ onBack, onNavigate, scope }: SettingsStoryProps): React.JSX.Element {
   const workspace = <WorkspaceLibrary {...(scope === 'server' ? { activeWorkspaceId: 'vatrushka' } : {})} onCreate={() => undefined} onDirectMessages={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />;
-  if (scope === 'server') return <SettingsShell activeSection="overview" entityLabel="Настройки сервера" entityName="Команда Ватрушки" items={serverSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><SettingsPlaceholderPage description="Основные параметры сервера" scope="server" title="Обзор" /></SettingsShell>;
+  if (scope === 'server') return <SettingsShell activeSection="overview" entityLabel="Настройки сервера" entityName="Команда Ватрушки" items={serverSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><ServerSettingsPage onChanged={() => Promise.resolve()} onDeleted={() => undefined} section="overview" server={storyServer} /></SettingsShell>;
   return <SettingsShell activeSection="profile" entityLabel="Личные настройки" entityName="Илья Форбиш" items={userSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><UserProfileSettingsPage onDirtyChange={() => undefined} onSave={(displayName) => Promise.resolve({ ...securityUser, displayName })} onUserChange={() => undefined} user={securityUser} /></SettingsShell>;
 }
 

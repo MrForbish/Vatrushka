@@ -105,9 +105,10 @@ export class ServerSettingsStore {
 
   async updateAppearance(serverId: string, input: { iconObjectKey?: string | null | undefined; bannerObjectKey?: string | null | undefined; accentColor: string | null; version: number }, now: Date): Promise<boolean> {
     const result = await this.pool.query(`
-      update servers set icon_object_key = coalesce($2, icon_object_key), banner_object_key = coalesce($3, banner_object_key),
-        accent_color = $4, version = version + 1, updated_at = $5 where id = $1 and version = $6
-    `, [serverId, input.iconObjectKey, input.bannerObjectKey, input.accentColor, now, input.version]);
+      update servers set icon_object_key = case when $2 then $3 else icon_object_key end,
+        banner_object_key = case when $4 then $5 else banner_object_key end,
+        accent_color = $6, version = version + 1, updated_at = $7 where id = $1 and version = $8
+    `, [serverId, input.iconObjectKey !== undefined, input.iconObjectKey ?? null, input.bannerObjectKey !== undefined, input.bannerObjectKey ?? null, input.accentColor, now, input.version]);
     return result.rowCount === 1;
   }
 
