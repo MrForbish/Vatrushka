@@ -11,6 +11,7 @@ declare global {
     readonly VITE_PUBLIC_API_BASE_URL?: string;
     readonly VITE_FEATURE_SERVER_SETTINGS_PAGE?: string;
     readonly VITE_FEATURE_USER_SETTINGS_PAGE?: string;
+    readonly VITE_FEATURE_PRESENCE_STATUSES?: string;
   }
 }
 

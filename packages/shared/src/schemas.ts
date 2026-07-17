@@ -47,6 +47,18 @@ export const twoFactorCodeSchema = z.object({ code: otpCodeSchema }).strict();
 export const sessionTrustSchema = z.object({ trusted: z.boolean() }).strict();
 export const refreshSchema = z.object({ refreshToken: z.string().min(32).max(512) }).strict();
 export const updateProfileSchema = z.object({ displayName: displayNameSchema }).strict();
+export const presencePreferenceSchema = z.enum(['online', 'idle', 'do_not_disturb', 'invisible']);
+export const updatePresenceSchema = z.object({
+  preference: presencePreferenceSchema,
+  customText: z.string().trim().max(128, 'Статус должен содержать не более 128 символов').nullable().default(null),
+  customTextExpiresAt: z.iso.datetime().nullable().default(null),
+}).strict();
+export const presenceHeartbeatSchema = z.object({ idle: z.boolean() }).strict();
+export const updatePrivacySettingsSchema = z.object({
+  directMessages: z.enum(['shared_servers', 'nobody']),
+  presenceVisibility: z.enum(['shared_servers', 'nobody']),
+  activityVisible: z.boolean(),
+}).strict();
 export const screenShareActionSchema = z
   .object({ participantIdentity: z.string().min(3).max(200) })
   .strict();

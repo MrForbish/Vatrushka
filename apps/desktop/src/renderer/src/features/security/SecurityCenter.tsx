@@ -37,6 +37,7 @@ export interface SecurityCenterProps {
   settings?: LocalSettings;
   onSettingsChange?: (settings: Pick<LocalSettings, 'desktopNotificationsEnabled' | 'messageSoundsEnabled'>) => void;
   client?: SecurityClient;
+  dndActive?: boolean;
 }
 
 const eventCopy: Record<SecurityEvent['type'], { title: string; description: string; tone: 'neutral' | 'success' | 'warning' | 'danger' }> = {
@@ -57,7 +58,7 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Не удалось выполнить действие';
 }
 
-export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRevoked, onSectionChange, onSettingsChange = () => undefined, onUserChange, open, presentation = 'modal', section, settings = { volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }, user }: SecurityCenterProps): React.JSX.Element {
+export function SecurityCenter({ client = apiClient, dndActive = false, onClose, onCurrentSessionRevoked, onSectionChange, onSettingsChange = () => undefined, onUserChange, open, presentation = 'modal', section, settings = { volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }, user }: SecurityCenterProps): React.JSX.Element {
   const [tab, setTab] = useState<SecurityTab>('protection');
   const [flow, setFlow] = useState<ProtectionFlow>('overview');
   const [sessions, setSessions] = useState<UserSession[]>([]);
@@ -257,8 +258,9 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
 
           {activeTab === 'notifications' && <div className="security-stack">
             <div className="security-section-heading"><div><h3>Уведомления о сообщениях</h3><p>Настройки хранятся только на этом компьютере и применяются сразу.</p></div></div>
-            <article className="security-card"><div><h3>Push-уведомления Windows</h3><p>Показывать автора, канал и текст нового сообщения, даже когда окно приложения открыто.</p></div><Switch checked={settings.desktopNotificationsEnabled} label="Push-уведомления" onCheckedChange={(checked) => onSettingsChange({ desktopNotificationsEnabled: checked, messageSoundsEnabled: settings.messageSoundsEnabled })} /></article>
-            <article className="security-card"><div><h3>Звук сообщения</h3><p>Проигрывать короткий ненавязчивый сигнал на выбранном устройстве вывода.</p></div><Switch checked={settings.messageSoundsEnabled} label="Звуковые уведомления" onCheckedChange={(checked) => onSettingsChange({ desktopNotificationsEnabled: settings.desktopNotificationsEnabled, messageSoundsEnabled: checked })} /></article>
+            {dndActive ? <aside className="security-notice"><strong>Статус «Не беспокоить» активен</strong><span>Все звуки и desktop/push-уведомления временно отключены. Сообщения и unread-счётчики продолжают обновляться.</span></aside> : null}
+            <article className="security-card"><div><h3>Push-уведомления Windows</h3><p>Показывать автора, канал и текст нового сообщения, даже когда окно приложения открыто.</p></div><Switch checked={settings.desktopNotificationsEnabled} disabled={dndActive} label="Push-уведомления" onCheckedChange={(checked) => onSettingsChange({ desktopNotificationsEnabled: checked, messageSoundsEnabled: settings.messageSoundsEnabled })} /></article>
+            <article className="security-card"><div><h3>Звук сообщения</h3><p>Проигрывать короткий ненавязчивый сигнал на выбранном устройстве вывода.</p></div><Switch checked={settings.messageSoundsEnabled} disabled={dndActive} label="Звуковые уведомления" onCheckedChange={(checked) => onSettingsChange({ desktopNotificationsEnabled: settings.desktopNotificationsEnabled, messageSoundsEnabled: checked })} /></article>
           </div>}
 
           {activeTab === 'protection' && flow === 'totp-enable' && <form className="security-form" onSubmit={enableTotp}>

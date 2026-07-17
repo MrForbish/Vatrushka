@@ -1,6 +1,6 @@
 import { boolean, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import type { HomeActivityType, PermissionOverwriteTargetType, PlatformRole, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
+import type { DirectMessagePrivacy, HomeActivityType, PermissionOverwriteTargetType, PlatformRole, PresencePreference, PresenceVisibility, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
 
@@ -15,6 +15,12 @@ export const users = pgTable(
     emailVerifiedAt: timestamp('email_verified_at', { withTimezone: true }),
     totpSecretEncrypted: text('totp_secret_encrypted'),
     twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
+    presencePreference: text('presence_preference').$type<PresencePreference>().notNull().default('online'),
+    customStatusText: text('custom_status_text'),
+    customStatusExpiresAt: timestamp('custom_status_expires_at', { withTimezone: true }),
+    directMessagePrivacy: text('direct_message_privacy').$type<DirectMessagePrivacy>().notNull().default('shared_servers'),
+    presenceVisibility: text('presence_visibility').$type<PresenceVisibility>().notNull().default('shared_servers'),
+    activityVisible: boolean('activity_visible').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },

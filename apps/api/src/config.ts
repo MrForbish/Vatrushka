@@ -60,6 +60,10 @@ const envSchema = z
     S3_SECRET_ACCESS_KEY: z.string().default(''),
     S3_FORCE_PATH_STYLE: booleanFromStringDefaultTrue,
     S3_KEY_PREFIX: z.string().regex(/^[a-z0-9](?:[a-z0-9/_-]*[a-z0-9])?$/).default('prod'),
+    PRESENCE_STORAGE_DRIVER: z.enum(['memory', 'redis']).default('memory'),
+    REDIS_URL: z.string().default(''),
+    PRESENCE_HEARTBEAT_SECONDS: z.coerce.number().int().min(5).max(60).default(20),
+    PRESENCE_TTL_SECONDS: z.coerce.number().int().min(15).max(300).default(75),
     SCREEN_SHARE_LEASE_SECONDS: z.coerce.number().int().positive().default(SCREEN_SHARE_LEASE_SECONDS),
     SCREEN_SHARE_HEARTBEAT_SECONDS: z.coerce.number().int().positive().default(SCREEN_SHARE_HEARTBEAT_SECONDS),
     CORS_ALLOWED_ORIGINS: z.string().default(''),
@@ -79,6 +83,8 @@ const envSchema = z
         }
       }
     }
+    if (env.PRESENCE_STORAGE_DRIVER === 'redis' && !env.REDIS_URL) context.addIssue({ code: 'custom', path: ['REDIS_URL'], message: 'REDIS_URL is required when PRESENCE_STORAGE_DRIVER=redis' });
+    if (env.PRESENCE_TTL_SECONDS <= env.PRESENCE_HEARTBEAT_SECONDS * 2) context.addIssue({ code: 'custom', path: ['PRESENCE_TTL_SECONDS'], message: 'PRESENCE_TTL_SECONDS must be greater than two heartbeat intervals' });
     if (env.NODE_ENV === 'production') {
       const required: Array<keyof typeof env> = [
         'DATABASE_URL',
@@ -101,6 +107,7 @@ const envSchema = z
       if (new URL(env.PUBLIC_API_URL).protocol !== 'https:') context.addIssue({ code: 'custom', path: ['PUBLIC_API_URL'], message: 'PUBLIC_API_URL must use HTTPS in production' });
       if (new URL(env.PUBLIC_INVITE_URL).protocol !== 'https:') context.addIssue({ code: 'custom', path: ['PUBLIC_INVITE_URL'], message: 'PUBLIC_INVITE_URL must use HTTPS in production' });
       if (env.DEV_FIXED_OTP) context.addIssue({ code: 'custom', path: ['DEV_FIXED_OTP'], message: 'DEV_FIXED_OTP is forbidden in production' });
+      if (env.PRESENCE_STORAGE_DRIVER !== 'redis') context.addIssue({ code: 'custom', path: ['PRESENCE_STORAGE_DRIVER'], message: 'Production presence storage must use Redis' });
     }
   });
 

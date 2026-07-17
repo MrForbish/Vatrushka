@@ -25,6 +25,8 @@
 3. Публичный resolver всегда преобразует `invisible` в `offline`. Собственный пользователь видит выбранный статус.
 4. Автоматический idle является device signal и не заменяет вручную выбранные `dnd`/`invisible`.
 
+Физическое хранение heartbeat реализовано решением [ADR 0004](0004-redis-presence-store.md): production использует Redis, а выбранный статус и privacy остаются в PostgreSQL.
+
 ## Решение: realtime и notification policy
 
 1. Добавить общий типизированный event envelope в `@vatrushka/shared`: `presence.changed`, `custom-status.changed`, `mention.created`, `mention.read`, `server-settings.changed`, `role.changed`, `member-roles.changed`, `session.revoked`.

@@ -61,6 +61,20 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('settings-shell-user-audio.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('routed DND presence settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--user-presence-dnd');
+    await expect(page.getByRole('heading', { name: 'Статус и активность' })).toBeVisible();
+    await expect(page.getByText('Режим «Не беспокоить» активен.')).toBeVisible();
+    await expect(page).toHaveScreenshot('settings-shell-user-presence.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('routed user privacy settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--user-privacy');
+    await expect(page.getByRole('heading', { name: 'Конфиденциальность' })).toBeVisible();
+    await expect(page.getByRole('switch', { name: 'Показывать активность' })).toBeVisible();
+    await expect(page).toHaveScreenshot('settings-shell-user-privacy.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('personal Home dashboard', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await openStory(page, 'home-homepage--returning-user');

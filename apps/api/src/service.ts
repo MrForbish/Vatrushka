@@ -32,6 +32,11 @@ import {
   type TwoFactorSetup,
   type TwoFactorEnableResult,
   type UserSession,
+  type UserPresence,
+  type UserPrivacySettings,
+  type PresencePreference,
+  type DirectMessagePrivacy,
+  type PresenceVisibility,
   serverPermissions,
   highestRolePosition,
   resolveChannelPermissions,
@@ -43,8 +48,9 @@ import {
 import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
 import type { AuthCodeRecord, DirectConversationOverviewRecord, DirectConversationRecord, DirectMessageAttachmentMetadata, DirectMessageAttachmentRecord, DirectMessageWithAuthor, MessageAttachmentMetadata, MessageAttachmentRecord, MessageNotificationRecord, MessageReactionSummary, RecoveryCodeRecord, SecurityEventRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
-import type { DataStore, Mailer, MediaService, ObjectStorage } from './ports.js';
+import type { DataStore, Mailer, MediaService, ObjectStorage, PresenceStore } from './ports.js';
 import { attachmentObjectKey } from './services/attachment-objects.js';
+import { MemoryPresenceStore } from './services/presence-store.js';
 import {
   hashOpaqueToken,
   hashOtp,
@@ -68,6 +74,7 @@ export interface ServiceDependencies {
   mailer: Mailer;
   media: MediaService;
   objectStorage?: ObjectStorage | null;
+  presenceStore?: PresenceStore;
   clock?: () => Date;
 }
 
@@ -187,6 +194,7 @@ export class VatrushkaService {
   readonly store: DataStore;
   readonly media: MediaService;
   readonly objectStorage: ObjectStorage | null;
+  readonly presenceStore: PresenceStore;
   private readonly mailer: Mailer;
   private readonly clock: () => Date;
   private readonly pendingVoiceMoves = new Map<string, { channelId: string; expiresAt: Date; seamlesslyMoved: boolean }>();
@@ -197,6 +205,7 @@ export class VatrushkaService {
     this.mailer = dependencies.mailer;
     this.media = dependencies.media;
     this.objectStorage = dependencies.objectStorage ?? null;
+    this.presenceStore = dependencies.presenceStore ?? new MemoryPresenceStore();
     this.clock = dependencies.clock ?? (() => new Date());
   }
 
@@ -434,19 +443,23 @@ export class VatrushkaService {
 
   async revokeSession(authorization: string | undefined, familyId: string): Promise<{ current: boolean }> {
     const { user, session } = await this.authenticateContext(authorization);
+    const familySessions = (await this.store.listSessionsForUser(user.id)).filter((candidate) => candidate.tokenFamilyId === familyId);
     const revoked = await this.store.revokeSessionFamilyForUser(user.id, familyId, this.now());
     if (!revoked) throw new AppError('SESSION_REVOKED', 404);
     const current = session.tokenFamilyId === familyId;
+    await Promise.allSettled(familySessions.map((candidate) => this.presenceStore.removeSession(user.id, candidate.id)));
     await this.recordSecurityEvent(user, 'SESSION_REVOKED', null, 'Сессия завершена', current ? 'Текущая сессия была завершена.' : 'Одна из сессий вашего аккаунта была завершена.');
     return { current };
   }
 
   async revokeOtherSessions(authorization: string | undefined): Promise<{ revokedCount: number }> {
     const { user, session } = await this.authenticateContext(authorization);
-    const families = new Set((await this.store.listSessionsForUser(user.id))
+    const allSessions = await this.store.listSessionsForUser(user.id);
+    const families = new Set(allSessions
       .filter((candidate) => candidate.tokenFamilyId !== session.tokenFamilyId && !candidate.revokedAt && !isExpired(candidate.expiresAt, this.now()))
       .map((candidate) => candidate.tokenFamilyId));
     await Promise.all([...families].map((familyId) => this.store.revokeSessionFamilyForUser(user.id, familyId, this.now())));
+    await Promise.allSettled(allSessions.filter((candidate) => families.has(candidate.tokenFamilyId)).map((candidate) => this.presenceStore.removeSession(user.id, candidate.id)));
     if (families.size > 0) await this.recordSecurityEvent(user, 'SESSION_REVOKED', null, 'Другие сессии завершены', `Завершено сессий: ${families.size}.`);
     return { revokedCount: families.size };
   }
@@ -477,6 +490,67 @@ export class VatrushkaService {
     return publicUser(updated);
   }
 
+  private async currentUserRecord(user: UserRecord): Promise<UserRecord> {
+    if (user.customStatusExpiresAt === null || user.customStatusExpiresAt > this.now()) return user;
+    return (await this.store.updatePresence(user.id, { preference: user.presencePreference, customText: null, customTextExpiresAt: null }, this.now())) ?? user;
+  }
+
+  private async publicPresence(user: UserRecord): Promise<UserPresence> {
+    const current = await this.currentUserRecord(user);
+    let ephemeral: 'online' | 'idle' | 'offline' = 'offline';
+    try {
+      ephemeral = await this.presenceStore.status(current.id, this.now());
+    } catch {
+      // Presence fails closed: storage outages never expose a stale online state.
+    }
+    const effectiveStatus = ephemeral === 'offline'
+      ? 'offline'
+      : current.presencePreference === 'invisible'
+        ? 'offline'
+        : current.presencePreference === 'do_not_disturb'
+          ? 'dnd'
+          : current.presencePreference === 'idle' || ephemeral === 'idle'
+            ? 'idle'
+            : 'online';
+    return {
+      preference: current.presencePreference,
+      effectiveStatus,
+      customText: current.customStatusText,
+      customTextExpiresAt: current.customStatusExpiresAt?.toISOString() ?? null,
+      updatedAt: current.updatedAt.toISOString(),
+    };
+  }
+
+  async getPresence(authorization: string | undefined): Promise<UserPresence> {
+    return this.publicPresence(await this.authenticate(authorization));
+  }
+
+  async heartbeatPresence(authorization: string | undefined, idle: boolean): Promise<UserPresence> {
+    const { user, session } = await this.authenticateContext(authorization);
+    await this.presenceStore.heartbeat(user.id, session.id, idle, this.now(), this.config.PRESENCE_TTL_SECONDS);
+    return this.publicPresence(user);
+  }
+
+  async updatePresence(authorization: string | undefined, input: { preference: PresencePreference; customText: string | null; customTextExpiresAt: string | null }): Promise<UserPresence> {
+    const user = await this.authenticate(authorization);
+    const expiresAt = input.customText && input.customTextExpiresAt ? new Date(input.customTextExpiresAt) : null;
+    const updated = await this.store.updatePresence(user.id, { preference: input.preference, customText: input.customText || null, customTextExpiresAt: expiresAt }, this.now());
+    if (!updated) throw new AppError('UNAUTHORIZED', 401);
+    return this.publicPresence(updated);
+  }
+
+  async getPrivacySettings(authorization: string | undefined): Promise<UserPrivacySettings> {
+    const user = await this.authenticate(authorization);
+    return { directMessages: user.directMessagePrivacy, presenceVisibility: user.presenceVisibility, activityVisible: user.activityVisible, updatedAt: user.updatedAt.toISOString() };
+  }
+
+  async updatePrivacySettings(authorization: string | undefined, input: { directMessages: DirectMessagePrivacy; presenceVisibility: PresenceVisibility; activityVisible: boolean }): Promise<UserPrivacySettings> {
+    const user = await this.authenticate(authorization);
+    const updated = await this.store.updatePrivacySettings(user.id, { directMessagePrivacy: input.directMessages, presenceVisibility: input.presenceVisibility, activityVisible: input.activityVisible }, this.now());
+    if (!updated) throw new AppError('UNAUTHORIZED', 401);
+    return { directMessages: updated.directMessagePrivacy, presenceVisibility: updated.presenceVisibility, activityVisible: updated.activityVisible, updatedAt: updated.updatedAt.toISOString() };
+  }
+
   async listServers(authorization: string | undefined): Promise<ServerSummary[]> {
     const user = await this.authenticate(authorization);
     return (await this.store.listServersForUser(user.id)).map((server) => ({
@@ -491,6 +565,7 @@ export class VatrushkaService {
 
   async getHomeDashboard(authorization: string | undefined): Promise<HomeDashboardResponse> {
     const user = await this.authenticate(authorization);
+    const presence = await this.publicPresence(user);
     const serverRecords = await this.store.listServersForUser(user.id);
     const details = await Promise.all(serverRecords.map((server) => this.getServerDetailForUser(server, user)));
     const activity = await this.store.listUserActivity(user.id, 5);
@@ -598,7 +673,7 @@ export class VatrushkaService {
         displayName: user.displayName ?? user.email,
         email: user.email,
         avatarUrl: null,
-        presence: 'online',
+        presence: presence.effectiveStatus,
         platformBadge: user.platformRole === 'owner' ? 'FOUNDER_DEVELOPER' : null,
       },
       readiness: { connection, audioSetupRequired: false },
@@ -901,7 +976,7 @@ export class VatrushkaService {
       const [server, channel] = await Promise.all([this.store.findServerById(notification.serverId), this.store.findServerChannel(notification.channelId)]);
       if (server && channel && (await this.channelPermissionsFor(server, channel, user)).has('VIEW_CHANNEL')) visibleChannelIds.add(notification.channelId);
     }
-    const items: MessageNotification[] = records
+    const items: MessageNotification[] = (user.presencePreference === 'do_not_disturb' ? [] : records)
       .filter((notification) => visibleChannelIds.has(notification.channelId))
       .map((notification: MessageNotificationRecord) => ({
         id: notification.id,
@@ -1060,6 +1135,8 @@ export class VatrushkaService {
       if (!permissions.has('VIEW_SERVER')) continue;
       for (const member of await this.store.listServerMembers(server.id)) {
         if (member.userId === user.id || !member.displayName) continue;
+        const candidate = await this.store.findUserById(member.userId);
+        if (candidate?.directMessagePrivacy === 'nobody') continue;
         const existing = candidates.get(member.userId);
         if (existing) existing.sharedServerNames.push(server.name);
         else candidates.set(member.userId, { userId: member.userId, displayName: member.displayName, platformRole: member.platformRole, sharedServerNames: [server.name] });
@@ -1078,7 +1155,7 @@ export class VatrushkaService {
     this.requireCompleteProfile(user);
     if (participantUserId === user.id) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 400);
     const participant = await this.store.findUserById(participantUserId);
-    if (!participant?.displayName) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
+    if (!participant?.displayName || participant.directMessagePrivacy === 'nobody') throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
     let shareVisibleServer = false;
     for (const server of await this.store.listServersForUser(user.id)) {
       if (!(await this.store.findServerMember(server.id, participant.id))) continue;
@@ -1104,6 +1181,9 @@ export class VatrushkaService {
     const user = await this.authenticate(authorization);
     this.requireCompleteProfile(user);
     const conversation = await this.requireDirectConversation(conversationId, user.id);
+    const recipientId = conversation.userAId === user.id ? conversation.userBId : conversation.userAId;
+    const recipient = await this.store.findUserById(recipientId);
+    if (!recipient || recipient.directMessagePrivacy === 'nobody') throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
     if (replyToMessageId !== null) {
       const reply = await this.store.findDirectMessage(replyToMessageId);
       if (!reply || reply.conversationId !== conversationId) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
@@ -1619,15 +1699,31 @@ export class VatrushkaService {
     const unreadCounts = new Map((await this.store.listChannelUnreadCounts(visibleChannels.filter((channel) => channel.type === 'text').map((channel) => channel.id), user.id, membership.joinedAt)).map((entry) => [entry.channelId, entry.count]));
     const roleById = new Map(publicRoles.map((role) => [role.id, role]));
     const defaultRoles = publicRoles.filter((role) => role.isDefault);
-    const publicMembers: ServerMember[] = members.map((member) => ({
-      userId: member.userId,
-      displayName: member.displayName ?? 'Участник',
-      platformRole: member.platformRole,
-      joinedAt: member.joinedAt.toISOString(),
-      roles: [
-        ...defaultRoles,
-        ...assignments.filter((assignment) => assignment.userId === member.userId).map((assignment) => roleById.get(assignment.roleId)).filter((role): role is ServerRole => Boolean(role)),
-      ],
+    const publicMembers: ServerMember[] = await Promise.all(members.map(async (member) => {
+      let presence: ServerMember['presence'] = 'offline';
+      let customStatusText: string | null = null;
+      if (member.userId === user.id || member.presenceVisibility === 'shared_servers') {
+        let ephemeral: 'online' | 'idle' | 'offline' = 'offline';
+        try { ephemeral = await this.presenceStore.status(member.userId, this.now()); } catch { /* fail closed */ }
+        presence = ephemeral === 'offline' || member.presencePreference === 'invisible'
+          ? 'offline'
+          : member.presencePreference === 'do_not_disturb'
+            ? 'dnd'
+            : member.presencePreference === 'idle' || ephemeral === 'idle' ? 'idle' : 'online';
+        customStatusText = member.customStatusExpiresAt === null || member.customStatusExpiresAt > this.now() ? member.customStatusText : null;
+      }
+      return {
+        userId: member.userId,
+        displayName: member.displayName ?? 'Участник',
+        platformRole: member.platformRole,
+        joinedAt: member.joinedAt.toISOString(),
+        roles: [
+          ...defaultRoles,
+          ...assignments.filter((assignment) => assignment.userId === member.userId).map((assignment) => roleById.get(assignment.roleId)).filter((role): role is ServerRole => Boolean(role)),
+        ],
+        presence,
+        customStatusText,
+      };
     }));
     const voiceParticipantsByChannel = new Map<string, VoiceChannelParticipant[]>();
     await Promise.all(visibleChannels.filter((channel) => channel.type === 'voice' && channel.livekitRoomName).map(async (channel) => {

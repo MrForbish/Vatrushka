@@ -33,7 +33,7 @@ Phase 1 — repo audit и фиксация контрактов — заверш
 
 Phase 2 — общий `SettingsShell`, типизированные routes, staged feature flags, Storybook и Electron navigation tests — завершена. Старые модалки сохранены как production fallback до полного parity.
 
-Phase 3 выполняется вертикальными срезами без подмены API: существующие уведомления, пароль/2FA, резервные коды, сессии, security activity, редактирование отображаемого имени и реальные локальные аудиоустройства перенесены в routed user settings. Аватар/username/bio не имитируются до появления backend-контрактов; presence и privacy идут следующими независимыми PR.
+Phase 3 выполняется вертикальными срезами без подмены API: существующие уведомления, пароль/2FA, резервные коды, сессии, security activity, редактирование отображаемого имени и реальные локальные аудиоустройства перенесены в routed user settings. Presence и privacy также подключены к реальному API: Redis агрегирует multi-session heartbeat, PostgreSQL хранит пользовательские предпочтения, invisible закрывается в offline, а DND подавляет доставку без потери unread. Аватар/username/bio не имитируются до появления backend-контрактов.
 
 ## Следующие итерации
 

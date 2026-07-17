@@ -902,6 +902,50 @@ describe('servers, channels, messages, and roles API', () => {
   });
 });
 
+describe('presence and privacy API', () => {
+  it('aggregates heartbeat state, persists DND/privacy, and suppresses external notification delivery', async () => {
+    const owner = await login('presence-owner@example.com', 'Presence Owner');
+    const member = await login('presence-member@example.com', 'Presence Member');
+    const ownerAuthorization = { authorization: `Bearer ${owner.accessToken}` };
+    const memberAuthorization = { authorization: `Bearer ${member.accessToken}` };
+
+    const heartbeat = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/me/presence/heartbeat`, headers: memberAuthorization, payload: { idle: false } });
+    expect(heartbeat.statusCode).toBe(200);
+    expect(heartbeat.json<{ effectiveStatus: string }>().effectiveStatus).toBe('online');
+
+    const dnd = await context.app.inject({ method: 'PATCH', url: `${API_PREFIX}/me/presence`, headers: memberAuthorization, payload: { preference: 'do_not_disturb', customText: 'Фокус', customTextExpiresAt: '2026-01-01T04:00:00.000Z' } });
+    expect(dnd.json()).toMatchObject({ preference: 'do_not_disturb', effectiveStatus: 'dnd', customText: 'Фокус' });
+    const privacy = await context.app.inject({ method: 'PATCH', url: `${API_PREFIX}/me/privacy`, headers: memberAuthorization, payload: { directMessages: 'nobody', presenceVisibility: 'nobody', activityVisible: false } });
+    expect(privacy.json()).toMatchObject({ directMessages: 'nobody', presenceVisibility: 'nobody', activityVisible: false });
+
+    const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: ownerAuthorization, payload: { name: 'Presence server' } });
+    const server = created.json<{ id: string; inviteUrl: string; channels: Array<{ id: string; type: string }> }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteTokenFromUrl(server.inviteUrl)}/accept`, headers: memberAuthorization });
+    const ownerView = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: ownerAuthorization });
+    expect(ownerView.json<{ members: Array<{ userId: string; presence: string; customStatusText: string | null }> }>().members.find((candidate) => candidate.userId === member.userId)).toMatchObject({ presence: 'offline', customStatusText: null });
+    const selfView = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: memberAuthorization });
+    expect(selfView.json<{ members: Array<{ userId: string; presence: string; customStatusText: string | null }> }>().members.find((candidate) => candidate.userId === member.userId)).toMatchObject({ presence: 'dnd', customStatusText: 'Фокус' });
+    const textChannel = server.channels.find((channel) => channel.type === 'text');
+    if (!textChannel) throw new Error('Text channel was not created');
+    const baseline = context.clock.now.toISOString();
+    context.clock.now = new Date(context.clock.now.getTime() + 1_000);
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: ownerAuthorization, payload: { content: 'Сообщение для DND' } });
+    const notifications = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/notifications/messages?since=${encodeURIComponent(baseline)}&limit=20`, headers: memberAuthorization });
+    expect(notifications.statusCode).toBe(200);
+    expect(notifications.json<{ items: unknown[]; cursor: unknown }>().items).toEqual([]);
+    expect(notifications.json<{ cursor: unknown }>().cursor).not.toBeNull();
+
+    const candidates = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-conversations/candidates`, headers: ownerAuthorization });
+    expect(candidates.json<Array<{ userId: string }>>()).not.toContainEqual(expect.objectContaining({ userId: member.userId }));
+    const deniedDirect = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations`, headers: ownerAuthorization, payload: { userId: member.userId } });
+    expect(deniedDirect.statusCode).toBe(403);
+
+    context.clock.now = new Date(context.clock.now.getTime() + 76_000);
+    const expired = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/me/presence`, headers: memberAuthorization });
+    expect(expired.json()).toMatchObject({ preference: 'do_not_disturb', effectiveStatus: 'offline' });
+  });
+});
+
 describe('screen-share lease and webhooks', () => {
   it('rejects an unsigned webhook and releases a lease on a signed participant_left event', async () => {
     const rejected = await context.app.inject({

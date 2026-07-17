@@ -22,6 +22,11 @@ import {
   type TwoFactorEnableResult,
   type UserSession,
   type SecurityEvent,
+  type UserPresence,
+  type UserPrivacySettings,
+  type PresencePreference,
+  type DirectMessagePrivacy,
+  type PresenceVisibility,
 } from '@vatrushka/shared';
 
 const apiBase = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '')}${API_PREFIX}`;
@@ -138,6 +143,26 @@ export class ApiClient {
     const user = await this.request<PublicUser>('/me', { method: 'PATCH', body: { displayName }, auth: true });
     this.user = user;
     return user;
+  }
+
+  getPresence(): Promise<UserPresence> {
+    return this.request('/me/presence', { auth: true });
+  }
+
+  heartbeatPresence(idle: boolean): Promise<UserPresence> {
+    return this.request('/me/presence/heartbeat', { method: 'POST', body: { idle }, auth: true });
+  }
+
+  updatePresence(input: { preference: PresencePreference; customText: string | null; customTextExpiresAt: string | null }): Promise<UserPresence> {
+    return this.request('/me/presence', { method: 'PATCH', body: input, auth: true });
+  }
+
+  getPrivacySettings(): Promise<UserPrivacySettings> {
+    return this.request('/me/privacy', { auth: true });
+  }
+
+  updatePrivacySettings(input: { directMessages: DirectMessagePrivacy; presenceVisibility: PresenceVisibility; activityVisible: boolean }): Promise<UserPrivacySettings> {
+    return this.request('/me/privacy', { method: 'PATCH', body: input, auth: true });
   }
 
   async logout(): Promise<void> {

@@ -69,6 +69,25 @@ export interface ServerSummary {
 }
 
 export type HomePresence = 'online' | 'idle' | 'dnd' | 'offline';
+export type PresencePreference = 'online' | 'idle' | 'do_not_disturb' | 'invisible';
+export type EffectivePresenceStatus = 'online' | 'idle' | 'dnd' | 'offline';
+export type DirectMessagePrivacy = 'shared_servers' | 'nobody';
+export type PresenceVisibility = 'shared_servers' | 'nobody';
+
+export interface UserPresence {
+  preference: PresencePreference;
+  effectiveStatus: EffectivePresenceStatus;
+  customText: string | null;
+  customTextExpiresAt: string | null;
+  updatedAt: string;
+}
+
+export interface UserPrivacySettings {
+  directMessages: DirectMessagePrivacy;
+  presenceVisibility: PresenceVisibility;
+  activityVisible: boolean;
+  updatedAt: string;
+}
 export type HomeConnectionStatus = 'healthy' | 'degraded' | 'offline';
 export type HomeDestinationType = 'server' | 'text_channel' | 'voice_channel';
 
@@ -209,6 +228,8 @@ export interface ServerMember {
   platformRole: PlatformRole;
   joinedAt: string;
   roles: ServerRole[];
+  presence?: EffectivePresenceStatus;
+  customStatusText?: string | null;
 }
 
 export interface ServerDetail extends ServerSummary {

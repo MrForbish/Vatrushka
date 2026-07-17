@@ -6,6 +6,8 @@ import type { PublicUser } from '@vatrushka/shared';
 
 import { UserAudioSettingsPage } from './UserAudioSettingsPage';
 import { UserProfileSettingsPage } from './UserProfileSettingsPage';
+import { UserPresenceSettingsPage } from './UserPresenceSettingsPage';
+import { UserPrivacySettingsPage } from './UserPrivacySettingsPage';
 
 const user: PublicUser = { id: 'user-1', email: 'owner@myvatrushka.ru', displayName: 'Илья', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true };
 
@@ -58,5 +60,31 @@ describe('routed user settings pages', () => {
 
     expect(onMicrophone).toHaveBeenCalledWith('mic-2');
     expect(onOutput).toHaveBeenCalledWith('speaker-2');
+  });
+
+  it('loads and saves DND as a server-side presence preference', async () => {
+    const initial = { preference: 'online' as const, effectiveStatus: 'online' as const, customText: null, customTextExpiresAt: null, updatedAt: '2026-07-17T10:00:00.000Z' };
+    const updated = { ...initial, preference: 'do_not_disturb' as const, effectiveStatus: 'dnd' as const };
+    const onSave = vi.fn(async () => updated);
+    const onPresenceChange = vi.fn();
+    render(<UserPresenceSettingsPage onDirtyChange={vi.fn()} onLoad={vi.fn(async () => initial)} onPresenceChange={onPresenceChange} onSave={onSave} presence={initial} />);
+    await userEvent.click(await screen.findByRole('radio', { name: /Не беспокоить/u }));
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ preference: 'do_not_disturb', customText: null, customTextExpiresAt: null }));
+    expect(onPresenceChange).toHaveBeenLastCalledWith(updated);
+  });
+
+  it('persists privacy controls instead of only hiding local UI', async () => {
+    const initial = { directMessages: 'shared_servers' as const, presenceVisibility: 'shared_servers' as const, activityVisible: true, updatedAt: '2026-07-17T10:00:00.000Z' };
+    const updated = { directMessages: 'nobody' as const, presenceVisibility: 'nobody' as const, activityVisible: false, updatedAt: '2026-07-17T10:01:00.000Z' };
+    const onSave = vi.fn(async () => updated);
+    render(<UserPrivacySettingsPage onDirtyChange={vi.fn()} onLoad={vi.fn(async () => initial)} onSave={onSave} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Кто может писать вам' }));
+    await userEvent.click(screen.getByRole('option', { name: 'Никто' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Кто видит ваш online-статус' }));
+    await userEvent.click(screen.getByRole('option', { name: 'Никто' }));
+    await userEvent.click(screen.getByRole('switch', { name: /Показывать активность/u }));
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ directMessages: 'nobody', presenceVisibility: 'nobody', activityVisible: false }));
   });
 });

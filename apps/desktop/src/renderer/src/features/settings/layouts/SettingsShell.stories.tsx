@@ -11,6 +11,8 @@ import { SettingsSaveBar } from '../components/SettingsSaveBar';
 import { SettingsPlaceholderPage } from '../pages/SettingsPlaceholderPage';
 import { UserAudioSettingsPage } from '../pages/UserAudioSettingsPage';
 import { UserProfileSettingsPage } from '../pages/UserProfileSettingsPage';
+import { UserPresenceSettingsPage } from '../pages/UserPresenceSettingsPage';
+import { UserPrivacySettingsPage } from '../pages/UserPrivacySettingsPage';
 import { SettingsShell } from './SettingsShell';
 
 const workspaces: WorkspaceNavigationItem[] = [
@@ -29,6 +31,8 @@ const audioDevices: AudioDevices = {
     { deviceId: 'speakers', groupId: 'monitor', kind: 'audiooutput', label: 'Динамики монитора', toJSON: () => ({}) },
   ],
 };
+const dndPresence = { preference: 'do_not_disturb' as const, effectiveStatus: 'dnd' as const, customText: 'Фокус до релиза', customTextExpiresAt: null, updatedAt: '2026-07-17T10:00:00.000Z' };
+const privacySettings = { directMessages: 'shared_servers' as const, presenceVisibility: 'shared_servers' as const, activityVisible: true, updatedAt: '2026-07-17T10:00:00.000Z' };
 const securityClient: SecurityClient = {
   requestPasswordSetup: fn(() => Promise.resolve({ retryAfterSeconds: 60 })),
   setPassword: fn(() => Promise.resolve(securityUser)),
@@ -79,6 +83,16 @@ export const UserProfile: Story = { args: { scope: 'user' } };
 export const UserAudioDevices: Story = {
   args: { scope: 'user' },
   render: (args) => <SettingsShell activeSection="audio" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserAudioSettingsPage busy={false} devices={audioDevices} inputLevel={0.34} microphoneId="studio-mic" onMicrophone={() => undefined} onOutput={() => undefined} onRefresh={() => undefined} onTestOutput={() => undefined} outputId="headphones" voiceConnected /></SettingsShell>,
+};
+
+export const UserPresenceDnd: Story = {
+  args: { scope: 'user' },
+  render: (args) => <SettingsShell activeSection="status" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserPresenceSettingsPage onDirtyChange={() => undefined} onLoad={() => Promise.resolve(dndPresence)} onPresenceChange={() => undefined} onSave={() => Promise.resolve(dndPresence)} presence={dndPresence} /></SettingsShell>,
+};
+
+export const UserPrivacy: Story = {
+  args: { scope: 'user' },
+  render: (args) => <SettingsShell activeSection="privacy" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserPrivacySettingsPage onDirtyChange={() => undefined} onLoad={() => Promise.resolve(privacySettings)} onSave={() => Promise.resolve(privacySettings)} /></SettingsShell>,
 };
 
 export const UserSecurityLiveSection: Story = {
