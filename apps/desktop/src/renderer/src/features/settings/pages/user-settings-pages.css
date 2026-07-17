@@ -1,0 +1,22 @@
+.vui-user-settings-page { display: grid; gap: var(--space-5); }
+.vui-user-settings-page__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); }
+.vui-user-settings-page__heading span { color: var(--color-cyan); font: var(--text-overline); letter-spacing: .06em; text-transform: uppercase; }
+.vui-user-settings-page__heading h1 { margin: var(--space-2) 0; font: var(--text-display-md); }
+.vui-user-settings-page__heading p { max-width: 680px; margin: 0; color: var(--color-text-secondary); font: var(--text-body-lg); }
+.vui-user-profile-settings__grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(320px, .95fr); gap: var(--space-4); }
+.vui-user-settings-card { display: grid; align-content: start; gap: var(--space-5); min-width: 0; padding: var(--space-5); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-surface-1); }
+.vui-user-settings-card > header h2 { margin: 0; font: var(--text-heading-lg); }
+.vui-user-settings-card > header p { margin: var(--space-1) 0 0; color: var(--color-text-muted); font: var(--text-body-md); }
+.vui-user-settings-readonly { display: grid; gap: var(--space-1); padding: var(--space-3); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); background: var(--color-surface-0); }
+.vui-user-settings-readonly span,
+.vui-user-settings-readonly small { color: var(--color-text-muted); font: var(--text-caption); }
+.vui-user-settings-readonly strong { overflow: hidden; font: var(--text-label-md); text-overflow: ellipsis; white-space: nowrap; }
+.vui-user-profile-preview { position: relative; overflow: hidden; }
+.vui-user-profile-preview__banner { height: 96px; border-radius: var(--radius-sm); background: var(--gradient-brand); opacity: .35; }
+.vui-user-profile-preview > .vui-avatar { margin-top: -52px; margin-left: var(--space-3); box-shadow: 0 0 0 4px var(--color-surface-1); }
+.vui-user-profile-preview > strong { font: var(--text-heading-lg); }
+.vui-user-profile-preview > small { margin-top: calc(var(--space-4) * -1); color: var(--color-text-muted); font: var(--text-caption); }
+.vui-user-profile-preview > .vui-badge { justify-self: stretch; }
+.vui-user-settings-note { padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); background: var(--color-surface-0); color: var(--color-text-secondary); font: var(--text-caption); }
+.vui-user-settings-page > .home-widget { border-radius: var(--radius-md); }
+@media (max-width: 1180px) { .vui-user-profile-settings__grid { grid-template-columns: 1fr; } }

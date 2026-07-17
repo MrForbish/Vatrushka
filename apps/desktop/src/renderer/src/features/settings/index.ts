@@ -5,3 +5,5 @@ export * from './components/SettingsSaveBar';
 export * from './layouts/SettingsShell';
 export * from './model/settings.types';
 export * from './pages/SettingsPlaceholderPage';
+export * from './pages/UserAudioSettingsPage';
+export * from './pages/UserProfileSettingsPage';

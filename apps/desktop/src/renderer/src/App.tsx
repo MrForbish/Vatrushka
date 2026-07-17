@@ -1024,23 +1024,34 @@ export default function App(): ReactNode {
   if (settingsRoute !== null && user !== null && (settingsRoute.kind === 'user' ? featureFlags.userSettingsPage : featureFlags.serverSettingsPage)) return withUpdateStatus(
     <Suspense fallback={<main className="bootScreen"><div className="pulseLogo"><span /></div><span>Открываем настройки…</span></main>}>
       <SettingsRoutePage
+        busy={busy}
+        devices={devices}
         directUnreadCount={directUnreadCount}
         error={settingsRoute.kind === 'server' ? settingsServerError : null}
+        inputLevel={localInputLevel ?? 0}
         loading={settingsRoute.kind === 'server' && (settingsServerLoading || serverDetail?.id !== settingsRoute.serverId && settingsServerError === null)}
+        microphoneId={settings.microphoneDeviceId}
         onBack={closeSettings}
         onCreateServer={leaveSettingsForHome}
         onCurrentSessionRevoked={handleCurrentSessionRevoked}
         onDirectMessages={leaveSettingsForDirectMessages}
         onHome={leaveSettingsForHome}
+        onMicrophone={(deviceId) => persistDevice('microphoneDeviceId', deviceId)}
         onNavigate={(path) => { void navigate(path); }}
         onNotificationSettingsChange={updateNotificationSettings}
         onOpenServer={leaveSettingsForServer}
+        onOutput={(deviceId) => persistDevice('outputDeviceId', deviceId)}
+        onRefreshDevices={() => { void run(() => refreshDevices(true)); }}
+        onTestOutput={() => playVoiceCue('message')}
+        onUpdateProfile={(name) => apiClient.updateProfile(name)}
         onUserChange={updateUser}
+        outputId={settings.outputDeviceId}
         route={settingsRoute}
         server={serverDetail?.id === (settingsRoute.kind === 'server' ? settingsRoute.serverId : '') ? serverDetail : null}
         servers={servers}
         settings={settings}
         user={user}
+        voiceConnected={connection !== null}
       />
     </Suspense>,
   );

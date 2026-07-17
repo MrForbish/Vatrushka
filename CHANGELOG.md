@@ -10,7 +10,9 @@ All notable changes to Vatrushka are documented here. The project follows semant
 - idempotent attachment backfill and a production canary that verifies bucket access, write, read and delete;
 - additive `storage_key` migration and temporary PostgreSQL dual-write fallback for rollback-safe rollout;
 - routed `SettingsShell` with typed hash routes, staged production flags, Storybook states and preserved modal fallbacks;
-- real notification, password/2FA, recovery-code, session and security-activity sections inside routed user settings, including `/settings/security/backup-codes`.
+- real notification, password/2FA, recovery-code, session and security-activity sections inside routed user settings, including `/settings/security/backup-codes`;
+- routed profile editing for the supported display-name contract, with validation, live preview, save progress and guarded navigation when changes are unsaved;
+- routed voice/audio settings backed by actual Windows `MediaDeviceInfo` input/output labels, persisted device IDs and live microphone readiness diagnostics.
 
 ### Operations
 

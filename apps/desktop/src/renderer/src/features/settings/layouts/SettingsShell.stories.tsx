@@ -3,11 +3,14 @@ import { expect, fn, userEvent, within } from 'storybook/test';
 import type { PublicUser, SecurityEvent } from '@vatrushka/shared';
 
 import { serverSettingsNavigation, userSettingsNavigation } from '../../../app/routes';
+import type { AudioDevices } from '../../../audio-devices';
 import { SecurityCenter, type SecurityClient } from '../../security';
 import { WorkspaceLibrary, type WorkspaceNavigationItem } from '../../../ui';
 import { SettingsPageState } from '../components/SettingsPageState';
 import { SettingsSaveBar } from '../components/SettingsSaveBar';
 import { SettingsPlaceholderPage } from '../pages/SettingsPlaceholderPage';
+import { UserAudioSettingsPage } from '../pages/UserAudioSettingsPage';
+import { UserProfileSettingsPage } from '../pages/UserProfileSettingsPage';
 import { SettingsShell } from './SettingsShell';
 
 const workspaces: WorkspaceNavigationItem[] = [
@@ -16,6 +19,16 @@ const workspaces: WorkspaceNavigationItem[] = [
 ];
 
 const securityUser: PublicUser = { id: 'user-1', email: 'owner@myvatrushka.ru', displayName: 'Илья Форбиш', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true };
+const audioDevices: AudioDevices = {
+  inputs: [
+    { deviceId: 'studio-mic', groupId: 'desk', kind: 'audioinput', label: 'Shure MV7 — рабочий стол', toJSON: () => ({}) },
+    { deviceId: 'webcam-mic', groupId: 'camera', kind: 'audioinput', label: 'Микрофон Logitech Brio', toJSON: () => ({}) },
+  ],
+  outputs: [
+    { deviceId: 'headphones', groupId: 'desk', kind: 'audiooutput', label: 'Наушники Arctis Nova 7', toJSON: () => ({}) },
+    { deviceId: 'speakers', groupId: 'monitor', kind: 'audiooutput', label: 'Динамики монитора', toJSON: () => ({}) },
+  ],
+};
 const securityClient: SecurityClient = {
   requestPasswordSetup: fn(() => Promise.resolve({ retryAfterSeconds: 60 })),
   setPassword: fn(() => Promise.resolve(securityUser)),
@@ -39,7 +52,7 @@ interface SettingsStoryProps {
 function SettingsStory({ onBack, onNavigate, scope }: SettingsStoryProps): React.JSX.Element {
   const workspace = <WorkspaceLibrary {...(scope === 'server' ? { activeWorkspaceId: 'vatrushka' } : {})} onCreate={() => undefined} onDirectMessages={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />;
   if (scope === 'server') return <SettingsShell activeSection="overview" entityLabel="Настройки сервера" entityName="Команда Ватрушки" items={serverSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><SettingsPlaceholderPage description="Основные параметры сервера" scope="server" title="Обзор" /></SettingsShell>;
-  return <SettingsShell activeSection="profile" entityLabel="Личные настройки" entityName="Илья Форбиш" items={userSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><SettingsPlaceholderPage description="Имя, аватар и представление" scope="user" title="Мой профиль" /></SettingsShell>;
+  return <SettingsShell activeSection="profile" entityLabel="Личные настройки" entityName="Илья Форбиш" items={userSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><UserProfileSettingsPage onDirtyChange={() => undefined} onSave={(displayName) => Promise.resolve({ ...securityUser, displayName })} onUserChange={() => undefined} user={securityUser} /></SettingsShell>;
 }
 
 const meta = {
@@ -62,6 +75,11 @@ export const ServerOverview: Story = {
 };
 
 export const UserProfile: Story = { args: { scope: 'user' } };
+
+export const UserAudioDevices: Story = {
+  args: { scope: 'user' },
+  render: (args) => <SettingsShell activeSection="audio" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserAudioSettingsPage busy={false} devices={audioDevices} inputLevel={0.34} microphoneId="studio-mic" onMicrophone={() => undefined} onOutput={() => undefined} onRefresh={() => undefined} onTestOutput={() => undefined} outputId="headphones" voiceConnected /></SettingsShell>,
+};
 
 export const UserSecurityLiveSection: Story = {
   args: { scope: 'user' },
