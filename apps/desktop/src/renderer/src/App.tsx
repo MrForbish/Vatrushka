@@ -19,9 +19,11 @@ import { ServerView } from './features/servers/index.js';
 import { UpdateStatus } from './features/update/index.js';
 import { diffRemoteParticipants, RoomView, VoiceConnectionPanel, VoiceCuePlayer, type VoiceCue } from './features/voice/index.js';
 import { MediaSession } from './media.js';
+import { RealtimeClient } from './realtime.js';
 
 type Screen = 'boot' | 'auth' | 'profile' | 'home' | 'server' | 'direct';
 const media = new MediaSession(apiClient);
+const realtime = new RealtimeClient((forceRefresh) => apiClient.realtimeCredentials(forceRefresh));
 const SettingsRoutePage = lazy(async () => {
   const module = await import('./app/routes/SettingsRoutePage');
   return { default: module.SettingsRoutePage };
@@ -69,6 +71,7 @@ export default function App(): ReactNode {
   const [activeDirectConversationId, setActiveDirectConversationId] = useState<string | null>(null);
   const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
   const [directMessageDraft, setDirectMessageDraft] = useState('');
+  const [realtimeRevision, setRealtimeRevision] = useState(0);
   const [serverName, setServerName] = useState('');
   const [pendingInviteToken, setPendingInviteToken] = useState<string | null>(null);
   const notificationCursorRef = useRef<string | null>(null);
@@ -91,6 +94,39 @@ export default function App(): ReactNode {
   const invalidSettingsCanonicalPath = settingsRouteResult?.kind === 'invalid' ? settingsRouteResult.canonicalPath : null;
   const settingsRouteKind = settingsRoute?.kind ?? null;
   const settingsServerRouteId = settingsRoute?.kind === 'server' ? settingsRoute.serverId : null;
+  const activeChannelIsText = activeChannelId !== null && Boolean(serverDetail?.channels.some((channel) => channel.id === activeChannelId && channel.type === 'text'));
+
+  useEffect(() => {
+    if (user === null) {
+      realtime.stop();
+      return undefined;
+    }
+    const refresh = (): void => setRealtimeRevision((current) => current + 1);
+    const unsubscribeEvent = realtime.onEvent(refresh);
+    const unsubscribeStatus = realtime.onStatus((status) => { if (status === 'connected') refresh(); });
+    realtime.start();
+    return () => {
+      unsubscribeEvent();
+      unsubscribeStatus();
+      realtime.stop();
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    let conversationId: string | null = null;
+    if (screen === 'server' && activeChannelId !== null && activeChannelIsText) conversationId = activeChannelId;
+    if (screen === 'direct') conversationId = activeDirectConversationId;
+    if (conversationId === null) {
+      realtime.setActiveConversation(null);
+      return undefined;
+    }
+    realtime.subscribe(conversationId);
+    realtime.setActiveConversation(conversationId);
+    return () => {
+      realtime.unsubscribe(conversationId);
+      realtime.setActiveConversation(null);
+    };
+  }, [activeChannelId, activeChannelIsText, activeDirectConversationId, screen]);
 
   useEffect(() => {
     if (invalidSettingsCanonicalPath === null) return;
@@ -272,9 +308,9 @@ export default function App(): ReactNode {
       void apiClient.listServers().then((items) => { if (active) setServers(items); }).catch((caught) => { if (active) setError(userMessage(caught)); }).finally(() => { inFlight = false; });
     };
     refresh();
-    const timer = window.setInterval(refresh, 3_000);
+    const timer = window.setInterval(refresh, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [screen, user]);
+  }, [realtimeRevision, screen, user]);
 
   useEffect(() => {
     if (!user || screen !== 'server' || serverDetail === null) return;
@@ -290,9 +326,10 @@ export default function App(): ReactNode {
         setActiveChannelId((current) => current !== null && detail.channels.some((channel) => channel.id === current) ? current : detail.channels[0]?.id ?? null);
       }).catch((caught) => { if (active) setError(userMessage(caught)); }).finally(() => { inFlight = false; });
     };
-    const timer = window.setInterval(refresh, 3_000);
+    refresh();
+    const timer = window.setInterval(refresh, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [screen, serverDetail?.id, user]);
+  }, [realtimeRevision, screen, serverDetail?.id, user]);
 
   useEffect(() => {
     if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
@@ -339,9 +376,9 @@ export default function App(): ReactNode {
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     poll();
-    const timer = window.setInterval(poll, 5_000);
+    const timer = window.setInterval(poll, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [playVoiceCue, screen, settings.desktopNotificationsEnabled, settings.messageSoundsEnabled, user]);
+  }, [playVoiceCue, realtimeRevision, screen, settings.desktopNotificationsEnabled, settings.messageSoundsEnabled, user]);
 
   useEffect(() => window.desktop.onMessageNotificationClick((target) => {
     if (!userRef.current) return;
@@ -366,9 +403,9 @@ export default function App(): ReactNode {
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     refresh();
-    const timer = window.setInterval(refresh, 5_000);
+    const timer = window.setInterval(refresh, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [screen, user]);
+  }, [realtimeRevision, screen, user]);
 
   useEffect(() => {
     if (!user || screen !== 'direct') return;
@@ -393,9 +430,9 @@ export default function App(): ReactNode {
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     refresh();
-    const timer = window.setInterval(refresh, 3_000);
+    const timer = window.setInterval(refresh, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [screen, activeDirectConversationId]);
+  }, [realtimeRevision, screen, activeDirectConversationId]);
 
   useEffect(() => {
     if (screen !== 'server' || !serverDetail || !activeChannelId) return;
@@ -414,9 +451,9 @@ export default function App(): ReactNode {
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     refresh();
-    const timer = setInterval(refresh, 3_000);
+    const timer = setInterval(refresh, 30_000);
     return () => { active = false; clearInterval(timer); };
-  }, [screen, serverDetail?.id, activeChannelId]);
+  }, [realtimeRevision, screen, serverDetail?.id, activeChannelId]);
 
   const run = useCallback(async (action: () => Promise<void>): Promise<void> => {
     setBusy(true);

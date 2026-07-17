@@ -171,6 +171,37 @@ export class CanonicalMessagingStore {
     return result.rowCount === 1;
   }
 
+  async ensureServerChannelConversation(channelId: string, serverId: string, createdBy: string, now: Date): Promise<string> {
+    await this.pool.query(`
+      insert into conversations (id, type, server_id, channel_id, created_by, created_at, updated_at)
+      values ($1, 'server_channel', $2, $1, $3, $4, $4)
+      on conflict (id) do nothing
+    `, [channelId, serverId, createdBy, now]);
+    return channelId;
+  }
+
+  async ensureLegacyDirectConversation(legacyId: string, userAId: string, userBId: string, now: Date): Promise<string> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('begin');
+      const pair = [userAId, userBId].sort();
+      await client.query('select pg_advisory_xact_lock(hashtextextended($1, 0))', [pair.join(':')]);
+      const existing = await client.query<{ id: string }>(`
+        select c.id from conversations c
+        join conversation_members a on a.conversation_id = c.id and a.user_id = $1 and a.left_at is null
+        join conversation_members b on b.conversation_id = c.id and b.user_id = $2 and b.left_at is null
+        where c.type = 'direct' limit 1
+      `, [userAId, userBId]);
+      const id = existing.rows[0]?.id ?? legacyId;
+      if (!existing.rows[0]) {
+        await client.query("insert into conversations (id, type, created_by, created_at, updated_at) values ($1, 'direct', $2, $3, $3) on conflict (id) do nothing", [id, userAId, now]);
+        await client.query('insert into conversation_members (conversation_id, user_id, joined_at) values ($1, $2, $4), ($1, $3, $4) on conflict do nothing', [id, userAId, userBId, now]);
+      }
+      await client.query('commit');
+      return id;
+    } catch (error) { await client.query('rollback'); throw error; } finally { client.release(); }
+  }
+
   async createAttachmentIntent(record: Omit<CanonicalAttachmentRecord, 'messageId' | 'finalizedAt'>): Promise<void> {
     await this.pool.query(`
       insert into conversation_message_attachments (id, uploader_user_id, object_key, original_name, mime_type, size_bytes, width, height, duration_ms, created_at)
@@ -313,6 +344,16 @@ export class CanonicalMessagingStore {
     return result.rows[0] ? publicMessage(result.rows[0]) : null;
   }
 
+  async findMessageByClientId(authorId: string, clientMessageId: string): Promise<ConversationMessage | null> {
+    const result = await this.pool.query<{ id: string }>('select id::text from messages where author_id = $1 and client_message_id = $2', [authorId, clientMessageId]);
+    return result.rows[0] ? this.findMessage(result.rows[0].id, authorId) : null;
+  }
+
+  async findMessageByLegacyId(legacyId: string, currentUserId: string): Promise<ConversationMessage | null> {
+    const result = await this.pool.query<{ id: string }>('select id::text from messages where client_message_id = $1 or legacy_text_message_id = $1 or legacy_direct_message_id = $1 limit 1', [legacyId]);
+    return result.rows[0] ? this.findMessage(result.rows[0].id, currentUserId) : null;
+  }
+
   async createMessage(input: CreateCanonicalMessageInput): Promise<{ message: ConversationMessage; created: boolean }> {
     const client = await this.pool.connect();
     try {
@@ -366,11 +407,11 @@ export class CanonicalMessagingStore {
     }
   }
 
-  async editMessage(messageId: string, authorId: string, content: string, mentions: CanonicalMentionInput[], now: Date): Promise<ConversationMessage | null> {
+  async editMessage(messageId: string, authorId: string, content: string, mentions: CanonicalMentionInput[], now: Date, canManage = false): Promise<ConversationMessage | null> {
     const client = await this.pool.connect();
     try {
       await client.query('begin');
-      const changed = await client.query<{ conversation_id: string }>('update messages set content = $3, edited_at = $4 where id = $1::bigint and author_id = $2 and deleted_at is null returning conversation_id', [messageId, authorId, content, now]);
+      const changed = await client.query<{ conversation_id: string }>('update messages set content = $3, edited_at = $4 where id = $1::bigint and (author_id = $2 or $5) and deleted_at is null returning conversation_id', [messageId, authorId, content, now, canManage]);
       if (!changed.rows[0]) { await client.query('rollback'); return null; }
       await client.query('delete from conversation_message_mentions where message_id = $1::bigint', [messageId]);
       for (const mention of mentions) await client.query('insert into conversation_message_mentions (id, message_id, mention_type, mentioned_user_id, mentioned_role_id, start, length, created_at) values ($1, $2::bigint, $3, $4, $5, $6, $7, $8)', [randomUUID(), messageId, mention.type, mention.userId ?? null, mention.roleId ?? null, mention.start ?? null, mention.length ?? null, now]);

@@ -31,6 +31,7 @@ import {
 } from '@vatrushka/shared';
 
 const apiBase = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '')}${API_PREFIX}`;
+const realtimeUrl = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '').replace(/^http/u, 'ws')}/ws`;
 
 export class ClientError extends Error {
   constructor(
@@ -59,6 +60,12 @@ export class ApiClient {
 
   currentUser(): PublicUser | null {
     return this.user;
+  }
+
+  async realtimeCredentials(forceRefresh = false): Promise<{ token: string; url: string }> {
+    if (forceRefresh || !this.accessToken) await this.refresh();
+    if (!this.accessToken) throw new ClientError('UNAUTHORIZED', 'Сессия не найдена', 401);
+    return { token: this.accessToken, url: realtimeUrl };
   }
 
   async restoreSession(): Promise<PublicUser | null> {

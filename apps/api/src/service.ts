@@ -732,6 +732,7 @@ export class VatrushkaService {
     this.requireCompleteProfile(user);
     const now = this.now();
     let server: ServerRecord | null = null;
+    let serverTextChannel: ServerChannelRecord | null = null;
     for (let attempt = 0; attempt < 10 && !server; attempt += 1) {
       const candidate: ServerRecord = { id: randomUUID(), name, inviteToken: randomOpaqueToken(9), ownerUserId: user.id, createdAt: now, updatedAt: now };
       const everyone: ServerRoleRecord = {
@@ -756,9 +757,15 @@ export class VatrushkaService {
         roles: [everyone, ownerRole],
         memberRoles: [{ serverId: candidate.id, userId: user.id, roleId: ownerRole.id }],
         channels: [textChannel, voiceChannel],
-      })) server = candidate;
+      })) {
+        server = candidate;
+        serverTextChannel = textChannel;
+      }
     }
     if (!server) throw new AppError('INTERNAL_ERROR', 500);
+    if (this.canonicalMessagingStore && serverTextChannel) {
+      await this.canonicalMessagingStore.ensureServerChannelConversation(serverTextChannel.id, server.id, user.id, now);
+    }
     await this.recordUserActivity(user.id, 'joined_server', server.name, 'Сервер создан', server.id, null);
     return this.getServerDetailForUser(server, user);
   }
@@ -792,6 +799,9 @@ export class VatrushkaService {
       livekitRoomName: type === 'voice' ? `channel_${randomUUID()}` : null, createdAt: now, updatedAt: now,
     };
     await this.store.createServerChannel(channel);
+    if (type === 'text' && this.canonicalMessagingStore) {
+      await this.canonicalMessagingStore.ensureServerChannelConversation(channel.id, server.id, user.id, now);
+    }
     await this.recordServerAudit(server.id, user, 'CHANNEL_CREATED', 'CHANNEL', channel.id, null, { name: channel.name, type: channel.type });
     return publicServerChannel(channel);
   }
@@ -1023,6 +1033,11 @@ export class VatrushkaService {
     const message = { id: randomUUID(), channelId: channel.id, authorUserId: user.id, content, replyToMessageId, createdAt: now, editedAt: null };
     const mentionRecords = await this.validateMessageMentions(server, channel, message.id, content, mentions);
     await this.store.createTextMessage(message, mentionRecords);
+    if (this.canonicalMessagingStore) {
+      await this.canonicalMessagingStore.ensureServerChannelConversation(channel.id, server.id, server.ownerUserId, now);
+      const canonicalReply = replyToMessageId ? await this.canonicalMessagingStore.findMessageByLegacyId(replyToMessageId, user.id) : null;
+      await this.canonicalMessagingStore.createMessage({ conversationId: channel.id, authorId: user.id, clientMessageId: message.id, content, replyToMessageId: canonicalReply?.id ?? null, attachmentIds: [], mentions: mentionRecords.map((mention) => ({ type: 'user', userId: mention.mentionedUserId, start: mention.start, length: mention.length })), now });
+    }
     await this.recordUserActivity(user.id, 'sent_message', `# ${channel.name}`, server.name, server.id, channel.id);
     for (const mentionedUserId of new Set(mentionRecords.map((mention) => mention.mentionedUserId))) {
       if (mentionedUserId !== user.id) await this.recordUserActivity(mentionedUserId, 'mention_received', `# ${channel.name}`, user.displayName ?? 'Участник', server.id, channel.id);
@@ -1043,6 +1058,10 @@ export class VatrushkaService {
     if (!updated) throw new AppError('MESSAGE_NOT_FOUND', 404);
     const author = await this.store.findUserById(updated.authorUserId);
     if (!author) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    if (this.canonicalMessagingStore) {
+      const canonical = await this.canonicalMessagingStore.findMessageByLegacyId(message.id, user.id);
+      if (canonical) await this.canonicalMessagingStore.editMessage(canonical.id, user.id, content, mentionRecords.map((mention) => ({ type: 'user', userId: mention.mentionedUserId, start: mention.start, length: mention.length })), this.now(), message.authorUserId !== user.id);
+    }
     for (const mentionedUserId of new Set(mentionRecords.map((mention) => mention.mentionedUserId))) {
       if (mentionedUserId !== user.id && !existingMentionUserIds.has(mentionedUserId)) await this.recordUserActivity(mentionedUserId, 'mention_received', `# ${channel.name}`, author.displayName ?? 'Участник', server.id, channel.id);
     }
@@ -1058,6 +1077,10 @@ export class VatrushkaService {
     await this.requireChannelPermission(server, channel, user, 'ADD_REACTIONS');
     if (active) await this.store.addMessageReaction({ messageId: message.id, userId: user.id, emoji, createdAt: this.now() });
     else await this.store.removeMessageReaction(message.id, user.id, emoji);
+    if (this.canonicalMessagingStore) {
+      const canonical = await this.canonicalMessagingStore.findMessageByLegacyId(message.id, user.id);
+      if (canonical) await this.canonicalMessagingStore.setReaction(canonical.id, user.id, emoji, active, this.now());
+    }
     const [withAuthor] = await this.store.findTextMessagesWithAuthors([message.id]);
     if (!withAuthor) throw new AppError('MESSAGE_NOT_FOUND', 404);
     return (await this.hydrateMessages([withAuthor], user.id))[0]!;
@@ -1138,6 +1161,10 @@ export class VatrushkaService {
     const message = await this.store.findTextMessage(messageId);
     if (!message || message.channelId !== channel.id) throw new AppError('MESSAGE_NOT_FOUND', 404);
     await this.store.markChannelRead({ channelId: channel.id, userId: user.id, readAt: message.createdAt });
+    if (this.canonicalMessagingStore) {
+      const canonical = await this.canonicalMessagingStore.findMessageByLegacyId(message.id, user.id);
+      if (canonical) await this.canonicalMessagingStore.updateReadState(channel.id, user.id, canonical.id, canonical.id, this.now());
+    }
   }
 
   async deleteMessage(authorization: string | undefined, messageId: string): Promise<void> {
@@ -1149,6 +1176,10 @@ export class VatrushkaService {
     await this.requireChannelPermission(server, channel, user, message.authorUserId === user.id ? 'MANAGE_OWN_MESSAGES' : 'MANAGE_MESSAGES');
     const attachments = await this.store.listMessageAttachments([message.id]);
     await this.store.deleteTextMessage(message.id);
+    if (this.canonicalMessagingStore) {
+      const canonical = await this.canonicalMessagingStore.findMessageByLegacyId(message.id, user.id);
+      if (canonical) await this.canonicalMessagingStore.softDeleteMessage(canonical.id, user.id, message.authorUserId !== user.id, this.now());
+    }
     await this.deleteStoredObjects(attachments.map((attachment) => attachment.storageKey));
   }
 
@@ -1191,6 +1222,7 @@ export class VatrushkaService {
     }
     if (!shareVisibleServer) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
     const conversation = await this.store.getOrCreateDirectConversation(user.id, participant.id, this.now());
+    if (this.canonicalMessagingStore) await this.canonicalMessagingStore.ensureLegacyDirectConversation(conversation.id, conversation.userAId, conversation.userBId, conversation.createdAt);
     const overview = (await this.store.listDirectConversationOverviews(user.id)).find((candidate) => candidate.conversation.id === conversation.id);
     if (!overview) throw new AppError('DIRECT_CONVERSATION_NOT_FOUND', 404);
     return publicDirectConversation(overview);
@@ -1216,6 +1248,11 @@ export class VatrushkaService {
     const createdAt = new Date(Math.max(this.now().getTime(), conversation.updatedAt.getTime() + 1));
     const message = { id: randomUUID(), conversationId, authorUserId: user.id, content, replyToMessageId, createdAt, editedAt: null };
     await this.store.createDirectMessage(message);
+    if (this.canonicalMessagingStore) {
+      const canonicalConversationId = await this.canonicalMessagingStore.ensureLegacyDirectConversation(conversation.id, conversation.userAId, conversation.userBId, conversation.createdAt);
+      const canonicalReply = replyToMessageId ? await this.canonicalMessagingStore.findMessageByLegacyId(replyToMessageId, user.id) : null;
+      await this.canonicalMessagingStore.createMessage({ conversationId: canonicalConversationId, authorId: user.id, clientMessageId: message.id, content, replyToMessageId: canonicalReply?.id ?? null, attachmentIds: [], mentions: [], now: createdAt });
+    }
     return (await this.hydrateDirectMessages([{ ...message, displayName: user.displayName, platformRole: user.platformRole }], user.id))[0]!;
   }
 
@@ -1226,6 +1263,10 @@ export class VatrushkaService {
     await this.requireDirectConversation(message.conversationId, user.id);
     const updated = await this.store.updateDirectMessage(message.id, content, this.now());
     if (!updated) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
+    if (this.canonicalMessagingStore) {
+      const canonical = await this.canonicalMessagingStore.findMessageByLegacyId(message.id, user.id);
+      if (canonical) await this.canonicalMessagingStore.editMessage(canonical.id, user.id, content, [], this.now());
+    }
     return (await this.hydrateDirectMessages([{ ...updated, displayName: user.displayName, platformRole: user.platformRole }], user.id))[0]!;
   }
 
@@ -1236,6 +1277,10 @@ export class VatrushkaService {
     await this.requireDirectConversation(message.conversationId, user.id);
     const attachments = await this.store.listDirectMessageAttachments([message.id]);
     await this.store.deleteDirectMessage(message.id);
+    if (this.canonicalMessagingStore) {
+      const canonical = await this.canonicalMessagingStore.findMessageByLegacyId(message.id, user.id);
+      if (canonical) await this.canonicalMessagingStore.softDeleteMessage(canonical.id, user.id, false, this.now());
+    }
     await this.deleteStoredObjects(attachments.map((attachment) => attachment.storageKey));
   }
 
@@ -1246,6 +1291,10 @@ export class VatrushkaService {
     await this.requireDirectConversation(message.conversationId, user.id);
     if (active) await this.store.addDirectMessageReaction({ messageId, userId: user.id, emoji, createdAt: this.now() });
     else await this.store.removeDirectMessageReaction(messageId, user.id, emoji);
+    if (this.canonicalMessagingStore) {
+      const canonical = await this.canonicalMessagingStore.findMessageByLegacyId(message.id, user.id);
+      if (canonical) await this.canonicalMessagingStore.setReaction(canonical.id, user.id, emoji, active, this.now());
+    }
     const [withAuthor] = await this.store.findDirectMessagesWithAuthors([message.id]);
     if (!withAuthor) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
     return (await this.hydrateDirectMessages([withAuthor], user.id))[0]!;
@@ -1253,10 +1302,15 @@ export class VatrushkaService {
 
   async markDirectConversationRead(authorization: string | undefined, conversationId: string, messageId: string): Promise<void> {
     const user = await this.authenticate(authorization);
-    await this.requireDirectConversation(conversationId, user.id);
+    const conversation = await this.requireDirectConversation(conversationId, user.id);
     const message = await this.store.findDirectMessage(messageId);
     if (!message || message.conversationId !== conversationId) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
     await this.store.markDirectConversationRead(conversationId, user.id, message.createdAt, message.id);
+    if (this.canonicalMessagingStore) {
+      const canonical = await this.canonicalMessagingStore.findMessageByLegacyId(message.id, user.id);
+      const canonicalConversationId = await this.canonicalMessagingStore.ensureLegacyDirectConversation(conversationId, conversation.userAId, conversation.userBId, conversation.createdAt);
+      if (canonical) await this.canonicalMessagingStore.updateReadState(canonicalConversationId, user.id, canonical.id, canonical.id, this.now());
+    }
   }
 
   async uploadDirectMessageAttachment(authorization: string | undefined, messageId: string, input: { fileName: string; mimeType: string; content: Buffer }): Promise<DirectMessage> {
