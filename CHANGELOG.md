@@ -2,6 +2,27 @@
 
 All notable changes to Vatrushka are documented here. The project follows semantic versioning for desktop and API release artifacts.
 
+## [0.4.4] - 2026-07-17
+
+### Fixed
+
+- remote participant volume controls now remain mounted and visible when the participant becomes the active speaker;
+- participant and screen-share volume sliders use a stable compact layout with aligned values and controls;
+- settings popovers, server settings and the screen-source picker close on an outside click as well as their explicit close action;
+- screen publication is blocked while LiveKit is reconnecting, and the raw `publishing rejected as engine not connected within timeout` error is replaced with a recovery instruction;
+- duplicate voice-channel connection attempts are coalesced while a connection transition is already running.
+
+### Changed
+
+- screen capture now preserves the selected source aspect ratio up to 2560×1440 at 30 FPS and publishes with an 8 Mbps ceiling and `maintain-resolution` degradation preference;
+- Windows system-audio sharing requires Chromium to apply `restrictOwnAudio` exactly. If the client cannot prove that Vatrushka voice output is excluded, it stops the unsafe share and asks the presenter to continue without audio;
+- viewers retain independent persistent mute and volume controls for the `ScreenShareAudio` track.
+
+### Quality
+
+- added renderer coverage for active-speaker slider stability, safe screen-audio capture, LiveKit timeout messaging and outside-click dismissal;
+- added Storybook and Windows visual coverage for screen-share audio volume controls and updated the participant-volume baselines.
+
 ## [0.4.3] - 2026-07-17
 
 ### Changed

@@ -396,8 +396,24 @@ export interface PopoverProps {
 export function Popover({ children, defaultOpen = false, label, trigger }: PopoverProps): React.JSX.Element {
   const [open, setOpen] = useState(defaultOpen);
   const id = useId();
+  const anchorRef = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event: PointerEvent): void => {
+      if (event.target instanceof Node && !anchorRef.current?.contains(event.target)) setOpen(false);
+    };
+    const onKeyDown = (event: globalThis.KeyboardEvent): void => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
   return (
-    <span className="vui-popover-anchor">
+    <span className="vui-popover-anchor" ref={anchorRef}>
       <button aria-controls={id} aria-expanded={open} className="vui-popover-trigger" onClick={() => setOpen((current) => !current)} type="button">{trigger}</button>
       {open ? <span aria-label={label} className="vui-popover" id={id} role="dialog">{children}</span> : null}
     </span>

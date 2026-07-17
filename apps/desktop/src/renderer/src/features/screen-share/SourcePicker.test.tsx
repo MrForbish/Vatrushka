@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -42,5 +42,20 @@ describe('screen share source picker', () => {
 
     expect(screen.getByRole('radio', { name: /Передавать звук приложения/u })).toBeDisabled();
     expect(screen.getByText('Ваша роль не разрешает передачу звука приложения.')).toBeInTheDocument();
+  });
+
+  it('does not offer loopback audio when own-app exclusion is unsupported', () => {
+    render(<SourcePicker audioProtectionAvailable={false} sources={sources} includeAudio={false} platform="win32" onAudio={vi.fn()} onSelect={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByRole('radio', { name: /Передавать звук приложения/u })).toBeDisabled();
+    expect(screen.getByText('Эта версия Windows не умеет безопасно исключать голоса участников из трансляции.')).toBeInTheDocument();
+  });
+
+  it('closes when the empty backdrop is clicked', () => {
+    const onCancel = vi.fn();
+    const { container } = render(<SourcePicker sources={sources} includeAudio={false} platform="win32" onAudio={vi.fn()} onSelect={vi.fn()} onCancel={onCancel} />);
+
+    fireEvent.mouseDown(container.querySelector('.vui-share-picker__backdrop')!);
+    expect(onCancel).toHaveBeenCalledOnce();
   });
 });

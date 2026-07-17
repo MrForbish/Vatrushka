@@ -37,7 +37,7 @@
 .vui-room__stream-audio-label > span { display: grid; }
 .vui-room__stream-audio-label strong { color: var(--color-text-primary); font: var(--text-label-md); }
 .vui-room__stream-audio-label small { color: var(--color-text-muted); font: var(--text-caption); }
-.vui-room__stream-audio-controls { display: grid; grid-template-columns: auto minmax(180px, 240px); align-items: end; gap: var(--space-3); }
+.vui-room__stream-audio-controls { display: grid; grid-template-columns: 36px minmax(180px, 240px); align-items: center; gap: var(--space-3); }
 .vui-room__stream-audio-controls > button { display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: var(--radius-sm); background: var(--color-primary-soft); color: var(--color-cyan); }
 .vui-room__empty { display: grid; justify-items: center; color: var(--color-text-muted); text-align: center; }
 .vui-room__empty h1 { color: var(--color-text-primary); font: var(--text-display-md); }

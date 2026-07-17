@@ -73,6 +73,12 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('voice-room-devices.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('screen share audio volume controls', async ({ page }) => {
+    await openStory(page, 'features-voice-room--screen-share-viewer');
+    await expect(page.getByRole('slider', { name: 'Громкость трансляции' })).toBeVisible();
+    await expect(page).toHaveScreenshot('screen-share-audio-volume.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('connected voice keeps server navigation', async ({ page }) => {
     await openStory(page, 'screens-server--connected-voice');
     await expect(page.getByRole('button', { name: 'общий' })).toBeVisible();

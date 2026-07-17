@@ -109,6 +109,22 @@ describe('room UI', () => {
     expect(onRefreshDevices).toHaveBeenCalledOnce();
   });
 
+  it('keeps the participant volume control mounted when the active speaker changes', () => {
+    const commonProps = { connection, devices: voiceDevices, microphoneId: undefined, outputId: undefined, busy: false, error: null, onMute: noop, onShare: noop, onCopy: noop, onLeave: noop, onKick: noop, onMicrophone: noop, onOutput: noop, onRefreshDevices: noop, onStartAudio: noop, onScreenAudioMute: noop, onScreenAudioVolume: noop, onParticipantMute: noop, onParticipantVolume: noop };
+    const { rerender } = render(<RoomView {...commonProps} snapshot={baseSnapshot} />);
+    const volumeSlider = screen.getByRole('slider', { name: 'Громкость Visitor' });
+    const nextSnapshot = {
+      ...baseSnapshot,
+      participants: baseSnapshot.participants.map((participant) => ({
+        ...participant,
+        isSpeaking: participant.isLocal,
+      })),
+    };
+
+    rerender(<RoomView {...commonProps} snapshot={nextSnapshot} />);
+    expect(screen.getByRole('slider', { name: 'Громкость Visitor' })).toBe(volumeSlider);
+  });
+
   it('shows reconnect, busy, and error states without relying only on color', () => {
     const snapshot = { ...baseSnapshot, connectionState: ConnectionState.Reconnecting };
     render(<RoomView connection={connection} snapshot={snapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy error="Другой участник уже показывает экран" onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={noop} onParticipantVolume={noop} />);

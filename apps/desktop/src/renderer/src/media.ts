@@ -10,7 +10,7 @@ import {
   type RoomOptions,
 } from 'livekit-client';
 
-import type { LocalSettings, PlatformRole, RoomConnection } from '@vatrushka/shared';
+import type { DesktopSourceInfo, LocalSettings, PlatformRole, RoomConnection } from '@vatrushka/shared';
 
 import type { ApiClient } from './api.js';
 
@@ -60,6 +60,11 @@ const initialSnapshot: MediaSnapshot = {
   error: null,
 };
 
+const screenShareEncoding = { maxBitrate: 8_000_000, maxFramerate: 30, priority: 'high' as const };
+const publishingReadyTimeoutMs = 20_000;
+
+class UserFacingMediaError extends Error {}
+
 export class MediaSession {
   private room: Room | null = null;
   private connection: RoomConnection | null = null;
@@ -99,7 +104,7 @@ export class MediaSession {
       },
       ...(settings.outputDeviceId ? { audioOutput: { deviceId: settings.outputDeviceId } } : {}),
       publishDefaults: {
-        screenShareEncoding: { maxBitrate: 3_500_000, maxFramerate: 30, priority: 'high' },
+        screenShareEncoding,
         simulcast: true,
       },
     };
@@ -184,28 +189,68 @@ export class MediaSession {
     this.patch({ screenShareAudioMuted: muted });
   }
 
-  async startScreenShare(includeAudio: boolean): Promise<void> {
+  async waitForPublishingReady(timeoutMs = publishingReadyTimeoutMs): Promise<void> {
+    const room = this.room;
+    if (!room || !this.connection) throw new UserFacingMediaError('Голосовой канал не подключён');
+    if (room.state === ConnectionState.Connected) return;
+    if (room.state === ConnectionState.Disconnected) {
+      throw new UserFacingMediaError('Соединение с голосовым сервером потеряно. Переподключитесь к каналу и повторите попытку.');
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const cleanup = (): void => {
+        window.clearTimeout(timeout);
+        room.off(RoomEvent.ConnectionStateChanged, onStateChanged);
+        room.off(RoomEvent.Disconnected, onDisconnected);
+      };
+      const finish = (): void => {
+        cleanup();
+        resolve();
+      };
+      const fail = (): void => {
+        cleanup();
+        reject(new UserFacingMediaError('Связь с голосовым сервером ещё восстанавливается. Дождитесь статуса «Голосовая связь активна» и повторите показ.'));
+      };
+      const onStateChanged = (state: ConnectionState): void => {
+        if (state === ConnectionState.Connected) finish();
+        else if (state === ConnectionState.Disconnected) fail();
+      };
+      const onDisconnected = (): void => fail();
+      const timeout = window.setTimeout(fail, timeoutMs);
+      room.on(RoomEvent.ConnectionStateChanged, onStateChanged);
+      room.on(RoomEvent.Disconnected, onDisconnected);
+      onStateChanged(room.state);
+    });
+  }
+
+  async startScreenShare(includeAudio: boolean, source: Pick<DesktopSourceInfo, 'width' | 'height'> = {}): Promise<void> {
     if (!this.room || !this.connection) throw new Error('Комната не подключена');
+    await this.waitForPublishingReady();
     this.stoppingScreenShare = false;
+    const resolution = screenShareResolution(source);
     try {
       await this.room.localParticipant.setScreenShareEnabled(
         true,
         {
           audio: includeAudio
             ? {
-                restrictOwnAudio: true,
+                restrictOwnAudio: { exact: true },
                 echoCancellation: false,
                 noiseSuppression: false,
                 autoGainControl: false,
               }
             : false,
           video: true,
-          resolution: { width: 1920, height: 1080, frameRate: 30 },
+          resolution,
           contentHint: 'detail',
           systemAudio: includeAudio ? 'include' : 'exclude',
         },
-        { screenShareEncoding: { maxBitrate: 3_500_000, maxFramerate: 30, priority: 'high' }, simulcast: true },
+        { degradationPreference: 'maintain-resolution', screenShareEncoding, simulcast: true },
       );
+      if (includeAudio && !this.isOwnAudioRestricted()) {
+        await this.stopScreenShare(false);
+        throw new UserFacingMediaError('Windows не смогла исключить голоса участников из системного звука. Запустите демонстрацию без звука, чтобы не создавать эхо.');
+      }
     } catch (error) {
       throw new Error(screenShareErrorMessage(error), { cause: error });
     }
@@ -379,6 +424,12 @@ export class MediaSession {
     }
   }
 
+  private isOwnAudioRestricted(): boolean {
+    const publication = this.room?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
+    const settings = publication?.track?.mediaStreamTrack.getSettings() as (MediaTrackSettings & { restrictOwnAudio?: boolean }) | undefined;
+    return settings?.restrictOwnAudio === true;
+  }
+
   private patch(update: Partial<MediaSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...update };
     this.emit();
@@ -414,9 +465,25 @@ function deviceErrorMessage(error: unknown): string {
 }
 
 function screenShareErrorMessage(error: unknown): string {
+  if (error instanceof UserFacingMediaError) return error.message;
+  if (error instanceof Error && /publishing rejected as engine not connected within timeout/iu.test(error.message)) {
+    return 'Связь с голосовым сервером прервалась во время запуска демонстрации. Дождитесь переподключения и повторите попытку.';
+  }
   if (error instanceof DOMException && error.name === 'NotAllowedError') return 'Доступ к записи экрана запрещён. Разрешите его в настройках Windows.';
+  if (error instanceof DOMException && error.name === 'OverconstrainedError') return 'Windows не смогла безопасно захватить системный звук без голосов участников. Запустите демонстрацию без звука.';
   if (error instanceof DOMException && error.name === 'NotFoundError') return 'Выбранный экран или окно больше недоступны';
   if (error instanceof DOMException && error.name === 'NotReadableError') return 'Не удалось прочитать выбранный экран или окно';
   if (error instanceof DOMException && error.name === 'AbortError') return 'Запуск демонстрации был отменён';
   return 'Не удалось запустить демонстрацию экрана';
+}
+
+function screenShareResolution(source: Pick<DesktopSourceInfo, 'width' | 'height'>): { width: number; height: number; frameRate: number } {
+  const sourceWidth = source.width ?? 2560;
+  const sourceHeight = source.height ?? 1440;
+  const scale = Math.min(1, 2560 / sourceWidth, 1440 / sourceHeight);
+  return {
+    width: Math.max(2, Math.round((sourceWidth * scale) / 2) * 2),
+    height: Math.max(2, Math.round((sourceHeight * scale) / 2) * 2),
+    frameRate: 30,
+  };
 }

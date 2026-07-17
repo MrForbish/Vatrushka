@@ -15,15 +15,13 @@
 .vui-voice-participant__signals .vui-badge { display: flex; align-items: center; gap: var(--space-1); }
 .vui-voice-participant[data-featured='true'] .vui-voice-participant__signals { width: min(280px, 100%); justify-content: center; }
 .vui-voice-participant[data-featured='true'] .vui-audio-meter { flex: 1; }
-.vui-voice-participant__controls { position: absolute; inset: auto var(--space-2) var(--space-2); z-index: 3; display: grid; grid-template-columns: auto minmax(120px, 1fr) auto; align-items: end; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-canvas), transparent 5%); box-shadow: var(--shadow-float); opacity: 0; transform: translateY(6px); transition: opacity var(--duration-fast), transform var(--duration-fast); }
-.vui-voice-participant:hover .vui-voice-participant__controls,
-.vui-voice-participant:focus-within .vui-voice-participant__controls { opacity: 1; transform: translateY(0); }
+.vui-voice-participant__controls { z-index: 3; display: grid; grid-column: 1 / -1; grid-template-columns: 36px minmax(150px, 1fr) 36px; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-canvas), transparent 5%); }
 .vui-voice-participant__controls > button { display: flex; align-items: center; gap: var(--space-2); min-height: 34px; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-sm); background: var(--color-surface-2); color: var(--color-text-secondary); font: var(--text-caption); }
 .vui-voice-participant__controls > button span { display: none; }
 .vui-voice-participant__controls .vui-slider { min-width: 130px; }
 .vui-voice-participant__controls .vui-slider > span { font: var(--text-caption); }
 .vui-voice-participant__controls .vui-voice-participant__kick { color: var(--color-danger); }
-.vui-voice-strip { display: grid; grid-auto-columns: minmax(220px, 1fr); grid-auto-flow: column; gap: var(--space-3); overflow-x: auto; padding: var(--space-2); }
+.vui-voice-strip { display: grid; grid-auto-columns: minmax(300px, 1fr); grid-auto-flow: column; gap: var(--space-3); overflow-x: auto; padding: var(--space-2); }
 .vui-voice-control-dock { display: flex; align-items: end; justify-content: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-surface-0), transparent 4%); box-shadow: var(--shadow-float); }
 .vui-voice-control { display: grid; justify-items: center; gap: var(--space-1); min-width: 64px; padding: 0; border: 0; background: transparent; color: var(--color-text-secondary); }
 .vui-voice-control > span { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-2); transition: transform var(--duration-fast), background var(--duration-fast); }

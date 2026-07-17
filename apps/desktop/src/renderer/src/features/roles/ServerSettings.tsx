@@ -176,7 +176,7 @@ export function ServerSettings(props: ServerSettingsProps): React.JSX.Element {
 
   return (
     <>
-      <Modal closeOnBackdrop={false} description={`Роли, доступ к каналам и история изменений · ${props.server.name}`} onClose={props.onClose} open={props.open} size="xl" title="Настройки сервера">
+      <Modal description={`Роли, доступ к каналам и история изменений · ${props.server.name}`} onClose={props.onClose} open={props.open} size="xl" title="Настройки сервера">
         <div className="vui-settings-layout">
           <nav aria-label="Разделы настроек" className="vui-settings-nav">
             <button aria-current={section === 'roles' ? 'page' : undefined} onClick={() => setSection('roles')} type="button"><Icon name="users" size={18} /><span>Роли</span></button>

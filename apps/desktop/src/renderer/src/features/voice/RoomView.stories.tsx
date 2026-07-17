@@ -1,4 +1,4 @@
-import { ConnectionState } from 'livekit-client';
+import { ConnectionState, type LocalTrack } from 'livekit-client';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
 
@@ -71,3 +71,18 @@ export const DeviceSelection: Story = {
 };
 
 export const VisualRoom: Story = { args: { microphoneId: 'microphone-studio', outputId: 'headphones-usb' } };
+
+const screenTrack = { attach: () => undefined, detach: () => [] } as unknown as LocalTrack;
+
+export const ScreenShareViewer: Story = {
+  args: {
+    snapshot: {
+      ...meta.args.snapshot,
+      screenTrack,
+      screenSharerName: 'Анна Белова',
+      screenShareIsLocal: false,
+      hasScreenShareAudio: true,
+      screenShareAudioVolume: 0.72,
+    },
+  },
+};

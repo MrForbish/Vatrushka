@@ -24,9 +24,10 @@ export interface VoiceParticipantTileProps {
   onKick?: (id: string) => void;
   onLocalMute?: (id: string, muted: boolean) => void;
   onVolume?: (id: string, volume: number) => void;
+  showControls?: boolean;
 }
 
-export function VoiceParticipantTile({ canKick = false, featured = false, onKick, onLocalMute, onVolume, participant }: VoiceParticipantTileProps): React.JSX.Element {
+export function VoiceParticipantTile({ canKick = false, featured = false, onKick, onLocalMute, onVolume, participant, showControls = true }: VoiceParticipantTileProps): React.JSX.Element {
   const audioLevel = Math.max(0, Math.min(1, participant.audioLevel ?? 0));
   const volume = participant.locallyMuted === true ? 0 : participant.volume ?? 1;
   return (
@@ -34,7 +35,7 @@ export function VoiceParticipantTile({ canKick = false, featured = false, onKick
       <div className="vui-voice-participant__portrait"><Avatar name={participant.name} size="lg" status={participant.isSpeaking === true ? 'online' : 'offline'} /><span aria-hidden="true" className="vui-voice-participant__pulse" /></div>
       <div className="vui-voice-participant__identity"><span><strong>{participant.name}{participant.isLocal === true ? ' (вы)' : ''}</strong>{participant.badge === 'founder' ? <Badge tone="founder">DEV</Badge> : participant.badge === 'admin' ? <Badge tone="primary">ADMIN</Badge> : participant.badge === 'guest' ? <Badge>ГОСТЬ</Badge> : null}</span><small>{participant.isSpeaking === true ? 'Говорит' : participant.statusLabel ?? 'В голосовом канале'}</small></div>
       <div className="vui-voice-participant__signals"><AudioLevelMeter label={`Уровень голоса ${participant.name}`} segments={featured ? 16 : 8} value={audioLevel} />{participant.isScreenSharing === true ? <Badge tone="success"><Icon name="screen" size={12} /> LIVE</Badge> : null}<span aria-label={participant.isMuted === true ? 'Микрофон выключен' : 'Микрофон включён'} role="img"><Icon name={participant.isMuted === true ? 'micOff' : 'mic'} size={17} /></span></div>
-      {participant.isLocal === true ? null : <div className="vui-voice-participant__controls"><button aria-label={participant.locallyMuted === true ? 'Включить локально' : 'Заглушить локально'} aria-pressed={participant.locallyMuted === true} onClick={() => onLocalMute?.(participant.id, participant.locallyMuted !== true)} type="button"><Icon name={participant.locallyMuted === true ? 'volumeOff' : 'volume'} size={16} /><span>{participant.locallyMuted === true ? 'Включить локально' : 'Заглушить локально'}</span></button><Slider label={`Громкость ${participant.name}`} max={100} min={0} onChange={(event) => onVolume?.(participant.id, Number(event.target.value) / 100)} value={Math.round(volume * 100)} valueLabel={`${Math.round(volume * 100)}%`} />{canKick && onKick !== undefined ? <button aria-label={`Исключить ${participant.name}`} className="vui-voice-participant__kick" onClick={() => onKick(participant.id)} type="button"><Icon name="close" size={15} /><span>Исключить</span></button> : null}</div>}
+      {participant.isLocal === true || !showControls ? null : <div className="vui-voice-participant__controls"><button aria-label={participant.locallyMuted === true ? 'Включить локально' : 'Заглушить локально'} aria-pressed={participant.locallyMuted === true} onClick={() => onLocalMute?.(participant.id, participant.locallyMuted !== true)} type="button"><Icon name={participant.locallyMuted === true ? 'volumeOff' : 'volume'} size={16} /><span>{participant.locallyMuted === true ? 'Включить локально' : 'Заглушить локально'}</span></button><Slider className="vui-slider--compact" label={`Громкость ${participant.name}`} max={100} min={0} onChange={(event) => onVolume?.(participant.id, Number(event.target.value) / 100)} value={Math.round(volume * 100)} valueLabel={`${Math.round(volume * 100)}%`} />{canKick && onKick !== undefined ? <button aria-label={`Исключить ${participant.name}`} className="vui-voice-participant__kick" onClick={() => onKick(participant.id)} type="button"><Icon name="close" size={15} /><span>Исключить</span></button> : null}</div>}
     </article>
   );
 }

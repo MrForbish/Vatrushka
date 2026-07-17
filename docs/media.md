@@ -18,13 +18,16 @@ Participant UI показывает имя, владельца/админист�
 2. Main process сериализует `desktopCapturer.getSources` без Node objects.
 3. Renderer группирует подписанные превью в «Весь экран» и «Окна приложений», показывает имя окна/приложения и выбирает source.
 4. Main проверяет source повторно и разрешает его ровно одному следующему `getDisplayMedia` request.
-5. На Windows `audio: loopback` добавляется только по checkbox; `restrictOwnAudio` исключает вывод самой «Ватрушки», чтобы не удваивать голоса участников.
-6. LiveKit публикует максимум 1920×1080/30 FPS с ориентиром 3.5 Mbps.
-7. Heartbeat идёт каждые 10 секунд; failure останавливает local track.
+5. На Windows `audio: loopback` добавляется только по явному выбору пользователя. Renderer запрашивает `restrictOwnAudio: { exact: true }` и после захвата проверяет track settings. Если исключение вывода самой «Ватрушки» не подтверждено, аудиодемонстрация fail-closed останавливается, чтобы не удваивать голоса участников.
+6. LiveKit сохраняет пропорции выбранного источника, публикует до 2560×1440/30 FPS с потолком 8 Mbps и предпочитает сохранять разрешение при ухудшении сети.
+7. Публикация разрешена только в состоянии LiveKit `Connected`. Во время reconnect клиент ждёт восстановления до 20 секунд, а затем показывает инструкцию вместо внутренней ошибки media engine.
+8. Heartbeat идёт каждые 10 секунд; failure останавливает local track.
 
 Удалённый `ScreenShareAudio` имеет отдельные mute и volume, не влияющие на громкость голосов участников. Координация выполняется channel lease в PostgreSQL.
 
 Cancel, publish failure, normal stop, channel leave, window close, `participant_left`, screen `track_unpublished`, LiveKit room finish и lease expiry освобождают ресурс. При ошибочном появлении нескольких screen tracks клиент логирует диагностику и показывает первый.
+
+Удалённый участник остаётся в постоянной полосе участников, даже когда становится active speaker. Поэтому его локальные mute/volume controls не размонтируются во время речи; featured-карточка служит только крупным визуальным представлением.
 
 ## Provider switching
 
