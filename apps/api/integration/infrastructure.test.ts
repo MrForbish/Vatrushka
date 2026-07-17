@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createPostgresStore } from '../src/db/postgres-store.js';
 import { createPresenceStore } from '../src/services/presence-store.js';
+import { createCanonicalMessagingStore } from '../src/services/canonical-messaging.js';
 import { loadConfig } from '../src/config.js';
 
 const databaseUrl = process.env.INTEGRATION_DATABASE_URL;
@@ -19,6 +20,7 @@ if (!databaseUrl || !redisUrl) {
 
 const adminPool = new pg.Pool({ connectionString: databaseUrl, max: 2 });
 const postgres = createPostgresStore(databaseUrl);
+const messaging = createCanonicalMessagingStore(databaseUrl);
 const presence = await createPresenceStore(loadConfig({
   NODE_ENV: 'test',
   PRESENCE_STORAGE_DRIVER: 'redis',
@@ -36,6 +38,7 @@ beforeAll(async () => {
 afterAll(async () => {
   await presence.close();
   await postgres.close();
+  await messaging.close();
   await adminPool.end();
 });
 
@@ -103,5 +106,30 @@ describe('production infrastructure adapters', () => {
     await presence.removeSession(userId, 'laptop');
     await expect(presence.status(userId, now)).resolves.toBe('idle');
     await expect(presence.status(userId, new Date(now.getTime() + 76_000))).resolves.toBe('offline');
+  });
+
+  it('persists idempotent messages, monotonic read state, notifications, and soft deletes', async () => {
+    const now = new Date('2026-07-18T12:00:00.000Z');
+    const first = (await postgres.store.getOrCreateUser(`${randomUUID()}@integration.test`, now)).user;
+    const second = (await postgres.store.getOrCreateUser(`${randomUUID()}@integration.test`, now)).user;
+    const serverId = randomUUID();
+    await adminPool.query('insert into servers (id, name, invite_code, owner_user_id, created_at, updated_at) values ($1, $2, $3, $4, $5, $5)', [serverId, 'Integration', randomUUID(), first.id, now]);
+    await adminPool.query('insert into server_members (server_id, user_id, joined_at) values ($1, $2, $4), ($1, $3, $4)', [serverId, first.id, second.id, now]);
+    const direct = await messaging.getOrCreateDirectConversation(first.id, second.id, now);
+    expect(direct.allowed).toBe(true);
+
+    const clientMessageId = randomUUID();
+    const created = await messaging.createMessage({ conversationId: direct.conversation.id, authorId: first.id, clientMessageId, content: 'hello', replyToMessageId: null, attachmentIds: [], mentions: [], now });
+    const retried = await messaging.createMessage({ conversationId: direct.conversation.id, authorId: first.id, clientMessageId, content: 'duplicate', replyToMessageId: null, attachmentIds: [], mentions: [], now });
+    expect(created.created).toBe(true);
+    expect(retried.created).toBe(false);
+    expect(retried.message.id).toBe(created.message.id);
+
+    const state = await messaging.updateReadState(direct.conversation.id, second.id, created.message.id, created.message.id, now);
+    const stale = await messaging.updateReadState(direct.conversation.id, second.id, created.message.id, created.message.id, new Date(now.getTime() + 1_000));
+    expect(stale?.lastReadMessageId).toBe(state?.lastReadMessageId);
+    expect(await messaging.listNotifications(second.id, null, 10, true)).toHaveLength(1);
+    expect(await messaging.softDeleteMessage(created.message.id, first.id, false, new Date(now.getTime() + 2_000))).toBe(true);
+    expect((await messaging.findMessage(created.message.id, second.id))?.deletedAt).not.toBeNull();
   });
 });

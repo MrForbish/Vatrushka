@@ -101,6 +101,47 @@ export const markChannelReadSchema = z.object({ messageId: uuidSchema }).strict(
 export const createDirectConversationSchema = z.object({ userId: uuidSchema }).strict();
 export const createDirectMessageSchema = z.object({ content: newMessageContentSchema, replyToMessageId: uuidSchema.nullish() }).strict();
 
+export const canonicalMessageIdSchema = z.string().regex(/^[1-9]\d*$/u);
+export const conversationHistoryQuerySchema = z.object({
+  before: canonicalMessageIdSchema.optional(),
+  after: canonicalMessageIdSchema.optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+}).strict().refine((value) => !(value.before && value.after), 'before and after are mutually exclusive');
+export const conversationMentionInputSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('user'), userId: uuidSchema, start: z.number().int().min(0).max(4_000).optional(), length: z.number().int().min(1).max(257).optional() }).strict(),
+  z.object({ type: z.literal('role'), roleId: uuidSchema }).strict(),
+  z.object({ type: z.literal('everyone') }).strict(),
+]);
+export const createConversationMessageSchema = z.object({
+  clientMessageId: uuidSchema,
+  content: newMessageContentSchema.default(''),
+  replyToMessageId: canonicalMessageIdSchema.nullish(),
+  attachmentIds: z.array(uuidSchema).max(10).default([]),
+  mentions: z.array(conversationMentionInputSchema).max(100).default([]),
+}).strict().refine((value) => value.content.length > 0 || value.attachmentIds.length > 0, 'Message must contain text or an attachment');
+export const updateConversationMessageSchema = z.object({
+  content: messageContentSchema,
+  mentions: z.array(conversationMentionInputSchema).max(100).default([]),
+}).strict();
+export const updateConversationReadStateSchema = z.object({
+  lastDeliveredMessageId: canonicalMessageIdSchema.optional(),
+  lastReadMessageId: canonicalMessageIdSchema.optional(),
+}).strict().refine((value) => Boolean(value.lastDeliveredMessageId || value.lastReadMessageId), 'At least one cursor is required');
+export const notificationQuerySchema = z.object({
+  before: z.iso.datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  unreadOnly: z.coerce.boolean().default(false),
+}).strict();
+export const notificationPreferenceLevelSchema = z.enum(['all', 'mentions', 'none']);
+export const createAttachmentIntentSchema = z.object({
+  fileName: z.string().trim().min(1).max(180),
+  mimeType: z.string().trim().min(3).max(127),
+  sizeBytes: z.number().int().positive(),
+  width: z.number().int().positive().max(32_768).optional(),
+  height: z.number().int().positive().max(32_768).optional(),
+  durationMs: z.number().int().positive().max(86_400_000).optional(),
+}).strict();
+
 export const desktopSourceSelectionSchema = z
   .object({ sourceId: z.string().min(1).max(512), includeAudio: z.boolean() })
   .strict();

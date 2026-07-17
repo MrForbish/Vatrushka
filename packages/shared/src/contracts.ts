@@ -342,6 +342,70 @@ export interface DirectMessage {
   editedAt: string | null;
 }
 
+export type ConversationType = 'server_channel' | 'direct' | 'group_direct';
+export type ConversationMentionType = 'user' | 'role' | 'everyone';
+export type ConversationNotificationType = 'direct_message' | 'mention' | 'reply' | 'server_invite' | 'moderation' | 'system';
+
+export interface ConversationSummary {
+  id: string;
+  type: ConversationType;
+  serverId: string | null;
+  channelId: string | null;
+  title: string;
+  updatedAt: string;
+  lastMessage: { id: string; authorId: string; content: string; createdAt: string } | null;
+  unreadCount: number;
+  mentionCount: number;
+}
+
+export interface ConversationMessage {
+  id: string;
+  conversationId: string;
+  clientMessageId: string;
+  author: { id: string; displayName: string; username: string | null; avatarUrl: string | null };
+  content: string;
+  replyTo: { id: string; authorId: string; authorDisplayName: string; content: string } | null;
+  attachments: Array<{ id: string; fileName: string; mimeType: string; sizeBytes: string; width: number | null; height: number | null; durationMs: number | null }>;
+  reactions: Array<{ emoji: string; count: number; reactedByCurrentUser: boolean }>;
+  mentions: Array<{ id: string; type: ConversationMentionType; userId: string | null; roleId: string | null; start: number | null; length: number | null }>;
+  createdAt: string;
+  editedAt: string | null;
+  deletedAt: string | null;
+}
+
+export interface ConversationMessagePage {
+  items: ConversationMessage[];
+  pageInfo: { before: string | null; after: string | null; hasMore: boolean };
+}
+
+export interface ConversationReadState {
+  conversationId: string;
+  lastDeliveredMessageId: string | null;
+  lastReadMessageId: string | null;
+  lastDeliveredAt: string | null;
+  lastReadAt: string | null;
+  mentionCount: number;
+}
+
+export interface UserUnreadSummary {
+  totalDirectUnread: number;
+  totalMentionUnread: number;
+  totalReplyUnread: number;
+  conversations: Array<{ conversationId: string; unreadCount: number; mentionCount: number; firstUnreadMessageId: string | null }>;
+}
+
+export interface InternalNotification {
+  id: string;
+  type: ConversationNotificationType;
+  actorUserId: string | null;
+  conversationId: string | null;
+  messageId: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  readAt: string | null;
+  dismissedAt: string | null;
+}
+
 export interface DesktopMessageNotification {
   id: string;
   title: string;

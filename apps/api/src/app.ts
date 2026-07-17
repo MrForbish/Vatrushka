@@ -47,6 +47,13 @@ import {
   updateRoleSchema,
   assignMemberRolesSchema,
   channelPermissionOverwriteSchema,
+  canonicalMessageIdSchema,
+  conversationHistoryQuerySchema,
+  createConversationMessageSchema,
+  updateConversationMessageSchema,
+  updateConversationReadStateSchema,
+  notificationQuerySchema,
+  createAttachmentIntentSchema,
   reorderRoleSchema,
   verifyRegistrationSchema,
 } from '@vatrushka/shared';
@@ -68,6 +75,10 @@ const channelMemberParams = z.object({ channelId: z.uuid(), userId: z.uuid() });
 const channelOverwriteParams = z.object({ channelId: z.uuid(), targetType: z.enum(['ROLE', 'MEMBER']), targetId: z.uuid() });
 const authSessionParams = z.object({ sessionId: z.uuid() });
 const inviteTokenParams = z.object({ inviteToken: inviteTokenSchema });
+const conversationIdParams = z.object({ conversationId: z.uuid() });
+const canonicalMessageParams = z.object({ conversationId: z.uuid(), messageId: canonicalMessageIdSchema });
+const canonicalReactionParams = canonicalMessageParams.extend({ emoji: messageReactionSchema });
+const notificationIdParams = z.object({ notificationId: z.uuid() });
 
 const errorResponseSchema = z.object({
   code: z.string(),
@@ -173,6 +184,22 @@ const directMessageParticipantResponseSchema = z.object({ userId: z.string(), di
 const directConversationResponseSchema = z.object({ id: z.string(), participant: directMessageParticipantResponseSchema, lastMessage: z.object({ authorUserId: z.string(), content: z.string(), createdAt: z.string() }).nullable(), unreadCount: z.number(), createdAt: z.string(), updatedAt: z.string() });
 const directMessageCandidateResponseSchema = directMessageParticipantResponseSchema.extend({ sharedServerNames: z.array(z.string()) });
 const directMessageResponseSchema = z.object({ id: z.string(), conversationId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), authorPlatformRole: z.enum(['member', 'admin', 'owner']), content: z.string(), replyTo: z.object({ messageId: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string() }).nullable(), reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reactedByCurrentUser: z.boolean() })), attachments: z.array(messageAttachmentResponseSchema), createdAt: z.string(), editedAt: z.string().nullable() });
+const canonicalConversationResponseSchema = z.object({ id: z.string(), type: z.enum(['server_channel', 'direct', 'group_direct']), serverId: z.string().nullable(), channelId: z.string().nullable(), title: z.string(), updatedAt: z.string(), lastMessage: z.object({ id: z.string(), authorId: z.string(), content: z.string(), createdAt: z.string() }).nullable(), unreadCount: z.number(), mentionCount: z.number() });
+const canonicalMessageResponseSchema = z.object({
+  id: z.string(), conversationId: z.string(), clientMessageId: z.string(),
+  author: z.object({ id: z.string(), displayName: z.string(), username: z.string().nullable(), avatarUrl: z.string().nullable() }),
+  content: z.string(),
+  replyTo: z.object({ id: z.string(), authorId: z.string(), authorDisplayName: z.string(), content: z.string() }).nullable(),
+  attachments: z.array(z.object({ id: z.string(), fileName: z.string(), mimeType: z.string(), sizeBytes: z.string(), width: z.number().nullable(), height: z.number().nullable(), durationMs: z.number().nullable() })),
+  reactions: z.array(z.object({ emoji: z.string(), count: z.number(), reactedByCurrentUser: z.boolean() })),
+  mentions: z.array(z.object({ id: z.string(), type: z.enum(['user', 'role', 'everyone']), userId: z.string().nullable(), roleId: z.string().nullable(), start: z.number().nullable(), length: z.number().nullable() })),
+  createdAt: z.string(), editedAt: z.string().nullable(), deletedAt: z.string().nullable(),
+});
+const canonicalMessagePageResponseSchema = z.object({ items: z.array(canonicalMessageResponseSchema), pageInfo: z.object({ before: z.string().nullable(), after: z.string().nullable(), hasMore: z.boolean() }) });
+const canonicalReadStateResponseSchema = z.object({ conversationId: z.string(), lastDeliveredMessageId: z.string().nullable(), lastReadMessageId: z.string().nullable(), lastDeliveredAt: z.string().nullable(), lastReadAt: z.string().nullable(), mentionCount: z.number() });
+const unreadSummaryResponseSchema = z.object({ totalDirectUnread: z.number(), totalMentionUnread: z.number(), totalReplyUnread: z.number(), conversations: z.array(z.object({ conversationId: z.string(), unreadCount: z.number(), mentionCount: z.number(), firstUnreadMessageId: z.string().nullable() })) });
+const internalNotificationResponseSchema = z.object({ id: z.string(), type: z.enum(['direct_message', 'mention', 'reply', 'server_invite', 'moderation', 'system']), actorUserId: z.string().nullable(), conversationId: z.string().nullable(), messageId: z.string().nullable(), payload: z.record(z.string(), z.unknown()), createdAt: z.string(), readAt: z.string().nullable(), dismissedAt: z.string().nullable() });
+const attachmentIntentResponseSchema = z.object({ attachmentId: z.string(), uploadUrl: z.url(), headers: z.record(z.string(), z.string()), expiresAt: z.string() });
 
 export interface BuildAppOptions {
   config: AppConfig;
@@ -532,6 +559,86 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     await service.kickServerMember(request.headers.authorization, request.params.serverId, request.params.userId);
     return reply.status(204).send(null);
   });
+
+  api.get(`${API_PREFIX}/conversations`, {
+    schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], response: { 200: z.array(canonicalConversationResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listCanonicalConversations(request.headers.authorization));
+
+  api.post(`${API_PREFIX}/direct-conversations/:userId`, {
+    config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: z.object({ userId: z.uuid() }), response: { 200: canonicalConversationResponseSchema, ...routeErrors() } },
+  }, async (request) => service.createCanonicalDirectConversation(request.headers.authorization, request.params.userId));
+
+  api.get(`${API_PREFIX}/conversations/:conversationId`, {
+    schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: conversationIdParams, response: { 200: canonicalConversationResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getCanonicalConversation(request.headers.authorization, request.params.conversationId));
+
+  api.get(`${API_PREFIX}/conversations/:conversationId/messages`, {
+    schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: conversationIdParams, querystring: conversationHistoryQuerySchema, response: { 200: canonicalMessagePageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.listCanonicalMessages(request.headers.authorization, request.params.conversationId, request.query.before, request.query.after, request.query.limit));
+
+  api.post(`${API_PREFIX}/conversations/:conversationId/messages`, {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: conversationIdParams, body: createConversationMessageSchema, response: { 200: canonicalMessageResponseSchema, 201: canonicalMessageResponseSchema, ...routeErrors() } },
+  }, async (request, reply) => {
+    const result = await service.createCanonicalMessage(request.headers.authorization, request.params.conversationId, request.body);
+    return reply.status(result.created ? 201 : 200).send(result.message);
+  });
+
+  api.patch(`${API_PREFIX}/conversations/:conversationId/messages/:messageId`, {
+    schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: canonicalMessageParams, body: updateConversationMessageSchema, response: { 200: canonicalMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateCanonicalMessage(request.headers.authorization, request.params.messageId, request.body.content, request.body.mentions));
+
+  api.delete(`${API_PREFIX}/conversations/:conversationId/messages/:messageId`, {
+    schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: canonicalMessageParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.deleteCanonicalMessage(request.headers.authorization, request.params.messageId);
+    return reply.status(204).send(null);
+  });
+
+  api.put(`${API_PREFIX}/conversations/:conversationId/messages/:messageId/reactions/:emoji`, {
+    schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: canonicalReactionParams, response: { 200: canonicalMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.setCanonicalReaction(request.headers.authorization, request.params.messageId, request.params.emoji, true));
+
+  api.delete(`${API_PREFIX}/conversations/:conversationId/messages/:messageId/reactions/:emoji`, {
+    schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: canonicalReactionParams, response: { 200: canonicalMessageResponseSchema, ...routeErrors() } },
+  }, async (request) => service.setCanonicalReaction(request.headers.authorization, request.params.messageId, request.params.emoji, false));
+
+  api.put(`${API_PREFIX}/conversations/:conversationId/read-state`, {
+    schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: conversationIdParams, body: updateConversationReadStateSchema, response: { 200: canonicalReadStateResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateCanonicalReadState(request.headers.authorization, request.params.conversationId, request.body.lastDeliveredMessageId, request.body.lastReadMessageId));
+
+  api.get(`${API_PREFIX}/me/unread`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], response: { 200: unreadSummaryResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getCanonicalUnreadSummary(request.headers.authorization));
+
+  api.get(`${API_PREFIX}/notifications`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], querystring: notificationQuerySchema, response: { 200: z.array(internalNotificationResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listCanonicalNotifications(request.headers.authorization, request.query.before, request.query.limit, request.query.unreadOnly));
+
+  api.patch(`${API_PREFIX}/notifications/:notificationId/read`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], params: notificationIdParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.markCanonicalNotificationRead(request.headers.authorization, request.params.notificationId);
+    return reply.status(204).send(null);
+  });
+
+  api.post(`${API_PREFIX}/notifications/read-all`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], response: { 200: z.object({ updated: z.number() }), ...routeErrors() } },
+  }, async (request) => service.markAllCanonicalNotificationsRead(request.headers.authorization));
+
+  api.post(`${API_PREFIX}/attachments/intents`, {
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    schema: { tags: ['attachments'], security: [{ bearerAuth: [] }], body: createAttachmentIntentSchema, response: { 201: attachmentIntentResponseSchema, ...routeErrors() } },
+  }, async (request, reply) => reply.status(201).send(await service.createCanonicalAttachmentIntent(request.headers.authorization, request.body)));
+
+  api.post(`${API_PREFIX}/attachments/:attachmentId/finalize`, {
+    schema: { tags: ['attachments'], security: [{ bearerAuth: [] }], params: attachmentIdParams, response: { 200: z.object({ attachmentId: z.string(), finalized: z.literal(true) }), ...routeErrors() } },
+  }, async (request) => service.finalizeCanonicalAttachment(request.headers.authorization, request.params.attachmentId));
+
+  api.get(`${API_PREFIX}/attachments/:attachmentId/url`, {
+    schema: { tags: ['attachments'], security: [{ bearerAuth: [] }], params: attachmentIdParams, response: { 200: z.object({ url: z.url(), expiresAt: z.string() }), ...routeErrors() } },
+  }, async (request) => service.getCanonicalAttachmentUrl(request.headers.authorization, request.params.attachmentId));
 
   api.get(`${API_PREFIX}/direct-conversations/candidates`, {
     schema: { tags: ['direct-messages'], security: [{ bearerAuth: [] }], response: { 200: z.array(directMessageCandidateResponseSchema), ...routeErrors() } },

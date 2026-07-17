@@ -152,6 +152,9 @@ export interface ObjectStorage {
   putObject(input: ObjectStoragePutInput): Promise<void>;
   getObject(key: string): Promise<Buffer>;
   deleteObject(key: string): Promise<void>;
+  createPutUrl(key: string, mimeType: string, size: number, expiresInSeconds: number): Promise<string>;
+  createGetUrl(key: string, expiresInSeconds: number): Promise<string>;
+  headObject(key: string): Promise<{ size: number; mimeType: string | null }>;
   close(): void;
 }
 

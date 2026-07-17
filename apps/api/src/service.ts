@@ -39,6 +39,12 @@ import {
   type PresencePreference,
   type DirectMessagePrivacy,
   type PresenceVisibility,
+  type ConversationMessage,
+  type ConversationMessagePage,
+  type ConversationReadState,
+  type ConversationSummary,
+  type InternalNotification,
+  type UserUnreadSummary,
   serverPermissions,
   highestRolePosition,
   resolveChannelPermissions,
@@ -55,6 +61,7 @@ import type { AuthCodeRecord, DirectConversationOverviewRecord, DirectConversati
 import type { DataStore, Mailer, MediaService, ObjectStorage, PresenceStore } from './ports.js';
 import { attachmentObjectKey } from './services/attachment-objects.js';
 import { MemoryPresenceStore } from './services/presence-store.js';
+import type { CanonicalMentionInput, CanonicalMessagingStore } from './services/canonical-messaging.js';
 import {
   hashOpaqueToken,
   hashOtp,
@@ -79,6 +86,7 @@ export interface ServiceDependencies {
   media: MediaService;
   objectStorage?: ObjectStorage | null;
   presenceStore?: PresenceStore;
+  canonicalMessagingStore?: CanonicalMessagingStore;
   clock?: () => Date;
 }
 
@@ -200,6 +208,7 @@ export class VatrushkaService {
   readonly media: MediaService;
   readonly objectStorage: ObjectStorage | null;
   readonly presenceStore: PresenceStore;
+  readonly canonicalMessagingStore: CanonicalMessagingStore | null;
   private readonly mailer: Mailer;
   private readonly clock: () => Date;
   private readonly pendingVoiceMoves = new Map<string, { channelId: string; expiresAt: Date; seamlesslyMoved: boolean }>();
@@ -211,6 +220,7 @@ export class VatrushkaService {
     this.media = dependencies.media;
     this.objectStorage = dependencies.objectStorage ?? null;
     this.presenceStore = dependencies.presenceStore ?? new MemoryPresenceStore();
+    this.canonicalMessagingStore = dependencies.canonicalMessagingStore ?? null;
     this.clock = dependencies.clock ?? (() => new Date());
   }
 
@@ -1547,6 +1557,221 @@ export class VatrushkaService {
     }
     if (!(await verifyPassword(password, user.passwordHash))) throw new AppError('INVALID_CREDENTIALS', 401);
     return user;
+  }
+
+  async listCanonicalConversations(authorization: string | undefined): Promise<ConversationSummary[]> {
+    const user = await this.authenticate(authorization);
+    this.requireCompleteProfile(user);
+    const summaries = await this.messaging().listConversations(user.id);
+    const visible = await Promise.all(summaries.map(async (summary) => {
+      try {
+        await this.requireCanonicalConversation(summary.id, user, 'READ_MESSAGE_HISTORY');
+        return summary;
+      } catch {
+        return null;
+      }
+    }));
+    return visible.filter((summary): summary is ConversationSummary => summary !== null);
+  }
+
+  async createCanonicalDirectConversation(authorization: string | undefined, otherUserId: string): Promise<ConversationSummary> {
+    const user = await this.authenticate(authorization);
+    this.requireCompleteProfile(user);
+    if (otherUserId === user.id || !(await this.store.findUserById(otherUserId))) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
+    const result = await this.messaging().getOrCreateDirectConversation(user.id, otherUserId, this.now());
+    if (result.blocked || !result.allowed) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
+    const summary = (await this.messaging().listConversations(user.id)).find((candidate) => candidate.id === result.conversation.id);
+    if (!summary) throw new AppError('INTERNAL_ERROR', 500);
+    return summary;
+  }
+
+  async getCanonicalConversation(authorization: string | undefined, conversationId: string): Promise<ConversationSummary> {
+    const user = await this.authenticate(authorization);
+    await this.requireCanonicalConversation(conversationId, user, 'READ_MESSAGE_HISTORY');
+    const summary = (await this.messaging().listConversations(user.id)).find((candidate) => candidate.id === conversationId);
+    if (!summary) throw new AppError('DIRECT_CONVERSATION_NOT_FOUND', 404);
+    return summary;
+  }
+
+  async listCanonicalMessages(authorization: string | undefined, conversationId: string, before: string | undefined, after: string | undefined, limit: number): Promise<ConversationMessagePage> {
+    const user = await this.authenticate(authorization);
+    await this.requireCanonicalConversation(conversationId, user, 'READ_MESSAGE_HISTORY');
+    return this.messaging().listMessages(conversationId, user.id, before ?? null, after ?? null, limit);
+  }
+
+  async createCanonicalMessage(authorization: string | undefined, conversationId: string, input: { clientMessageId: string; content: string; replyToMessageId?: string | null | undefined; attachmentIds: string[]; mentions: CanonicalMentionInput[] }): Promise<{ message: ConversationMessage; created: boolean }> {
+    const user = await this.authenticate(authorization);
+    this.requireCompleteProfile(user);
+    const access = await this.requireCanonicalConversation(conversationId, user, 'SEND_MESSAGES');
+    if (input.attachmentIds.length > this.config.MEDIA_MAX_ATTACHMENTS_PER_MESSAGE) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'attachmentIds' });
+    const attachments = await Promise.all(input.attachmentIds.map((id) => this.messaging().findAttachment(id)));
+    if (attachments.reduce((total, attachment) => total + Number(attachment?.sizeBytes ?? 0), 0) > this.config.MEDIA_MAX_MESSAGE_TOTAL_BYTES) throw new AppError('ATTACHMENT_TOO_LARGE', 413, undefined, { limit: this.config.MEDIA_MAX_MESSAGE_TOTAL_BYTES });
+    if (input.attachmentIds.length > 0 && access.channel) await this.requireChannelPermission(access.server!, access.channel, user, 'SEND_ATTACHMENTS');
+    await this.validateCanonicalMentions(access, user, input.mentions);
+    try {
+      return await this.messaging().createMessage({ conversationId, authorId: user.id, clientMessageId: input.clientMessageId, content: input.content, replyToMessageId: input.replyToMessageId ?? null, attachmentIds: input.attachmentIds, mentions: input.mentions, now: this.now() });
+    } catch (error) {
+      if (error instanceof Error && (error.message === 'INVALID_REPLY' || error.message === 'INVALID_ATTACHMENTS')) throw new AppError('VALIDATION_ERROR', 400);
+      throw error;
+    }
+  }
+
+  async updateCanonicalMessage(authorization: string | undefined, messageId: string, content: string, mentions: CanonicalMentionInput[]): Promise<ConversationMessage> {
+    const user = await this.authenticate(authorization);
+    const current = await this.messaging().findMessage(messageId, user.id);
+    if (!current) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    const access = await this.requireCanonicalConversation(current.conversationId, user, 'READ_MESSAGE_HISTORY');
+    await this.validateCanonicalMentions(access, user, mentions);
+    const updated = await this.messaging().editMessage(messageId, user.id, content, mentions, this.now());
+    if (!updated) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    return updated;
+  }
+
+  async deleteCanonicalMessage(authorization: string | undefined, messageId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const current = await this.messaging().findMessage(messageId, user.id);
+    if (!current) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    const access = await this.requireCanonicalConversation(current.conversationId, user, 'READ_MESSAGE_HISTORY');
+    let canManage = false;
+    if (access.channel) canManage = (await this.channelPermissionsFor(access.server!, access.channel, user)).has('MANAGE_MESSAGES');
+    if (!(await this.messaging().softDeleteMessage(messageId, user.id, canManage, this.now()))) throw new AppError('MESSAGE_NOT_FOUND', 404);
+  }
+
+  async setCanonicalReaction(authorization: string | undefined, messageId: string, emoji: string, active: boolean): Promise<ConversationMessage> {
+    const user = await this.authenticate(authorization);
+    const current = await this.messaging().findMessage(messageId, user.id);
+    if (!current) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    await this.requireCanonicalConversation(current.conversationId, user, 'ADD_REACTIONS');
+    const updated = await this.messaging().setReaction(messageId, user.id, emoji, active, this.now());
+    if (!updated) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    return updated;
+  }
+
+  async updateCanonicalReadState(authorization: string | undefined, conversationId: string, deliveredId: string | undefined, readId: string | undefined): Promise<ConversationReadState> {
+    const user = await this.authenticate(authorization);
+    await this.requireCanonicalConversation(conversationId, user, 'READ_MESSAGE_HISTORY');
+    const state = await this.messaging().updateReadState(conversationId, user.id, deliveredId ?? null, readId ?? null, this.now());
+    if (!state) throw new AppError('VALIDATION_ERROR', 400);
+    return state;
+  }
+
+  async getCanonicalUnreadSummary(authorization: string | undefined): Promise<UserUnreadSummary> {
+    const user = await this.authenticate(authorization);
+    return this.messaging().unreadSummary(user.id);
+  }
+
+  async listCanonicalNotifications(authorization: string | undefined, before: string | undefined, limit: number, unreadOnly: boolean): Promise<InternalNotification[]> {
+    const user = await this.authenticate(authorization);
+    return this.messaging().listNotifications(user.id, before ? new Date(before) : null, limit, unreadOnly);
+  }
+
+  async markCanonicalNotificationRead(authorization: string | undefined, notificationId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    if (!(await this.messaging().markNotificationRead(user.id, notificationId, this.now()))) throw new AppError('MESSAGE_NOT_FOUND', 404);
+  }
+
+  async markAllCanonicalNotificationsRead(authorization: string | undefined): Promise<{ updated: number }> {
+    const user = await this.authenticate(authorization);
+    return { updated: await this.messaging().markAllNotificationsRead(user.id, this.now()) };
+  }
+
+  async createCanonicalAttachmentIntent(authorization: string | undefined, input: { fileName: string; mimeType: string; sizeBytes: number; width?: number | undefined; height?: number | undefined; durationMs?: number | undefined }): Promise<{ attachmentId: string; uploadUrl: string; headers: Record<string, string>; expiresAt: string }> {
+    const user = await this.authenticate(authorization);
+    if (!this.objectStorage) throw new AppError('MEDIA_STORAGE_UNAVAILABLE', 503);
+    const allowed = new Set(this.config.MEDIA_ALLOWED_MIME_TYPES.split(',').map((value) => value.trim()).filter(Boolean));
+    const limit = input.mimeType.startsWith('image/') ? this.config.MEDIA_MAX_IMAGE_BYTES : input.mimeType.startsWith('video/') ? this.config.MEDIA_MAX_VIDEO_BYTES : this.config.MEDIA_MAX_FILE_BYTES;
+    if (!allowed.has(input.mimeType)) throw new AppError('ATTACHMENT_TYPE_NOT_ALLOWED', 400);
+    if (input.sizeBytes > limit) throw new AppError('ATTACHMENT_TOO_LARGE', 413, undefined, { limit });
+    const id = randomUUID();
+    const objectKey = `${this.config.S3_KEY_PREFIX}/messages/${user.id}/${id}`;
+    const expiresInSeconds = 15 * 60;
+    let uploadUrl: string;
+    try {
+      uploadUrl = await this.objectStorage.createPutUrl(objectKey, input.mimeType, input.sizeBytes, expiresInSeconds);
+    } catch {
+      throw new AppError('MEDIA_STORAGE_UNAVAILABLE', 503);
+    }
+    const now = this.now();
+    await this.messaging().createAttachmentIntent({ id, uploaderUserId: user.id, objectKey, originalName: safeAttachmentName(input.fileName), mimeType: input.mimeType, sizeBytes: String(input.sizeBytes), width: input.width ?? null, height: input.height ?? null, durationMs: input.durationMs ?? null, createdAt: now });
+    return { attachmentId: id, uploadUrl, headers: { 'Content-Type': input.mimeType, 'Content-Length': String(input.sizeBytes) }, expiresAt: new Date(now.getTime() + expiresInSeconds * 1_000).toISOString() };
+  }
+
+  async finalizeCanonicalAttachment(authorization: string | undefined, attachmentId: string): Promise<{ attachmentId: string; finalized: true }> {
+    const user = await this.authenticate(authorization);
+    if (!this.objectStorage) throw new AppError('MEDIA_STORAGE_UNAVAILABLE', 503);
+    const attachment = await this.messaging().findAttachment(attachmentId);
+    if (!attachment || attachment.uploaderUserId !== user.id || attachment.messageId) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    if (attachment.finalizedAt) return { attachmentId, finalized: true };
+    try {
+      const object = await this.objectStorage.headObject(attachment.objectKey);
+      if (object.size !== Number(attachment.sizeBytes) || object.mimeType !== attachment.mimeType) {
+        await this.objectStorage.deleteObject(attachment.objectKey);
+        throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'file' });
+      }
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      throw new AppError('MEDIA_STORAGE_UNAVAILABLE', 503);
+    }
+    if (!(await this.messaging().finalizeAttachment(attachmentId, user.id, this.now()))) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    return { attachmentId, finalized: true };
+  }
+
+  async getCanonicalAttachmentUrl(authorization: string | undefined, attachmentId: string): Promise<{ url: string; expiresAt: string }> {
+    const user = await this.authenticate(authorization);
+    if (!this.objectStorage) throw new AppError('MEDIA_STORAGE_UNAVAILABLE', 503);
+    const attachment = await this.messaging().findAttachment(attachmentId);
+    if (!attachment?.finalizedAt) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    if (attachment.messageId) {
+      const message = await this.messaging().findMessage(attachment.messageId, user.id);
+      if (!message) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+      await this.requireCanonicalConversation(message.conversationId, user, 'READ_MESSAGE_HISTORY');
+    } else if (attachment.uploaderUserId !== user.id) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
+    const expiresInSeconds = 5 * 60;
+    try {
+      return { url: await this.objectStorage.createGetUrl(attachment.objectKey, expiresInSeconds), expiresAt: new Date(this.now().getTime() + expiresInSeconds * 1_000).toISOString() };
+    } catch {
+      throw new AppError('MEDIA_STORAGE_UNAVAILABLE', 503);
+    }
+  }
+
+  private messaging(): CanonicalMessagingStore {
+    if (!this.canonicalMessagingStore) throw new AppError('INTERNAL_ERROR', 500);
+    return this.canonicalMessagingStore;
+  }
+
+  private async requireCanonicalConversation(conversationId: string, user: UserRecord, permission: ServerPermission): Promise<{ conversation: Awaited<ReturnType<CanonicalMessagingStore['findConversation']>> & {}; server: ServerRecord | null; channel: ServerChannelRecord | null }> {
+    const conversation = await this.messaging().findConversation(conversationId);
+    if (!conversation) throw new AppError('DIRECT_CONVERSATION_NOT_FOUND', 404);
+    if (conversation.type === 'server_channel') {
+      if (!conversation.serverId || !conversation.channelId) throw new AppError('CHANNEL_NOT_FOUND', 404);
+      const [server, channel] = await Promise.all([this.requireServer(conversation.serverId), this.requireTextChannel(conversation.channelId)]);
+      await this.requireChannelPermission(server, channel, user, permission);
+      return { conversation, server, channel };
+    }
+    if (!(await this.messaging().isDirectMember(conversationId, user.id))) throw new AppError('DIRECT_CONVERSATION_NOT_FOUND', 404);
+    return { conversation, server: null, channel: null };
+  }
+
+  private async validateCanonicalMentions(access: { conversation: { id: string; type: 'server_channel' | 'direct' | 'group_direct' }; server: ServerRecord | null; channel: ServerChannelRecord | null }, author: UserRecord, mentions: CanonicalMentionInput[]): Promise<void> {
+    if (access.conversation.type !== 'server_channel') {
+      for (const mention of mentions) if (mention.type !== 'user' || !mention.userId || !(await this.messaging().isDirectMember(access.conversation.id, mention.userId))) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'mentions' });
+      return;
+    }
+    const server = access.server!;
+    const channel = access.channel!;
+    const roles = await this.store.listServerRoles(server.id);
+    for (const mention of mentions) {
+      if (mention.type === 'everyone') {
+        await this.requireChannelPermission(server, channel, author, 'MENTION_EVERYONE');
+      } else if (mention.type === 'role') {
+        if (!mention.roleId || !roles.some((role) => role.id === mention.roleId)) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'mentions' });
+      } else {
+        const mentioned = mention.userId ? await this.store.findUserById(mention.userId) : null;
+        if (!mention.userId || !mentioned || !(await this.store.findServerMember(server.id, mention.userId))) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'mentions' });
+        const permissions = await this.channelPermissionsFor(server, channel, mentioned);
+        if (!permissions.has('VIEW_CHANNEL')) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'mentions' });
+      }
+    }
   }
 
   private async promotePlatformOwner(user: UserRecord, now: Date): Promise<UserRecord> {
