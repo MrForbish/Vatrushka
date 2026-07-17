@@ -16,14 +16,17 @@ Fastify — единственный компонент, имеющий PostgreS
 6. Подписанный LiveKit webhook освобождает lease после ухода participant или unpublish.
 7. Permission aggregation = `@everyone` + назначенные роли + channel overwrites; персональные allow/deny применяются последними. Полный набор получают владелец сервера и роли с `ADMINISTRATOR`, а platform owner/admin остаются визуальным статусом и не обходят права сервера. `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` транслируются в отдельные LiveKit grants.
 8. Electron main проверяет generic update feed, загружает NSIS differential package и предлагает перезапуск; renderer видит только типизированное состояние прогресса.
+9. Desktop опрашивает server detail и message notifications; API дополняет голосовые каналы фактическими LiveKit identities, поэтому membership и media presence не смешиваются.
+10. `MOVE_MEMBERS` нативно переносит уже подключённую identity между LiveKit rooms и повторно применяет channel-scoped publish grants. Короткоживущая команда синхронизирует UI клиента, а для пользователя вне voice инициирует подключение с новым токеном.
+11. Home запрашивает агрегат `GET /api/v1/home`: API объединяет членство, unread-счётчики, фактические LiveKit identities и значимую `user_activity`. TanStack Query сохраняет последний снимок локально, повторно проверяет его при возврате на Home и инвалидируется при изменении состава voice participants/серверов.
 
 ## Консистентность
 
 - Refresh rotation и reuse detection выполняются под row lock.
 - Channel screen-share lease захватывается одной транзакцией и не допускает двух ведущих одновременно.
-- Сервер, его каналы, роли и членство создаются одной транзакцией. Удаление канала каскадно удаляет сообщения, permission overwrites и channel lease.
+- Сервер, его каналы, роли и членство создаются одной транзакцией. Удаление канала каскадно удаляет сообщения, permission overwrites, dashboard activity этого канала и channel lease.
 - Системные роли `OWNER`/`EVERYONE` защищены от удаления, пользовательские роли ограничены иерархией, а административные изменения записываются в append-only audit log.
 
 ## Packages
 
-`@vatrushka/shared` не зависит от Node API и безопасно используется backend/renderer. Здесь находятся validation, API errors, contracts, permissions, expiration и чистая lease logic. Исторические таблицы временных комнат остаются только для обратимого rollout и не имеют публичных API-маршрутов.
+`@vatrushka/shared` не зависит от Node API и безопасно используется backend/renderer. Здесь находятся validation, API errors, dashboard/server contracts, permissions, expiration и чистая lease logic. Исторические standalone rooms, guest sessions и их lease-модель удалены из текущей схемы и рабочих контрактов.

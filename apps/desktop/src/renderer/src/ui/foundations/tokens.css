@@ -57,6 +57,7 @@
   --space-4: 16px;
   --space-5: 20px;
   --space-6: 24px;
+  --space-7: 28px;
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
@@ -81,6 +82,7 @@
   --control-height-md: 40px;
   --control-height-lg: 48px;
 
+  --text-display-lg: 600 36px/44px var(--font-display);
   --text-display-xl: 600 30px/38px var(--font-display);
   --text-display-md: 500 24px/32px var(--font-display);
   --text-heading-lg: 600 20px/28px var(--font-ui);
@@ -88,6 +90,7 @@
   --text-heading-sm: 600 15px/22px var(--font-ui);
   --text-body-lg: 400 15px/22px var(--font-ui);
   --text-body-md: 400 14px/20px var(--font-ui);
+  --text-label-lg: 600 14px/20px var(--font-ui);
   --text-label-md: 600 13px/18px var(--font-ui);
   --text-caption: 400 12px/16px var(--font-ui);
   --text-overline: 600 11px/16px var(--font-ui);
@@ -97,4 +100,11 @@
   --z-drawer: 70;
   --z-modal: 80;
   --z-tooltip: 90;
+
+  --app-titlebar-height: 28px;
+  --home-sidebar-width: 272px;
+  --home-profile-rail-width: 224px;
+  --home-dashboard-max-width: 1120px;
+  --home-page-gap: 20px;
+  --home-card-radius: 16px;
 }

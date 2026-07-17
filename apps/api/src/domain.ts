@@ -1,4 +1,4 @@
-import type { PermissionOverwriteTargetType, PlatformRole, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
+import type { HomeActivityType, PermissionOverwriteTargetType, PlatformRole, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
 
 export interface UserRecord {
   id: string;
@@ -55,38 +55,15 @@ export interface SecurityEventRecord {
   createdAt: Date;
 }
 
-export type RoomStatus = 'active' | 'closed' | 'expired';
-
-export interface RoomRecord {
+export interface UserActivityRecord {
   id: string;
-  code: string;
-  ownerUserId: string;
-  livekitRoomName: string;
-  status: RoomStatus;
-  isLocked: boolean;
-  maxParticipants: number;
-  expiresAt: Date;
-  closedAt: Date | null;
+  userId: string;
+  type: HomeActivityType;
+  title: string;
+  context: string;
+  serverId: string | null;
+  channelId: string | null;
   createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface GuestSessionRecord {
-  id: string;
-  roomId: string;
-  displayName: string;
-  tokenHash: string;
-  expiresAt: Date;
-  revokedAt: Date | null;
-  createdAt: Date;
-}
-
-export interface LeaseRecord {
-  roomId: string;
-  participantIdentity: string;
-  participantDisplayName: string;
-  acquiredAt: Date;
-  expiresAt: Date;
 }
 
 export interface ServerRecord {
@@ -279,5 +256,3 @@ export type RefreshRotation =
   | { status: 'not_found' }
   | { status: 'expired'; session: SessionRecord }
   | { status: 'reused'; session: SessionRecord };
-
-export type LeaseClaim = { status: 'ok'; lease: LeaseRecord } | { status: 'busy'; lease: LeaseRecord };

@@ -1,6 +1,6 @@
 import type { ParticipantView } from '../../media';
 
-export type VoiceCue = 'join' | 'leave';
+export type VoiceCue = 'join' | 'leave' | 'message';
 
 export interface RemoteParticipantChanges {
   current: Set<string>;
@@ -25,6 +25,7 @@ type SinkAudioContext = AudioContext & {
 const cueNotes: Record<VoiceCue, ReadonlyArray<{ frequency: number; offset: number }>> = {
   join: [{ frequency: 587.33, offset: 0 }, { frequency: 783.99, offset: 0.075 }],
   leave: [{ frequency: 659.25, offset: 0 }, { frequency: 493.88, offset: 0.075 }],
+  message: [{ frequency: 698.46, offset: 0 }, { frequency: 880, offset: 0.055 }],
 };
 
 export class VoiceCuePlayer {

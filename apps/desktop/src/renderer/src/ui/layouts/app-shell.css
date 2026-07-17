@@ -21,7 +21,7 @@
 .vui-app-shell__content { grid-area: content; min-width: 0; min-height: 0; overflow: hidden; background: var(--color-surface-1); }
 .vui-app-shell__members { display: none; grid-area: members; min-width: 0; overflow: hidden; }
 .vui-app-shell__workspace-toggle { display: none; flex: 0 0 auto; }
-.vui-app-shell__members-toggle { flex: 0 0 auto; }
+.vui-app-shell__members-toggle { display: inline-flex; flex: 0 0 auto; }
 .vui-app-shell__drawer-content { height: calc(100vh - 86px); margin: calc(var(--space-6) * -1); }
 .vui-app-shell__drawer-content > .vui-workspace-library,
 .vui-app-shell__drawer-content > .vui-member-panel { width: 100%; border: 0; }
@@ -51,6 +51,37 @@
   }
 }
 
+.vui-app-shell[data-variant='home'] {
+  grid-template-areas:
+    "workspaces topbar"
+    "workspaces content";
+  grid-template-columns: var(--home-sidebar-width) minmax(0, 1fr);
+  min-width: 1100px;
+  background: var(--color-canvas);
+}
+
+.vui-app-shell[data-variant='home'] .vui-app-shell__topbar {
+  min-height: 56px;
+  padding-inline: var(--home-page-gap);
+}
+
+@media (min-width: 1280px) {
+  .vui-app-shell[data-variant='home'] {
+    grid-template-areas:
+      "workspaces topbar topbar"
+      "workspaces content members";
+    grid-template-columns: var(--home-sidebar-width) minmax(0, 1fr) var(--home-profile-rail-width);
+  }
+
+  .vui-app-shell[data-variant='home'] .vui-app-shell__members { display: block; }
+  .vui-app-shell[data-variant='home'] .vui-app-shell__members-toggle { display: none; }
+}
+
+@media (max-width: 1279px) {
+  .vui-app-shell[data-variant='home'] .vui-app-shell__members { display: none; }
+  .vui-app-shell[data-variant='home'] .vui-app-shell__members-toggle { display: inline-flex; }
+}
+
 @media (max-width: 1179px) {
   .vui-app-shell {
     grid-template-areas:
@@ -67,4 +98,17 @@
       "content";
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+@media (max-width: 1179px) {
+  .vui-app-shell[data-variant='home'],
+  .vui-app-shell[data-variant='home']:not([data-has-server-context]) {
+    grid-template-areas:
+      "workspaces topbar"
+      "workspaces content";
+    grid-template-columns: var(--home-sidebar-width) minmax(0, 1fr);
+  }
+
+  .vui-app-shell[data-variant='home'] .vui-app-shell__workspaces { display: block; }
+  .vui-app-shell[data-variant='home'] .vui-app-shell__workspace-toggle { display: none; }
 }

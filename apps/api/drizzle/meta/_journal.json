@@ -85,6 +85,20 @@
       "when": 1784248262279,
       "tag": "0011_wise_hammerhead",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1784289650265,
+      "tag": "0012_remove_legacy_rooms_contract",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784290438818,
+      "tag": "0013_home_activity",
+      "breakpoints": true
     }
   ]
 }

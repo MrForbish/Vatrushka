@@ -1,12 +1,9 @@
 import type {
   AuthCodeRecord,
-  GuestSessionRecord,
-  LeaseClaim,
-  LeaseRecord,
   RefreshRotation,
-  RoomRecord,
   RecoveryCodeRecord,
   SecurityEventRecord,
+  UserActivityRecord,
   SessionRecord,
   UserRecord,
   ServerGraph,
@@ -65,27 +62,8 @@ export interface DataStore {
   deleteRecoveryCodes(userId: string): Promise<void>;
   createSecurityEvent(event: SecurityEventRecord): Promise<void>;
   listSecurityEvents(userId: string, limit: number): Promise<SecurityEventRecord[]>;
-  createRoom(room: RoomRecord): Promise<boolean>;
-  findRoomById(id: string): Promise<RoomRecord | null>;
-  findRoomByCode(code: string): Promise<RoomRecord | null>;
-  setRoomLocked(id: string, isLocked: boolean, now: Date): Promise<RoomRecord | null>;
-  closeRoom(id: string, now: Date): Promise<RoomRecord | null>;
-  expireRoom(id: string, now: Date): Promise<RoomRecord | null>;
-  createGuestSession(session: GuestSessionRecord): Promise<void>;
-  findGuestSessionByTokenHash(tokenHash: string): Promise<GuestSessionRecord | null>;
-  revokeGuestSessionsForRoom(roomId: string, now: Date): Promise<void>;
-  revokeGuestSessionById(id: string, now: Date): Promise<void>;
-  claimLease(
-    roomId: string,
-    participantIdentity: string,
-    participantDisplayName: string,
-    now: Date,
-    leaseSeconds: number,
-  ): Promise<LeaseClaim>;
-  heartbeatLease(roomId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<LeaseRecord | null>;
-  releaseLease(roomId: string, participantIdentity: string): Promise<boolean>;
-  releaseLeaseByParticipant(participantIdentity: string): Promise<void>;
-  releaseLeaseByRoom(roomId: string): Promise<void>;
+  createUserActivity(activity: UserActivityRecord): Promise<void>;
+  listUserActivity(userId: string, limit: number): Promise<UserActivityRecord[]>;
   createServerGraph(graph: ServerGraph): Promise<boolean>;
   listServersForUser(userId: string): Promise<ServerWithMemberCount[]>;
   findServerById(id: string): Promise<ServerRecord | null>;
@@ -148,6 +126,7 @@ export interface DataStore {
   heartbeatChannelLease(channelId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<ChannelLeaseRecord | null>;
   releaseChannelLease(channelId: string, participantIdentity: string): Promise<boolean>;
   releaseChannelLeaseByParticipant(participantIdentity: string): Promise<void>;
+  releaseChannelLeaseByChannel(channelId: string): Promise<void>;
 }
 
 export interface Mailer {
@@ -178,6 +157,7 @@ export interface MediaService {
   participantCount(roomName: string): Promise<number>;
   participantExists(roomName: string, identity: string): Promise<boolean>;
   removeParticipant(roomName: string, identity: string): Promise<void>;
+  moveParticipant(sourceRoomName: string, identity: string, destinationRoomName: string, permissions: Pick<MediaTokenOptions, 'canPublishMicrophone' | 'canPublishScreen' | 'canPublishScreenAudio'>): Promise<void>;
   participantIdentities(roomName: string): Promise<string[]>;
   issueToken(options: MediaTokenOptions): Promise<string>;
   healthCheck(): Promise<void>;

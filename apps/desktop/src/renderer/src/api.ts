@@ -6,6 +6,7 @@ import {
   type DirectConversationSummary,
   type DirectMessage,
   type DirectMessageCandidate,
+  type HomeDashboardResponse,
   type PasswordLoginChallenge,
   type PublicUser,
   type RoomConnection,
@@ -152,6 +153,18 @@ export class ApiClient {
     return this.request('/servers', { auth: true });
   }
 
+  getHomeDashboard(): Promise<HomeDashboardResponse> {
+    return this.request('/home', { auth: true });
+  }
+
+  async recordOpenedChannel(channelId: string): Promise<void> {
+    await this.request(`/channels/${channelId}/activity/open`, { method: 'POST', auth: true });
+  }
+
+  async recordLeftVoiceChannel(channelId: string): Promise<void> {
+    await this.request(`/channels/${channelId}/activity/leave`, { method: 'POST', auth: true });
+  }
+
   createServer(name: string): Promise<ServerDetail> {
     return this.request('/servers', { method: 'POST', body: { name }, auth: true });
   }
@@ -202,6 +215,14 @@ export class ApiClient {
 
   async kickServerMember(serverId: string, userId: string): Promise<void> {
     await this.request(`/servers/${serverId}/members/${userId}`, { method: 'DELETE', auth: true });
+  }
+
+  async moveVoiceMember(channelId: string, userId: string): Promise<void> {
+    await this.request(`/channels/${channelId}/members/${userId}/move`, { method: 'POST', auth: true });
+  }
+
+  pollVoiceMoveRequest(): Promise<RoomConnection | null> {
+    return this.request('/voice/move-request', { auth: true });
   }
 
   listMessages(channelId: string): Promise<TextMessage[]> {

@@ -1,6 +1,6 @@
 import { boolean, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import type { PermissionOverwriteTargetType, PlatformRole, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
+import type { HomeActivityType, PermissionOverwriteTargetType, PlatformRole, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
 
@@ -149,6 +149,21 @@ export const serverChannels = pgTable(
   (table) => [index('server_channels_server_position_idx').on(table.serverId, table.position), uniqueIndex('server_channels_livekit_name_unique').on(table.livekitRoomName)],
 );
 
+export const userActivity = pgTable(
+  'user_activity',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    type: text('type').$type<HomeActivityType>().notNull(),
+    title: text('title').notNull(),
+    context: text('context').notNull(),
+    serverId: uuid('server_id').references(() => servers.id, { onDelete: 'cascade' }),
+    channelId: uuid('channel_id').references(() => serverChannels.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('user_activity_user_created_idx').on(table.userId, table.createdAt)],
+);
+
 export const channelPermissionOverwrites = pgTable(
   'channel_permission_overwrites',
   {
@@ -295,57 +310,4 @@ export const channelScreenShareLeases = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
   },
   (table) => [primaryKey({ columns: [table.channelId] }), index('channel_screen_share_lease_expires_idx').on(table.expiresAt)],
-);
-
-export const rooms = pgTable(
-  'rooms',
-  {
-    id: uuid('id').primaryKey(),
-    code: text('code').notNull(),
-    ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
-    livekitRoomName: text('livekit_room_name').notNull(),
-    status: text('status').notNull(),
-    isLocked: boolean('is_locked').notNull().default(false),
-    maxParticipants: integer('max_participants').notNull().default(5),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-    closedAt: timestamp('closed_at', { withTimezone: true }),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
-  },
-  (table) => [
-    uniqueIndex('rooms_code_unique').on(table.code),
-    uniqueIndex('rooms_livekit_name_unique').on(table.livekitRoomName),
-    index('rooms_owner_idx').on(table.ownerUserId),
-    index('rooms_status_expires_idx').on(table.status, table.expiresAt),
-  ],
-);
-
-export const guestSessions = pgTable(
-  'guest_sessions',
-  {
-    id: uuid('id').primaryKey(),
-    roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
-    displayName: text('display_name').notNull(),
-    tokenHash: text('token_hash').notNull(),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-    revokedAt: timestamp('revoked_at', { withTimezone: true }),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
-  },
-  (table) => [
-    uniqueIndex('guest_sessions_token_hash_unique').on(table.tokenHash),
-    index('guest_sessions_room_idx').on(table.roomId),
-    index('guest_sessions_expires_idx').on(table.expiresAt),
-  ],
-);
-
-export const screenShareLeases = pgTable(
-  'screen_share_leases',
-  {
-    roomId: uuid('room_id').notNull().references(() => rooms.id, { onDelete: 'cascade' }),
-    participantIdentity: text('participant_identity').notNull(),
-    participantDisplayName: text('participant_display_name').notNull(),
-    acquiredAt: timestamp('acquired_at', { withTimezone: true }).notNull(),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.roomId] }), index('screen_share_lease_expires_idx').on(table.expiresAt)],
 );

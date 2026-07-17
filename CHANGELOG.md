@@ -2,6 +2,32 @@
 
 All notable changes to Vatrushka are documented here. The project follows semantic versioning for desktop and API release artifacts.
 
+## [Unreleased]
+
+### Added
+
+- redesigned Home as a personal dashboard with Continue, Active Spaces, Recent Activity, audio readiness, onboarding, responsive profile rail and Storybook states;
+- `GET /api/v1/home`, persisted user activity, cached TanStack Query data and presence-driven invalidation for dashboard widgets;
+- live microphone permission/signal diagnostics using the selected Windows input without opening a duplicate capture stream during an active call;
+- live voice presence under every voice channel, backed by LiveKit participant identities;
+- drag-and-drop voice member moves gated by `MOVE_MEMBERS`: connected participants move natively between LiveKit rooms, while an online desktop not yet in voice receives a short-lived connect command;
+- independent Windows push and message-sound preferences in account settings;
+- a 30-item message reaction picker and inline previews for authenticated image attachments;
+- decoded screen-share resolution diagnostics and a centered grid containing every participant when no screen is shared.
+
+### Fixed
+
+- server member counts, the right member panel, channel unread state and voice presence refresh without reopening the server;
+- attachment-only server and direct messages can be sent without placeholder text;
+- screen share no longer falls back to a low adaptive simulcast layer: it publishes one original high-quality layer and viewers request HIGH/30 FPS;
+- desktop message notifications are no longer silently discarded merely because the application window is focused.
+
+### Security and operations
+
+- removed the legacy standalone-room, guest-session and standalone screen-share lease tables through an explicitly marked contract migration; persistent server channels and channel leases are unchanged;
+- image previews use authenticated blob downloads and the Electron CSP allows only local `blob:` images;
+- PostgreSQL remains bound to `127.0.0.1:5433`; administrative access is documented through an SSH tunnel instead of a public database port.
+
 ## [0.4.4] - 2026-07-17
 
 ### Fixed

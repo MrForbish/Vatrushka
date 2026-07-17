@@ -61,6 +61,7 @@ const attachmentIdParams = z.object({ attachmentId: z.uuid() });
 const directConversationIdParams = z.object({ conversationId: z.uuid() });
 const messageReactionParams = z.object({ messageId: z.uuid(), emoji: messageReactionSchema });
 const channelParticipantParams = z.object({ channelId: z.uuid(), participantIdentity: z.string().min(3).max(200) });
+const channelMemberParams = z.object({ channelId: z.uuid(), userId: z.uuid() });
 const channelOverwriteParams = z.object({ channelId: z.uuid(), targetType: z.enum(['ROLE', 'MEMBER']), targetId: z.uuid() });
 const authSessionParams = z.object({ sessionId: z.uuid() });
 const inviteTokenParams = z.object({ inviteToken: inviteTokenSchema });
@@ -114,17 +115,38 @@ const connectionSchema = z.object({
   contextType: z.literal('channel'),
   serverId: z.string(),
   channelId: z.string(),
+  serverName: z.string().optional(),
+  channelName: z.string().optional(),
   canSpeak: z.boolean().optional(),
   canStream: z.boolean().optional(),
   canStreamApplicationAudio: z.boolean().optional(),
+  canMoveMembers: z.boolean().optional(),
+  seamlesslyMoved: z.boolean().optional(),
 });
 const permissionSchema = z.enum(serverPermissions);
 const serverRoleResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), color: z.string(), position: z.number(), isDefault: z.boolean(), kind: z.enum(['EVERYONE', 'OWNER', 'CUSTOM']).optional(), permissions: z.array(permissionSchema) });
 const permissionOverwriteResponseSchema = z.object({ channelId: z.string(), targetType: z.enum(['ROLE', 'MEMBER']), targetId: z.string(), allow: z.array(permissionSchema), deny: z.array(permissionSchema) });
-const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), unreadCount: z.number(), permissions: z.array(permissionSchema).optional(), permissionOverwrites: z.array(permissionOverwriteResponseSchema).optional() });
+const voiceChannelParticipantResponseSchema = z.object({ identity: z.string(), userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']) });
+const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), unreadCount: z.number(), voiceParticipants: z.array(voiceChannelParticipantResponseSchema).optional(), permissions: z.array(permissionSchema).optional(), permissionOverwrites: z.array(permissionOverwriteResponseSchema).optional() });
 const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema) });
 const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteUrl: z.url(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
 const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
+const homeDestinationResponseSchema = z.object({ type: z.enum(['server', 'text_channel', 'voice_channel']), serverId: z.string(), channelId: z.string().optional() });
+const homeServerResponseSchema = serverSummaryResponseSchema.extend({ unreadCount: z.number(), activeVoiceCount: z.number() });
+const homeContinueResponseSchema = z.object({ id: z.string(), type: z.enum(['active_call', 'server', 'text_channel', 'voice_channel']), title: z.string(), subtitle: z.string(), participantCount: z.number(), active: z.boolean(), lastActivityAt: z.string(), destination: homeDestinationResponseSchema });
+const homeActiveSpaceResponseSchema = z.object({ id: z.string(), type: z.enum(['voice_channel', 'text_channel']), title: z.string(), subtitle: z.string(), participants: z.array(z.object({ id: z.string(), displayName: z.string() })), participantCount: z.number(), hasVoiceActivity: z.boolean(), unreadCount: z.number(), lastActivityAt: z.string(), destination: homeDestinationResponseSchema });
+const homeActivityTypeSchema = z.enum(['opened_channel', 'joined_voice', 'left_voice', 'sent_message', 'joined_server', 'mention_received']);
+const homeRecentActivityResponseSchema = z.object({ id: z.string(), type: homeActivityTypeSchema, title: z.string(), context: z.string(), occurredAt: z.string(), destination: homeDestinationResponseSchema.nullable() });
+const homeOnboardingStepResponseSchema = z.object({ id: z.enum(['create_server', 'configure_channels', 'invite_members']), title: z.string(), description: z.string(), complete: z.boolean(), destination: homeDestinationResponseSchema.nullable() });
+const homeDashboardResponseSchema = z.object({
+  user: z.object({ id: z.string(), displayName: z.string(), email: z.string(), avatarUrl: z.string().nullable(), presence: z.enum(['online', 'idle', 'dnd', 'offline']), platformBadge: z.literal('FOUNDER_DEVELOPER').nullable() }),
+  readiness: z.object({ connection: z.enum(['healthy', 'degraded', 'offline']), audioSetupRequired: z.boolean() }),
+  servers: z.array(homeServerResponseSchema),
+  continueItems: z.array(homeContinueResponseSchema),
+  activeSpaces: z.array(homeActiveSpaceResponseSchema),
+  recentActivity: z.array(homeRecentActivityResponseSchema),
+  onboarding: z.object({ visible: z.boolean(), steps: z.array(homeOnboardingStepResponseSchema) }),
+});
 const serverAuditLogResponseSchema = z.object({ id: z.string(), serverId: z.string(), actorUserId: z.string().nullable(), actorDisplayName: z.string(), action: z.string(), targetType: z.string(), targetId: z.string().nullable(), before: z.unknown(), after: z.unknown(), createdAt: z.string() });
 const messageAttachmentResponseSchema = z.object({ id: z.string(), messageId: z.string(), fileName: z.string(), mimeType: z.string(), size: z.number(), createdAt: z.string() });
 const messageNotificationResponseSchema = z.object({ id: z.string(), serverId: z.string(), serverName: z.string(), channelId: z.string(), channelName: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string(), createdAt: z.string() });
@@ -373,6 +395,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     schema: { tags: ['servers'], security: [{ bearerAuth: [] }], response: { 200: z.array(serverSummaryResponseSchema), ...routeErrors() } },
   }, async (request) => service.listServers(request.headers.authorization));
 
+  api.get(`${API_PREFIX}/home`, {
+    schema: { tags: ['home'], security: [{ bearerAuth: [] }], response: { 200: homeDashboardResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getHomeDashboard(request.headers.authorization));
+
   api.post(`${API_PREFIX}/servers`, {
     schema: { tags: ['servers'], security: [{ bearerAuth: [] }], body: createServerSchema, response: { 201: serverDetailResponseSchema, ...routeErrors() } },
   }, async (request, reply) => reply.status(201).send(await service.createServer(request.headers.authorization, request.body.name)));
@@ -393,6 +419,20 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     schema: { tags: ['channels'], security: [{ bearerAuth: [] }], params: channelIdParams, response: { 204: z.null(), ...routeErrors() } },
   }, async (request, reply) => {
     await service.deleteServerChannel(request.headers.authorization, request.params.channelId);
+    return reply.status(204).send(null);
+  });
+
+  api.post(`${API_PREFIX}/channels/:channelId/activity/open`, {
+    schema: { tags: ['home'], security: [{ bearerAuth: [] }], params: channelIdParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.recordOpenedChannel(request.headers.authorization, request.params.channelId);
+    return reply.status(204).send(null);
+  });
+
+  api.post(`${API_PREFIX}/channels/:channelId/activity/leave`, {
+    schema: { tags: ['home'], security: [{ bearerAuth: [] }], params: channelIdParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.recordLeftVoiceChannel(request.headers.authorization, request.params.channelId);
     return reply.status(204).send(null);
   });
 
@@ -584,6 +624,17 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   api.post(`${API_PREFIX}/channels/:channelId/connect`, {
     schema: { tags: ['channels'], security: [{ bearerAuth: [] }], params: channelIdParams, response: { 200: connectionSchema, ...routeErrors() } },
   }, async (request) => service.connectVoiceChannel(request.headers.authorization, request.params.channelId));
+
+  api.post(`${API_PREFIX}/channels/:channelId/members/:userId/move`, {
+    schema: { tags: ['channels'], security: [{ bearerAuth: [] }], params: channelMemberParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.requestVoiceMemberMove(request.headers.authorization, request.params.channelId, request.params.userId);
+    return reply.status(204).send(null);
+  });
+
+  api.get(`${API_PREFIX}/voice/move-request`, {
+    schema: { tags: ['channels'], security: [{ bearerAuth: [] }], response: { 200: connectionSchema.nullable(), ...routeErrors() } },
+  }, async (request) => service.pollVoiceMemberMove(request.headers.authorization));
 
   api.delete(`${API_PREFIX}/channels/:channelId/participants/:participantIdentity`, {
     schema: { tags: ['channels'], security: [{ bearerAuth: [] }], params: channelParticipantParams, response: { 204: z.null(), ...routeErrors() } },

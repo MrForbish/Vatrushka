@@ -6,10 +6,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { RoomConnection, ServerDetail } from '@vatrushka/shared';
 
-import { AuthPanel, HomePanel } from './components.js';
+import { AuthPanel } from './components.js';
+import { HomePage } from './features/home/index.js';
 import { ServerView } from './features/servers/index.js';
 import { RoomView } from './features/voice/index.js';
 import type { MediaSnapshot } from './media.js';
+import { MessageComposer } from './ui/index.js';
 
 const noop = (): void => undefined;
 
@@ -34,16 +36,34 @@ describe('authentication screens', () => {
 
 describe('main screen', () => {
   it('shows user identity, server actions, audio settings, and app version', () => {
-    render(<HomePanel user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="Команда" onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} />);
+    render(<HomePage user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="Команда" onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} onCopyInvite={noop} />);
     expect(screen.getAllByText('Anna').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: /Создать сервер/u })).toBeEnabled();
-    expect(screen.getByRole('heading', { name: 'Вход по ссылке' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Создать сервер/u }).length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Пригласить друзей' })).toBeInTheDocument();
+    expect(screen.queryByText(/войти по коду/iu)).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Код приглашения')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Микрофон')).toBeInTheDocument();
+    expect(screen.getByLabelText('Устройство ввода')).toBeInTheDocument();
     expect(screen.getByLabelText('Динамики / наушники')).toBeInTheDocument();
-    expect(screen.getByText('v1.2.3')).toBeInTheDocument();
+    expect(screen.getAllByText(/1\.2\.3/u).length).toBeGreaterThan(0);
     expect(document.querySelector('.vui-app-shell__server-context')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Безопасность и настройки' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Безопасность и настройки' }).length).toBeGreaterThan(0);
+  });
+
+  it('copies only a short server link and reports success', async () => {
+    const onCopyInvite = vi.fn().mockResolvedValue(undefined);
+    render(<HomePage user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[{ id: 'server-1', name: 'Команда', inviteUrl: 'https://myvatrushka.ru/i/shortLink42', ownerUserId: 'user-1', memberCount: 1, createdAt: '2026-07-17T10:00:00.000Z' }]} serverName="" onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} onCopyInvite={onCopyInvite} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Пригласить друзей' }));
+    expect(screen.getByText('https://myvatrushka.ru/i/shortLink42')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Скопировать ссылку' }));
+    expect(onCopyInvite).toHaveBeenCalledWith('https://myvatrushka.ru/i/shortLink42');
+    expect(await screen.findByRole('button', { name: 'Ссылка скопирована' })).toBeInTheDocument();
+  });
+
+  it('uses widget skeletons instead of a fullscreen loader', () => {
+    render(<HomePage user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="" dashboardLoading onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} onCopyInvite={noop} />);
+    expect(screen.getByLabelText('Загрузка блока Продолжить')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getByLabelText('Загрузка активных пространств')).toBeInTheDocument();
+    expect(screen.queryByText(/Подключаем «Ватрушку»/u)).not.toBeInTheDocument();
   });
 });
 
@@ -64,8 +84,8 @@ describe('room UI', () => {
   const baseSnapshot: MediaSnapshot = {
     connectionState: ConnectionState.Connected,
     participants: [
-      { identity: 'user_owner-1_local', displayName: 'Owner', isLocal: true, isOwner: true, isGuest: false, isMuted: true, isSpeaking: false, audioLevel: 0, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'owner', connectionQuality: 'Отличное' },
-      { identity: 'user_visitor-1_remote', displayName: 'Visitor', isLocal: false, isOwner: false, isGuest: false, isMuted: false, isSpeaking: true, audioLevel: 0.7, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
+      { identity: 'user_owner-1_local', displayName: 'Owner', isLocal: true, isOwner: true, isMuted: true, isSpeaking: false, audioLevel: 0, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'owner', connectionQuality: 'Отличное' },
+      { identity: 'user_visitor-1_remote', displayName: 'Visitor', isLocal: false, isOwner: false, isMuted: false, isSpeaking: true, audioLevel: 0.7, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
     ],
     isMuted: true,
     isScreenSharing: false,
@@ -95,6 +115,7 @@ describe('room UI', () => {
     expect(screen.getByTestId('mute-control')).toHaveAccessibleName('Включить микрофон');
     expect(screen.getByTestId('screen-share-control')).toBeEnabled();
     expect(screen.getByText('Голосовая связь активна')).toBeInTheDocument();
+    expect(document.querySelector('.vui-room__participant-grid')?.children).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Исключить Visitor' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Заглушить локально' }));
     expect(onParticipantMute).toHaveBeenCalledWith('user_visitor-1_remote', true);
@@ -149,6 +170,16 @@ describe('room UI', () => {
   });
 });
 
+describe('message composer', () => {
+  it('submits an attachment without requiring text', async () => {
+    const onSubmit = vi.fn();
+    render(<MessageComposer attachments={[{ id: 'draft-image', name: 'photo.png', size: 128, mimeType: 'image/png' }]} channelName="общий" onChange={noop} onSubmit={onSubmit} value="" />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Отправить сообщение' }));
+    expect(onSubmit).toHaveBeenCalledOnce();
+  });
+});
+
 describe('server UI', () => {
   const server: ServerDetail = {
     id: 'server-1',
@@ -160,7 +191,7 @@ describe('server UI', () => {
     permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'SEND_ATTACHMENTS', 'ADD_REACTIONS', 'MANAGE_OWN_MESSAGES', 'CONNECT_VOICE', 'MANAGE_CHANNELS', 'MANAGE_ROLES', 'MANAGE_MESSAGES'],
     channels: [
       { id: 'text-1', serverId: 'server-1', name: 'общий', type: 'text', position: 0, unreadCount: 0 },
-      { id: 'voice-1', serverId: 'server-1', name: 'Голосовой', type: 'voice', position: 1, unreadCount: 0 },
+      { id: 'voice-1', serverId: 'server-1', name: 'Голосовой', type: 'voice', position: 1, unreadCount: 0, voiceParticipants: [{ identity: 'user_user-1_desktop', userId: 'user-1', displayName: 'Anna', platformRole: 'owner' }] },
     ],
     roles: [{ id: 'role-1', serverId: 'server-1', name: '@everyone', color: '#8d7a72', position: 0, isDefault: true, permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] }],
     members: [{ userId: 'user-1', displayName: 'Anna', platformRole: 'owner', joinedAt: '2026-01-01T00:00:00.000Z', roles: [] }],
@@ -175,6 +206,7 @@ describe('server UI', () => {
     render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', replyTo: null, reactions: [], attachments: [], createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" busy={false} error={null} auditLog={[]} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={onMessageDraft} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={onConnectVoice} onCopyInvite={onCopyInvite} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onUpdateRole={noop} onDeleteRole={noop} onReorderRole={noop} onAssignRoles={noop} onSetChannelOverwrite={noop} onLoadAudit={noop} onKickMember={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onLogout={noop} />);
     expect(screen.getByText('Привет, команда!')).toBeInTheDocument();
     expect(screen.getByText('Владелец сервера')).toBeInTheDocument();
+    expect(document.querySelectorAll('.vui-channel-row__participants > div')).toHaveLength(1);
     const upload = screen.getByLabelText('Выбрать вложения');
     await userEvent.upload(upload, new File(['preview'], 'preview.txt', { type: 'text/plain' }));
     expect(screen.getByText('preview.txt')).toBeInTheDocument();
@@ -183,11 +215,12 @@ describe('server UI', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Отменить' }));
     await userEvent.click(screen.getByRole('button', { name: 'Редактировать сообщение' }));
     expect(onMessageDraft).toHaveBeenCalledWith('Привет, команда!');
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить реакцию 👍' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить реакцию' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Реакция 👍' }));
     expect(onMessageReaction).toHaveBeenCalledWith('message-1', '👍');
-    await userEvent.click(screen.getByRole('button', { name: 'Голосовой' }));
+    await userEvent.click(screen.getByRole('button', { name: /^Голосовой/u }));
     expect(onChannel).toHaveBeenCalledWith('voice-1');
-    await userEvent.dblClick(screen.getByRole('button', { name: 'Голосовой' }));
+    await userEvent.dblClick(screen.getByRole('button', { name: /^Голосовой/u }));
     expect(onConnectVoice).toHaveBeenCalledWith('voice-1');
     await userEvent.click(screen.getByRole('button', { name: 'Пригласить на сервер' }));
     expect(screen.getByRole('dialog', { name: 'Пригласить на сервер' })).toBeInTheDocument();

@@ -75,8 +75,8 @@ function sendDeepLink(inviteToken: string): void {
 }
 
 function showMessageNotification(message: DesktopMessageNotification): void {
-  if (!Notification.isSupported() || mainWindow?.isFocused()) return;
-  const notification = new Notification({ title: message.title, body: message.body });
+  if (!Notification.isSupported()) return;
+  const notification = new Notification({ title: message.title, body: message.body, silent: message.silent ?? false });
   const release = (): void => { activeNotifications.delete(notification); };
   activeNotifications.add(notification);
   notification.once('click', () => {
@@ -105,7 +105,7 @@ function configureSession(): void {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data:",
+    "img-src 'self' data: blob:",
     "media-src 'self' blob:",
     "connect-src 'self' https: wss: http://localhost:* ws://localhost:*",
     "font-src 'self' data:",
@@ -168,8 +168,8 @@ async function createWindow(): Promise<void> {
     height: settings.windowBounds?.height ?? 800,
     ...(settings.windowBounds?.x === undefined ? {} : { x: settings.windowBounds.x }),
     ...(settings.windowBounds?.y === undefined ? {} : { y: settings.windowBounds.y }),
-    minWidth: 960,
-    minHeight: 640,
+    minWidth: 1100,
+    minHeight: 680,
     show: false,
     backgroundColor: '#090d18',
     autoHideMenuBar: true,

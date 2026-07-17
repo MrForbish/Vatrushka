@@ -17,16 +17,18 @@ export interface WorkspaceNavigationItem {
 interface WorkspaceCardProps {
   workspace: WorkspaceNavigationItem;
   active?: boolean;
+  disabled?: boolean;
   onSelect: (id: string) => void;
 }
 
-export function WorkspaceCard({ active = false, onSelect, workspace }: WorkspaceCardProps): React.JSX.Element {
+export function WorkspaceCard({ active = false, disabled = false, onSelect, workspace }: WorkspaceCardProps): React.JSX.Element {
   const initials = workspace.name.split(/\s+/).slice(0, 2).map((word) => word[0]).join('').toUpperCase();
   return (
     <button
       aria-current={active ? 'page' : undefined}
       className="vui-workspace-card"
       data-active={active || undefined}
+      disabled={disabled}
       onClick={() => onSelect(workspace.id)}
       type="button"
     >
@@ -80,6 +82,7 @@ export interface ChannelNavigationItem {
   unreadCount?: number;
   mentionCount?: number;
   participantCount?: number;
+  participants?: Array<{ identity: string; userId: string; name: string; founder?: boolean; canDrag?: boolean }> | undefined;
 }
 
 interface ChannelRowProps {
@@ -89,11 +92,12 @@ interface ChannelRowProps {
   onSelect: (id: string) => void;
   onConnectVoice?: ((id: string) => void) | undefined;
   onDelete?: ((id: string) => void) | undefined;
+  onMoveMember?: ((channelId: string, userId: string) => void) | undefined;
 }
 
-export function ChannelRow({ active = false, canDelete = false, channel, onConnectVoice, onDelete, onSelect }: ChannelRowProps): React.JSX.Element {
+export function ChannelRow({ active = false, canDelete = false, channel, onConnectVoice, onDelete, onMoveMember, onSelect }: ChannelRowProps): React.JSX.Element {
   return (
-    <div className="vui-channel-row" data-active={active || undefined}>
+    <div className="vui-channel-row" data-active={active || undefined} onDragOver={channel.type === 'voice' && onMoveMember !== undefined ? (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; event.currentTarget.dataset.dropTarget = 'true'; } : undefined} onDragLeave={(event) => { delete event.currentTarget.dataset.dropTarget; }} onDrop={channel.type === 'voice' && onMoveMember !== undefined ? (event) => { event.preventDefault(); delete event.currentTarget.dataset.dropTarget; const userId = event.dataTransfer.getData('application/x-vatrushka-user'); if (userId) onMoveMember(channel.id, userId); } : undefined}>
       <button aria-current={active ? 'page' : undefined} onClick={() => onSelect(channel.id)} onDoubleClick={channel.type === 'voice' && onConnectVoice !== undefined ? () => onConnectVoice(channel.id) : undefined} title={channel.type === 'voice' && onConnectVoice !== undefined ? 'Двойной щелчок — подключиться' : undefined} type="button">
         <Icon name={channel.type === 'text' ? 'hash' : 'voice'} size={17} />
         <span>{channel.name}</span>
@@ -103,6 +107,7 @@ export function ChannelRow({ active = false, canDelete = false, channel, onConne
         {channel.unread === true ? <span aria-label="Есть непрочитанные сообщения" className="vui-channel-row__unread" role="img" /> : null}
       </button>
       {canDelete && onDelete !== undefined ? <IconButton className="vui-channel-row__delete" icon="close" label={`Удалить канал ${channel.name}`} onClick={() => onDelete(channel.id)} size="sm" type="button" /> : null}
+      {channel.type !== 'voice' || channel.participants === undefined || channel.participants.length === 0 ? null : <div className="vui-channel-row__participants">{channel.participants.map((participant) => <div draggable={participant.canDrag === true} key={participant.userId} onDragStart={participant.canDrag === true ? (event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-vatrushka-user', participant.userId); } : undefined}><Avatar name={participant.name} size="sm" /><span>{participant.name}</span>{participant.founder ? <Badge tone="founder">DEV</Badge> : null}</div>)}</div>}
     </div>
   );
 }
@@ -116,14 +121,15 @@ interface ChannelCategoryProps {
   onConnectVoice?: ((id: string) => void) | undefined;
   onCreate?: ((type: ChannelNavigationItem['type']) => void) | undefined;
   onDelete?: ((id: string) => void) | undefined;
+  onMoveMember?: ((channelId: string, userId: string) => void) | undefined;
   type: ChannelNavigationItem['type'];
 }
 
-export function ChannelCategory({ activeChannelId, canManage = false, channels, onConnectVoice, onCreate, onDelete, onSelect, title, type }: ChannelCategoryProps): React.JSX.Element {
+export function ChannelCategory({ activeChannelId, canManage = false, channels, onConnectVoice, onCreate, onDelete, onMoveMember, onSelect, title, type }: ChannelCategoryProps): React.JSX.Element {
   return (
     <section className="vui-channel-category">
       <header><span>{title}</span>{canManage && onCreate !== undefined ? <IconButton icon="plus" label={`Создать ${type === 'text' ? 'текстовый' : 'голосовой'} канал`} onClick={() => onCreate(type)} size="sm" type="button" /> : null}</header>
-      <div>{channels.map((channel) => <ChannelRow active={channel.id === activeChannelId} canDelete={canManage} channel={channel} key={channel.id} onConnectVoice={onConnectVoice} onDelete={onDelete} onSelect={onSelect} />)}</div>
+      <div>{channels.map((channel) => <ChannelRow active={channel.id === activeChannelId} canDelete={canManage} channel={channel} key={channel.id} onConnectVoice={onConnectVoice} onDelete={onDelete} onMoveMember={onMoveMember} onSelect={onSelect} />)}</div>
     </section>
   );
 }
@@ -164,9 +170,10 @@ export interface ServerContextProps {
   onDeleteChannel?: ((id: string) => void) | undefined;
   onCopyInvite: () => void;
   onManageRoles: () => void;
+  onMoveMember?: ((channelId: string, userId: string) => void) | undefined;
 }
 
-export function ServerContext({ activeChannelId, canManageChannels = false, canManageRoles = false, connectionLabel = 'Голосовой канал не подключён', connectionPanel, name, onChannel, onConnectVoice, onCopyInvite, onCreateChannel, onDeleteChannel, onManageRoles, privacyLabel = 'Приватный сервер', profile, textChannels, voiceChannels }: ServerContextProps): React.JSX.Element {
+export function ServerContext({ activeChannelId, canManageChannels = false, canManageRoles = false, connectionLabel = 'Голосовой канал не подключён', connectionPanel, name, onChannel, onConnectVoice, onCopyInvite, onCreateChannel, onDeleteChannel, onManageRoles, onMoveMember, privacyLabel = 'Приватный сервер', profile, textChannels, voiceChannels }: ServerContextProps): React.JSX.Element {
   return (
     <aside aria-label="Навигация сервера" className="vui-server-context">
       <header className="vui-server-context__header">
@@ -175,7 +182,7 @@ export function ServerContext({ activeChannelId, canManageChannels = false, canM
       </header>
       <div className="vui-server-context__scroll">
         <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={textChannels} onCreate={onCreateChannel} onDelete={onDeleteChannel} onSelect={onChannel} title="Текстовые каналы" type="text" />
-        <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={voiceChannels} onConnectVoice={onConnectVoice} onCreate={onCreateChannel} onDelete={onDeleteChannel} onSelect={onChannel} title="Голосовые каналы" type="voice" />
+        <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={voiceChannels} onConnectVoice={onConnectVoice} onCreate={onCreateChannel} onDelete={onDeleteChannel} onMoveMember={onMoveMember} onSelect={onChannel} title="Голосовые каналы" type="voice" />
       </div>
       {connectionPanel ?? <div className="vui-server-context__connection"><StatusDot label="Статус голосового подключения" status="offline" /><span>{connectionLabel}</span></div>}
       {profile}
@@ -211,6 +218,7 @@ export interface MemberNavigationItem {
   founder?: boolean;
   status?: 'online' | 'idle' | 'dnd' | 'offline' | 'streaming';
   actions?: ReactNode;
+  draggable?: boolean;
 }
 
 export interface MemberPanelProps {
@@ -225,7 +233,7 @@ export function MemberPanel({ members }: MemberPanelProps): React.JSX.Element {
       <div className="vui-member-panel__summary"><StatusDot label="В сети" status="online" />{online} в сети</div>
       <div className="vui-member-panel__list">
         {members.map((member) => (
-          <div className="vui-member-row" data-founder={member.founder || undefined} key={member.id}>
+          <div className="vui-member-row" data-founder={member.founder || undefined} draggable={member.draggable === true} key={member.id} onDragStart={member.draggable === true ? (event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-vatrushka-user', member.id); } : undefined} title={member.draggable === true ? 'Перетащите участника в голосовой канал' : undefined}>
             <Avatar name={member.name} size="sm" {...(member.status === undefined ? {} : { status: member.status })} />
             <span><strong>{member.name}</strong><small>{member.roleLabel ?? (member.founder ? 'Основатель сервера' : 'Участник')}</small></span>
             {member.founder ? <Badge tone="founder">DEV</Badge> : member.actions}

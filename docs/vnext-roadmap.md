@@ -24,13 +24,14 @@
 - транзакционные screen-share leases для голосовых каналов;
 - локальные Manrope/Unbounded, анимации и новый server shell.
 - NSIS auto-update через self-hosted generic feed с progress/restart UI.
+- персональная Home-панель с быстрым возвратом, активными пространствами, недавней активностью, offline-кэшем, onboarding и фактической диагностикой выбранного микрофона.
 
 ## Следующие итерации
 
 ### P0 — эксплуатационная готовность
 
 1. Восстановление забытого пароля через отдельный ограниченный email-flow.
-2. Mention-счётчики, настройки уведомлений и доставка событий без polling.
+2. Mention-счётчики и доставка событий через WebSocket без polling; локальные настройки push/звука уже реализованы.
 3. Code signing автообновляемого Windows-клиента и отдельные release channels stable/beta.
 4. Нагрузочные тесты PostgreSQL/LiveKit и метрики Prometheus/Grafana.
 

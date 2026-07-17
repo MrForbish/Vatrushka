@@ -32,10 +32,19 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('app-shell-desktop.png', { animations: 'disabled', fullPage: true });
   });
 
-  test('server home', async ({ page }) => {
-    await openStory(page, 'screens-current--server-home');
-    await expect(page.getByRole('heading', { name: 'Серверы' })).toBeVisible();
-    await expect(page).toHaveScreenshot('server-home.png', { animations: 'disabled', fullPage: true });
+  test('personal Home dashboard', async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await openStory(page, 'home-homepage--returning-user');
+    await expect(page.getByRole('heading', { name: 'Продолжить' })).toBeVisible();
+    await expect(page).toHaveScreenshot('home-dashboard.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('personal Home profile drawer', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 760 });
+    await openStory(page, 'home-homepage--profile-drawer-mode');
+    await page.getByRole('button', { name: 'Открыть профиль' }).click();
+    await expect(page.getByRole('dialog', { name: 'Профиль' })).toBeVisible();
+    await expect(page).toHaveScreenshot('home-profile-drawer.png', { animations: 'disabled', fullPage: true });
   });
 
   test('password login', async ({ page }) => {

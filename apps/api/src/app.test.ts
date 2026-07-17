@@ -414,6 +414,49 @@ describe('retired standalone room API', () => {
   });
 });
 
+describe('home dashboard API', () => {
+  it('returns onboarding without any manual-code flow for a new user', async () => {
+    const auth = await login('home-new@example.com', 'New User');
+    const response = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/home`, headers: { authorization: `Bearer ${auth.accessToken}` } });
+
+    expect(response.statusCode).toBe(200);
+    const home = response.json<{ servers: unknown[]; continueItems: unknown[]; onboarding: { visible: boolean; steps: Array<{ id: string }> } }>();
+    expect(home.servers).toEqual([]);
+    expect(home.continueItems).toEqual([]);
+    expect(home.onboarding.visible).toBe(true);
+    expect(home.onboarding.steps.map((step) => step.id)).toEqual(['create_server', 'configure_channels', 'invite_members']);
+    expect(JSON.stringify(home)).not.toMatch(/join.by.code|inviteCode|по коду/iu);
+  });
+
+  it('aggregates voice presence, unread channels, and meaningful recent activity', async () => {
+    const owner = await login('home-owner@example.com', 'Home Owner');
+    const member = await login('home-member@example.com', 'Home Member');
+    const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Home Space' } });
+    const server = created.json<{ id: string; inviteUrl: string; channels: Array<{ id: string; type: 'text' | 'voice' }> }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteTokenFromUrl(server.inviteUrl)}/accept`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    const textChannel = server.channels.find((channel) => channel.type === 'text');
+    const voiceChannel = server.channels.find((channel) => channel.type === 'voice');
+    if (!textChannel || !voiceChannel) throw new Error('Missing default channels');
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { content: 'Важное обновление' } });
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/activity/open`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    const connected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voiceChannel.id}/connect`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    const connection = connected.json<{ participantIdentity: string }>();
+    const voiceRecord = context.store.serverChannels.get(voiceChannel.id);
+    if (!voiceRecord?.livekitRoomName) throw new Error('Missing voice room');
+    context.media.connect(voiceRecord.livekitRoomName, connection.participantIdentity);
+
+    const response = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/home`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(response.statusCode).toBe(200);
+    const home = response.json<{ servers: Array<{ unreadCount: number; activeVoiceCount: number }>; activeSpaces: Array<{ type: string; id: string }>; recentActivity: Array<{ type: string }> }>();
+    expect(home.servers[0]).toEqual(expect.objectContaining({ unreadCount: 1, activeVoiceCount: 1 }));
+    expect(home.activeSpaces).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: voiceChannel.id, type: 'voice_channel' }),
+      expect.objectContaining({ id: textChannel.id, type: 'text_channel' }),
+    ]));
+    expect(home.recentActivity.map((item) => item.type)).toContain('opened_channel');
+  });
+});
+
 describe('servers, channels, messages, and roles API', () => {
   it('creates a server and lets another user join through its short invite link', async () => {
     const owner = await login('community-owner@example.com', 'Owner');
@@ -520,6 +563,12 @@ describe('servers, channels, messages, and roles API', () => {
     expect(sentMessage.replyTo).toBeNull();
     expect(sentMessage.reactions).toEqual([]);
     expect(sentMessage.attachments).toEqual([]);
+
+    const attachmentOnly = await context.app.inject({
+      method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { content: '' },
+    });
+    expect(attachmentOnly.statusCode).toBe(201);
+    expect(attachmentOnly.json<{ content: string }>().content).toBe('');
 
     const fileContent = Buffer.from('Vatrushka attachment');
     const multipart = multipartFile('notes.txt', 'text/plain', fileContent);
@@ -665,12 +714,32 @@ describe('servers, channels, messages, and roles API', () => {
     expect(memberConnection).toEqual(expect.objectContaining({ canStream: true, canStreamApplicationAudio: false }));
     expect(context.media.tokens.at(-1)).toEqual(expect.objectContaining({ canPublishScreen: true, canPublishScreenAudio: false }));
     context.media.connect(channel.livekitRoomName, memberConnection.participantIdentity);
+    const serverWithPresence = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    const voiceWithPresence = serverWithPresence.json<{ channels: Array<{ id: string; voiceParticipants?: Array<{ userId: string; identity: string }> }> }>().channels.find((candidate) => candidate.id === voice.id);
+    expect(voiceWithPresence?.voiceParticipants).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userId: owner.userId, identity: connection.participantIdentity }),
+      expect.objectContaining({ userId: member.userId, identity: memberConnection.participantIdentity }),
+    ]));
+
     const busyClaim = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/screen-share/claim`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { participantIdentity: memberConnection.participantIdentity } });
     expect(busyClaim.statusCode).toBe(409);
     expect(busyClaim.json<{ code: string }>().code).toBe('SCREEN_SHARE_BUSY');
     context.clock.now = new Date(context.clock.now.getTime() + 31_000);
     const afterExpiry = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/screen-share/claim`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { participantIdentity: memberConnection.participantIdentity } });
     expect(afterExpiry.statusCode).toBe(200);
+
+    const secondVoiceResponse = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/${server.id}/channels`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Вторая голосовая', type: 'voice' } });
+    expect(secondVoiceResponse.statusCode).toBe(201);
+    const secondVoice = secondVoiceResponse.json<{ id: string }>();
+    const moved = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${secondVoice.id}/members/${member.userId}/move`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    expect(moved.statusCode).toBe(204);
+    expect(context.media.rooms.get(channel.livekitRoomName)?.has(memberConnection.participantIdentity)).toBe(false);
+    expect([...context.media.rooms.entries()].some(([roomName, participants]) => roomName !== channel.livekitRoomName && participants.has(memberConnection.participantIdentity))).toBe(true);
+    const acceptedMove = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/voice/move-request`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(acceptedMove.statusCode).toBe(200);
+    expect(acceptedMove.json<{ channelId: string; channelName: string; seamlesslyMoved: boolean }>()).toEqual(expect.objectContaining({ channelId: secondVoice.id, channelName: 'вторая голосовая', seamlesslyMoved: true }));
+    const consumedMove = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/voice/move-request`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(consumedMove.json()).toBeNull();
   });
 
   it('creates private one-to-one conversations only for users sharing a server', async () => {

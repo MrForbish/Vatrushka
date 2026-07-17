@@ -3,13 +3,10 @@ import type { PermissionOverwriteTargetType, PlatformRole } from '@vatrushka/sha
 
 import type {
   AuthCodeRecord,
-  GuestSessionRecord,
-  LeaseClaim,
-  LeaseRecord,
   RefreshRotation,
-  RoomRecord,
   RecoveryCodeRecord,
   SecurityEventRecord,
+  UserActivityRecord,
   SessionRecord,
   UserRecord,
   ServerGraph,
@@ -46,9 +43,7 @@ export class MemoryStore implements DataStore {
   readonly sessions = new Map<string, SessionRecord>();
   readonly recoveryCodes = new Map<string, RecoveryCodeRecord>();
   readonly securityEvents = new Map<string, SecurityEventRecord>();
-  readonly rooms = new Map<string, RoomRecord>();
-  readonly guests = new Map<string, GuestSessionRecord>();
-  readonly leases = new Map<string, LeaseRecord>();
+  readonly userActivity = new Map<string, UserActivityRecord>();
   readonly servers = new Map<string, ServerRecord>();
   readonly serverMembers = new Map<string, ServerMemberRecord>();
   readonly serverRoles = new Map<string, ServerRoleRecord>();
@@ -270,98 +265,16 @@ export class MemoryStore implements DataStore {
       .map((event) => structuredClone(event));
   }
 
-  async createRoom(room: RoomRecord): Promise<boolean> {
-    if ([...this.rooms.values()].some((current) => current.code === room.code || current.livekitRoomName === room.livekitRoomName)) return false;
-    this.rooms.set(room.id, structuredClone(room));
-    return true;
+  async createUserActivity(activity: UserActivityRecord): Promise<void> {
+    this.userActivity.set(activity.id, structuredClone(activity));
   }
 
-  async findRoomById(id: string): Promise<RoomRecord | null> {
-    const row = this.rooms.get(id);
-    return row ? structuredClone(row) : null;
-  }
-
-  async findRoomByCode(code: string): Promise<RoomRecord | null> {
-    const row = [...this.rooms.values()].find((room) => room.code === code);
-    return row ? structuredClone(row) : null;
-  }
-
-  async setRoomLocked(id: string, isLocked: boolean, now: Date): Promise<RoomRecord | null> {
-    const row = this.rooms.get(id);
-    if (!row) return null;
-    row.isLocked = isLocked;
-    row.updatedAt = now;
-    return structuredClone(row);
-  }
-
-  async closeRoom(id: string, now: Date): Promise<RoomRecord | null> {
-    const row = this.rooms.get(id);
-    if (!row) return null;
-    row.status = 'closed';
-    row.closedAt = now;
-    row.updatedAt = now;
-    return structuredClone(row);
-  }
-
-  async expireRoom(id: string, now: Date): Promise<RoomRecord | null> {
-    const row = this.rooms.get(id);
-    if (!row) return null;
-    row.status = 'expired';
-    row.updatedAt = now;
-    return structuredClone(row);
-  }
-
-  async createGuestSession(session: GuestSessionRecord): Promise<void> {
-    this.guests.set(session.tokenHash, structuredClone(session));
-  }
-
-  async findGuestSessionByTokenHash(tokenHash: string): Promise<GuestSessionRecord | null> {
-    const row = this.guests.get(tokenHash);
-    return row ? structuredClone(row) : null;
-  }
-
-  async revokeGuestSessionsForRoom(roomId: string, now: Date): Promise<void> {
-    for (const guest of this.guests.values()) if (guest.roomId === roomId && !guest.revokedAt) guest.revokedAt = now;
-  }
-
-  async revokeGuestSessionById(id: string, now: Date): Promise<void> {
-    for (const guest of this.guests.values()) if (guest.id === id && !guest.revokedAt) guest.revokedAt = now;
-  }
-
-  async claimLease(
-    roomId: string,
-    participantIdentity: string,
-    participantDisplayName: string,
-    now: Date,
-    leaseSeconds: number,
-  ): Promise<LeaseClaim> {
-    const current = this.leases.get(roomId) ?? null;
-    const decision = decideScreenShareLease(current, participantIdentity, participantDisplayName, now, leaseSeconds);
-    if (!decision.ok) return { status: 'busy', lease: structuredClone(current as LeaseRecord) };
-    const lease = { roomId, ...decision.lease };
-    this.leases.set(roomId, lease);
-    return { status: 'ok', lease: structuredClone(lease) };
-  }
-
-  async heartbeatLease(roomId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<LeaseRecord | null> {
-    const lease = this.leases.get(roomId);
-    if (!lease || lease.participantIdentity !== participantIdentity || isExpired(lease.expiresAt, now)) return null;
-    lease.expiresAt = expiresAt(now, leaseSeconds);
-    return structuredClone(lease);
-  }
-
-  async releaseLease(roomId: string, participantIdentity: string): Promise<boolean> {
-    const lease = this.leases.get(roomId);
-    if (!lease || lease.participantIdentity !== participantIdentity) return false;
-    return this.leases.delete(roomId);
-  }
-
-  async releaseLeaseByParticipant(participantIdentity: string): Promise<void> {
-    for (const [roomId, lease] of this.leases) if (lease.participantIdentity === participantIdentity) this.leases.delete(roomId);
-  }
-
-  async releaseLeaseByRoom(roomId: string): Promise<void> {
-    this.leases.delete(roomId);
+  async listUserActivity(userId: string, limit: number): Promise<UserActivityRecord[]> {
+    return [...this.userActivity.values()]
+      .filter((activity) => activity.userId === userId)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+      .slice(0, limit)
+      .map((activity) => structuredClone(activity));
   }
 
   async createServerGraph(graph: ServerGraph): Promise<boolean> {
@@ -821,5 +734,9 @@ export class MemoryStore implements DataStore {
 
   async releaseChannelLeaseByParticipant(participantIdentity: string): Promise<void> {
     for (const [channelId, lease] of this.channelLeases) if (lease.participantIdentity === participantIdentity) this.channelLeases.delete(channelId);
+  }
+
+  async releaseChannelLeaseByChannel(channelId: string): Promise<void> {
+    this.channelLeases.delete(channelId);
   }
 }

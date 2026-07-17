@@ -16,9 +16,9 @@ const meta = {
     snapshot: {
       connectionState: ConnectionState.Connected,
       participants: [
-        { identity: 'user_founder_local', displayName: 'Илья Форбиш', isLocal: true, isOwner: true, isGuest: false, isMuted: false, isSpeaking: false, audioLevel: 0.08, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'owner', connectionQuality: 'Отличное' },
-        { identity: 'user_anna_remote', displayName: 'Анна Белова', isLocal: false, isOwner: false, isGuest: false, isMuted: false, isSpeaking: true, audioLevel: 0.76, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'member', connectionQuality: 'Отличное' },
-        { identity: 'user_max_remote', displayName: 'Максим Орлов', isLocal: false, isOwner: false, isGuest: false, isMuted: true, isSpeaking: false, audioLevel: 0, isScreenSharing: false, volume: 0.8, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
+        { identity: 'user_founder_local', displayName: 'Илья Форбиш', isLocal: true, isOwner: true, isMuted: false, isSpeaking: false, audioLevel: 0.08, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'owner', connectionQuality: 'Отличное' },
+        { identity: 'user_anna_remote', displayName: 'Анна Белова', isLocal: false, isOwner: false, isMuted: false, isSpeaking: true, audioLevel: 0.76, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'member', connectionQuality: 'Отличное' },
+        { identity: 'user_max_remote', displayName: 'Максим Орлов', isLocal: false, isOwner: false, isMuted: true, isSpeaking: false, audioLevel: 0, isScreenSharing: false, volume: 0.8, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
       ],
       isMuted: false,
       isScreenSharing: false,

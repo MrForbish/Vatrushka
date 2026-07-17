@@ -12,20 +12,22 @@ export interface AppShellProps {
   members: ReactNode;
   workspaceDrawerTitle?: string;
   membersDrawerTitle?: string;
+  variant?: 'default' | 'home';
+  renderMembersToggle?: ((open: () => void) => ReactNode) | undefined;
 }
 
-export function AppShell({ children, members, membersDrawerTitle = 'Участники сервера', serverContext, topBar, workspaceDrawerTitle = 'Серверы', workspaceLibrary }: AppShellProps): React.JSX.Element {
+export function AppShell({ children, members, membersDrawerTitle = 'Участники сервера', renderMembersToggle, serverContext, topBar, variant = 'default', workspaceDrawerTitle = 'Серверы', workspaceLibrary }: AppShellProps): React.JSX.Element {
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
 
   return (
-    <div className="vui-app-shell" data-has-server-context={serverContext === undefined ? undefined : true}>
+    <div className="vui-app-shell" data-has-server-context={serverContext === undefined ? undefined : true} data-variant={variant}>
       <div className="vui-app-shell__workspaces">{workspaceLibrary}</div>
       {serverContext === undefined ? null : <div className="vui-app-shell__server-context">{serverContext}</div>}
       <header className="vui-app-shell__topbar">
         <IconButton className="vui-app-shell__workspace-toggle" icon="panelLeft" label="Открыть список серверов" onClick={() => setWorkspaceOpen(true)} size="sm" type="button" />
         {topBar}
-        <IconButton className="vui-app-shell__members-toggle" icon="panelRight" label="Открыть участников" onClick={() => setMembersOpen(true)} size="sm" type="button" />
+        <span className="vui-app-shell__members-toggle">{renderMembersToggle === undefined ? <IconButton icon="panelRight" label="Открыть участников" onClick={() => setMembersOpen(true)} size="sm" type="button" /> : renderMembersToggle(() => setMembersOpen(true))}</span>
       </header>
       <main className="vui-app-shell__content">{children}</main>
       <div className="vui-app-shell__members">{members}</div>

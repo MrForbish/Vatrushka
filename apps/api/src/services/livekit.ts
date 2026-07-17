@@ -21,7 +21,7 @@ export class LiveKitMediaService implements MediaService {
       maxParticipants: options.maxParticipants,
       emptyTimeout: 10 * 60,
       departureTimeout: 60,
-      metadata: JSON.stringify({ appRoomId: options.id, ownerUserId: options.ownerUserId }),
+      metadata: JSON.stringify({ appChannelId: options.id, ownerUserId: options.ownerUserId }),
     };
     try {
       await this.rooms.createRoom(roomOptions);
@@ -53,6 +53,25 @@ export class LiveKitMediaService implements MediaService {
 
   async removeParticipant(roomName: string, identity: string): Promise<void> {
     await this.rooms.removeParticipant(roomName, identity);
+  }
+
+  async moveParticipant(sourceRoomName: string, identity: string, destinationRoomName: string, permissions: Pick<MediaTokenOptions, 'canPublishMicrophone' | 'canPublishScreen' | 'canPublishScreenAudio'>): Promise<void> {
+    await this.rooms.moveParticipant(sourceRoomName, identity, destinationRoomName);
+    const canPublishMicrophone = permissions.canPublishMicrophone ?? true;
+    const canPublishScreen = permissions.canPublishScreen ?? true;
+    const canPublishScreenAudio = canPublishScreen && (permissions.canPublishScreenAudio ?? true);
+    await this.rooms.updateParticipant(destinationRoomName, identity, {
+      permission: {
+        canPublish: canPublishMicrophone || canPublishScreen,
+        canSubscribe: true,
+        canPublishData: false,
+        canPublishSources: [
+          ...(canPublishMicrophone ? [TrackSource.MICROPHONE] : []),
+          ...(canPublishScreen ? [TrackSource.SCREEN_SHARE] : []),
+          ...(canPublishScreenAudio ? [TrackSource.SCREEN_SHARE_AUDIO] : []),
+        ],
+      },
+    });
   }
 
   async participantIdentities(roomName: string): Promise<string[]> {

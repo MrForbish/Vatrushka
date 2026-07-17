@@ -17,6 +17,16 @@ export default defineConfig({
   renderer: {
     root: resolve('src/renderer'),
     plugins: [react()],
-    build: { sourcemap: true },
+    build: {
+      sourcemap: true,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('/node_modules/@tanstack/')) return 'tanstack-query';
+            return undefined;
+          },
+        },
+      },
+    },
   },
 });

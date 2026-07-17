@@ -149,6 +149,71 @@ test('revokes another device without exposing its refresh token to the renderer'
   await expect(remote).toHaveCount(0);
 });
 
+test('opens the redesigned Home, creates the first server, and restores it after returning', async () => {
+  let serverCreated = false;
+  const user = { id: 'home-e2e-user', email: 'home@myvatrushka.ru', displayName: 'Домашний пользователь', platformRole: 'member', hasPassword: true, twoFactorEnabled: false };
+  const server = {
+    id: 'home-e2e-server', name: 'Первый сервер', inviteUrl: 'http://localhost:3000/i/homeInvite42', ownerUserId: user.id, memberCount: 1, createdAt: '2026-07-17T10:00:00.000Z',
+    permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'CONNECT_VOICE'],
+    channels: [
+      { id: 'home-e2e-text', serverId: 'home-e2e-server', name: 'общий', type: 'text', position: 0, unreadCount: 0, permissions: ['VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES'] },
+      { id: 'home-e2e-voice', serverId: 'home-e2e-server', name: 'Голосовой', type: 'voice', position: 1, unreadCount: 0, voiceParticipants: [], permissions: ['VIEW_CHANNEL', 'CONNECT_VOICE'] },
+    ],
+    roles: [], members: [],
+  };
+  apiServer = createServer((request, response) => {
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    response.setHeader('Content-Type', 'application/json');
+    if (request.method === 'OPTIONS') { response.statusCode = 204; response.end(); return; }
+    const url = new URL(request.url ?? '/', 'http://localhost:3000');
+    if (request.method === 'POST' && url.pathname === '/api/v1/auth/password/begin') { response.end(JSON.stringify({ status: 'SECOND_FACTOR_REQUIRED', factor: 'email', retryAfterSeconds: 60 })); return; }
+    if (request.method === 'POST' && url.pathname === '/api/v1/auth/password/complete') { response.end(JSON.stringify({ accessToken: 'home-access-token-for-e2e-user-1234567890', refreshToken: 'home-refresh-token-for-e2e-user-1234567890', expiresIn: 900, user })); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/servers') { response.end(JSON.stringify(serverCreated ? [server] : [])); return; }
+    if (request.method === 'POST' && url.pathname === '/api/v1/servers') { serverCreated = true; response.statusCode = 201; response.end(JSON.stringify(server)); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/home') {
+      response.end(JSON.stringify({
+        user: { id: user.id, displayName: user.displayName, email: user.email, avatarUrl: null, presence: 'online', platformBadge: null },
+        readiness: { connection: 'healthy', audioSetupRequired: false },
+        servers: serverCreated ? [{ ...server, unreadCount: 0, activeVoiceCount: 0 }] : [],
+        continueItems: serverCreated ? [{ id: 'server-home-e2e-server', type: 'server', title: server.name, subtitle: 'Ваше пространство', participantCount: 0, active: false, lastActivityAt: server.createdAt, destination: { type: 'server', serverId: server.id } }] : [],
+        activeSpaces: [], recentActivity: [],
+        onboarding: { visible: !serverCreated, steps: [
+          { id: 'create_server', title: 'Создайте свой сервер', description: 'Первый шаг', complete: serverCreated, destination: null },
+          { id: 'configure_channels', title: 'Настройте каналы', description: 'Второй шаг', complete: serverCreated, destination: serverCreated ? { type: 'server', serverId: server.id } : null },
+          { id: 'invite_members', title: 'Пригласите участников', description: 'Третий шаг', complete: false, destination: serverCreated ? { type: 'server', serverId: server.id } : null },
+        ] },
+      }));
+      return;
+    }
+    if (request.method === 'GET' && url.pathname === '/api/v1/notifications/messages') { response.end(JSON.stringify({ items: [], cursor: null })); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/channels/home-e2e-text/messages') { response.end('[]'); return; }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ code: 'NOT_FOUND' }));
+  });
+  await new Promise<void>((resolve, reject) => apiServer?.listen(3000, () => resolve()).once('error', reject));
+
+  application = await electron.launch({ args: ['.', '--use-fake-device-for-media-stream', '--user-data-dir=.e2e-user-data-home'], cwd: process.cwd(), env: electronEnvironment() });
+  const window = await application.firstWindow();
+  await window.getByRole('textbox', { name: 'Email' }).fill(user.email);
+  await window.getByRole('textbox', { name: 'Пароль', exact: true }).fill('secure-vatrushka-42');
+  await window.getByRole('button', { name: /Продолжить/u }).click();
+  await window.getByLabel('Код из письма').fill('123456');
+  await window.getByRole('button', { name: /Подтвердить вход/u }).click();
+  await expect(window.getByRole('heading', { name: /Добро пожаловать/u })).toBeVisible();
+  await expect(window.getByRole('heading', { name: 'Что дальше?' })).toBeVisible();
+  await expect(window.getByText(/Войти по коду/u)).toHaveCount(0);
+
+  await window.locator('.home-quick-actions').getByRole('button', { name: 'Создать сервер' }).click();
+  const dialog = window.getByRole('dialog', { name: 'Новый сервер' });
+  await dialog.getByLabel('Название').fill(server.name);
+  await dialog.getByRole('button', { name: 'Создать' }).click();
+  await expect(window.getByRole('button', { name: 'общий' })).toBeVisible();
+  await window.getByRole('button', { name: 'Главная' }).click();
+  await expect(window.getByText(server.name).first()).toBeVisible();
+  await expect(window.getByRole('heading', { name: 'Продолжить' })).toBeVisible();
+});
+
 test('accepts a validated invite link after authentication without exposing a manual code or guest flow', async () => {
   const inviteToken = 'ABCD2345test';
   let inviteAccepted = false;

@@ -68,6 +68,98 @@ export interface ServerSummary {
   createdAt: string;
 }
 
+export type HomePresence = 'online' | 'idle' | 'dnd' | 'offline';
+export type HomeConnectionStatus = 'healthy' | 'degraded' | 'offline';
+export type HomeDestinationType = 'server' | 'text_channel' | 'voice_channel';
+
+export interface HomeDestination {
+  type: HomeDestinationType;
+  serverId: string;
+  channelId?: string;
+}
+
+export interface HomeServerSummary extends ServerSummary {
+  unreadCount: number;
+  activeVoiceCount: number;
+}
+
+export interface HomeContinueItem {
+  id: string;
+  type: 'active_call' | HomeDestinationType;
+  title: string;
+  subtitle: string;
+  participantCount: number;
+  active: boolean;
+  lastActivityAt: string;
+  destination: HomeDestination;
+}
+
+export interface HomeParticipantPreview {
+  id: string;
+  displayName: string;
+}
+
+export interface HomeActiveSpaceItem {
+  id: string;
+  type: 'voice_channel' | 'text_channel';
+  title: string;
+  subtitle: string;
+  participants: HomeParticipantPreview[];
+  participantCount: number;
+  hasVoiceActivity: boolean;
+  unreadCount: number;
+  lastActivityAt: string;
+  destination: HomeDestination;
+}
+
+export type HomeActivityType =
+  | 'opened_channel'
+  | 'joined_voice'
+  | 'left_voice'
+  | 'sent_message'
+  | 'joined_server'
+  | 'mention_received';
+
+export interface HomeRecentActivityItem {
+  id: string;
+  type: HomeActivityType;
+  title: string;
+  context: string;
+  occurredAt: string;
+  destination: HomeDestination | null;
+}
+
+export interface HomeOnboardingStep {
+  id: 'create_server' | 'configure_channels' | 'invite_members';
+  title: string;
+  description: string;
+  complete: boolean;
+  destination: HomeDestination | null;
+}
+
+export interface HomeDashboardResponse {
+  user: {
+    id: string;
+    displayName: string;
+    email: string;
+    avatarUrl: string | null;
+    presence: HomePresence;
+    platformBadge: 'FOUNDER_DEVELOPER' | null;
+  };
+  readiness: {
+    connection: HomeConnectionStatus;
+    audioSetupRequired: boolean;
+  };
+  servers: HomeServerSummary[];
+  continueItems: HomeContinueItem[];
+  activeSpaces: HomeActiveSpaceItem[];
+  recentActivity: HomeRecentActivityItem[];
+  onboarding: {
+    visible: boolean;
+    steps: HomeOnboardingStep[];
+  };
+}
+
 export interface ServerChannel {
   id: string;
   serverId: string;
@@ -75,8 +167,16 @@ export interface ServerChannel {
   type: ServerChannelType;
   position: number;
   unreadCount: number;
+  voiceParticipants?: VoiceChannelParticipant[];
   permissions?: ServerPermission[];
   permissionOverwrites?: ChannelPermissionOverwrite[];
+}
+
+export interface VoiceChannelParticipant {
+  identity: string;
+  userId: string;
+  displayName: string;
+  platformRole: PlatformRole;
 }
 
 export interface ServerRole {
@@ -206,6 +306,7 @@ export interface DesktopMessageNotification {
   body: string;
   serverId: string;
   channelId: string;
+  silent?: boolean | undefined;
 }
 
 export type DesktopUpdateStatus =
@@ -296,9 +397,13 @@ export interface RoomConnection {
   contextType: 'channel';
   serverId: string;
   channelId: string;
+  serverName?: string;
+  channelName?: string;
   canSpeak?: boolean;
   canStream?: boolean;
   canStreamApplicationAudio?: boolean;
+  canMoveMembers?: boolean;
+  seamlesslyMoved?: boolean;
 }
 
 export interface DesktopSourceInfo {

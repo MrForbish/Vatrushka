@@ -1,32 +1,5 @@
-import { ROOM_CODE_ALPHABET, ROOM_CODE_LENGTH } from './constants.js';
-
 export function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
-}
-
-export function normalizeRoomCode(code: string): string {
-  return code.trim().toUpperCase();
-}
-
-export function generateRoomCode(
-  length = ROOM_CODE_LENGTH,
-  randomIndex: (upperBound: number) => number = secureRandomIndex,
-): string {
-  if (length < 6 || length > 8) {
-    throw new RangeError('Room code length must be between 6 and 8');
-  }
-  return Array.from({ length }, () => ROOM_CODE_ALPHABET[randomIndex(ROOM_CODE_ALPHABET.length)]).join('');
-}
-
-function secureRandomIndex(upperBound: number): number {
-  const limit = Math.floor(0x1_0000_0000 / upperBound) * upperBound;
-  const buffer = new Uint32Array(1);
-  let value: number;
-  do {
-    crypto.getRandomValues(buffer);
-    value = buffer[0] ?? 0;
-  } while (value >= limit);
-  return value % upperBound;
 }
 
 export function expiresAt(now: Date, seconds: number): Date {

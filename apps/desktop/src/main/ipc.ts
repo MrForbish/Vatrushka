@@ -66,6 +66,7 @@ const desktopMessageNotificationSchema = z.object({
   body: z.string().trim().min(1).max(1_000),
   serverId: z.uuid(),
   channelId: z.uuid(),
+  silent: z.boolean().optional(),
 }).strict();
 
 const apiBaseUrlSchema = z.url().refine((value) => {

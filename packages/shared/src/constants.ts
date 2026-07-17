@@ -1,9 +1,6 @@
 export const APP_NAME = 'Ватрушка';
 export const APP_PROTOCOL = 'vatrushka';
 export const API_PREFIX = '/api/v1';
-export const ROOM_MAX_PARTICIPANTS = 5;
-export const ROOM_CODE_LENGTH = 6;
-export const ROOM_CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 export const OTP_TTL_SECONDS = 10 * 60;
 export const OTP_RESEND_SECONDS = 60;

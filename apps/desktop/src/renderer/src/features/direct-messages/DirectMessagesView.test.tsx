@@ -39,7 +39,8 @@ describe('direct messages UI', () => {
 
     expect(screen.getAllByText('Привет!').length).toBeGreaterThan(0);
     expect(screen.getAllByText('2').length).toBeGreaterThan(0);
-    await userEvent.click(screen.getByRole('button', { name: 'Добавить реакцию 👍' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Добавить реакцию' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Реакция 👍' }));
     expect(onMessageReaction).toHaveBeenCalledWith('message-1', '👍');
     await userEvent.click(screen.getByRole('button', { name: /Новый/u }));
     await userEvent.click(screen.getByLabelText('Участник общего сервера'));

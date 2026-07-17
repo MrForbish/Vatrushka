@@ -7,12 +7,10 @@ import {
   decideScreenShareLease,
   displayNameSchema,
   expiresAt,
-  generateRoomCode,
   isExpired,
   normalizeEmail,
   resolveChannelPermissions,
   resolveServerPermissions,
-  roomCodeSchema,
   serverPermissions,
 } from './index.js';
 
@@ -25,21 +23,10 @@ describe('shared domain helpers', () => {
     expect(displayNameSchema.safeParse('Name\u0000').success).toBe(false);
   });
 
-  it('normalizes and validates room codes', () => {
-    expect(roomCodeSchema.parse(' abc234 ')).toBe('ABC234');
-    expect(roomCodeSchema.safeParse('ABO120').success).toBe(false);
-  });
-
-  it('generates a code from the safe alphabet', () => {
-    const code = generateRoomCode(6, () => 0);
-    expect(code).toBe('AAAAAA');
-    expect(roomCodeSchema.parse(code)).toBe(code);
-  });
-
   it('formats API errors consistently', () => {
-    expect(createApiError('ROOM_FULL', 'req-1')).toEqual({
-      code: 'ROOM_FULL',
-      message: 'В комнате уже находится максимальное количество участников',
+    expect(createApiError('SERVER_PERMISSION_DENIED', 'req-1')).toEqual({
+      code: 'SERVER_PERMISSION_DENIED',
+      message: 'Недостаточно прав для этого действия',
       details: null,
       requestId: 'req-1',
     });

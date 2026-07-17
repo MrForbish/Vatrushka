@@ -19,11 +19,14 @@ import {
   type ServerRole,
   type ServerSummary,
   type TextMessage,
+  type VoiceChannelParticipant,
   type MessageNotification,
   type MessageNotificationPage,
   type DirectConversationSummary,
   type DirectMessage,
   type DirectMessageCandidate,
+  type HomeActivityType,
+  type HomeDashboardResponse,
   type SecurityEvent,
   type SecurityEventType,
   type TwoFactorSetup,
@@ -105,8 +108,8 @@ function publicServerRole(role: ServerRoleRecord): ServerRole {
   return { id: role.id, serverId: role.serverId, name: role.name, color: role.color, position: role.position, isDefault: role.isDefault, kind: role.kind, permissions: role.permissions };
 }
 
-function publicServerChannel(channel: ServerChannelRecord, unreadCount = 0, permissions?: ServerPermission[], permissionOverwrites?: ChannelPermissionOverwrite[]): ServerChannel {
-  return { id: channel.id, serverId: channel.serverId, name: channel.name, type: channel.type, position: channel.position, unreadCount, ...(permissions === undefined ? {} : { permissions }), ...(permissionOverwrites === undefined ? {} : { permissionOverwrites }) };
+function publicServerChannel(channel: ServerChannelRecord, unreadCount = 0, permissions?: ServerPermission[], permissionOverwrites?: ChannelPermissionOverwrite[], voiceParticipants?: VoiceChannelParticipant[]): ServerChannel {
+  return { id: channel.id, serverId: channel.serverId, name: channel.name, type: channel.type, position: channel.position, unreadCount, ...(voiceParticipants === undefined ? {} : { voiceParticipants }), ...(permissions === undefined ? {} : { permissions }), ...(permissionOverwrites === undefined ? {} : { permissionOverwrites }) };
 }
 
 export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
@@ -183,6 +186,7 @@ export class VatrushkaService {
   readonly media: MediaService;
   private readonly mailer: Mailer;
   private readonly clock: () => Date;
+  private readonly pendingVoiceMoves = new Map<string, { channelId: string; expiresAt: Date; seamlesslyMoved: boolean }>();
 
   constructor(dependencies: ServiceDependencies) {
     this.config = dependencies.config;
@@ -454,6 +458,154 @@ export class VatrushkaService {
     }));
   }
 
+  async getHomeDashboard(authorization: string | undefined): Promise<HomeDashboardResponse> {
+    const user = await this.authenticate(authorization);
+    const serverRecords = await this.store.listServersForUser(user.id);
+    const details = await Promise.all(serverRecords.map((server) => this.getServerDetailForUser(server, user)));
+    const activity = await this.store.listUserActivity(user.id, 5);
+    let connection: HomeDashboardResponse['readiness']['connection'] = 'healthy';
+    try {
+      await this.media.healthCheck();
+    } catch {
+      connection = 'degraded';
+    }
+
+    const lastActivityByChannel = new Map<string, Date>();
+    for (const item of activity) {
+      if (item.channelId && !lastActivityByChannel.has(item.channelId)) lastActivityByChannel.set(item.channelId, item.createdAt);
+    }
+
+    const activeSpaces: HomeDashboardResponse['activeSpaces'] = [];
+    for (const server of details) {
+      for (const channel of server.channels) {
+        const participants = channel.voiceParticipants ?? [];
+        if (channel.type === 'voice' && participants.length > 0) {
+          activeSpaces.push({
+            id: channel.id,
+            type: 'voice_channel',
+            title: channel.name,
+            subtitle: server.name,
+            participants: participants.slice(0, 4).map((participant) => ({ id: participant.userId, displayName: participant.displayName })),
+            participantCount: participants.length,
+            hasVoiceActivity: true,
+            unreadCount: 0,
+            lastActivityAt: (lastActivityByChannel.get(channel.id) ?? new Date(server.createdAt)).toISOString(),
+            destination: { type: 'voice_channel', serverId: server.id, channelId: channel.id },
+          });
+        } else if (channel.type === 'text' && channel.unreadCount > 0) {
+          activeSpaces.push({
+            id: channel.id,
+            type: 'text_channel',
+            title: channel.name,
+            subtitle: server.name,
+            participants: [],
+            participantCount: 0,
+            hasVoiceActivity: false,
+            unreadCount: channel.unreadCount,
+            lastActivityAt: (lastActivityByChannel.get(channel.id) ?? new Date(server.createdAt)).toISOString(),
+            destination: { type: 'text_channel', serverId: server.id, channelId: channel.id },
+          });
+        }
+      }
+    }
+    activeSpaces.sort((left, right) => {
+      if (left.type !== right.type) return left.type === 'voice_channel' ? -1 : 1;
+      if (left.participantCount !== right.participantCount) return right.participantCount - left.participantCount;
+      if (left.unreadCount !== right.unreadCount) return right.unreadCount - left.unreadCount;
+      return Date.parse(right.lastActivityAt) - Date.parse(left.lastActivityAt);
+    });
+
+    const servers: HomeDashboardResponse['servers'] = details.map((server) => ({
+      id: server.id,
+      name: server.name,
+      inviteUrl: server.inviteUrl,
+      ownerUserId: server.ownerUserId,
+      memberCount: server.memberCount,
+      createdAt: server.createdAt,
+      unreadCount: server.channels.reduce((total, channel) => total + channel.unreadCount, 0),
+      activeVoiceCount: server.channels.reduce((total, channel) => total + (channel.voiceParticipants?.length ?? 0), 0),
+    }));
+
+    const continueItems: HomeDashboardResponse['continueItems'] = activeSpaces.slice(0, 2).map((space) => ({
+      id: `space-${space.id}`,
+      type: space.type,
+      title: space.title,
+      subtitle: space.subtitle,
+      participantCount: space.participantCount,
+      active: space.type === 'voice_channel',
+      lastActivityAt: space.lastActivityAt,
+      destination: space.destination,
+    }));
+    for (const server of servers) {
+      if (continueItems.length >= 2) break;
+      if (continueItems.some((item) => item.destination.serverId === server.id)) continue;
+      continueItems.push({
+        id: `server-${server.id}`,
+        type: 'server',
+        title: server.name,
+        subtitle: 'Ваше пространство',
+        participantCount: server.activeVoiceCount,
+        active: server.activeVoiceCount > 0,
+        lastActivityAt: server.createdAt,
+        destination: { type: 'server', serverId: server.id },
+      });
+    }
+
+    const firstServer = servers[0];
+    const channelTypeById = new Map(details.flatMap((server) => server.channels.map((channel) => [channel.id, channel.type] as const)));
+    const onboardingSteps: HomeDashboardResponse['onboarding']['steps'] = [
+      { id: 'create_server', title: 'Создайте свой сервер', description: 'Соберите общение в одном пространстве.', complete: servers.length > 0, destination: null },
+      { id: 'configure_channels', title: 'Настройте каналы', description: 'Подготовьте текстовые и голосовые каналы.', complete: details.some((server) => server.channels.length > 0), destination: firstServer ? { type: 'server', serverId: firstServer.id } : null },
+      { id: 'invite_members', title: 'Пригласите участников', description: 'Отправьте короткую ссылку-приглашение.', complete: servers.some((server) => server.memberCount > 1), destination: firstServer ? { type: 'server', serverId: firstServer.id } : null },
+    ];
+    const accountAge = this.now().getTime() - user.createdAt.getTime();
+    const onboardingVisible = servers.length === 0 && accountAge < 7 * 24 * 60 * 60 * 1000 && onboardingSteps.some((step) => !step.complete);
+
+    return {
+      user: {
+        id: user.id,
+        displayName: user.displayName ?? user.email,
+        email: user.email,
+        avatarUrl: null,
+        presence: 'online',
+        platformBadge: user.platformRole === 'owner' ? 'FOUNDER_DEVELOPER' : null,
+      },
+      readiness: { connection, audioSetupRequired: false },
+      servers,
+      continueItems,
+      activeSpaces: activeSpaces.slice(0, 4),
+      recentActivity: activity.map((item) => ({
+        id: item.id,
+        type: item.type,
+        title: item.title,
+        context: item.context,
+        occurredAt: item.createdAt.toISOString(),
+        destination: item.serverId === null ? null : {
+          type: item.channelId === null ? 'server' : channelTypeById.get(item.channelId) === 'voice' ? 'voice_channel' : 'text_channel',
+          serverId: item.serverId,
+          ...(item.channelId === null ? {} : { channelId: item.channelId }),
+        },
+      })),
+      onboarding: { visible: onboardingVisible, steps: onboardingSteps },
+    };
+  }
+
+  async recordOpenedChannel(authorization: string | undefined, channelId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const channel = await this.requireServerChannel(channelId);
+    const server = await this.requireServer(channel.serverId);
+    await this.requireChannelPermission(server, channel, user, 'VIEW_CHANNEL');
+    await this.recordUserActivity(user.id, 'opened_channel', channel.type === 'text' ? `# ${channel.name}` : channel.name, server.name, server.id, channel.id);
+  }
+
+  async recordLeftVoiceChannel(authorization: string | undefined, channelId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const channel = await this.requireVoiceChannel(channelId);
+    const server = await this.requireServer(channel.serverId);
+    await this.requireChannelPermission(server, channel, user, 'VIEW_CHANNEL');
+    await this.recordUserActivity(user.id, 'left_voice', channel.name, server.name, server.id, channel.id);
+  }
+
   async createServer(authorization: string | undefined, name: string): Promise<ServerDetail> {
     const user = await this.authenticate(authorization);
     this.requireCompleteProfile(user);
@@ -486,6 +638,7 @@ export class VatrushkaService {
       })) server = candidate;
     }
     if (!server) throw new AppError('INTERNAL_ERROR', 500);
+    await this.recordUserActivity(user.id, 'joined_server', server.name, 'Сервер создан', server.id, null);
     return this.getServerDetailForUser(server, user);
   }
 
@@ -496,6 +649,7 @@ export class VatrushkaService {
     if (!server) throw new AppError('SERVER_NOT_FOUND', 404);
     if (!await this.store.findServerMember(server.id, user.id)) {
       await this.store.addServerMember({ serverId: server.id, userId: user.id, joinedAt: this.now() });
+      await this.recordUserActivity(user.id, 'joined_server', server.name, 'Вы приняли приглашение по ссылке', server.id, null);
     }
     return this.getServerDetailForUser(server, user);
   }
@@ -744,6 +898,7 @@ export class VatrushkaService {
     const now = this.now();
     const message = { id: randomUUID(), channelId: channel.id, authorUserId: user.id, content, replyToMessageId, createdAt: now, editedAt: null };
     await this.store.createTextMessage(message);
+    await this.recordUserActivity(user.id, 'sent_message', `# ${channel.name}`, server.name, server.id, channel.id);
     return (await this.hydrateMessages([{ ...message, displayName: user.displayName, platformRole: user.platformRole }], user.id))[0]!;
   }
 
@@ -1040,6 +1195,7 @@ export class VatrushkaService {
         canPublishScreen: permissions.has('STREAM_SCREEN'),
         canPublishScreenAudio: permissions.has('STREAM_APPLICATION_AUDIO'),
       });
+      await this.recordUserActivity(user.id, 'joined_voice', channel.name, server.name, server.id, channel.id);
       return {
         roomId: channel.id,
         ownerUserId: server.ownerUserId,
@@ -1051,13 +1207,76 @@ export class VatrushkaService {
         contextType: 'channel',
         serverId: server.id,
         channelId: channel.id,
+        serverName: server.name,
+        channelName: channel.name,
         canSpeak: permissions.has('SPEAK'),
         canStream: permissions.has('STREAM_SCREEN'),
         canStreamApplicationAudio: permissions.has('STREAM_APPLICATION_AUDIO'),
+        canMoveMembers: permissions.has('MOVE_MEMBERS'),
       };
     } catch {
       throw new AppError('LIVEKIT_UNAVAILABLE', 503);
     }
+  }
+
+  async requestVoiceMemberMove(authorization: string | undefined, channelId: string, memberUserId: string): Promise<void> {
+    const actor = await this.authenticate(authorization);
+    const channel = await this.requireVoiceChannel(channelId);
+    const server = await this.requireServer(channel.serverId);
+    await this.requireChannelPermission(server, channel, actor, 'MOVE_MEMBERS');
+    if (memberUserId === actor.id || memberUserId === server.ownerUserId) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    const [targetMember, targetUser, roles] = await Promise.all([
+      this.store.findServerMember(server.id, memberUserId),
+      this.store.findUserById(memberUserId),
+      this.store.listServerRoles(server.id),
+    ]);
+    if (!targetMember || !targetUser?.displayName) throw new AppError('SERVER_NOT_FOUND', 404);
+    const actorTopPosition = await this.serverRolePositionFor(server, actor, roles);
+    const targetRoleIds = new Set(await this.store.listMemberRoleIds(server.id, memberUserId));
+    const targetTopPosition = Math.max(0, ...roles.filter((role) => targetRoleIds.has(role.id)).map((role) => role.position));
+    if (targetTopPosition >= actorTopPosition) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    const targetPermissions = await this.channelPermissionsFor(server, channel, targetUser);
+    if (!targetPermissions.has('CONNECT_VOICE')) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    if (!channel.livekitRoomName) throw new AppError('CHANNEL_NOT_FOUND', 404);
+
+    let seamlesslyMoved = false;
+    try {
+      await this.media.createRoom({ id: channel.id, ownerUserId: server.ownerUserId, name: channel.livekitRoomName, maxParticipants: 25 });
+      for (const candidate of await this.store.listServerChannels(server.id)) {
+        if (candidate.type !== 'voice' || !candidate.livekitRoomName || candidate.id === channel.id) continue;
+        for (const identity of (await this.media.participantIdentities(candidate.livekitRoomName)).filter((value) => value.startsWith(`user_${memberUserId}_`))) {
+          try {
+            await this.media.moveParticipant(candidate.livekitRoomName, identity, channel.livekitRoomName, {
+              canPublishMicrophone: targetPermissions.has('SPEAK'),
+              canPublishScreen: targetPermissions.has('STREAM_SCREEN'),
+              canPublishScreenAudio: targetPermissions.has('STREAM_APPLICATION_AUDIO'),
+            });
+            seamlesslyMoved = true;
+          } catch {
+            // Older LiveKit servers may not support native moves; the target client will reconnect from the command below.
+            await this.media.removeParticipant(candidate.livekitRoomName, identity);
+          }
+          await this.store.releaseChannelLeaseByParticipant(identity);
+        }
+      }
+    } catch {
+      // The target client will disconnect its previous room before accepting the move.
+    }
+    this.pendingVoiceMoves.set(memberUserId, { channelId: channel.id, expiresAt: new Date(this.now().getTime() + 60_000), seamlesslyMoved });
+    await this.recordServerAudit(server.id, actor, 'MEMBER_VOICE_MOVED', 'MEMBER', memberUserId, null, { channelId: channel.id, channelName: channel.name });
+  }
+
+  async pollVoiceMemberMove(authorization: string | undefined): Promise<RoomConnection | null> {
+    const user = await this.authenticate(authorization);
+    const pending = this.pendingVoiceMoves.get(user.id);
+    if (!pending) return null;
+    if (pending.expiresAt.getTime() <= this.now().getTime()) {
+      this.pendingVoiceMoves.delete(user.id);
+      return null;
+    }
+    const connection = await this.connectVoiceChannel(authorization, pending.channelId);
+    this.pendingVoiceMoves.delete(user.id);
+    return { ...connection, seamlesslyMoved: pending.seamlesslyMoved };
   }
 
   async kickChannelParticipant(authorization: string | undefined, channelId: string, participantIdentity: string): Promise<void> {
@@ -1101,13 +1320,12 @@ export class VatrushkaService {
   async handleWebhookEvent(event: { event?: string; participant?: { identity?: string }; room?: { metadata?: string }; track?: { source?: TrackSource } }): Promise<void> {
     const identity = event.participant?.identity;
     if ((event.event === 'participant_left' || (event.event === 'track_unpublished' && event.track?.source === TrackSource.SCREEN_SHARE)) && identity) {
-      await this.store.releaseLeaseByParticipant(identity);
       await this.store.releaseChannelLeaseByParticipant(identity);
     }
     if (event.event === 'room_finished' && event.room?.metadata) {
       try {
-        const metadata = JSON.parse(event.room.metadata) as { appRoomId?: string };
-        if (metadata.appRoomId) await this.store.releaseLeaseByRoom(metadata.appRoomId);
+        const metadata = JSON.parse(event.room.metadata) as { appChannelId?: string };
+        if (metadata.appChannelId) await this.store.releaseChannelLeaseByChannel(metadata.appChannelId);
       } catch {
         // LiveKit metadata is treated as untrusted input.
       }
@@ -1297,6 +1515,21 @@ export class VatrushkaService {
     return highestRolePosition(server.ownerUserId === user.id, roles, assigned);
   }
 
+  private async recordUserActivity(
+    userId: string,
+    type: HomeActivityType,
+    title: string,
+    context: string,
+    serverId: string | null,
+    channelId: string | null,
+  ): Promise<void> {
+    try {
+      await this.store.createUserActivity({ id: randomUUID(), userId, type, title, context, serverId, channelId, createdAt: this.now() });
+    } catch {
+      // Activity is a secondary dashboard signal and must never block calls or messages.
+    }
+  }
+
   private async requireServerPermission(server: ServerRecord, user: UserRecord, permission: ServerPermission): Promise<Set<ServerPermission>> {
     const permissions = await this.serverPermissionsFor(server, user);
     if (!permissions.has(permission)) throw new AppError('SERVER_PERMISSION_DENIED', 403);
@@ -1343,6 +1576,21 @@ export class VatrushkaService {
         ...assignments.filter((assignment) => assignment.userId === member.userId).map((assignment) => roleById.get(assignment.roleId)).filter((role): role is ServerRole => Boolean(role)),
       ],
     }));
+    const voiceParticipantsByChannel = new Map<string, VoiceChannelParticipant[]>();
+    await Promise.all(visibleChannels.filter((channel) => channel.type === 'voice' && channel.livekitRoomName).map(async (channel) => {
+      let identities: string[] = [];
+      try {
+        identities = await this.media.participantIdentities(channel.livekitRoomName!);
+      } catch {
+        // Server navigation remains available while LiveKit is temporarily unavailable.
+      }
+      const participants = new Map<string, VoiceChannelParticipant>();
+      for (const identity of identities) {
+        const member = publicMembers.find((candidate) => identity.startsWith(`user_${candidate.userId}_`));
+        if (member && !participants.has(member.userId)) participants.set(member.userId, { identity, userId: member.userId, displayName: member.displayName, platformRole: member.platformRole });
+      }
+      voiceParticipantsByChannel.set(channel.id, [...participants.values()]);
+    }));
     return {
       id: server.id,
       name: server.name,
@@ -1355,6 +1603,7 @@ export class VatrushkaService {
         unreadCounts.get(channel.id) ?? 0,
         [...(effectiveByChannel.get(channel.id) ?? [])],
         permissions.has('MANAGE_ROLES') ? overwrites.filter((overwrite) => overwrite.channelId === channel.id).map((overwrite) => ({ channelId: overwrite.channelId, targetType: overwrite.targetType, targetId: overwrite.targetId, allow: overwrite.allow, deny: overwrite.deny })) : undefined,
+        channel.type === 'voice' ? voiceParticipantsByChannel.get(channel.id) ?? [] : undefined,
       )),
       roles: publicRoles,
       members: publicMembers,

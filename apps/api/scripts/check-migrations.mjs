@@ -35,9 +35,11 @@ for (const [position, entry] of journal.entries.entries()) {
   const snapshotFile = `${prefix}_snapshot.json`;
   const sql = await readFile(resolve(drizzleDirectory, sqlFile), 'utf8');
   const snapshot = JSON.parse(await readFile(resolve(metadataDirectory, snapshotFile), 'utf8'));
+  const containsDestructiveOperation = /\b(?:DROP\s+TABLE|DROP\s+COLUMN|TRUNCATE\s+TABLE|ALTER\s+COLUMN\b[^;]*\bTYPE)\b/iu.test(sql);
+  const explicitContractMigration = entry.tag.endsWith('_contract') && sql.startsWith('-- vatrushka: destructive-contract');
 
   invariant(sql.trim().length > 0, `Migration ${sqlFile} is empty`);
-  invariant(!/\b(?:DROP\s+TABLE|DROP\s+COLUMN|TRUNCATE\s+TABLE|ALTER\s+COLUMN\b[^;]*\bTYPE)\b/iu.test(sql), `Migration ${sqlFile} contains a destructive schema operation; use an explicit expand/migrate/contract rollout`);
+  invariant(!containsDestructiveOperation || explicitContractMigration, `Migration ${sqlFile} contains a destructive schema operation; use an explicit expand/migrate/contract rollout and mark the final *_contract migration`);
   invariant(snapshot.dialect === journal.dialect, `Snapshot ${snapshotFile} has an unexpected dialect`);
   invariant(typeof snapshot.id === 'string' && !snapshotIds.has(snapshot.id), `Snapshot ${snapshotFile} has a missing or duplicate id`);
   invariant(position === 0 ? snapshot.prevId === '00000000-0000-0000-0000-000000000000' : snapshot.prevId === previousSnapshotId, `Snapshot ${snapshotFile} does not continue the previous snapshot`);
@@ -52,4 +54,4 @@ for (const [position, entry] of journal.entries.entries()) {
 invariant(JSON.stringify(sqlFiles) === JSON.stringify(expectedSqlFiles), `SQL files do not match the journal: expected ${expectedSqlFiles.join(', ')}, received ${sqlFiles.join(', ')}`);
 invariant(JSON.stringify(snapshotFiles) === JSON.stringify(expectedSnapshotFiles), `Snapshots do not match the journal: expected ${expectedSnapshotFiles.join(', ')}, received ${snapshotFiles.join(', ')}`);
 
-console.log(`Verified ${journal.entries.length} additive PostgreSQL migrations and their snapshot chain.`);
+console.log(`Verified ${journal.entries.length} PostgreSQL migrations and their snapshot chain.`);

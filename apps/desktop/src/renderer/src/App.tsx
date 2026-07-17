@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
 import { ConnectionState } from 'livekit-client';
+import { useQueryClient } from '@tanstack/react-query';
 
-import { channelNameSchema, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type LocalSettings, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage } from '@vatrushka/shared';
+import { channelNameSchema, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type LocalSettings, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage } from '@vatrushka/shared';
 
 import { apiClient, ClientError } from './api.js';
 import { splitAudioDevices, type AudioDevices } from './audio-devices.js';
-import { AuthPanel, HomePanel, ProfilePanel } from './components.js';
+import { AuthPanel, ProfilePanel } from './components.js';
 import { DirectMessagesView } from './features/direct-messages/index.js';
+import { HomePage, homeDashboardQueryKey, useHomeDashboard } from './features/home/index.js';
 import { SourcePicker } from './features/screen-share/index.js';
 import { SecurityCenter } from './features/security/index.js';
 import { ServerView } from './features/servers/index.js';
@@ -33,7 +35,7 @@ export default function App(): ReactNode {
   const [displayName, setDisplayName] = useState('');
   const [connection, setConnection] = useState<RoomConnection | null>(null);
   const [connectedVoiceChannelName, setConnectedVoiceChannelName] = useState('');
-  const [settings, setSettings] = useState<LocalSettings>({ volume: 1 });
+  const [settings, setSettings] = useState<LocalSettings>({ volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true });
   const [devices, setDevices] = useState<AudioDevices>({ inputs: [], outputs: [] });
   const [version, setVersion] = useState('0.4.0');
   const [updateState, setUpdateState] = useState<DesktopUpdateState>({ status: 'idle', currentVersion: '0.4.0' });
@@ -66,6 +68,15 @@ export default function App(): ReactNode {
   const previousRemoteParticipantsRef = useRef<Set<string> | null>(null);
   const voiceTransitionRef = useRef(false);
   const mediaSnapshot = useSyncExternalStore(media.subscribe, media.getSnapshot, media.getSnapshot);
+  const queryClient = useQueryClient();
+  const homeDashboardQuery = useHomeDashboard(user?.id, screen === 'home');
+  const homePresenceRevision = mediaSnapshot.participants.map((participant) => participant.identity).sort().join('|');
+  const homeServersRevision = servers.map((server) => `${server.id}:${server.memberCount}`).join('|');
+
+  useEffect(() => {
+    if (user === null) return;
+    void queryClient.invalidateQueries({ queryKey: homeDashboardQueryKey(user.id), refetchType: screen === 'home' ? 'active' : 'none' });
+  }, [connection?.channelId, homePresenceRevision, homeServersRevision, queryClient, screen, user?.id]);
 
   const playVoiceCue = useCallback((cue: VoiceCue): void => {
     voiceCuePlayerRef.current ??= new VoiceCuePlayer();
@@ -177,9 +188,34 @@ export default function App(): ReactNode {
   useEffect(() => {
     if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
     let active = true;
-    void apiClient.listServers().then((items) => { if (active) setServers(items); }).catch((caught) => { if (active) setError(userMessage(caught)); });
-    return () => { active = false; };
+    let inFlight = false;
+    const refresh = (): void => {
+      if (inFlight) return;
+      inFlight = true;
+      void apiClient.listServers().then((items) => { if (active) setServers(items); }).catch((caught) => { if (active) setError(userMessage(caught)); }).finally(() => { inFlight = false; });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 3_000);
+    return () => { active = false; window.clearInterval(timer); };
   }, [screen, user]);
+
+  useEffect(() => {
+    if (!user || screen !== 'server' || serverDetail === null) return;
+    let active = true;
+    let inFlight = false;
+    const serverId = serverDetail.id;
+    const refresh = (): void => {
+      if (inFlight) return;
+      inFlight = true;
+      void apiClient.getServer(serverId).then((detail) => {
+        if (!active) return;
+        setServerDetail(detail);
+        setActiveChannelId((current) => current !== null && detail.channels.some((channel) => channel.id === current) ? current : detail.channels[0]?.id ?? null);
+      }).catch((caught) => { if (active) setError(userMessage(caught)); }).finally(() => { inFlight = false; });
+    };
+    const timer = window.setInterval(refresh, 3_000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [screen, serverDetail?.id, user]);
 
   useEffect(() => {
     if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
@@ -198,13 +234,17 @@ export default function App(): ReactNode {
         const fresh = notifications.filter((notification) => !shownNotificationIdsRef.current.has(notification.id));
         for (const notification of fresh) {
           shownNotificationIdsRef.current.add(notification.id);
-          void window.desktop.showMessageNotification({
-            id: notification.id,
-            title: `${notification.authorDisplayName} · #${notification.channelName}`,
-            body: `${notification.content.slice(0, 700)}\n${notification.serverName}`,
-            serverId: notification.serverId,
-            channelId: notification.channelId,
-          }).catch(() => undefined);
+          if (settings.messageSoundsEnabled) playVoiceCue('message');
+          if (settings.desktopNotificationsEnabled) {
+            void window.desktop.showMessageNotification({
+              id: notification.id,
+              title: `${notification.authorDisplayName} · #${notification.channelName}`,
+              body: `${notification.content.trim().length > 0 ? notification.content.slice(0, 700) : 'Вложение'}\n${notification.serverName}`,
+              serverId: notification.serverId,
+              channelId: notification.channelId,
+              silent: true,
+            }).catch(() => undefined);
+          }
         }
         if (page.cursor) {
           notificationCursorRef.current = page.cursor.createdAt;
@@ -220,7 +260,7 @@ export default function App(): ReactNode {
     poll();
     const timer = window.setInterval(poll, 5_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [screen, user]);
+  }, [playVoiceCue, screen, settings.desktopNotificationsEnabled, settings.messageSoundsEnabled, user]);
 
   useEffect(() => window.desktop.onMessageNotificationClick((target) => {
     if (!userRef.current) return;
@@ -295,7 +335,7 @@ export default function App(): ReactNode {
     refresh();
     const timer = setInterval(refresh, 3_000);
     return () => { active = false; clearInterval(timer); };
-  }, [screen, serverDetail, activeChannelId]);
+  }, [screen, serverDetail?.id, activeChannelId]);
 
   const run = useCallback(async (action: () => Promise<void>): Promise<void> => {
     setBusy(true);
@@ -373,16 +413,20 @@ export default function App(): ReactNode {
     });
   };
 
-  const openServer = (serverId: string): void => {
+  const openDestination = (destination: HomeDestination): void => {
     void run(async () => {
-      const detail = await apiClient.getServer(serverId);
+      const detail = await apiClient.getServer(destination.serverId);
       setServerDetail(detail);
       setServerAuditLog([]);
-      setActiveChannelId(detail.channels.find((channel) => channel.type === 'text')?.id ?? detail.channels[0]?.id ?? null);
+      const requestedChannel = destination.channelId && detail.channels.some((channel) => channel.id === destination.channelId) ? destination.channelId : null;
+      setActiveChannelId(requestedChannel ?? detail.channels.find((channel) => channel.type === 'text')?.id ?? detail.channels[0]?.id ?? null);
       setMessages([]);
       setScreen('server');
+      if (requestedChannel) void apiClient.recordOpenedChannel(requestedChannel).catch(() => undefined);
     });
   };
+
+  const openServer = (serverId: string): void => openDestination({ type: 'server', serverId });
 
   const openDirectMessages = (): void => {
     void run(async () => {
@@ -436,7 +480,7 @@ export default function App(): ReactNode {
   const sendMessage = (replyToMessageId?: string, files: File[] = []): void => {
     void run(async () => {
       if (!activeChannelId || !user) return;
-      const content = messageContentSchema.parse(messageDraft);
+      const content = messageDraft.trim().length > 0 ? messageContentSchema.parse(messageDraft) : files.length > 0 ? '' : messageContentSchema.parse(messageDraft);
       const optimisticId = `optimistic_${crypto.randomUUID()}`;
       const replyTarget = replyToMessageId === undefined ? null : messages.find((message) => message.id === replyToMessageId) ?? null;
       const optimistic: TextMessage = {
@@ -500,6 +544,8 @@ export default function App(): ReactNode {
     });
   };
 
+  const loadAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadMessageAttachment(attachmentId), []);
+
   const updateMessage = (messageId: string, value: string): void => {
     void run(async () => {
       const updated = await apiClient.updateMessage(messageId, messageContentSchema.parse(value));
@@ -521,7 +567,7 @@ export default function App(): ReactNode {
   const sendDirectMessage = (replyToMessageId?: string, files: File[] = []): void => {
     void run(async () => {
       if (activeDirectConversationId === null || !user) return;
-      const content = messageContentSchema.parse(directMessageDraft);
+      const content = directMessageDraft.trim().length > 0 ? messageContentSchema.parse(directMessageDraft) : files.length > 0 ? '' : messageContentSchema.parse(directMessageDraft);
       const conversationId = activeDirectConversationId;
       const optimisticId = `optimistic_${crypto.randomUUID()}`;
       const replyTarget = replyToMessageId === undefined ? null : directMessages.find((message) => message.id === replyToMessageId) ?? null;
@@ -605,6 +651,8 @@ export default function App(): ReactNode {
       window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
     });
   };
+
+  const loadDirectAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadDirectMessageAttachment(attachmentId), []);
 
   const createCommunityChannel = (name: string, type: 'text' | 'voice'): void => {
     void run(async () => {
@@ -691,7 +739,7 @@ export default function App(): ReactNode {
     previousRemoteParticipantsRef.current = null;
     await media.connect(voiceConnection, settings);
     setConnection(voiceConnection);
-    setConnectedVoiceChannelName(serverDetail?.channels.find((channel) => channel.id === voiceConnection.channelId)?.name ?? 'Голосовой канал');
+    setConnectedVoiceChannelName(voiceConnection.channelName ?? serverDetail?.channels.find((channel) => channel.id === voiceConnection.channelId)?.name ?? 'Голосовой канал');
     setActiveChannelId(voiceConnection.channelId);
     setScreen('server');
     playVoiceCue('join');
@@ -712,13 +760,61 @@ export default function App(): ReactNode {
 
   const leaveRoom = (): void => {
     void run(async () => {
-      if (connection !== null) playVoiceCue('leave');
+      if (connection !== null) {
+        playVoiceCue('leave');
+        void apiClient.recordLeftVoiceChannel(connection.channelId).catch(() => undefined);
+      }
       participantConnectionRef.current = null;
       previousRemoteParticipantsRef.current = null;
       await media.disconnect();
       setConnection(null);
       setConnectedVoiceChannelName('');
       setScreen(serverDetail ? 'server' : userRef.current ? 'home' : 'auth');
+    });
+  };
+
+  useEffect(() => {
+    if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
+    let active = true;
+    const poll = (): void => {
+      if (voiceTransitionRef.current) return;
+      void apiClient.pollVoiceMoveRequest().then(async (voiceConnection) => {
+        if (!active || voiceConnection === null || voiceConnection.channelId === connection?.channelId) return;
+        voiceTransitionRef.current = true;
+        try {
+          if (serverDetail?.id !== voiceConnection.serverId) {
+            const detail = await apiClient.getServer(voiceConnection.serverId);
+            if (!active) return;
+            setServerDetail(detail);
+            setServerAuditLog([]);
+            setMessages([]);
+          }
+          if (voiceConnection.seamlesslyMoved === true && mediaSnapshot.connectionState === ConnectionState.Connected) {
+            playVoiceCue('leave');
+            participantConnectionRef.current = null;
+            previousRemoteParticipantsRef.current = null;
+            setConnection(voiceConnection);
+            setConnectedVoiceChannelName(voiceConnection.channelName ?? 'Голосовой канал');
+            setActiveChannelId(voiceConnection.channelId);
+            setScreen('server');
+            playVoiceCue('join');
+          } else {
+            await enterVoiceChannel(voiceConnection);
+          }
+        } finally {
+          voiceTransitionRef.current = false;
+        }
+      }).catch((caught) => { if (active) setError(userMessage(caught)); });
+    };
+    poll();
+    const timer = window.setInterval(poll, 2_500);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [connection?.channelId, mediaSnapshot.connectionState, playVoiceCue, screen, serverDetail?.id, user]);
+
+  const moveVoiceMember = (channelId: string, userId: string): void => {
+    void run(async () => {
+      await apiClient.moveVoiceMember(channelId, userId);
+      await refreshServer();
     });
   };
 
@@ -816,9 +912,15 @@ export default function App(): ReactNode {
     void window.desktop.copyToClipboard(text);
   };
 
-  const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityCenter open user={user} onClose={() => setSecurityOpen(false)} onUserChange={updateUser} onCurrentSessionRevoked={() => { updateUser(null); setScreen('auth'); }} /> : null;
+  const updateNotificationSettings = (values: Pick<LocalSettings, 'desktopNotificationsEnabled' | 'messageSoundsEnabled'>): void => {
+    const next = { ...settings, ...values };
+    setSettings(next);
+    void window.desktop.updateLocalSettings(next).catch((caught) => setError(userMessage(caught)));
+  };
+  const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityCenter open user={user} settings={settings} onSettingsChange={updateNotificationSettings} onClose={() => setSecurityOpen(false)} onUserChange={updateUser} onCurrentSessionRevoked={() => { updateUser(null); setScreen('auth'); }} /> : null;
   const withUpdateStatus = (content: ReactNode): ReactNode => <>{content}<UpdateStatus state={updateState} onInstall={() => void window.desktop.installUpdate().catch((caught) => setError(userMessage(caught)))} /></>;
   const directUnreadCount = directConversations.reduce((count, conversation) => count + conversation.unreadCount, 0);
+  const localInputLevel = connection === null ? undefined : mediaSnapshot.participants.find((participant) => participant.isLocal)?.audioLevel;
   const openConnectedVoice = (): void => {
     if (!connection) return;
     if (serverDetail?.id === connection.serverId) {
@@ -841,9 +943,9 @@ export default function App(): ReactNode {
   if (screen === 'boot') return withUpdateStatus(<main className="bootScreen"><div className="pulseLogo"><span /></div><span>Подключаем «Ватрушку»…</span></main>);
   if (screen === 'auth') return withUpdateStatus(<AuthPanel mode={authMode} stage={authStage} factor={secondFactor} totpAvailable={totpAvailable} email={email} code={otp} password={password} passwordConfirmation={passwordConfirmation} retrySeconds={retrySeconds} busy={busy} error={error} onMode={(mode) => { setAuthMode(mode); setAuthStage('credentials'); setOtp(''); setError(null); }} onEmailChange={setEmail} onCodeChange={setOtp} onPasswordChange={setPasswordValue} onPasswordConfirmationChange={setPasswordConfirmation} onRequest={requestCode} onVerify={verifyCode} onFactor={switchPasswordFactor} onBack={() => { setAuthStage('credentials'); setOtp(''); setError(null); }} />);
   if (screen === 'profile') return withUpdateStatus(<ProfilePanel value={displayName} busy={busy} error={error} onChange={setDisplayName} onSave={saveProfile} />);
-  if (screen === 'home' && user) return withUpdateStatus(<><HomePanel user={user} version={version} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} servers={servers} serverName={serverName} directUnreadCount={directUnreadCount} onLogout={logout} onSecurity={() => setSecurityOpen(true)} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onServerName={setServerName} onCreateServer={createServer} onOpenServer={openServer} onDirectMessages={openDirectMessages} />{renderSecurityPanel()}</>);
-  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onConnectVoice={connectVoiceChannel} onCopyInvite={() => window.desktop.copyToClipboard(serverDetail.inviteUrl)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onCreateServer={createServer} onSecurity={() => setSecurityOpen(true)} onLogout={logout} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} audioProtectionAvailable={supportsOwnAudioExclusion()} busy={busy} sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}{renderSecurityPanel()}</>);
-  if (screen === 'direct' && user) return withUpdateStatus(<><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} busy={busy} error={error} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onServerName={setServerName} onCreateServer={createServer} onSecurity={() => setSecurityOpen(true)} onLogout={logout} />{renderSecurityPanel()}</>);
+  if (screen === 'home' && user) return withUpdateStatus(<><HomePage user={user} version={version} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} inputLevel={localInputLevel} busy={busy} error={error} servers={servers} serverName={serverName} directUnreadCount={directUnreadCount} connection={connection} dashboard={homeDashboardQuery.data} dashboardLoading={homeDashboardQuery.isFetching && homeDashboardQuery.data === undefined} dashboardError={homeDashboardQuery.error ? userMessage(homeDashboardQuery.error) : null} onRetryDashboard={() => void homeDashboardQuery.refetch()} onLogout={logout} onSecurity={() => setSecurityOpen(true)} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onTestOutput={() => playVoiceCue('message')} onServerName={setServerName} onCreateServer={createServer} onOpenServer={openServer} onOpenDestination={openDestination} onReturnToCall={openConnectedVoice} onDirectMessages={openDirectMessages} onCopyInvite={(inviteUrl) => window.desktop.copyToClipboard(inviteUrl)} />{renderSecurityPanel()}</>);
+  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); void apiClient.recordOpenedChannel(channelId).catch(() => undefined); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onLoadAttachment={loadAttachment} onConnectVoice={connectVoiceChannel} onMoveVoiceMember={moveVoiceMember} onCopyInvite={() => window.desktop.copyToClipboard(serverDetail.inviteUrl)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onCreateServer={createServer} onSecurity={() => setSecurityOpen(true)} onLogout={logout} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} audioProtectionAvailable={supportsOwnAudioExclusion()} busy={busy} sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}{renderSecurityPanel()}</>);
+  if (screen === 'direct' && user) return withUpdateStatus(<><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} busy={busy} error={error} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onLoadAttachment={loadDirectAttachment} onServerName={setServerName} onCreateServer={createServer} onSecurity={() => setSecurityOpen(true)} onLogout={logout} />{renderSecurityPanel()}</>);
   return withUpdateStatus(<main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>);
 }
 

@@ -43,6 +43,13 @@ export class FakeMediaService implements MediaService {
     if (!participants?.delete(identity)) throw new Error('participant not found');
   }
 
+  async moveParticipant(sourceRoomName: string, identity: string, destinationRoomName: string): Promise<void> {
+    const source = this.rooms.get(sourceRoomName);
+    const destination = this.rooms.get(destinationRoomName);
+    if (!source?.delete(identity) || !destination) throw new Error('participant or room not found');
+    destination.add(identity);
+  }
+
   async participantIdentities(roomName: string): Promise<string[]> {
     return [...(this.rooms.get(roomName) ?? [])];
   }

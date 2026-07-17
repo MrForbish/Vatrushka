@@ -1,11 +1,9 @@
 import { z } from 'zod';
 
 import { serverPermissions } from './contracts.js';
-import { ROOM_CODE_ALPHABET } from './constants.js';
 
 const controlCharacterPattern = /[\p{Cc}\p{Cf}]/u;
 const displayNamePattern = /^[\p{L}\p{M}\p{N} _-]+$/u;
-const roomAlphabetPattern = new RegExp(`^[${ROOM_CODE_ALPHABET}]{6,8}$`);
 
 export const emailSchema = z
   .string()
@@ -21,12 +19,6 @@ export const displayNameSchema = z
   .max(30, 'Имя должно содержать не более 30 символов')
   .refine((value) => !controlCharacterPattern.test(value), 'Управляющие символы запрещены')
   .refine((value) => displayNamePattern.test(value), 'Разрешены буквы, цифры, пробел, дефис и подчёркивание');
-
-export const roomCodeSchema = z
-  .string()
-  .trim()
-  .toUpperCase()
-  .refine((value) => roomAlphabetPattern.test(value), 'Некорректный код комнаты');
 
 export const otpCodeSchema = z.string().regex(/^\d{6}$/, 'Код должен содержать 6 цифр');
 export const recoveryCodeSchema = z.string().trim().toUpperCase().regex(/^[A-Z2-9]{4}(?:-[A-Z2-9]{4}){2}$/, 'Некорректный резервный код');
@@ -64,6 +56,7 @@ export const channelNameSchema = z.string().trim().toLowerCase().min(1).max(50).
 export const roleNameSchema = z.string().trim().min(1).max(40).refine((value) => !controlCharacterPattern.test(value));
 export const inviteTokenSchema = z.string().trim().regex(/^[A-Za-z0-9_-]{8,32}$/u);
 export const messageContentSchema = z.string().trim().min(1).max(4_000).refine((value) => !controlCharacterPattern.test(value));
+export const newMessageContentSchema = z.string().trim().max(4_000).refine((value) => !controlCharacterPattern.test(value));
 export const messageReactionSchema = z.string().trim().min(1).max(32).refine((value) => !controlCharacterPattern.test(value));
 export const createServerSchema = z.object({ name: serverNameSchema }).strict();
 export const createChannelSchema = z.object({ name: channelNameSchema, type: z.enum(['text', 'voice']) }).strict();
@@ -83,13 +76,13 @@ export const channelPermissionOverwriteSchema = z.object({
   allow: z.array(z.enum(serverPermissions)).max(serverPermissions.length),
   deny: z.array(z.enum(serverPermissions)).max(serverPermissions.length),
 }).strict().refine((value) => value.allow.every((permission) => !value.deny.includes(permission)), 'Permission cannot be allowed and denied at the same time');
-export const createMessageSchema = z.object({ content: messageContentSchema, replyToMessageId: uuidSchema.nullish() }).strict();
+export const createMessageSchema = z.object({ content: newMessageContentSchema, replyToMessageId: uuidSchema.nullish() }).strict();
 export const updateMessageSchema = z.object({ content: messageContentSchema }).strict();
 export const messageQuerySchema = z.object({ before: z.iso.datetime().optional(), limit: z.coerce.number().int().min(1).max(100).default(50) }).strict();
 export const messageNotificationQuerySchema = z.object({ since: z.iso.datetime().optional(), afterId: uuidSchema.optional(), limit: z.coerce.number().int().min(1).max(50).default(20) }).strict();
 export const markChannelReadSchema = z.object({ messageId: uuidSchema }).strict();
 export const createDirectConversationSchema = z.object({ userId: uuidSchema }).strict();
-export const createDirectMessageSchema = z.object({ content: messageContentSchema, replyToMessageId: uuidSchema.nullish() }).strict();
+export const createDirectMessageSchema = z.object({ content: newMessageContentSchema, replyToMessageId: uuidSchema.nullish() }).strict();
 
 export const desktopSourceSelectionSchema = z
   .object({ sourceId: z.string().min(1).max(512), includeAudio: z.boolean() })
@@ -100,6 +93,8 @@ export const localSettingsSchema = z
     microphoneDeviceId: z.string().max(512).optional(),
     outputDeviceId: z.string().max(512).optional(),
     volume: z.number().min(0).max(1).default(1),
+    desktopNotificationsEnabled: z.boolean().default(true),
+    messageSoundsEnabled: z.boolean().default(true),
     windowBounds: z
       .object({
         x: z.number().int().optional(),
@@ -108,7 +103,6 @@ export const localSettingsSchema = z
         height: z.number().int().min(620).max(4320),
       })
       .optional(),
-    lastRoomCode: roomCodeSchema.optional(),
   })
   .strict();
 

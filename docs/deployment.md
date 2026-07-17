@@ -21,7 +21,7 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml build --pull a
 docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
 ```
 
-Backup PostgreSQL выполняйте до обновления schema/image. Rollback приложения: checkout предыдущего tag, rebuild `api`, `up -d`; миграции в MVP additive, destructive rollback автоматически не выполняется.
+Backup PostgreSQL выполняйте до обновления schema/image. Миграция `0012_remove_legacy_rooms_contract` намеренно удаляет только уже выведенные из эксплуатации `rooms`, `guest_sessions` и старую `screen_share_leases`; постоянные server channels и `channel_screen_share_leases` она не затрагивает. Следующая `0013_home_activity` добавляет историю для Home. После применения contract-миграции простой rollback image не восстановит удалённые legacy-таблицы, поэтому перед первым обновлением на эту версию обязателен backup.
 
 API не имеет host `ports`, Swagger отключён production config, Caddy получает TLS автоматически. Не копируйте `.env` в image; Compose передаёт его runtime.
 
@@ -54,6 +54,16 @@ npm run package:win
 ```
 
 Раздавайте `apps/desktop/release/Vatrushka-Setup-<version>-x64.exe`; именно установленная версия поддерживает дальнейшие обновления без переустановки. После изменения домена API или update feed клиент нужно пересобрать. `LIVEKIT_API_SECRET`, SMTP credentials и остальные server secrets в desktop env добавлять нельзя.
+
+## Доступ к production PostgreSQL из VS Code
+
+PostgreSQL не публикуется в интернет и слушает только `127.0.0.1:5433` на VPS. Откройте отдельный терминал на рабочем компьютере и оставьте SSH-туннель активным:
+
+```powershell
+ssh -i C:\Users\Admin\.ssh\id_ed25519_vatrushka_server -N -L 15433:127.0.0.1:5433 codex@213.171.7.154
+```
+
+В расширении PostgreSQL для VS Code используйте host `127.0.0.1`, port `15433`, значения database/user/password из production `.env` и отключённый SSL. Порт `5433` в firewall открывать нельзя. При ротации `POSTGRES_PASSWORD` одновременно обновите `DATABASE_URL` и перезапустите API/PostgreSQL штатным deployment flow.
 
 ## Что именно хостится
 

@@ -7,13 +7,10 @@ import type { PermissionOverwriteTargetType, PlatformRole } from '@vatrushka/sha
 
 import type {
   AuthCodeRecord,
-  GuestSessionRecord,
-  LeaseClaim,
-  LeaseRecord,
   RefreshRotation,
-  RoomRecord,
   RecoveryCodeRecord,
   SecurityEventRecord,
+  UserActivityRecord,
   SessionRecord,
   UserRecord,
   ServerGraph,
@@ -46,14 +43,6 @@ import type { DataStore } from '../ports.js';
 import * as schema from './schema.js';
 
 type Database = NodePgDatabase<typeof schema>;
-type RoomRow = typeof schema.rooms.$inferSelect;
-
-function mapRoom(row: RoomRow): RoomRecord {
-  return {
-    ...row,
-    status: row.status as RoomRecord['status'],
-  };
-}
 
 export class PostgresStore implements DataStore {
   constructor(private readonly db: Database) {}
@@ -291,148 +280,17 @@ export class PostgresStore implements DataStore {
       .orderBy(desc(schema.securityEvents.createdAt)).limit(limit);
   }
 
-  async createRoom(room: RoomRecord): Promise<boolean> {
-    const rows = await this.db
-      .insert(schema.rooms)
-      .values(room)
-      .onConflictDoNothing()
-      .returning({ id: schema.rooms.id });
-    return rows.length === 1;
+  async createUserActivity(activity: UserActivityRecord): Promise<void> {
+    await this.db.insert(schema.userActivity).values(activity);
   }
 
-  async findRoomById(id: string): Promise<RoomRecord | null> {
-    const [row] = await this.db.select().from(schema.rooms).where(eq(schema.rooms.id, id)).limit(1);
-    return row ? mapRoom(row) : null;
-  }
-
-  async findRoomByCode(code: string): Promise<RoomRecord | null> {
-    const [row] = await this.db.select().from(schema.rooms).where(eq(schema.rooms.code, code)).limit(1);
-    return row ? mapRoom(row) : null;
-  }
-
-  async setRoomLocked(id: string, isLocked: boolean, now: Date): Promise<RoomRecord | null> {
-    const [row] = await this.db
-      .update(schema.rooms)
-      .set({ isLocked, updatedAt: now })
-      .where(eq(schema.rooms.id, id))
-      .returning();
-    return row ? mapRoom(row) : null;
-  }
-
-  async closeRoom(id: string, now: Date): Promise<RoomRecord | null> {
-    const [row] = await this.db
-      .update(schema.rooms)
-      .set({ status: 'closed', closedAt: now, updatedAt: now })
-      .where(eq(schema.rooms.id, id))
-      .returning();
-    return row ? mapRoom(row) : null;
-  }
-
-  async expireRoom(id: string, now: Date): Promise<RoomRecord | null> {
-    const [row] = await this.db
-      .update(schema.rooms)
-      .set({ status: 'expired', updatedAt: now })
-      .where(eq(schema.rooms.id, id))
-      .returning();
-    return row ? mapRoom(row) : null;
-  }
-
-  async createGuestSession(session: GuestSessionRecord): Promise<void> {
-    await this.db.insert(schema.guestSessions).values(session);
-  }
-
-  async findGuestSessionByTokenHash(tokenHash: string): Promise<GuestSessionRecord | null> {
-    const [row] = await this.db
+  async listUserActivity(userId: string, limit: number): Promise<UserActivityRecord[]> {
+    return this.db
       .select()
-      .from(schema.guestSessions)
-      .where(eq(schema.guestSessions.tokenHash, tokenHash))
-      .limit(1);
-    return row ?? null;
-  }
-
-  async revokeGuestSessionsForRoom(roomId: string, now: Date): Promise<void> {
-    await this.db
-      .update(schema.guestSessions)
-      .set({ revokedAt: now })
-      .where(and(eq(schema.guestSessions.roomId, roomId), isNull(schema.guestSessions.revokedAt)));
-  }
-
-  async revokeGuestSessionById(id: string, now: Date): Promise<void> {
-    await this.db
-      .update(schema.guestSessions)
-      .set({ revokedAt: now })
-      .where(and(eq(schema.guestSessions.id, id), isNull(schema.guestSessions.revokedAt)));
-  }
-
-  async claimLease(
-    roomId: string,
-    participantIdentity: string,
-    participantDisplayName: string,
-    now: Date,
-    leaseSeconds: number,
-  ): Promise<LeaseClaim> {
-    return this.db.transaction(async (tx) => {
-      await tx.select({ id: schema.rooms.id }).from(schema.rooms).where(eq(schema.rooms.id, roomId)).for('update');
-      const [current] = await tx
-        .select()
-        .from(schema.screenShareLeases)
-        .where(eq(schema.screenShareLeases.roomId, roomId))
-        .limit(1)
-        .for('update');
-      const decision = decideScreenShareLease(current ?? null, participantIdentity, participantDisplayName, now, leaseSeconds);
-      if (!decision.ok) return { status: 'busy', lease: { roomId, ...decision.current } };
-      const lease: LeaseRecord = { roomId, ...decision.lease };
-      await tx
-        .insert(schema.screenShareLeases)
-        .values(lease)
-        .onConflictDoUpdate({
-          target: schema.screenShareLeases.roomId,
-          set: {
-            participantIdentity: lease.participantIdentity,
-            participantDisplayName: lease.participantDisplayName,
-            acquiredAt: lease.acquiredAt,
-            expiresAt: lease.expiresAt,
-          },
-        });
-      return { status: 'ok', lease };
-    });
-  }
-
-  async heartbeatLease(roomId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<LeaseRecord | null> {
-    const [row] = await this.db
-      .update(schema.screenShareLeases)
-      .set({ expiresAt: expiresAt(now, leaseSeconds) })
-      .where(
-        and(
-          eq(schema.screenShareLeases.roomId, roomId),
-          eq(schema.screenShareLeases.participantIdentity, participantIdentity),
-        ),
-      )
-      .returning();
-    return row ?? null;
-  }
-
-  async releaseLease(roomId: string, participantIdentity: string): Promise<boolean> {
-    const rows = await this.db
-      .delete(schema.screenShareLeases)
-      .where(
-        and(
-          eq(schema.screenShareLeases.roomId, roomId),
-          eq(schema.screenShareLeases.participantIdentity, participantIdentity),
-        ),
-      )
-      .returning({ roomId: schema.screenShareLeases.roomId });
-    return rows.length === 1;
-  }
-
-  async releaseLeaseByParticipant(participantIdentity: string): Promise<void> {
-    await this.db
-      .delete(schema.screenShareLeases)
-      .where(eq(schema.screenShareLeases.participantIdentity, participantIdentity));
-  }
-
-  async releaseLeaseByRoom(roomId: string): Promise<void> {
-    await this.db.delete(schema.screenShareLeases).where(eq(schema.screenShareLeases.roomId, roomId));
+      .from(schema.userActivity)
+      .where(eq(schema.userActivity.userId, userId))
+      .orderBy(desc(schema.userActivity.createdAt))
+      .limit(limit);
   }
 
   async createServerGraph(graph: ServerGraph): Promise<boolean> {
@@ -856,6 +714,10 @@ export class PostgresStore implements DataStore {
 
   async releaseChannelLeaseByParticipant(participantIdentity: string): Promise<void> {
     await this.db.delete(schema.channelScreenShareLeases).where(eq(schema.channelScreenShareLeases.participantIdentity, participantIdentity));
+  }
+
+  async releaseChannelLeaseByChannel(channelId: string): Promise<void> {
+    await this.db.delete(schema.channelScreenShareLeases).where(eq(schema.channelScreenShareLeases.channelId, channelId));
   }
 }
 

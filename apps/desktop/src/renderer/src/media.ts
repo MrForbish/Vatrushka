@@ -4,6 +4,7 @@ import {
   Room,
   RoomEvent,
   Track,
+  VideoQuality,
   type LocalTrack,
   type Participant,
   type RemoteTrack,
@@ -19,7 +20,6 @@ export interface ParticipantView {
   displayName: string;
   isLocal: boolean;
   isOwner: boolean;
-  isGuest: boolean;
   isMuted: boolean;
   isSpeaking: boolean;
   audioLevel: number;
@@ -92,8 +92,8 @@ export class MediaSession {
     this.screenShareAudioVolume = settings.volume;
     this.screenShareAudioMuted = false;
     const options: RoomOptions = {
-      adaptiveStream: true,
-      dynacast: true,
+      adaptiveStream: false,
+      dynacast: false,
       disconnectOnPageLeave: true,
       stopLocalTrackOnUnpublish: true,
       audioCaptureDefaults: {
@@ -105,7 +105,7 @@ export class MediaSession {
       ...(settings.outputDeviceId ? { audioOutput: { deviceId: settings.outputDeviceId } } : {}),
       publishDefaults: {
         screenShareEncoding,
-        simulcast: true,
+        simulcast: false,
       },
     };
     const room = new Room(options);
@@ -245,7 +245,7 @@ export class MediaSession {
           contentHint: 'detail',
           systemAudio: includeAudio ? 'include' : 'exclude',
         },
-        { degradationPreference: 'maintain-resolution', screenShareEncoding, simulcast: true },
+        { degradationPreference: 'maintain-resolution', screenShareEncoding, simulcast: false },
       );
       if (includeAudio && !this.isOwnAudioRestricted()) {
         await this.stopScreenShare(false);
@@ -343,6 +343,10 @@ export class MediaSession {
         if (publication.source === Track.Source.ScreenShare && this.snapshot.screenTrack && this.snapshot.screenTrack !== track) {
           console.error('Multiple active screen-share video tracks detected');
         }
+        if (publication.source === Track.Source.ScreenShare) {
+          publication.setVideoQuality(VideoQuality.HIGH);
+          publication.setVideoFPS(30);
+        }
         refresh();
       })
       .on(RoomEvent.TrackUnsubscribed, (track) => {
@@ -363,7 +367,6 @@ export class MediaSession {
       displayName: participant.name || 'Участник',
       isLocal: participant === room.localParticipant,
       isOwner: Boolean(this.connection && participant.identity.startsWith(`user_${this.connection.ownerUserId}_`)),
-      isGuest: participant.identity.startsWith('guest_'),
       isMuted: !participant.isMicrophoneEnabled,
       isSpeaking: participant.isSpeaking,
       audioLevel: participant.audioLevel,

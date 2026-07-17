@@ -61,7 +61,9 @@ export interface ServerViewProps {
   onDeleteMessage(messageId: string): void;
   onDeleteAttachment(attachmentId: string): void;
   onDownloadAttachment(attachmentId: string, fileName: string): void;
+  onLoadAttachment?(attachmentId: string): Promise<Blob>;
   onConnectVoice(channelId: string): void;
+  onMoveVoiceMember?(channelId: string, userId: string): void;
   onCopyInvite(): void | Promise<void>;
   onCreateChannel(name: string, type: 'text' | 'voice'): void;
   onDeleteChannel(channelId: string): void;
@@ -119,6 +121,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const activeChannelPermissions = activeChannel?.permissions ?? props.server.permissions;
   const canManageMessages = activeChannelPermissions.includes('MANAGE_MESSAGES');
   const canKickMembers = props.server.permissions.includes('KICK_MEMBERS');
+  const canMoveMembers = props.server.permissions.includes('MOVE_MEMBERS');
 
   const channels: ChannelNavigationItem[] = props.server.channels.map((channel) => ({
     id: channel.id,
@@ -126,6 +129,14 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     type: channel.type,
     unread: channel.unreadCount > 0,
     unreadCount: channel.unreadCount,
+    participantCount: channel.voiceParticipants?.length ?? 0,
+    participants: channel.voiceParticipants?.map((participant) => ({
+      identity: participant.identity,
+      userId: participant.userId,
+      name: participant.displayName,
+      founder: participant.platformRole === 'owner',
+      canDrag: canMoveMembers && props.onMoveVoiceMember !== undefined && participant.userId !== props.user.id && participant.userId !== props.server.ownerUserId,
+    })),
   }));
   const workspaces: WorkspaceNavigationItem[] = props.servers.map((server) => ({
     id: server.id,
@@ -133,6 +144,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     memberCount: server.memberCount,
     activeVoice: server.id === props.connectedVoiceServerId,
   }));
+  const connectedMemberIds = new Set(props.server.channels.flatMap((channel) => channel.voiceParticipants?.map((participant) => participant.userId) ?? []));
   const members: MemberNavigationItem[] = props.server.members.map((member) => {
     const roleLabel = member.userId === props.server.ownerUserId
       ? 'Владелец сервера'
@@ -145,8 +157,9 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       name: member.displayName,
       roleLabel,
       founder: member.platformRole === 'owner',
-      ...(member.userId === props.user.id ? { status: 'online' as const } : {}),
+      ...(member.userId === props.user.id || connectedMemberIds.has(member.userId) ? { status: 'online' as const } : {}),
       ...(kickAction === undefined ? {} : { actions: kickAction }),
+      draggable: canMoveMembers && props.onMoveVoiceMember !== undefined && member.userId !== props.user.id && member.userId !== props.server.ownerUserId,
     };
   });
 
@@ -207,6 +220,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       onCreateChannel={openChannelForm}
       onDeleteChannel={props.onDeleteChannel}
       onManageRoles={() => setRolesOpen(true)}
+      {...(canMoveMembers && props.onMoveVoiceMember !== undefined ? { onMoveMember: props.onMoveVoiceMember } : {})}
       profile={<UserProfileDock email={props.user.email} founder={props.user.platformRole === 'owner'} name={displayName(props.user)} onLogout={props.onLogout} onSecurity={props.onSecurity} />}
       textChannels={channels.filter((channel) => channel.type === 'text')}
       voiceChannels={channels.filter((channel) => channel.type === 'voice')}
@@ -305,7 +319,7 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
   };
   return (
     <section className="vui-message-stage">
-      <MessageList channelName={activeChannel.name} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onEdit={onEdit} {...(channelPermissions.includes('ADD_REACTIONS') ? { onReaction: props.onMessageReaction } : {})} {...(channelPermissions.includes('SEND_MESSAGES') ? { onReply } : {})} />
+      <MessageList channelName={activeChannel.name} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onLoadAttachment={props.onLoadAttachment} onEdit={onEdit} {...(channelPermissions.includes('ADD_REACTIONS') ? { onReaction: props.onMessageReaction } : {})} {...(channelPermissions.includes('SEND_MESSAGES') ? { onReply } : {})} />
       <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} canSend={editingMessage === null ? channelPermissions.includes('SEND_MESSAGES') : editingMessage.canEdit === true} channelName={activeChannel.name} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} {...(editingMessage === null && channelPermissions.includes('SEND_ATTACHMENTS') ? { onFilesSelected: onAddAttachments } : {})} onChange={props.onMessageDraft} onRemoveAttachment={onRemoveAttachment} onSubmit={submitMessage} value={props.messageDraft} />
       {attachmentError === null ? null : <div className="vui-server-error vui-server-error--attachment" role="alert">{attachmentError}</div>}
       {props.error === null ? null : <div className="vui-server-error vui-server-error--floating" role="alert">{props.error}</div>}

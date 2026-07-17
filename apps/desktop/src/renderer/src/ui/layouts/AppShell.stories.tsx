@@ -42,7 +42,7 @@ const members: MemberNavigationItem[] = [
   { id: 'anna', name: 'Анна Белова', roleLabel: 'Frontend', status: 'online' },
   { id: 'max', name: 'Максим Орлов', roleLabel: 'Backend', status: 'idle' },
   { id: 'olga', name: 'Ольга Ветрова', roleLabel: 'Дизайнер', status: 'dnd' },
-  { id: 'guest', name: 'Сергей Котов', status: 'offline' },
+  { id: 'sergey', name: 'Сергей Котов', status: 'offline' },
 ];
 
 function StoryChannel(): React.JSX.Element {

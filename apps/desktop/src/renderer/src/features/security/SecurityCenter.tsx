@@ -1,14 +1,14 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import QRCode from 'qrcode';
 
-import type { PublicUser, SecurityEvent, TwoFactorEnableResult, TwoFactorSetup, UserSession } from '@vatrushka/shared';
+import type { LocalSettings, PublicUser, SecurityEvent, TwoFactorEnableResult, TwoFactorSetup, UserSession } from '@vatrushka/shared';
 
 import { apiClient } from '../../api';
-import { Badge, Button, Input, PasswordInput } from '../../ui/primitives';
+import { Badge, Button, Input, PasswordInput, Switch } from '../../ui/primitives';
 import { ConfirmDialog, Modal } from '../../ui/overlays';
 import './security-center.css';
 
-type SecurityTab = 'protection' | 'sessions' | 'recovery' | 'activity';
+type SecurityTab = 'protection' | 'notifications' | 'sessions' | 'recovery' | 'activity';
 type ProtectionFlow = 'overview' | 'password' | 'totp-enable' | 'totp-disable' | 'recovery-regenerate';
 
 export interface SecurityClient {
@@ -31,6 +31,8 @@ export interface SecurityCenterProps {
   onClose: () => void;
   onUserChange: (user: PublicUser) => void;
   onCurrentSessionRevoked: () => void;
+  settings?: LocalSettings;
+  onSettingsChange?: (settings: Pick<LocalSettings, 'desktopNotificationsEnabled' | 'messageSoundsEnabled'>) => void;
   client?: SecurityClient;
 }
 
@@ -52,7 +54,7 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Не удалось выполнить действие';
 }
 
-export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRevoked, onUserChange, open, user }: SecurityCenterProps): React.JSX.Element {
+export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRevoked, onSettingsChange = () => undefined, onUserChange, open, settings = { volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }, user }: SecurityCenterProps): React.JSX.Element {
   const [tab, setTab] = useState<SecurityTab>('protection');
   const [flow, setFlow] = useState<ProtectionFlow>('overview');
   const [sessions, setSessions] = useState<UserSession[]>([]);
@@ -210,7 +212,7 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
     <Modal description="Пароль, 2FA, активные устройства и события аккаунта" onClose={onClose} open={open} size="xl" title="Безопасность аккаунта">
       <div className="security-center">
         <nav aria-label="Разделы безопасности" className="security-center__tabs">
-          {([['protection', 'Защита'], ['sessions', 'Сессии'], ['recovery', 'Резервные коды'], ['activity', 'Активность']] as const).map(([value, label]) =>
+          {([['protection', 'Защита'], ['notifications', 'Уведомления'], ['sessions', 'Сессии'], ['recovery', 'Резервные коды'], ['activity', 'Активность']] as const).map(([value, label]) =>
             <button aria-current={tab === value ? 'page' : undefined} key={value} onClick={() => { setTab(value); setFlow('overview'); setError(null); }} type="button">{label}</button>)}
         </nav>
 
@@ -234,6 +236,12 @@ export function SecurityCenter({ client = apiClient, onClose, onCurrentSessionRe
             <PasswordInput autoComplete="new-password" label="Повторите пароль" maxLength={128} minLength={10} onChange={(event) => setConfirmation(event.target.value)} value={confirmation} />
             <div className="security-form__actions"><Button onClick={() => setFlow('overview')} type="button" variant="quiet">Назад</Button><Button disabled={code.length !== 6 || password.length < 10} loading={busy}>Сохранить</Button></div>
           </form>}
+
+          {tab === 'notifications' && <div className="security-stack">
+            <div className="security-section-heading"><div><h3>Уведомления о сообщениях</h3><p>Настройки хранятся только на этом компьютере и применяются сразу.</p></div></div>
+            <article className="security-card"><div><h3>Push-уведомления Windows</h3><p>Показывать автора, канал и текст нового сообщения, даже когда окно приложения открыто.</p></div><Switch checked={settings.desktopNotificationsEnabled} label="Push-уведомления" onCheckedChange={(checked) => onSettingsChange({ desktopNotificationsEnabled: checked, messageSoundsEnabled: settings.messageSoundsEnabled })} /></article>
+            <article className="security-card"><div><h3>Звук сообщения</h3><p>Проигрывать короткий ненавязчивый сигнал на выбранном устройстве вывода.</p></div><Switch checked={settings.messageSoundsEnabled} label="Звуковые уведомления" onCheckedChange={(checked) => onSettingsChange({ desktopNotificationsEnabled: settings.desktopNotificationsEnabled, messageSoundsEnabled: checked })} /></article>
+          </div>}
 
           {tab === 'protection' && flow === 'totp-enable' && <form className="security-form" onSubmit={enableTotp}>
             <h3>Подключить 2FA</h3><p>Отсканируйте QR-код, затем введите код из приложения.</p>
