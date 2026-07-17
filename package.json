@@ -1,6 +1,6 @@
 {
   "name": "vatrushka",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "«Ватрушка» — настольные голосовые комнаты",
   "type": "module",
@@ -31,6 +31,9 @@
     "build:storybook": "npm run build-storybook -w @vatrushka/desktop",
     "test:storybook": "npm run test:storybook -w @vatrushka/desktop",
     "test:visual": "npm run test:visual -w @vatrushka/desktop",
+    "perf:check": "npm run perf:check -w @vatrushka/desktop",
+    "perf:bundle": "npm run perf:bundle -w @vatrushka/desktop",
+    "db:check": "npm run db:check -w @vatrushka/api",
     "db:generate": "npm run db:generate -w @vatrushka/api",
     "db:migrate": "npm run db:migrate -w @vatrushka/api",
     "db:studio": "npm run db:studio -w @vatrushka/api"

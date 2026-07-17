@@ -46,6 +46,26 @@ test('launches the secure auth shell with an allowlisted preload API', async () 
   ].sort());
 });
 
+test('supports keyboard-only authentication with a visible focus indicator', async () => {
+  application = await electron.launch({ args: ['.', '--user-data-dir=.e2e-user-data-keyboard'], cwd: process.cwd(), env: electronEnvironment() });
+  const window = await application.firstWindow();
+  const email = window.getByLabel('Email');
+  const password = window.getByLabel('Пароль');
+
+  await expect(email).toBeVisible();
+  await expect(email).toBeFocused();
+  await email.fill('keyboard@example.com');
+  await window.keyboard.press('Tab');
+  await expect(password).toBeFocused();
+  expect(await password.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
+
+  const emailTab = window.getByRole('tab', { name: 'Код из почты' });
+  await emailTab.focus();
+  await window.keyboard.press('Enter');
+  await expect(emailTab).toHaveAttribute('aria-selected', 'true');
+  await expect(password).toHaveCount(0);
+});
+
 test('revokes another device without exposing its refresh token to the renderer', async () => {
   let remoteSessionActive = true;
   apiServer = createServer((request, response) => {

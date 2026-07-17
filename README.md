@@ -104,7 +104,7 @@ docs/                   operating and design documentation
    npm run package:win
    ```
 
-3. Запустите `apps/desktop/release/Vatrushka-Setup-0.1.0-x64.exe`. Он установит «Ватрушку» в профиль текущего пользователя и добавит ярлыки. `Vatrushka-Portable-0.1.0-x64.exe` запускается без установки.
+3. Запустите `apps/desktop/release/Vatrushka-Setup-<version>-x64.exe`. Он установит «Ватрушку» в профиль текущего пользователя и добавит ярлыки. `Vatrushka-Portable-<version>-x64.exe` запускается без установки.
 
 Сборки MVP не подписаны code-signing сертификатом. Windows SmartScreen может показать предупреждение; подписывать публичные релизы нужно до распространения среди пользователей.
 
@@ -117,7 +117,11 @@ npm run lint
 npm run typecheck
 npm run test
 npm run build
+npm run test:storybook
 npm run test:e2e
+npm run test:visual
+npm run db:check
+npm run perf:bundle
 npm run package:win
 npm run db:generate
 npm run db:migrate
@@ -232,4 +236,6 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 - [Self-hosted LiveKit](docs/self-hosted-livekit.md)
 - [Security](docs/security.md)
 - [Testing](docs/testing.md)
+- [Performance](docs/performance.md)
+- [Release 0.3.0](docs/releases/0.3.0.md)
 - [vNext roadmap](docs/vnext-roadmap.md)

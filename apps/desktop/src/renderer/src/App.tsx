@@ -35,7 +35,7 @@ export default function App(): ReactNode {
   const [connection, setConnection] = useState<RoomConnection | null>(null);
   const [settings, setSettings] = useState<LocalSettings>({ volume: 1 });
   const [devices, setDevices] = useState<{ inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[] }>({ inputs: [], outputs: [] });
-  const [version, setVersion] = useState('0.1.0');
+  const [version, setVersion] = useState('0.3.0');
   const [platform, setPlatform] = useState('win32');
   const [retrySeconds, setRetrySeconds] = useState(0);
   const [busy, setBusy] = useState(false);
