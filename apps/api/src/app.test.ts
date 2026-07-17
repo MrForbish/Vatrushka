@@ -105,6 +105,21 @@ beforeEach(async () => {
 });
 
 describe('authentication API', () => {
+  it('returns a validation error for malformed JSON bodies', async () => {
+    const response = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/register/request-code`,
+      headers: { 'content-type': 'application/json' },
+      payload: '{',
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ code: string; details: Array<{ field: string; message: string }> }>()).toEqual(expect.objectContaining({
+      code: 'VALIDATION_ERROR',
+      details: [{ field: 'body', message: 'Некорректный JSON' }],
+    }));
+  });
+
   it('does not expose retired passwordless endpoints', async () => {
     const requested = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/request-code`, payload: { email: 'user@example.com' } });
     const verified = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/verify-code`, payload: { email: 'user@example.com', code: '123456', deviceName: 'Windows Desktop' } });

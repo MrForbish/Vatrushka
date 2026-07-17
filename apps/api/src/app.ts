@@ -223,6 +223,12 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
       void reply.status(400).send(createApiError('VALIDATION_ERROR', request.id, details));
       return;
     }
+    if (error instanceof Error && 'code' in error && error.code === 'FST_ERR_CTP_INVALID_JSON_BODY') {
+      void reply.status(400).send(createApiError('VALIDATION_ERROR', request.id, [
+        { field: 'body', message: 'Некорректный JSON' },
+      ]));
+      return;
+    }
     if (error instanceof Error && 'statusCode' in error && error.statusCode === 429) {
       void reply.status(429).send(createApiError('RATE_LIMITED', request.id));
       return;
