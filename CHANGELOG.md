@@ -4,6 +4,8 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-17
+
 ### Added
 
 - redesigned Home as a personal dashboard with Continue, Active Spaces, Recent Activity, audio readiness, onboarding, responsive profile rail and Storybook states;
