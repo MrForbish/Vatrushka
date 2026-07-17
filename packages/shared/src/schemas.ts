@@ -141,6 +141,17 @@ export const createAttachmentIntentSchema = z.object({
   height: z.number().int().positive().max(32_768).optional(),
   durationMs: z.number().int().positive().max(86_400_000).optional(),
 }).strict();
+export const realtimeClientCommandSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('auth'), token: z.string().min(32).max(4_096), deviceId: z.string().trim().min(1).max(128) }).strict(),
+  z.object({ type: z.literal('subscribe'), conversationId: uuidSchema }).strict(),
+  z.object({ type: z.literal('unsubscribe'), conversationId: uuidSchema }).strict(),
+  z.object({ type: z.literal('typing.start'), conversationId: uuidSchema }).strict(),
+  z.object({ type: z.literal('typing.stop'), conversationId: uuidSchema }).strict(),
+  z.object({ type: z.literal('active_conversation.set'), conversationId: uuidSchema.nullable() }).strict(),
+  z.object({ type: z.literal('delivery.ack'), conversationId: uuidSchema, messageId: canonicalMessageIdSchema }).strict(),
+  z.object({ type: z.literal('conversation.read'), conversationId: uuidSchema, messageId: canonicalMessageIdSchema }).strict(),
+  z.object({ type: z.literal('ping') }).strict(),
+]);
 
 export const desktopSourceSelectionSchema = z
   .object({ sourceId: z.string().min(1).max(512), includeAudio: z.boolean() })

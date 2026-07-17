@@ -406,6 +406,40 @@ export interface InternalNotification {
   dismissedAt: string | null;
 }
 
+export type RealtimeEventType =
+  | 'message.created'
+  | 'message.updated'
+  | 'message.deleted'
+  | 'message.reaction.updated'
+  | 'conversation.read_state.updated'
+  | 'conversation.unread.updated'
+  | 'notification.created'
+  | 'typing.started'
+  | 'typing.stopped'
+  | 'presence.updated'
+  | 'session.revoked'
+  | 'feature_flags.updated';
+
+export interface RealtimeEvent {
+  id: string;
+  type: RealtimeEventType;
+  occurredAt: string;
+  conversationId: string | null;
+  targetUserIds: string[];
+  payload: Record<string, unknown>;
+}
+
+export type RealtimeClientCommand =
+  | { type: 'auth'; token: string; deviceId: string }
+  | { type: 'subscribe'; conversationId: string }
+  | { type: 'unsubscribe'; conversationId: string }
+  | { type: 'typing.start'; conversationId: string }
+  | { type: 'typing.stop'; conversationId: string }
+  | { type: 'active_conversation.set'; conversationId: string | null }
+  | { type: 'delivery.ack'; conversationId: string; messageId: string }
+  | { type: 'conversation.read'; conversationId: string; messageId: string }
+  | { type: 'ping' };
+
 export interface DesktopMessageNotification {
   id: string;
   title: string;

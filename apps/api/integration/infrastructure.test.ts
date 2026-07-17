@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createPostgresStore } from '../src/db/postgres-store.js';
 import { createPresenceStore } from '../src/services/presence-store.js';
 import { createCanonicalMessagingStore } from '../src/services/canonical-messaging.js';
+import { OutboxWorker, RedisRealtimeBus } from '../src/services/realtime.js';
 import { loadConfig } from '../src/config.js';
 
 const databaseUrl = process.env.INTEGRATION_DATABASE_URL;
@@ -26,6 +27,8 @@ const presence = await createPresenceStore(loadConfig({
   PRESENCE_STORAGE_DRIVER: 'redis',
   REDIS_URL: redisUrl,
 }));
+const realtime = new RedisRealtimeBus(redisUrl);
+await realtime.start();
 
 beforeAll(async () => {
   await adminPool.query('drop schema if exists public cascade');
@@ -37,6 +40,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await presence.close();
+  await realtime.close();
   await postgres.close();
   await messaging.close();
   await adminPool.end();
@@ -131,5 +135,22 @@ describe('production infrastructure adapters', () => {
     expect(await messaging.listNotifications(second.id, null, 10, true)).toHaveLength(1);
     expect(await messaging.softDeleteMessage(created.message.id, first.id, false, new Date(now.getTime() + 2_000))).toBe(true);
     expect((await messaging.findMessage(created.message.id, second.id))?.deletedAt).not.toBeNull();
+  });
+
+  it('publishes the transactional outbox through Redis with deduplication', async () => {
+    const received = new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Realtime event timeout')), 5_000);
+      const unsubscribe = realtime.onEvent((event) => {
+        if (!event.id.startsWith('outbox:')) return;
+        clearTimeout(timeout);
+        unsubscribe();
+        resolve(event.id);
+      });
+    });
+    const worker = new OutboxWorker(messaging, realtime);
+    expect(await worker.drainOnce()).toBeGreaterThan(0);
+    await expect(received).resolves.toMatch(/^outbox:/u);
+    const pending = await adminPool.query<{ count: number }>('select count(*)::int as count from outbox_events where processed_at is null and failed_at is null');
+    expect(pending.rows[0]?.count).toBe(0);
   });
 });

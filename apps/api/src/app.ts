@@ -1,6 +1,7 @@
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -61,6 +62,8 @@ import {
 import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
 import { MAX_ATTACHMENT_BYTES, type VatrushkaService } from './service.js';
+import type { RedisRealtimeBus } from './services/realtime.js';
+import { WebSocketGateway } from './services/websocket-gateway.js';
 
 const serverIdParams = z.object({ serverId: z.uuid() });
 const channelIdParams = z.object({ channelId: z.uuid() });
@@ -205,6 +208,7 @@ export interface BuildAppOptions {
   config: AppConfig;
   service: VatrushkaService;
   logger?: boolean;
+  realtimeBus?: RedisRealtimeBus | undefined;
 }
 
 function routeErrors(): Record<number, typeof errorResponseSchema> {
@@ -255,6 +259,12 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   });
   await app.register(multipart, { limits: { fileSize: MAX_ATTACHMENT_BYTES, files: 1, fields: 0, parts: 1 } });
   await app.register(rateLimit, { global: false, max: 60, timeWindow: '1 minute', ban: 2 });
+  if (options.realtimeBus) {
+    await app.register(websocket, { options: { maxPayload: 16 * 1024 } });
+    const gateway = new WebSocketGateway(service, options.realtimeBus);
+    app.get('/ws', { websocket: true }, (socket) => gateway.handle(socket));
+    app.addHook('onClose', () => gateway.close());
+  }
   await app.register(rawBody, { field: 'rawBody', global: false, encoding: 'utf8', runFirst: true });
 
   if (config.NODE_ENV !== 'production') {

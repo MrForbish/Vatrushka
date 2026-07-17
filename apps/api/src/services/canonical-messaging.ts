@@ -55,6 +55,16 @@ export interface CanonicalAttachmentRecord {
   createdAt: Date;
 }
 
+export interface OutboxEventRecord {
+  id: string;
+  eventType: string;
+  aggregateType: string;
+  aggregateId: string;
+  payload: Record<string, unknown>;
+  createdAt: Date;
+  attempts: number;
+}
+
 interface MessageRow {
   id: string;
   conversation_id: string;
@@ -115,6 +125,38 @@ export class CanonicalMessagingStore {
   constructor(private readonly pool: pg.Pool) {}
 
   async close(): Promise<void> { await this.pool.end(); }
+
+  async claimOutboxBatch(limit: number, now: Date): Promise<OutboxEventRecord[]> {
+    const result = await this.pool.query<{
+      id: string; event_type: string; aggregate_type: string; aggregate_id: string; payload: Record<string, unknown>; created_at: Date; attempts: number;
+    }>(`
+      with claimed as (
+        select id from outbox_events
+        where processed_at is null and failed_at is null and available_at <= $1
+        order by available_at, id
+        for update skip locked
+        limit $2
+      )
+      update outbox_events event
+      set attempts = event.attempts + 1, available_at = $1 + interval '30 seconds'
+      from claimed where event.id = claimed.id
+      returning event.id::text, event.event_type, event.aggregate_type, event.aggregate_id, event.payload, event.created_at, event.attempts
+    `, [now, limit]);
+    return result.rows.map((row) => ({ id: row.id, eventType: row.event_type, aggregateType: row.aggregate_type, aggregateId: row.aggregate_id, payload: row.payload, createdAt: row.created_at, attempts: row.attempts }));
+  }
+
+  async completeOutboxEvent(id: string, now: Date): Promise<void> {
+    await this.pool.query('update outbox_events set processed_at = $2, last_error = null where id = $1::bigint', [id, now]);
+  }
+
+  async retryOutboxEvent(id: string, attempts: number, error: string, now: Date): Promise<void> {
+    if (attempts >= 10) {
+      await this.pool.query('update outbox_events set failed_at = $2, last_error = $3 where id = $1::bigint', [id, now, error.slice(0, 1_000)]);
+      return;
+    }
+    const delaySeconds = Math.min(300, 2 ** attempts);
+    await this.pool.query("update outbox_events set available_at = $2 + ($3 * interval '1 second'), last_error = $4 where id = $1::bigint", [id, now, delaySeconds, error.slice(0, 1_000)]);
+  }
 
   async findConversation(id: string): Promise<CanonicalConversationRecord | null> {
     const result = await this.pool.query<{
@@ -362,8 +404,9 @@ export class CanonicalMessagingStore {
     const result = await this.pool.query<{
       conversation_id: string; last_delivered_message_id: string | null; last_read_message_id: string | null; last_delivered_at: Date | null; last_read_at: Date | null; mention_count: number;
     }>(`
+      with updated_state as (
       insert into conversation_read_states (conversation_id, user_id, last_delivered_message_id, last_read_message_id, last_delivered_at, last_read_at, mention_count)
-      values ($1, $2, $3::bigint, $4::bigint, case when $3::bigint is null then null else $5 end, case when $4::bigint is null then null else $5 end, 0)
+      values ($1, $2, $3::bigint, $4::bigint, case when $3::bigint is null then null else $5::timestamptz end, case when $4::bigint is null then null else $5::timestamptz end, 0)
       on conflict (conversation_id, user_id) do update set
         last_delivered_message_id = greatest(conversation_read_states.last_delivered_message_id, excluded.last_delivered_message_id),
         last_read_message_id = greatest(conversation_read_states.last_read_message_id, excluded.last_read_message_id),
@@ -373,7 +416,14 @@ export class CanonicalMessagingStore {
           select count(*)::int from conversation_message_mentions mention join messages m on m.id = mention.message_id
           where m.conversation_id = $1 and mention.mentioned_user_id = $2 and m.id > excluded.last_read_message_id
         ) else conversation_read_states.mention_count end
-      returning conversation_id, last_delivered_message_id::text, last_read_message_id::text, last_delivered_at, last_read_at, mention_count
+      returning conversation_id, last_delivered_message_id, last_read_message_id, last_delivered_at, last_read_at, mention_count
+      ), queued_event as (
+        insert into outbox_events (event_type, aggregate_type, aggregate_id, payload, created_at, available_at)
+        select 'conversation.read_state.updated', 'conversation', $1,
+          jsonb_build_object('conversationId', $1, 'userId', $2, 'lastDeliveredMessageId', updated_state.last_delivered_message_id::text, 'lastReadMessageId', updated_state.last_read_message_id::text), $5, $5
+        from updated_state
+      )
+      select conversation_id, last_delivered_message_id::text, last_read_message_id::text, last_delivered_at, last_read_at, mention_count from updated_state
     `, [conversationId, userId, deliveredId, readId, now]);
     const row = result.rows[0];
     if (!row) return null;
