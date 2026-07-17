@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 async function openStory(page: Page, id: string): Promise<void> {
-  await page.goto(`/iframe.html?id=${id}&viewMode=story`);
-  await page.waitForLoadState('networkidle');
+  await page.goto(`/iframe.html?id=${id}&viewMode=story`, { waitUntil: 'load' });
+  await page.locator('#storybook-root').waitFor({ state: 'attached' });
   await page.evaluate(async () => document.fonts.ready);
 }
 
