@@ -32,7 +32,7 @@
 - Единственная демонстрация обеспечивается транзакционной lease в PostgreSQL, а не только UI.
 - Серверы хранят постоянное членство, каналы, сообщения, иерархию ролей, channel overrides и audit log; права `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` ограничиваются также grant-ами LiveKit-токена.
 
-Подробности: [архитектура](docs/architecture.md), [Home dashboard](docs/home.md), [аутентификация](docs/auth.md), [медиа](docs/media.md), [объектное хранилище](docs/object-storage.md), [безопасность](docs/security.md).
+Подробности: [архитектура](docs/architecture.md), [ADR](docs/adr/README.md), [Home dashboard](docs/home.md), [аутентификация](docs/auth.md), [медиа](docs/media.md), [объектное хранилище](docs/object-storage.md), [безопасность](docs/security.md).
 
 ## Структура
 
@@ -241,6 +241,7 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 ## Документация
 
 - [Architecture](docs/architecture.md)
+- [Architecture decisions](docs/adr/README.md)
 - [Auth](docs/auth.md)
 - [Media](docs/media.md)
 - [Object storage](docs/object-storage.md)
