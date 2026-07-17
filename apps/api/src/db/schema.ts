@@ -1,8 +1,12 @@
-import { boolean, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, customType, foreignKey, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
 import type { DirectMessagePrivacy, HomeActivityType, PermissionOverwriteTargetType, PlatformRole, PresencePreference, PresenceVisibility, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
+
+export const conversationType = pgEnum('conversation_type', ['server_channel', 'direct', 'group_direct']);
+export const conversationMentionType = pgEnum('conversation_mention_type', ['user', 'role', 'everyone']);
+export const notificationType = pgEnum('notification_type', ['direct_message', 'mention', 'reply', 'server_invite', 'moderation', 'system']);
 
 export const users = pgTable(
   'users',
@@ -321,6 +325,221 @@ export const directMessageAttachments = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
   (table) => [index('direct_message_attachments_message_idx').on(table.messageId), uniqueIndex('direct_message_attachments_storage_key_unique').on(table.storageKey)],
+);
+
+// Canonical messaging model. Legacy text/direct tables remain mapped above for one
+// compatibility release and are migrated through the explicit backfill migration.
+export const conversations = pgTable(
+  'conversations',
+  {
+    id: uuid('id').primaryKey(),
+    type: conversationType('type').notNull(),
+    serverId: uuid('server_id').references(() => servers.id, { onDelete: 'cascade' }),
+    channelId: uuid('channel_id').references(() => serverChannels.id, { onDelete: 'cascade' }),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('conversations_channel_unique').on(table.channelId),
+    index('conversations_server_updated_idx').on(table.serverId, table.updatedAt),
+    index('conversations_type_updated_idx').on(table.type, table.updatedAt),
+  ],
+);
+
+export const conversationMembers = pgTable(
+  'conversation_members',
+  {
+    conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    joinedAt: timestamp('joined_at', { withTimezone: true }).notNull().defaultNow(),
+    leftAt: timestamp('left_at', { withTimezone: true }),
+    notificationsMutedUntil: timestamp('notifications_muted_until', { withTimezone: true }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.conversationId, table.userId] }),
+    index('conversation_members_user_active_idx').on(table.userId, table.leftAt),
+  ],
+);
+
+export const messages = pgTable(
+  'messages',
+  {
+    id: bigint('id', { mode: 'bigint' }).primaryKey().generatedAlwaysAsIdentity(),
+    conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+    authorId: uuid('author_id').notNull().references(() => users.id),
+    content: text('content').notNull().default(''),
+    replyToMessageId: bigint('reply_to_message_id', { mode: 'bigint' }),
+    clientMessageId: uuid('client_message_id').notNull(),
+    legacyTextMessageId: uuid('legacy_text_message_id'),
+    legacyDirectMessageId: uuid('legacy_direct_message_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    editedAt: timestamp('edited_at', { withTimezone: true }),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
+  },
+  (table) => [
+    uniqueIndex('messages_author_client_message_unique').on(table.authorId, table.clientMessageId),
+    uniqueIndex('messages_legacy_text_unique').on(table.legacyTextMessageId),
+    uniqueIndex('messages_legacy_direct_unique').on(table.legacyDirectMessageId),
+    index('messages_conversation_history_idx').on(table.conversationId, table.id),
+    index('messages_author_history_idx').on(table.authorId, table.id),
+    foreignKey({ columns: [table.replyToMessageId], foreignColumns: [table.id], name: 'messages_reply_to_message_id_fk' }).onDelete('set null'),
+  ],
+);
+
+export const conversationMessageAttachments = pgTable(
+  'conversation_message_attachments',
+  {
+    id: uuid('id').primaryKey(),
+    messageId: bigint('message_id', { mode: 'bigint' }).references(() => messages.id, { onDelete: 'cascade' }),
+    uploaderUserId: uuid('uploader_user_id').notNull().references(() => users.id),
+    objectKey: text('object_key').notNull(),
+    originalName: text('original_name').notNull(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'bigint' }).notNull(),
+    width: integer('width'),
+    height: integer('height'),
+    durationMs: integer('duration_ms'),
+    previewObjectKey: text('preview_object_key'),
+    finalizedAt: timestamp('finalized_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('conversation_message_attachments_object_key_unique').on(table.objectKey),
+    index('conversation_message_attachments_message_idx').on(table.messageId),
+    index('conversation_message_attachments_uploader_idx').on(table.uploaderUserId, table.createdAt),
+  ],
+);
+
+export const conversationMessageReactions = pgTable(
+  'conversation_message_reactions',
+  {
+    messageId: bigint('message_id', { mode: 'bigint' }).notNull().references(() => messages.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    emoji: text('emoji').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.messageId, table.userId, table.emoji] }),
+    index('conversation_message_reactions_message_idx').on(table.messageId),
+  ],
+);
+
+export const conversationMessageMentions = pgTable(
+  'conversation_message_mentions',
+  {
+    id: uuid('id').primaryKey(),
+    messageId: bigint('message_id', { mode: 'bigint' }).notNull().references(() => messages.id, { onDelete: 'cascade' }),
+    type: conversationMentionType('mention_type').notNull(),
+    mentionedUserId: uuid('mentioned_user_id').references(() => users.id, { onDelete: 'cascade' }),
+    mentionedRoleId: uuid('mentioned_role_id').references(() => serverRoles.id, { onDelete: 'cascade' }),
+    start: integer('start'),
+    length: integer('length'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('conversation_message_mentions_message_idx').on(table.messageId),
+    index('conversation_message_mentions_user_idx').on(table.mentionedUserId, table.messageId),
+    index('conversation_message_mentions_role_idx').on(table.mentionedRoleId, table.messageId),
+  ],
+);
+
+export const conversationReadStates = pgTable(
+  'conversation_read_states',
+  {
+    conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    lastDeliveredMessageId: bigint('last_delivered_message_id', { mode: 'bigint' }).references(() => messages.id, { onDelete: 'set null' }),
+    lastReadMessageId: bigint('last_read_message_id', { mode: 'bigint' }).references(() => messages.id, { onDelete: 'set null' }),
+    lastDeliveredAt: timestamp('last_delivered_at', { withTimezone: true }),
+    lastReadAt: timestamp('last_read_at', { withTimezone: true }),
+    mentionCount: integer('mention_count').notNull().default(0),
+  },
+  (table) => [
+    primaryKey({ columns: [table.conversationId, table.userId] }),
+    index('conversation_read_states_user_idx').on(table.userId),
+  ],
+);
+
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    type: notificationType('type').notNull(),
+    actorUserId: uuid('actor_user_id').references(() => users.id, { onDelete: 'set null' }),
+    conversationId: uuid('conversation_id').references(() => conversations.id, { onDelete: 'cascade' }),
+    messageId: bigint('message_id', { mode: 'bigint' }).references(() => messages.id, { onDelete: 'cascade' }),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('notifications_user_created_idx').on(table.userId, table.createdAt),
+    index('notifications_conversation_idx').on(table.conversationId, table.createdAt),
+  ],
+);
+
+export const userNotificationPreferences = pgTable(
+  'user_notification_preferences',
+  {
+    userId: uuid('user_id').primaryKey().references(() => users.id, { onDelete: 'cascade' }),
+    desktopEnabled: boolean('desktop_enabled').notNull().default(true),
+    soundEnabled: boolean('sound_enabled').notNull().default(true),
+    showPreview: boolean('show_preview').notNull().default(true),
+    directMessagesEnabled: boolean('direct_messages_enabled').notNull().default(true),
+    mentionsEnabled: boolean('mentions_enabled').notNull().default(true),
+    quietHoursStart: text('quiet_hours_start'),
+    quietHoursEnd: text('quiet_hours_end'),
+    quietHoursTimezone: text('quiet_hours_timezone'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+);
+
+export const serverNotificationPreferences = pgTable(
+  'server_notification_preferences',
+  {
+    serverId: uuid('server_id').notNull().references(() => servers.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    level: text('level').notNull().default('mentions'),
+    mutedUntil: timestamp('muted_until', { withTimezone: true }),
+    suppressEveryone: boolean('suppress_everyone').notNull().default(false),
+    suppressRoles: boolean('suppress_roles').notNull().default(false),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.serverId, table.userId] }), index('server_notification_preferences_user_idx').on(table.userId)],
+);
+
+export const conversationNotificationPreferences = pgTable(
+  'conversation_notification_preferences',
+  {
+    conversationId: uuid('conversation_id').notNull().references(() => conversations.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    level: text('level').notNull().default('mentions'),
+    mutedUntil: timestamp('muted_until', { withTimezone: true }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.conversationId, table.userId] }), index('conversation_notification_preferences_user_idx').on(table.userId)],
+);
+
+export const outboxEvents = pgTable(
+  'outbox_events',
+  {
+    id: bigint('id', { mode: 'bigint' }).primaryKey().generatedAlwaysAsIdentity(),
+    eventType: text('event_type').notNull(),
+    aggregateType: text('aggregate_type').notNull(),
+    aggregateId: text('aggregate_id').notNull(),
+    payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+    failedAt: timestamp('failed_at', { withTimezone: true }),
+    attempts: integer('attempts').notNull().default(0),
+    lastError: text('last_error'),
+  },
+  (table) => [index('outbox_events_available_idx').on(table.availableAt, table.id)],
 );
 
 export const channelScreenShareLeases = pgTable(

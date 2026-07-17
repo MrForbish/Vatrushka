@@ -120,6 +120,13 @@
       "when": 1784322807058,
       "tag": "0016_nasty_malcolm_colcord",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784327052530,
+      "tag": "0017_canonical_messaging_expand",
+      "breakpoints": true
     }
   ]
 }
