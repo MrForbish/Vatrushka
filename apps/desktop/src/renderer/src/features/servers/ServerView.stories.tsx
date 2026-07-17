@@ -1,6 +1,6 @@
 import { ConnectionState } from 'livekit-client';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn } from 'storybook/test';
+import { fn, userEvent, within } from 'storybook/test';
 
 import type { RoomConnection, ServerDetail } from '@vatrushka/shared';
 
@@ -11,7 +11,6 @@ import { ServerView } from './ServerView';
 const connection: RoomConnection = {
   roomId: 'voice-1',
   ownerUserId: 'owner',
-  code: 'ABCD2345',
   livekitUrl: 'wss://livekit.myvatrushka.ru',
   livekitToken: 'storybook',
   participantIdentity: 'owner-local',
@@ -50,7 +49,7 @@ const headset = { deviceId: 'headphones-usb', groupId: 'output-group', kind: 'au
 const server: ServerDetail = {
   id: 'server-1',
   name: 'Команда разработки',
-  inviteCode: 'ABCD2345',
+  inviteUrl: 'https://myvatrushka.ru/i/ABCD2345test',
   ownerUserId: 'owner',
   memberCount: 3,
   createdAt: '2026-07-17T00:00:00.000Z',
@@ -88,12 +87,11 @@ const meta = {
     messages: [],
     messageDraft: '',
     serverName: '',
-    serverInvite: '',
     busy: false,
     error: null,
     auditLog: [],
     directUnreadCount: 3,
-    onBack: fn(), onDirectMessages: fn(), onSwitchServer: fn(), onChannel: fn(), onMessageDraft: fn(), onSendMessage: fn(), onUpdateMessage: fn(), onMessageReaction: fn(), onDeleteMessage: fn(), onDeleteAttachment: fn(), onDownloadAttachment: fn(), onConnectVoice: fn(), onCopyInvite: fn(), onCreateChannel: fn(), onDeleteChannel: fn(), onCreateRole: fn(), onUpdateRole: fn(), onDeleteRole: fn(), onReorderRole: fn(), onAssignRoles: fn(), onSetChannelOverwrite: fn(), onLoadAudit: fn(), onKickMember: fn(), onServerName: fn(), onServerInvite: fn(), onCreateServer: fn(), onJoinServer: fn(), onSecurity: fn(), onLogout: fn(),
+    onBack: fn(), onDirectMessages: fn(), onSwitchServer: fn(), onChannel: fn(), onMessageDraft: fn(), onSendMessage: fn(), onUpdateMessage: fn(), onMessageReaction: fn(), onDeleteMessage: fn(), onDeleteAttachment: fn(), onDownloadAttachment: fn(), onConnectVoice: fn(), onCopyInvite: fn(), onCreateChannel: fn(), onDeleteChannel: fn(), onCreateRole: fn(), onUpdateRole: fn(), onDeleteRole: fn(), onReorderRole: fn(), onAssignRoles: fn(), onSetChannelOverwrite: fn(), onLoadAudit: fn(), onKickMember: fn(), onServerName: fn(), onCreateServer: fn(), onSecurity: fn(), onLogout: fn(),
   },
 } satisfies Meta<typeof ServerView>;
 
@@ -101,3 +99,16 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const ConnectedVoice: Story = {};
+
+export const InviteLink: Story = {
+  args: {
+    activeChannelId: 'text-1',
+    connectedVoiceChannelId: undefined,
+    connectedVoiceServerId: undefined,
+    voiceStage: undefined,
+    voiceConnectionPanel: undefined,
+  },
+  play: async ({ canvasElement }) => {
+    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Пригласить на сервер' }));
+  },
+};

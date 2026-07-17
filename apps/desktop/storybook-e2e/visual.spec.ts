@@ -81,6 +81,13 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('server-connected-voice.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('server invite short link', async ({ page }) => {
+    await openStory(page, 'screens-server--invite-link');
+    await expect(page.getByRole('dialog', { name: 'Пригласить на сервер' })).toBeVisible();
+    await expect(page.getByText('https://myvatrushka.ru/i/ABCD2345test')).toBeVisible();
+    await expect(page).toHaveScreenshot('server-invite-link.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('screen share source picker', async ({ page }) => {
     await openStory(page, 'features-screen-share--visual-picker');
     await expect(page).toHaveScreenshot('screen-share-picker.png', { animations: 'disabled', fullPage: true });

@@ -42,7 +42,6 @@ export interface ServerViewProps {
   messages: TextMessage[];
   messageDraft: string;
   serverName: string;
-  serverInvite: string;
   busy: boolean;
   error: string | null;
   auditLog: ServerAuditLogEntry[];
@@ -63,7 +62,7 @@ export interface ServerViewProps {
   onDeleteAttachment(attachmentId: string): void;
   onDownloadAttachment(attachmentId: string, fileName: string): void;
   onConnectVoice(channelId: string): void;
-  onCopyInvite(): void;
+  onCopyInvite(): void | Promise<void>;
   onCreateChannel(name: string, type: 'text' | 'voice'): void;
   onDeleteChannel(channelId: string): void;
   onCreateRole(name: string, color: string, permissions: ServerPermission[]): void;
@@ -75,9 +74,7 @@ export interface ServerViewProps {
   onLoadAudit(): void;
   onKickMember(userId: string): void;
   onServerName(value: string): void;
-  onServerInvite(value: string): void;
   onCreateServer(): void;
-  onJoinServer(): void;
   onSecurity(): void;
   onLogout(): void;
 }
@@ -94,7 +91,9 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const [channelName, setChannelName] = useState('');
   const [channelType, setChannelType] = useState<'text' | 'voice'>('text');
   const [rolesOpen, setRolesOpen] = useState(false);
-  const [serverAction, setServerAction] = useState<'create' | 'join' | null>(null);
+  const [serverCreateOpen, setServerCreateOpen] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteCopyState, setInviteCopyState] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle');
   const [editingMessage, setEditingMessage] = useState<MessageViewModel | null>(null);
   const [replyingMessage, setReplyingMessage] = useState<MessageViewModel | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<Array<{ id: string; file: File }>>([]);
@@ -162,21 +161,32 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     setChannelName('');
     setChannelFormOpen(false);
   };
-  const submitServerAction = (event: FormEvent): void => {
+  const submitServerCreate = (event: FormEvent): void => {
     event.preventDefault();
-    if (serverAction === 'create') props.onCreateServer();
-    if (serverAction === 'join') props.onJoinServer();
-    setServerAction(null);
+    props.onCreateServer();
+    setServerCreateOpen(false);
+  };
+  const closeInvite = (): void => {
+    setInviteOpen(false);
+    setInviteCopyState('idle');
+  };
+  const copyInvite = async (): Promise<void> => {
+    setInviteCopyState('copying');
+    try {
+      await props.onCopyInvite();
+      setInviteCopyState('copied');
+    } catch {
+      setInviteCopyState('error');
+    }
   };
 
   const workspaceLibrary = (
     <WorkspaceLibrary
       activeWorkspaceId={props.server.id}
       directUnreadCount={props.directUnreadCount ?? 0}
-      onCreate={() => setServerAction('create')}
+      onCreate={() => setServerCreateOpen(true)}
       {...(props.onDirectMessages === undefined ? {} : { onDirectMessages: props.onDirectMessages })}
       onHome={props.onBack}
-      onJoin={() => setServerAction('join')}
       onSelect={props.onSwitchServer}
       workspaces={workspaces}
     />
@@ -193,7 +203,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
         if (channelId === props.connectedVoiceChannelId) props.onChannel(channelId);
         else props.onConnectVoice(channelId);
       }}
-      onCopyInvite={props.onCopyInvite}
+      onCopyInvite={() => { setInviteCopyState('idle'); setInviteOpen(true); }}
       onCreateChannel={openChannelForm}
       onDeleteChannel={props.onDeleteChannel}
       onManageRoles={() => setRolesOpen(true)}
@@ -224,13 +234,15 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
         </form>
       </Modal>
 
-      <Modal onClose={() => setServerAction(null)} open={serverAction !== null} title={serverAction === 'create' ? 'Новый сервер' : 'Войти на сервер'}>
-        <form className="vui-server-form" onSubmit={submitServerAction}>
-          {serverAction === 'create'
-            ? <Input autoFocus label="Название сервера" maxLength={60} onChange={(event) => props.onServerName(event.target.value)} placeholder="Моя команда" value={props.serverName} />
-            : <Input autoFocus label="Код приглашения" maxLength={12} onChange={(event) => props.onServerInvite(event.target.value.toUpperCase())} placeholder="ABCD2345" value={props.serverInvite} />}
-          <div className="vui-server-form__actions"><Button onClick={() => setServerAction(null)} type="button" variant="quiet">Отмена</Button><Button disabled={(serverAction === 'create' ? props.serverName : props.serverInvite).trim().length === 0} loading={props.busy} type="submit">{serverAction === 'create' ? 'Создать' : 'Войти'}</Button></div>
+      <Modal onClose={() => setServerCreateOpen(false)} open={serverCreateOpen} title="Новый сервер">
+        <form className="vui-server-form" onSubmit={submitServerCreate}>
+          <Input autoFocus label="Название сервера" maxLength={60} onChange={(event) => props.onServerName(event.target.value)} placeholder="Моя команда" value={props.serverName} />
+          <div className="vui-server-form__actions"><Button onClick={() => setServerCreateOpen(false)} type="button" variant="quiet">Отмена</Button><Button disabled={props.serverName.trim().length === 0} loading={props.busy} type="submit">Создать</Button></div>
         </form>
+      </Modal>
+
+      <Modal description="Отправьте ссылку человеку, которого хотите добавить на сервер." footer={<><Button onClick={closeInvite} type="button" variant="quiet">Закрыть</Button><Button icon="copy" loading={inviteCopyState === 'copying'} onClick={() => void copyInvite()} type="button">{inviteCopyState === 'copied' ? 'Скопировано' : 'Скопировать ссылку'}</Button></>} onClose={closeInvite} open={inviteOpen} size="sm" title="Пригласить на сервер">
+        <div className="vui-server-invite"><span>Короткая ссылка</span><code>{props.server.inviteUrl}</code><p>После перехода откроется «Ватрушка» и сервер будет добавлен автоматически.</p>{inviteCopyState === 'copied' ? <strong role="status"><Icon name="check" size={16} />Ссылка скопирована</strong> : inviteCopyState === 'error' ? <strong className="vui-server-invite__error" role="alert"><Icon name="warning" size={16} />Не удалось скопировать ссылку</strong> : null}</div>
       </Modal>
 
       <ServerSettings auditLog={props.auditLog} busy={props.busy} currentUserId={props.user.id} error={props.error} onAssignRoles={props.onAssignRoles} onClose={() => setRolesOpen(false)} onCreateRole={props.onCreateRole} onDeleteRole={props.onDeleteRole} onLoadAudit={props.onLoadAudit} onReorderRole={props.onReorderRole} onSetChannelOverwrite={props.onSetChannelOverwrite} onUpdateRole={props.onUpdateRole} open={rolesOpen} server={props.server} />

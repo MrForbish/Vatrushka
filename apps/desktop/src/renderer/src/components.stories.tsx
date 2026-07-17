@@ -29,11 +29,10 @@ export const ServerHome: Story = {
     busy={false}
     error={null}
     servers={[
-      { id: 'server-1', name: 'Команда разработки', inviteCode: 'ABCD2345', ownerUserId: 'owner', memberCount: 8, createdAt: '2026-07-17T00:00:00.000Z' },
-      { id: 'server-2', name: 'Друзья', inviteCode: 'FGHJ6789', ownerUserId: 'friend', memberCount: 14, createdAt: '2026-07-17T00:00:00.000Z' },
+      { id: 'server-1', name: 'Команда разработки', inviteUrl: 'https://myvatrushka.ru/i/ABCD2345test', ownerUserId: 'owner', memberCount: 8, createdAt: '2026-07-17T00:00:00.000Z' },
+      { id: 'server-2', name: 'Друзья', inviteUrl: 'https://myvatrushka.ru/i/FGHJ6789test', ownerUserId: 'friend', memberCount: 14, createdAt: '2026-07-17T00:00:00.000Z' },
     ]}
     serverName=""
-    serverInvite=""
     directUnreadCount={3}
     onLogout={fn()}
     onSecurity={fn()}
@@ -41,9 +40,7 @@ export const ServerHome: Story = {
     onOutput={fn()}
     onRefreshDevices={fn()}
     onServerName={fn()}
-    onServerInvite={fn()}
     onCreateServer={fn()}
-    onJoinServer={fn()}
     onOpenServer={fn()}
     onDirectMessages={fn()}
   />,

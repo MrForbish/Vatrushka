@@ -116,14 +116,14 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .vui-home-empty strong { color: var(--color-text-primary); font: var(--text-heading-sm); }
 .vui-home-empty p { margin: 0; font: var(--text-body-md); }
 .vui-home-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin-top: var(--space-5); }
-.vui-home-actions form { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--space-3); min-width: 0; padding: var(--space-5); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-0); }
+.vui-home-actions form,
+.vui-home-invite-hint { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--space-3); min-width: 0; padding: var(--space-5); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); background: var(--color-surface-0); }
 .vui-home-actions form > .vui-field { grid-column: 1 / -1; width: 100%; min-width: 0; }
 .vui-home-actions form > .vui-button { grid-column: 1 / -1; width: 100%; }
 .vui-home-action-icon { display: grid; width: 42px; height: 42px; place-items: center; border-radius: var(--radius-sm); background: var(--color-primary-soft); color: var(--color-primary); }
 .vui-home-action-icon--cyan { background: color-mix(in srgb, var(--color-cyan), transparent 88%); color: var(--color-cyan); }
 .vui-home-actions h2 { margin: 0 0 var(--space-1); font: var(--text-heading-sm); }
 .vui-home-actions p { margin: 0; color: var(--color-text-muted); font: var(--text-caption); line-height: 1.5; }
-.vui-home-code { font: var(--text-mono-sm); letter-spacing: .15em; text-transform: uppercase; }
 .vui-home-audio > header > div { display: flex; align-items: center; gap: var(--space-3); }
 .vui-home-audio > header > div > span { display: grid; width: 42px; height: 42px; place-items: center; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-cyan), transparent 88%); color: var(--color-cyan); }
 .vui-home-audio h2 { margin: 0; }

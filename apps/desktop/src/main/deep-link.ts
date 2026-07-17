@@ -1,12 +1,12 @@
-import { serverInviteCodeSchema } from '@vatrushka/shared';
+import { inviteTokenSchema } from '@vatrushka/shared';
 
 export function parseDeepLink(value: string, protocol: string): string | null {
   try {
     const url = new URL(value);
-    if (url.protocol !== `${protocol}:` || url.hostname !== 'server') return null;
+    if (url.protocol !== `${protocol}:` || url.hostname !== 'invite') return null;
     const segments = url.pathname.split('/').filter(Boolean);
     if (segments.length !== 1) return null;
-    const parsed = serverInviteCodeSchema.safeParse(segments[0]);
+    const parsed = inviteTokenSchema.safeParse(segments[0]);
     return parsed.success ? parsed.data : null;
   } catch {
     return null;

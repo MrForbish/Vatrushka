@@ -62,15 +62,15 @@ function isTrustedOrigin(value: string): boolean {
   }
 }
 
-function sendDeepLink(code: string): void {
+function sendDeepLink(inviteToken: string): void {
   if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isLoading()) {
-    pendingDeepLink = code;
+    pendingDeepLink = inviteToken;
     return;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
-  mainWindow.webContents.send(IPC_CHANNELS.deepLink, code);
+  mainWindow.webContents.send(IPC_CHANNELS.deepLink, inviteToken);
   pendingDeepLink = null;
 }
 
@@ -194,9 +194,9 @@ async function createWindow(): Promise<void> {
   mainWindow.once('ready-to-show', () => mainWindow?.show());
   mainWindow.webContents.on('did-finish-load', () => {
     if (!pendingDeepLink || !mainWindow || mainWindow.isDestroyed()) return;
-    const code = pendingDeepLink;
+    const inviteToken = pendingDeepLink;
     pendingDeepLink = null;
-    mainWindow.webContents.send(IPC_CHANNELS.deepLink, code);
+    mainWindow.webContents.send(IPC_CHANNELS.deepLink, inviteToken);
   });
 
   let saveBoundsTimer: NodeJS.Timeout | undefined;
@@ -225,8 +225,8 @@ if (!hasLock) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
-    const code = findDeepLink(argv, APP_PROTOCOL);
-    if (code) sendDeepLink(code);
+    const inviteToken = findDeepLink(argv, APP_PROTOCOL);
+    if (inviteToken) sendDeepLink(inviteToken);
     else {
       if (mainWindow?.isMinimized()) mainWindow.restore();
       mainWindow?.show();
@@ -235,8 +235,8 @@ if (!hasLock) {
   });
   app.on('open-url', (event, url) => {
     event.preventDefault();
-    const code = findDeepLink([url], APP_PROTOCOL);
-    if (code) sendDeepLink(code);
+    const inviteToken = findDeepLink([url], APP_PROTOCOL);
+    if (inviteToken) sendDeepLink(inviteToken);
   });
 
   void app.whenReady().then(async () => {

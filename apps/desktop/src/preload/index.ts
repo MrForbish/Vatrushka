@@ -24,18 +24,18 @@ const channels = {
   notificationClick: 'notification:message-click',
 } as const;
 
-const deepLinkCallbacks = new Set<(serverInviteCode: string) => void>();
+const deepLinkCallbacks = new Set<(inviteToken: string) => void>();
 const notificationClickCallbacks = new Set<(target: { serverId: string; channelId: string }) => void>();
 const updateStateCallbacks = new Set<(state: DesktopUpdateState) => void>();
 let pendingDeepLink: string | null = null;
 
-ipcRenderer.on(channels.deepLink, (_event, serverInviteCode: unknown) => {
-  if (typeof serverInviteCode !== 'string') return;
+ipcRenderer.on(channels.deepLink, (_event, inviteToken: unknown) => {
+  if (typeof inviteToken !== 'string') return;
   if (deepLinkCallbacks.size === 0) {
-    pendingDeepLink = serverInviteCode;
+    pendingDeepLink = inviteToken;
     return;
   }
-  for (const callback of deepLinkCallbacks) callback(serverInviteCode);
+  for (const callback of deepLinkCallbacks) callback(inviteToken);
 });
 
 ipcRenderer.on(channels.notificationClick, (_event, target: unknown) => {

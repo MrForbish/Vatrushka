@@ -19,7 +19,6 @@ interface ShellScenarioProps {
   onChannel: (id: string) => void;
   onWorkspace: (id: string) => void;
   onCreate: () => void;
-  onJoin: () => void;
   onSecurity: () => void;
   onLogout: () => void;
 }
@@ -56,8 +55,8 @@ function StoryChannel(): React.JSX.Element {
   );
 }
 
-function ShellScenario({ onChannel, onCreate, onJoin, onLogout, onSecurity, onWorkspace }: ShellScenarioProps): React.JSX.Element {
-  const library = <WorkspaceLibrary activeWorkspaceId="vatrushka" onCreate={onCreate} onHome={() => undefined} onJoin={onJoin} onSelect={onWorkspace} workspaces={workspaces} />;
+function ShellScenario({ onChannel, onCreate, onLogout, onSecurity, onWorkspace }: ShellScenarioProps): React.JSX.Element {
+  const library = <WorkspaceLibrary activeWorkspaceId="vatrushka" onCreate={onCreate} onHome={() => undefined} onSelect={onWorkspace} workspaces={workspaces} />;
   const profile = <UserProfileDock email="founder@myvatrushka.ru" founder name="Илья Форбиш" onLogout={onLogout} onSecurity={onSecurity} />;
   const context = <ServerContext activeChannelId="general" canManageChannels canManageRoles name="Команда Ватрушки" onChannel={onChannel} onCopyInvite={() => undefined} onCreateChannel={() => undefined} onDeleteChannel={() => undefined} onManageRoles={() => undefined} profile={profile} textChannels={channels.filter((channel) => channel.type === 'text')} voiceChannels={channels.filter((channel) => channel.type === 'voice')} />;
   return <AppShell members={<MemberPanel members={members} />} serverContext={context} topBar={<ServerTopBar channelName="общий" channelType="text" description="Главное пространство команды" memberCount={18} />} workspaceLibrary={library}><StoryChannel /></AppShell>;
@@ -71,7 +70,6 @@ const meta = {
     onChannel: fn(),
     onWorkspace: fn(),
     onCreate: fn(),
-    onJoin: fn(),
     onSecurity: fn(),
     onLogout: fn(),
   },

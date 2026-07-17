@@ -53,10 +53,9 @@ export interface WorkspaceLibraryProps {
   onHome: () => void;
   onDirectMessages?: () => void;
   onCreate: () => void;
-  onJoin: () => void;
 }
 
-export function WorkspaceLibrary({ activeWorkspaceId, directActive = false, directUnreadCount = 0, onCreate, onDirectMessages, onHome, onJoin, onSelect, workspaces }: WorkspaceLibraryProps): React.JSX.Element {
+export function WorkspaceLibrary({ activeWorkspaceId, directActive = false, directUnreadCount = 0, onCreate, onDirectMessages, onHome, onSelect, workspaces }: WorkspaceLibraryProps): React.JSX.Element {
   return (
     <aside aria-label="Библиотека серверов" className="vui-workspace-library">
       <div className="vui-workspace-library__brand"><span aria-hidden="true">В</span><strong>Ватрушка</strong></div>
@@ -68,7 +67,6 @@ export function WorkspaceLibrary({ activeWorkspaceId, directActive = false, dire
       </nav>
       <div className="vui-workspace-library__actions">
         <button onClick={onCreate} type="button"><Icon name="plus" size={17} /><span>Создать сервер</span></button>
-        <button onClick={onJoin} type="button"><Icon name="link" size={17} /><span>Войти по коду</span></button>
       </div>
     </aside>
   );
@@ -173,7 +171,7 @@ export function ServerContext({ activeChannelId, canManageChannels = false, canM
     <aside aria-label="Навигация сервера" className="vui-server-context">
       <header className="vui-server-context__header">
         <div><span aria-hidden="true" className="vui-server-context__cover">{name.slice(0, 1).toUpperCase()}</span><span><strong>{name}</strong><small><Icon name="lock" size={12} />{privacyLabel}</small></span></div>
-        <span className="vui-server-context__tools"><IconButton icon="invite" label="Скопировать приглашение" onClick={onCopyInvite} size="sm" type="button" />{canManageRoles ? <IconButton icon="settings" label="Роли и права" onClick={onManageRoles} size="sm" type="button" /> : null}</span>
+        <span className="vui-server-context__tools"><IconButton icon="invite" label="Пригласить на сервер" onClick={onCopyInvite} size="sm" type="button" />{canManageRoles ? <IconButton icon="settings" label="Роли и права" onClick={onManageRoles} size="sm" type="button" /> : null}</span>
       </header>
       <div className="vui-server-context__scroll">
         <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={textChannels} onCreate={onCreateChannel} onDelete={onDeleteChannel} onSelect={onChannel} title="Текстовые каналы" type="text" />

@@ -28,6 +28,22 @@
   }
 }
 
+{$INVITE_DOMAIN:invite.example.com} {
+  encode zstd gzip
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "no-referrer"
+    -Server
+  }
+  handle /i/* {
+    reverse_proxy 127.0.0.1:3001
+  }
+  handle {
+    respond "Откройте ссылку-приглашение из приложения «Ватрушка»." 404
+  }
+}
+
 # Certbot uses this HTTP-only webroot to renew the TURN/TLS certificate.
 http://{$TURN_DOMAIN:turn.invalid} {
   root * /var/www/certbot

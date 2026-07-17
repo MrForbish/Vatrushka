@@ -464,8 +464,8 @@ export class PostgresStore implements DataStore {
     return row ?? null;
   }
 
-  async findServerByInviteCode(inviteCode: string): Promise<ServerRecord | null> {
-    const [row] = await this.db.select().from(schema.servers).where(eq(schema.servers.inviteCode, inviteCode)).limit(1);
+  async findServerByInviteToken(inviteToken: string): Promise<ServerRecord | null> {
+    const [row] = await this.db.select().from(schema.servers).where(eq(schema.servers.inviteToken, inviteToken)).limit(1);
     return row ?? null;
   }
 

@@ -34,10 +34,11 @@ describe('authentication screens', () => {
 
 describe('main screen', () => {
   it('shows user identity, server actions, audio settings, and app version', () => {
-    render(<HomePanel user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="Команда" serverInvite="ABCD2345" onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onOpenServer={noop} />);
+    render(<HomePanel user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="Команда" onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} />);
     expect(screen.getAllByText('Anna').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: /Создать сервер/u })).toBeEnabled();
-    expect(screen.getByLabelText('Код приглашения')).toHaveValue('ABCD2345');
+    expect(screen.getByRole('heading', { name: 'Вход по ссылке' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Код приглашения')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Микрофон')).toBeInTheDocument();
     expect(screen.getByLabelText('Динамики / наушники')).toBeInTheDocument();
     expect(screen.getByText('v1.2.3')).toBeInTheDocument();
@@ -50,7 +51,6 @@ describe('room UI', () => {
   const connection: RoomConnection = {
     roomId: 'room-1',
     ownerUserId: 'owner-1',
-    code: 'ABC234',
     livekitUrl: 'ws://test',
     livekitToken: 'token',
     participantIdentity: 'user_owner-1_local',
@@ -137,7 +137,7 @@ describe('server UI', () => {
   const server: ServerDetail = {
     id: 'server-1',
     name: 'Команда',
-    inviteCode: 'ABCD2345',
+    inviteUrl: 'https://myvatrushka.ru/i/ABCD2345test',
     ownerUserId: 'user-1',
     memberCount: 1,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -155,7 +155,8 @@ describe('server UI', () => {
     const onMessageDraft = vi.fn();
     const onMessageReaction = vi.fn();
     const onConnectVoice = vi.fn();
-    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', replyTo: null, reactions: [], attachments: [], createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" serverInvite="" busy={false} error={null} auditLog={[]} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={onMessageDraft} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={onConnectVoice} onCopyInvite={noop} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onUpdateRole={noop} onDeleteRole={noop} onReorderRole={noop} onAssignRoles={noop} onSetChannelOverwrite={noop} onLoadAudit={noop} onKickMember={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onSecurity={noop} onLogout={noop} />);
+    const onCopyInvite = vi.fn(async () => undefined);
+    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', replyTo: null, reactions: [], attachments: [], createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" busy={false} error={null} auditLog={[]} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={onMessageDraft} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={onConnectVoice} onCopyInvite={onCopyInvite} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onUpdateRole={noop} onDeleteRole={noop} onReorderRole={noop} onAssignRoles={noop} onSetChannelOverwrite={noop} onLoadAudit={noop} onKickMember={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onLogout={noop} />);
     expect(screen.getByText('Привет, команда!')).toBeInTheDocument();
     expect(screen.getByText('Владелец сервера')).toBeInTheDocument();
     const upload = screen.getByLabelText('Выбрать вложения');
@@ -172,13 +173,21 @@ describe('server UI', () => {
     expect(onChannel).toHaveBeenCalledWith('voice-1');
     await userEvent.dblClick(screen.getByRole('button', { name: 'Голосовой' }));
     expect(onConnectVoice).toHaveBeenCalledWith('voice-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Пригласить на сервер' }));
+    expect(screen.getByRole('dialog', { name: 'Пригласить на сервер' })).toBeInTheDocument();
+    expect(screen.getByText(server.inviteUrl)).toBeInTheDocument();
+    expect(screen.queryByText(/код приглашения/iu)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Скопировать ссылку' }));
+    expect(onCopyInvite).toHaveBeenCalledOnce();
+    expect(await screen.findByRole('status')).toHaveTextContent('Ссылка скопирована');
+    await userEvent.click(screen.getByRole('button', { name: 'Закрыть окно' }));
     await userEvent.click(screen.getByRole('button', { name: /Роли и права/u }));
     expect(screen.getByRole('heading', { name: 'Настройки сервера' })).toBeInTheDocument();
   });
 
   it('keeps the server and channel navigation visible inside a connected voice channel', async () => {
     const onChannel = vi.fn();
-    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="voice-1" connectedVoiceChannelId="voice-1" connectedVoiceServerId="server-1" voiceStage={<div>Активная голосовая сцена</div>} voiceConnectionPanel={<div>Голосовая связь подключена</div>} messages={[]} messageDraft="" serverName="" serverInvite="" busy={false} error={null} auditLog={[]} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={noop} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={noop} onCopyInvite={noop} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onUpdateRole={noop} onDeleteRole={noop} onReorderRole={noop} onAssignRoles={noop} onSetChannelOverwrite={noop} onLoadAudit={noop} onKickMember={noop} onServerName={noop} onServerInvite={noop} onCreateServer={noop} onJoinServer={noop} onSecurity={noop} onLogout={noop} />);
+    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="voice-1" connectedVoiceChannelId="voice-1" connectedVoiceServerId="server-1" voiceStage={<div>Активная голосовая сцена</div>} voiceConnectionPanel={<div>Голосовая связь подключена</div>} messages={[]} messageDraft="" serverName="" busy={false} error={null} auditLog={[]} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={noop} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={noop} onCopyInvite={noop} onCreateChannel={noop} onDeleteChannel={noop} onCreateRole={noop} onUpdateRole={noop} onDeleteRole={noop} onReorderRole={noop} onAssignRoles={noop} onSetChannelOverwrite={noop} onLoadAudit={noop} onKickMember={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onLogout={noop} />);
 
     expect(screen.getByText('Активная голосовая сцена')).toBeInTheDocument();
     expect(screen.getByText('Голосовая связь подключена')).toBeInTheDocument();

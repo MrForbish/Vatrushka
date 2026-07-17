@@ -365,7 +365,7 @@ export class MemoryStore implements DataStore {
   }
 
   async createServerGraph(graph: ServerGraph): Promise<boolean> {
-    if ([...this.servers.values()].some((server) => server.inviteCode === graph.server.inviteCode)) return false;
+    if ([...this.servers.values()].some((server) => server.inviteToken === graph.server.inviteToken)) return false;
     this.servers.set(graph.server.id, structuredClone(graph.server));
     for (const member of graph.members) this.serverMembers.set(`${member.serverId}:${member.userId}`, structuredClone(member));
     for (const role of graph.roles) this.serverRoles.set(role.id, structuredClone(role));
@@ -387,8 +387,8 @@ export class MemoryStore implements DataStore {
     return server ? structuredClone(server) : null;
   }
 
-  async findServerByInviteCode(inviteCode: string): Promise<ServerRecord | null> {
-    const server = [...this.servers.values()].find((current) => current.inviteCode === inviteCode);
+  async findServerByInviteToken(inviteToken: string): Promise<ServerRecord | null> {
+    const server = [...this.servers.values()].find((current) => current.inviteToken === inviteToken);
     return server ? structuredClone(server) : null;
   }
 

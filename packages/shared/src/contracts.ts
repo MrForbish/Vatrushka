@@ -62,7 +62,7 @@ export interface ChannelPermissionOverwrite {
 export interface ServerSummary {
   id: string;
   name: string;
-  inviteCode: string;
+  inviteUrl: string;
   ownerUserId: string;
   memberCount: number;
   createdAt: string;
@@ -288,7 +288,6 @@ export interface AuthResponse {
 export interface RoomConnection {
   roomId: string;
   ownerUserId: string;
-  code: string;
   livekitUrl: string;
   livekitToken: string;
   participantIdentity: string;
@@ -330,7 +329,7 @@ export interface DesktopBridge {
   copyToClipboard(text: string): Promise<void>;
   showMessageNotification(notification: DesktopMessageNotification): Promise<void>;
   onMessageNotificationClick(callback: (target: Pick<DesktopMessageNotification, 'serverId' | 'channelId'>) => void): () => void;
-  onDeepLink(callback: (serverInviteCode: string) => void): () => void;
+  onDeepLink(callback: (inviteToken: string) => void): () => void;
   getPlatform(): Promise<string>;
   getLocalSettings(): Promise<LocalSettings>;
   updateLocalSettings(settings: LocalSettings): Promise<void>;

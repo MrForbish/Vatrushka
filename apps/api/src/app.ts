@@ -27,7 +27,7 @@ import {
   createServerSchema,
   createApiError,
   errorMessages,
-  joinServerSchema,
+  inviteTokenSchema,
   messageQuerySchema,
   messageNotificationQuerySchema,
   messageReactionSchema,
@@ -63,6 +63,7 @@ const messageReactionParams = z.object({ messageId: z.uuid(), emoji: messageReac
 const channelParticipantParams = z.object({ channelId: z.uuid(), participantIdentity: z.string().min(3).max(200) });
 const channelOverwriteParams = z.object({ channelId: z.uuid(), targetType: z.enum(['ROLE', 'MEMBER']), targetId: z.uuid() });
 const authSessionParams = z.object({ sessionId: z.uuid() });
+const inviteTokenParams = z.object({ inviteToken: inviteTokenSchema });
 
 const errorResponseSchema = z.object({
   code: z.string(),
@@ -105,7 +106,6 @@ const securityEventResponseSchema = z.object({
 const connectionSchema = z.object({
   roomId: z.string(),
   ownerUserId: z.string(),
-  code: z.string(),
   livekitUrl: z.string(),
   livekitToken: z.string(),
   participantIdentity: z.string(),
@@ -123,7 +123,7 @@ const serverRoleResponseSchema = z.object({ id: z.string(), serverId: z.string()
 const permissionOverwriteResponseSchema = z.object({ channelId: z.string(), targetType: z.enum(['ROLE', 'MEMBER']), targetId: z.string(), allow: z.array(permissionSchema), deny: z.array(permissionSchema) });
 const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), unreadCount: z.number(), permissions: z.array(permissionSchema).optional(), permissionOverwrites: z.array(permissionOverwriteResponseSchema).optional() });
 const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema) });
-const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteCode: z.string(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
+const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteUrl: z.url(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
 const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
 const serverAuditLogResponseSchema = z.object({ id: z.string(), serverId: z.string(), actorUserId: z.string().nullable(), actorDisplayName: z.string(), action: z.string(), targetType: z.string(), targetId: z.string().nullable(), before: z.unknown(), after: z.unknown(), createdAt: z.string() });
 const messageAttachmentResponseSchema = z.object({ id: z.string(), messageId: z.string(), fileName: z.string(), mimeType: z.string(), size: z.number(), createdAt: z.string() });
@@ -258,6 +258,11 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     }
   });
 
+  api.get('/i/:inviteToken', {
+    config: { rateLimit: { max: 60, timeWindow: '1 minute' } },
+    schema: { params: inviteTokenParams },
+  }, (request, reply) => reply.status(302).header('Cache-Control', 'no-store').header('Location', `${config.APP_PROTOCOL}://invite/${request.params.inviteToken}`).send());
+
   api.post(`${API_PREFIX}/auth/register/request-code`, {
     config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
     schema: {
@@ -372,9 +377,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     schema: { tags: ['servers'], security: [{ bearerAuth: [] }], body: createServerSchema, response: { 201: serverDetailResponseSchema, ...routeErrors() } },
   }, async (request, reply) => reply.status(201).send(await service.createServer(request.headers.authorization, request.body.name)));
 
-  api.post(`${API_PREFIX}/servers/join`, {
-    schema: { tags: ['servers'], security: [{ bearerAuth: [] }], body: joinServerSchema, response: { 200: serverDetailResponseSchema, ...routeErrors() } },
-  }, async (request) => service.joinServer(request.headers.authorization, request.body.inviteCode));
+  api.post(`${API_PREFIX}/invites/:inviteToken/accept`, {
+    schema: { tags: ['servers'], security: [{ bearerAuth: [] }], params: inviteTokenParams, response: { 200: serverDetailResponseSchema, ...routeErrors() } },
+  }, async (request) => service.acceptServerInvite(request.headers.authorization, request.params.inviteToken));
 
   api.get(`${API_PREFIX}/servers/:serverId`, {
     schema: { tags: ['servers'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: serverDetailResponseSchema, ...routeErrors() } },

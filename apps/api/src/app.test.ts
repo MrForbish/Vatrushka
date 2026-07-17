@@ -22,6 +22,12 @@ interface TestContext {
 
 let context: TestContext;
 
+function inviteTokenFromUrl(inviteUrl: string): string {
+  const token = new URL(inviteUrl).pathname.split('/').filter(Boolean).at(-1);
+  if (!token) throw new Error('Missing invite token');
+  return token;
+}
+
 async function makeContext(): Promise<TestContext> {
   const store = new MemoryStore();
   const mailer = new FakeMailer();
@@ -409,7 +415,7 @@ describe('retired standalone room API', () => {
 });
 
 describe('servers, channels, messages, and roles API', () => {
-  it('creates a server with default channels and lets another user join by invite', async () => {
+  it('creates a server and lets another user join through its short invite link', async () => {
     const owner = await login('community-owner@example.com', 'Owner');
     const created = await context.app.inject({
       method: 'POST',
@@ -418,8 +424,14 @@ describe('servers, channels, messages, and roles API', () => {
       payload: { name: 'Тёплая компания' },
     });
     expect(created.statusCode).toBe(201);
-    const server = created.json<{ id: string; inviteCode: string; channels: Array<{ name: string; type: string }>; permissions: string[] }>();
-    expect(server.inviteCode).toMatch(/^[A-Z2-9]{8}$/u);
+    const server = created.json<{ id: string; inviteUrl: string; channels: Array<{ name: string; type: string }>; permissions: string[] }>();
+    expect(server.inviteUrl).toMatch(/^http:\/\/localhost:3000\/i\/[A-Za-z0-9_-]{8,32}$/u);
+    expect(created.json()).not.toHaveProperty('inviteCode');
+    const inviteToken = inviteTokenFromUrl(server.inviteUrl);
+    const redirect = await context.app.inject({ method: 'GET', url: `/i/${inviteToken}` });
+    expect(redirect.statusCode).toBe(302);
+    expect(redirect.headers.location).toBe(`vatrushka://invite/${inviteToken}`);
+    expect(redirect.headers['cache-control']).toBe('no-store');
     expect(server.channels).toEqual(expect.arrayContaining([
       expect.objectContaining({ name: 'общий', type: 'text' }),
       expect.objectContaining({ name: 'Голосовой', type: 'voice' }),
@@ -429,13 +441,17 @@ describe('servers, channels, messages, and roles API', () => {
     const member = await login('community-member@example.com', 'Member');
     const joined = await context.app.inject({
       method: 'POST',
-      url: `${API_PREFIX}/servers/join`,
+      url: `${API_PREFIX}/invites/${inviteToken}/accept`,
       headers: { authorization: `Bearer ${member.accessToken}` },
-      payload: { inviteCode: server.inviteCode },
     });
     expect(joined.statusCode).toBe(200);
     expect(joined.json<{ memberCount: number; permissions: string[] }>().memberCount).toBe(2);
     expect(joined.json<{ permissions: string[] }>().permissions).toContain('SEND_MESSAGES');
+    const reopened = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteToken}/accept`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(reopened.statusCode).toBe(200);
+    expect(reopened.json<{ memberCount: number }>().memberCount).toBe(2);
+    const retiredCodeJoin = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/join`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { inviteCode: inviteToken } });
+    expect(retiredCodeJoin.statusCode).toBe(404);
 
     const list = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(list.statusCode).toBe(200);
@@ -455,8 +471,8 @@ describe('servers, channels, messages, and roles API', () => {
     const owner = await login('role-owner@example.com', 'Owner');
     const member = await login('role-member@example.com', 'Member');
     const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Редакция' } });
-    const server = created.json<{ id: string; inviteCode: string; channels: Array<{ id: string; type: string }>; roles: Array<{ id: string; isDefault: boolean }> }>();
-    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/join`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { inviteCode: server.inviteCode } });
+    const server = created.json<{ id: string; inviteUrl: string; channels: Array<{ id: string; type: string }>; roles: Array<{ id: string; isDefault: boolean }> }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteTokenFromUrl(server.inviteUrl)}/accept`, headers: { authorization: `Bearer ${member.accessToken}` } });
     const textChannel = server.channels.find((channel) => channel.type === 'text');
     const defaultRole = server.roles.find((role) => role.isDefault);
     if (!textChannel || !defaultRole) throw new Error('Missing default server graph');
@@ -621,8 +637,8 @@ describe('servers, channels, messages, and roles API', () => {
     const owner = await login('voice-owner@example.com', 'Owner');
     const member = await login('voice-member@example.com', 'Member');
     const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Эфирная' } });
-    const server = created.json<{ id: string; inviteCode: string; channels: Array<{ id: string; type: string }> }>();
-    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/join`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { inviteCode: server.inviteCode } });
+    const server = created.json<{ id: string; inviteUrl: string; channels: Array<{ id: string; type: string }> }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteTokenFromUrl(server.inviteUrl)}/accept`, headers: { authorization: `Bearer ${member.accessToken}` } });
     const voice = server.channels.find((channel) => channel.type === 'voice');
     if (!voice) throw new Error('Missing voice channel');
     const connected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/connect`, headers: { authorization: `Bearer ${owner.accessToken}` } });
@@ -666,8 +682,8 @@ describe('servers, channels, messages, and roles API', () => {
     expect(deniedWithoutSharedServer.statusCode).toBe(403);
 
     const createdServer = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { name: 'DM community' } });
-    const server = createdServer.json<{ inviteCode: string }>();
-    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/join`, headers: { authorization: `Bearer ${boris.accessToken}` }, payload: { inviteCode: server.inviteCode } });
+    const server = createdServer.json<{ inviteUrl: string }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteTokenFromUrl(server.inviteUrl)}/accept`, headers: { authorization: `Bearer ${boris.accessToken}` } });
 
     const candidates = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-conversations/candidates`, headers: { authorization: `Bearer ${anna.accessToken}` } });
     expect(candidates.statusCode).toBe(200);
@@ -729,8 +745,8 @@ describe('servers, channels, messages, and roles API', () => {
     const owner = await login('permissions-owner@example.com', 'Owner');
     const member = await login('permissions-member@example.com', 'Member');
     const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Закрытый клуб' } });
-    const server = created.json<{ id: string; inviteCode: string; channels: Array<{ id: string; type: string }>; roles: Array<{ id: string; kind: string }> }>();
-    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/join`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { inviteCode: server.inviteCode } });
+    const server = created.json<{ id: string; inviteUrl: string; channels: Array<{ id: string; type: string }>; roles: Array<{ id: string; kind: string }> }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteTokenFromUrl(server.inviteUrl)}/accept`, headers: { authorization: `Bearer ${member.accessToken}` } });
     const channel = server.channels.find((candidate) => candidate.type === 'text');
     if (!channel) throw new Error('Text channel was not created');
 

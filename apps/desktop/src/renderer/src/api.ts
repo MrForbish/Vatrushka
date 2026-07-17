@@ -156,8 +156,8 @@ export class ApiClient {
     return this.request('/servers', { method: 'POST', body: { name }, auth: true });
   }
 
-  joinServer(inviteCode: string): Promise<ServerDetail> {
-    return this.request('/servers/join', { method: 'POST', body: { inviteCode }, auth: true });
+  acceptServerInvite(inviteToken: string): Promise<ServerDetail> {
+    return this.request(`/invites/${encodeURIComponent(inviteToken)}/accept`, { method: 'POST', auth: true });
   }
 
   getServer(serverId: string): Promise<ServerDetail> {

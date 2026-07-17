@@ -132,13 +132,13 @@ npm run db:studio
 
 ### Deep link в development
 
-После запуска `npm run dev:desktop` протокол регистрируется для текущего пользователя. Проверка из PowerShell:
+После запуска `npm run dev:desktop` протокол регистрируется для текущего пользователя. Кнопка приглашения показывает только короткую HTTPS-ссылку вида `https://myvatrushka.ru/i/<token>`; ручного ввода кода нет. Для прямой проверки зарегистрированного протокола используйте токен из ссылки созданного сервера:
 
 ```powershell
-Start-Process 'vatrushka://server/ABCD2345'
+Start-Process 'vatrushka://invite/ABCD2345test'
 ```
 
-Приложение использует single-instance lock, валидирует protocol/host/code и передаёт только нормализованный код существующему окну.
+Приложение использует single-instance lock, валидирует protocol/host/token и передаёт только непрозрачный invite token существующему окну. После авторизации ссылка автоматически добавляет и открывает сервер; для уже состоящего участника она просто открывает его повторно.
 
 ## LiveKit Cloud
 
@@ -161,8 +161,9 @@ Self-hosted режим описан в [docs/self-hosted-livekit.md](docs/self-h
 git clone <repository> /opt/vatrushka
 cd /opt/vatrushka
 cp .env.example .env
-# направить DNS api.example.com на IP сервера и заполнить .env
-# NODE_ENV=production, DOMAIN=api.example.com, PUBLIC_API_URL=https://api.example.com
+# направить DNS example.com и api.example.com на IP сервера и заполнить .env
+# NODE_ENV=production, DOMAIN=api.example.com, INVITE_DOMAIN=example.com
+# PUBLIC_API_URL=https://api.example.com, PUBLIC_INVITE_URL=https://example.com
 # удалить DEV_FIXED_OTP, указать SMTP_* и LIVEKIT_*
 # сгенерировать ACCESS_TOKEN_SECRET и OTP_PEPPER: openssl rand -hex 32
 mkdir -p updates
@@ -183,7 +184,7 @@ API наружу не публикуется напрямую; доступен 
 
 | Группа | Переменные |
 |---|---|
-| Process | `NODE_ENV`, `HOST`, `PORT`, `LOG_LEVEL`, `PUBLIC_API_URL` |
+| Process | `NODE_ENV`, `HOST`, `PORT`, `LOG_LEVEL`, `PUBLIC_API_URL`, `PUBLIC_INVITE_URL` |
 | Product | `APP_NAME`, `APP_PROTOCOL`, `PLATFORM_OWNER_EMAIL` |
 | Database | `DATABASE_URL`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` |
 | Tokens | `ACCESS_TOKEN_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`, `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS` |
@@ -191,7 +192,7 @@ API наружу не публикуется напрямую; доступен 
 | SMTP | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` |
 | LiveKit | `LIVEKIT_URL`, `LIVEKIT_HTTP_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
 | Media coordination | `SCREEN_SHARE_LEASE_SECONDS`, `SCREEN_SHARE_HEARTBEAT_SECONDS` |
-| Network | `CORS_ALLOWED_ORIGINS`, `DOMAIN`, `LIVEKIT_DOMAIN`, `TURN_DOMAIN` |
+| Network | `CORS_ALLOWED_ORIGINS`, `DOMAIN`, `INVITE_DOMAIN`, `LIVEKIT_DOMAIN`, `TURN_DOMAIN` |
 | Desktop public | `VITE_PUBLIC_API_BASE_URL` |
 
 Production API отклоняет development secrets и `DEV_FIXED_OTP`; обязательные настройки валидируются Zod до открытия порта.

@@ -92,7 +92,7 @@ export interface LeaseRecord {
 export interface ServerRecord {
   id: string;
   name: string;
-  inviteCode: string;
+  inviteToken: string;
   ownerUserId: string;
   createdAt: Date;
   updatedAt: Date;

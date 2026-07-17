@@ -18,7 +18,6 @@ const meta = {
     onSelect: fn(),
     onHome: fn(),
     onCreate: fn(),
-    onJoin: fn(),
   },
   decorators: [(Story) => <div style={{ width: 220, height: 680 }}><Story /></div>],
 } satisfies Meta<typeof WorkspaceLibrary>;

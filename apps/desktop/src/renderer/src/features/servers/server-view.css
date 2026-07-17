@@ -9,6 +9,12 @@
 .vui-server-form .vui-field,
 .vui-server-form .vui-input-frame { width: 100%; min-width: 0; }
 .vui-server-form__actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
+.vui-server-invite { display: grid; gap: var(--space-3); }
+.vui-server-invite > span { color: var(--color-text-secondary); font: var(--text-label-md); }
+.vui-server-invite code { overflow-wrap: anywhere; padding: var(--space-4); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-1); color: var(--color-cyan); font: var(--text-mono-sm); user-select: all; }
+.vui-server-invite p { margin: 0; color: var(--color-text-muted); font: var(--text-body-md); line-height: 1.5; }
+.vui-server-invite strong { display: flex; align-items: center; gap: var(--space-2); color: var(--color-success); font: var(--text-label-md); }
+.vui-server-invite .vui-server-invite__error { color: var(--color-danger); }
 .vui-role-editor { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: var(--space-6); }
 .vui-role-editor h3 { margin: 0 0 var(--space-3); font: var(--text-heading-sm); }
 .vui-role-editor > section { min-width: 0; }

@@ -89,7 +89,7 @@ export interface DataStore {
   createServerGraph(graph: ServerGraph): Promise<boolean>;
   listServersForUser(userId: string): Promise<ServerWithMemberCount[]>;
   findServerById(id: string): Promise<ServerRecord | null>;
-  findServerByInviteCode(inviteCode: string): Promise<ServerRecord | null>;
+  findServerByInviteToken(inviteToken: string): Promise<ServerRecord | null>;
   findServerMember(serverId: string, userId: string): Promise<ServerMemberRecord | null>;
   addServerMember(member: ServerMemberRecord): Promise<boolean>;
   removeServerMember(serverId: string, userId: string): Promise<boolean>;

@@ -10,7 +10,7 @@ import { ServerSettings } from './ServerSettings';
 const server: ServerDetail = {
   id: 'server-1',
   name: 'Космодром',
-  inviteCode: 'SPACE123',
+  inviteUrl: 'https://myvatrushka.ru/i/SPACE123test',
   ownerUserId: 'user-owner',
   memberCount: 2,
   createdAt: '2026-01-01T00:00:00.000Z',

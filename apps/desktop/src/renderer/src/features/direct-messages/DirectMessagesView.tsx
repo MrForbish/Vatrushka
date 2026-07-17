@@ -39,7 +39,6 @@ export interface DirectMessagesViewProps {
   messages: DirectMessage[];
   messageDraft: string;
   serverName: string;
-  serverInvite: string;
   busy: boolean;
   error: string | null;
   onHome(): void;
@@ -54,9 +53,7 @@ export interface DirectMessagesViewProps {
   onDeleteAttachment(attachmentId: string): void;
   onDownloadAttachment(attachmentId: string, fileName: string): void;
   onServerName(value: string): void;
-  onServerInvite(value: string): void;
   onCreateServer(): void;
-  onJoinServer(): void;
   onSecurity(): void;
   onLogout(): void;
 }
@@ -72,7 +69,7 @@ function conversationPreview(conversation: DirectConversationSummary): string {
 export function DirectMessagesView(props: DirectMessagesViewProps): React.JSX.Element {
   const [newConversationOpen, setNewConversationOpen] = useState(false);
   const [candidateId, setCandidateId] = useState('');
-  const [serverAction, setServerAction] = useState<'create' | 'join' | null>(null);
+  const [serverCreateOpen, setServerCreateOpen] = useState(false);
   const [editingMessage, setEditingMessage] = useState<MessageViewModel | null>(null);
   const [replyingMessage, setReplyingMessage] = useState<MessageViewModel | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<Array<{ id: string; file: File }>>([]);
@@ -114,11 +111,10 @@ export function DirectMessagesView(props: DirectMessagesViewProps): React.JSX.El
     setCandidateId('');
     setNewConversationOpen(false);
   };
-  const submitServerAction = (event: FormEvent): void => {
+  const submitServerCreate = (event: FormEvent): void => {
     event.preventDefault();
-    if (serverAction === 'create') props.onCreateServer();
-    if (serverAction === 'join') props.onJoinServer();
-    setServerAction(null);
+    props.onCreateServer();
+    setServerCreateOpen(false);
   };
 
   const workspaces: WorkspaceNavigationItem[] = props.servers.map((server) => ({ id: server.id, name: server.name, memberCount: server.memberCount }));
@@ -139,7 +135,7 @@ export function DirectMessagesView(props: DirectMessagesViewProps): React.JSX.El
     ...(message.authorPlatformRole === 'owner' ? { authorBadge: 'founder' as const } : message.authorPlatformRole === 'admin' ? { authorBadge: 'admin' as const } : {}),
   }));
 
-  const workspaceLibrary = <WorkspaceLibrary directActive directUnreadCount={totalUnread} onCreate={() => setServerAction('create')} onDirectMessages={() => undefined} onHome={props.onHome} onJoin={() => setServerAction('join')} onSelect={props.onSwitchServer} workspaces={workspaces} />;
+  const workspaceLibrary = <WorkspaceLibrary directActive directUnreadCount={totalUnread} onCreate={() => setServerCreateOpen(true)} onDirectMessages={() => undefined} onHome={props.onHome} onSelect={props.onSwitchServer} workspaces={workspaces} />;
   const conversationList = (
     <aside aria-label="Личные диалоги" className="vui-direct-context">
       <header><span><strong>Личные сообщения</strong><small>{props.conversations.length} диалогов</small></span><Button icon="plus" onClick={() => setNewConversationOpen(true)} size="sm" type="button">Новый</Button></header>
@@ -166,8 +162,8 @@ export function DirectMessagesView(props: DirectMessagesViewProps): React.JSX.El
         <form className="vui-direct-form" onSubmit={submitConversation}><Select autoFocus label="Участник общего сервера" onChange={(event) => setCandidateId(event.target.value)} options={[{ value: '', label: 'Выберите участника' }, ...props.candidates.map((candidate) => ({ value: candidate.userId, label: `${candidate.displayName} · ${candidate.sharedServerNames.join(', ')}` }))]} value={candidateId} /><p>Начать диалог можно только с участником хотя бы одного общего сервера.</p><div><Button onClick={() => setNewConversationOpen(false)} type="button" variant="quiet">Отмена</Button><Button disabled={candidateId === ''} loading={props.busy} type="submit">Открыть диалог</Button></div></form>
       </Modal>
 
-      <Modal onClose={() => setServerAction(null)} open={serverAction !== null} title={serverAction === 'create' ? 'Новый сервер' : 'Войти на сервер'}>
-        <form className="vui-direct-form" onSubmit={submitServerAction}>{serverAction === 'create' ? <Input autoFocus label="Название сервера" maxLength={60} onChange={(event) => props.onServerName(event.target.value)} value={props.serverName} /> : <Input autoFocus label="Код приглашения" maxLength={12} onChange={(event) => props.onServerInvite(event.target.value.toUpperCase())} value={props.serverInvite} />}<div><Button onClick={() => setServerAction(null)} type="button" variant="quiet">Отмена</Button><Button loading={props.busy} type="submit">{serverAction === 'create' ? 'Создать' : 'Войти'}</Button></div></form>
+      <Modal onClose={() => setServerCreateOpen(false)} open={serverCreateOpen} title="Новый сервер">
+        <form className="vui-direct-form" onSubmit={submitServerCreate}><Input autoFocus label="Название сервера" maxLength={60} onChange={(event) => props.onServerName(event.target.value)} value={props.serverName} /><div><Button onClick={() => setServerCreateOpen(false)} type="button" variant="quiet">Отмена</Button><Button loading={props.busy} type="submit">Создать</Button></div></form>
       </Modal>
     </>
   );

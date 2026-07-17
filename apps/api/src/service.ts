@@ -101,13 +101,6 @@ const DEFAULT_SERVER_PERMISSIONS: ServerPermission[] = [
   'MANAGE_INVITES',
 ];
 
-const SERVER_INVITE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-
-function generateServerInviteCode(): string {
-  const bytes = randomBytes(8);
-  return [...bytes].map((byte) => SERVER_INVITE_ALPHABET[byte % SERVER_INVITE_ALPHABET.length]).join('');
-}
-
 function publicServerRole(role: ServerRoleRecord): ServerRole {
   return { id: role.id, serverId: role.serverId, name: role.name, color: role.color, position: role.position, isDefault: role.isDefault, kind: role.kind, permissions: role.permissions };
 }
@@ -201,6 +194,10 @@ export class VatrushkaService {
 
   now(): Date {
     return this.clock();
+  }
+
+  inviteUrl(inviteToken: string): string {
+    return new URL(`/i/${encodeURIComponent(inviteToken)}`, this.config.PUBLIC_INVITE_URL).toString();
   }
 
   async requestRegistration(email: string, password: string): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
@@ -450,7 +447,7 @@ export class VatrushkaService {
     return (await this.store.listServersForUser(user.id)).map((server) => ({
       id: server.id,
       name: server.name,
-      inviteCode: server.inviteCode,
+      inviteUrl: this.inviteUrl(server.inviteToken),
       ownerUserId: server.ownerUserId,
       memberCount: server.memberCount,
       createdAt: server.createdAt.toISOString(),
@@ -463,7 +460,7 @@ export class VatrushkaService {
     const now = this.now();
     let server: ServerRecord | null = null;
     for (let attempt = 0; attempt < 10 && !server; attempt += 1) {
-      const candidate: ServerRecord = { id: randomUUID(), name, inviteCode: generateServerInviteCode(), ownerUserId: user.id, createdAt: now, updatedAt: now };
+      const candidate: ServerRecord = { id: randomUUID(), name, inviteToken: randomOpaqueToken(9), ownerUserId: user.id, createdAt: now, updatedAt: now };
       const everyone: ServerRoleRecord = {
         id: randomUUID(), serverId: candidate.id, name: '@everyone', color: '#8d7a72', position: 0, isDefault: true,
         kind: 'EVERYONE',
@@ -492,13 +489,14 @@ export class VatrushkaService {
     return this.getServerDetailForUser(server, user);
   }
 
-  async joinServer(authorization: string | undefined, inviteCode: string): Promise<ServerDetail> {
+  async acceptServerInvite(authorization: string | undefined, inviteToken: string): Promise<ServerDetail> {
     const user = await this.authenticate(authorization);
     this.requireCompleteProfile(user);
-    const server = await this.store.findServerByInviteCode(inviteCode);
+    const server = await this.store.findServerByInviteToken(inviteToken);
     if (!server) throw new AppError('SERVER_NOT_FOUND', 404);
-    if (await this.store.findServerMember(server.id, user.id)) throw new AppError('ALREADY_SERVER_MEMBER', 409);
-    await this.store.addServerMember({ serverId: server.id, userId: user.id, joinedAt: this.now() });
+    if (!await this.store.findServerMember(server.id, user.id)) {
+      await this.store.addServerMember({ serverId: server.id, userId: user.id, joinedAt: this.now() });
+    }
     return this.getServerDetailForUser(server, user);
   }
 
@@ -1045,7 +1043,6 @@ export class VatrushkaService {
       return {
         roomId: channel.id,
         ownerUserId: server.ownerUserId,
-        code: server.inviteCode,
         livekitUrl: this.config.LIVEKIT_URL,
         livekitToken: token,
         participantIdentity: identity,
@@ -1349,7 +1346,7 @@ export class VatrushkaService {
     return {
       id: server.id,
       name: server.name,
-      inviteCode: server.inviteCode,
+      inviteUrl: this.inviteUrl(server.inviteToken),
       ownerUserId: server.ownerUserId,
       memberCount: members.length,
       createdAt: server.createdAt.toISOString(),

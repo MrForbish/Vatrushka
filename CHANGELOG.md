@@ -2,6 +2,25 @@
 
 All notable changes to Vatrushka are documented here. The project follows semantic versioning for desktop and API release artifacts.
 
+## [0.4.3] - 2026-07-17
+
+### Changed
+
+- server invitations are now short HTTPS links on `myvatrushka.ru`; the desktop client accepts them automatically after authentication;
+- the invite button opens a styled dialog with the link, copy progress, success confirmation and an explicit clipboard error;
+- opening an invite for a server the user already belongs to now opens that server instead of returning a conflict.
+
+### Removed
+
+- manual invite-code fields and “Войти по коду” actions from Home, server and direct-message navigation;
+- the public `POST /api/v1/servers/join` contract and invite codes from server/voice responses;
+- the former `vatrushka://server/<code>` deep-link format.
+
+### Operations
+
+- production requires `PUBLIC_INVITE_URL` for API link generation and `INVITE_DOMAIN` for the dedicated Caddy TLS site;
+- no database migration is required: existing opaque invite identifiers remain valid as link tokens.
+
 ## [0.4.2] - 2026-07-17
 
 ### Changed

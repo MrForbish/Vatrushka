@@ -62,11 +62,10 @@ export const screenShareActionSchema = z
 export const serverNameSchema = z.string().trim().min(2).max(60).refine((value) => !controlCharacterPattern.test(value));
 export const channelNameSchema = z.string().trim().toLowerCase().min(1).max(50).regex(/^[\p{L}\p{N}_ -]+$/u);
 export const roleNameSchema = z.string().trim().min(1).max(40).refine((value) => !controlCharacterPattern.test(value));
-export const serverInviteCodeSchema = z.string().trim().toUpperCase().regex(/^[A-Z2-9]{8}$/u);
+export const inviteTokenSchema = z.string().trim().regex(/^[A-Za-z0-9_-]{8,32}$/u);
 export const messageContentSchema = z.string().trim().min(1).max(4_000).refine((value) => !controlCharacterPattern.test(value));
 export const messageReactionSchema = z.string().trim().min(1).max(32).refine((value) => !controlCharacterPattern.test(value));
 export const createServerSchema = z.object({ name: serverNameSchema }).strict();
-export const joinServerSchema = z.object({ inviteCode: serverInviteCodeSchema }).strict();
 export const createChannelSchema = z.object({ name: channelNameSchema, type: z.enum(['text', 'voice']) }).strict();
 export const createRoleSchema = z.object({
   name: roleNameSchema,

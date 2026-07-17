@@ -89,12 +89,12 @@ export const servers = pgTable(
   {
     id: uuid('id').primaryKey(),
     name: text('name').notNull(),
-    inviteCode: text('invite_code').notNull(),
+    inviteToken: text('invite_code').notNull(),
     ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },
-  (table) => [uniqueIndex('servers_invite_code_unique').on(table.inviteCode), index('servers_owner_idx').on(table.ownerUserId)],
+  (table) => [uniqueIndex('servers_invite_code_unique').on(table.inviteToken), index('servers_owner_idx').on(table.ownerUserId)],
 );
 
 export const serverMembers = pgTable(

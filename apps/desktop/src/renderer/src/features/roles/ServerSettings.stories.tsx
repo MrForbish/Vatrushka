@@ -6,7 +6,7 @@ import { serverPermissions, type ServerDetail, type ServerPermission } from '@va
 import { ServerSettings } from './ServerSettings';
 
 const server: ServerDetail = {
-  id: 'server-1', name: 'Космодром', inviteCode: 'SPACE123', ownerUserId: 'user-owner', memberCount: 4, createdAt: '2026-07-01T00:00:00.000Z', permissions: [...serverPermissions],
+  id: 'server-1', name: 'Космодром', inviteUrl: 'https://myvatrushka.ru/i/SPACE123test', ownerUserId: 'user-owner', memberCount: 4, createdAt: '2026-07-01T00:00:00.000Z', permissions: [...serverPermissions],
   roles: [
     { id: 'role-owner', serverId: 'server-1', name: 'Владелец', color: '#f0b35b', position: 100, isDefault: true, kind: 'OWNER', permissions: [...serverPermissions] },
     { id: 'role-moderator', serverId: 'server-1', name: 'Модератор', color: '#d77b63', position: 20, isDefault: false, kind: 'CUSTOM', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'SEND_ATTACHMENTS', 'ADD_REACTIONS', 'MANAGE_OWN_MESSAGES', 'CONNECT_VOICE', 'SPEAK', 'KICK_MEMBERS', 'MANAGE_MESSAGES'] },

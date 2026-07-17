@@ -149,10 +149,46 @@ test('revokes another device without exposing its refresh token to the renderer'
   await expect(remote).toHaveCount(0);
 });
 
-test('accepts a validated server invite deep link at startup without exposing a guest room flow', async () => {
-  application = await electron.launch({ args: ['.', 'vatrushka://server/ABCD2345', '--user-data-dir=.e2e-user-data-link'], cwd: process.cwd(), env: electronEnvironment() });
-  expect(await application.evaluate(() => process.argv)).toContain('vatrushka://server/ABCD2345');
+test('accepts a validated invite link after authentication without exposing a manual code or guest flow', async () => {
+  const inviteToken = 'ABCD2345test';
+  let inviteAccepted = false;
+  const server = {
+    id: 'server-from-invite', name: 'Сервер по ссылке', inviteUrl: `http://localhost:3000/i/${inviteToken}`, ownerUserId: 'owner-user', memberCount: 2, createdAt: '2026-07-17T10:00:00.000Z',
+    permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'CONNECT_VOICE'],
+    channels: [{ id: 'text-from-invite', serverId: 'server-from-invite', name: 'общий', type: 'text', position: 0, unreadCount: 0, permissions: ['VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES'] }],
+    roles: [],
+    members: [],
+  };
+  apiServer = createServer((request, response) => {
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    response.setHeader('Content-Type', 'application/json');
+    if (request.method === 'OPTIONS') { response.statusCode = 204; response.end(); return; }
+    const url = new URL(request.url ?? '/', 'http://localhost:3000');
+    if (request.method === 'POST' && url.pathname === '/api/v1/auth/password/begin') { response.end(JSON.stringify({ status: 'SECOND_FACTOR_REQUIRED', factor: 'email', retryAfterSeconds: 60 })); return; }
+    if (request.method === 'POST' && url.pathname === '/api/v1/auth/password/complete') { response.end(JSON.stringify({ accessToken: 'invite-access-token-for-e2e-user', refreshToken: 'invite-refresh-token-for-e2e-user-1234567890', expiresIn: 900, user: { id: 'invite-user', email: 'invitee@myvatrushka.ru', displayName: 'Гость по ссылке', platformRole: 'member', hasPassword: true, twoFactorEnabled: true } })); return; }
+    if (request.method === 'POST' && url.pathname === `/api/v1/invites/${inviteToken}/accept`) { inviteAccepted = true; response.end(JSON.stringify(server)); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/servers') { response.end(JSON.stringify(inviteAccepted ? [server] : [])); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/notifications/messages') { response.end(JSON.stringify({ items: [], cursor: null })); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/channels/text-from-invite/messages') { response.end('[]'); return; }
+    if (request.method === 'POST' && url.pathname === '/api/v1/channels/text-from-invite/read') { response.statusCode = 204; response.end(); return; }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ code: 'NOT_FOUND' }));
+  });
+  await new Promise<void>((resolve, reject) => apiServer?.listen(3000, () => resolve()).once('error', reject));
+
+  application = await electron.launch({ args: ['.', 'vatrushka://invite/ABCD2345test', '--user-data-dir=.e2e-user-data-link'], cwd: process.cwd(), env: electronEnvironment() });
+  expect(await application.evaluate(() => process.argv)).toContain('vatrushka://invite/ABCD2345test');
   const window = await application.firstWindow();
   await expect(window.getByRole('heading', { name: 'С возвращением' })).toBeVisible();
   await expect(window.getByText(/Гостевой вход/u)).toHaveCount(0);
+  await expect(window.getByText(/Код приглашения/u)).toHaveCount(0);
+  await window.getByRole('textbox', { name: 'Email' }).fill('invitee@myvatrushka.ru');
+  await window.getByRole('textbox', { name: 'Пароль', exact: true }).fill('secure-vatrushka-42');
+  await window.getByRole('button', { name: /Продолжить/u }).click();
+  await window.getByLabel('Код из письма').fill('123456');
+  await window.getByRole('button', { name: /Подтвердить вход/u }).click();
+  await expect(window.getByText('Сервер по ссылке').first()).toBeVisible();
+  await expect(window.getByRole('button', { name: 'общий' })).toBeVisible();
+  expect(inviteAccepted).toBe(true);
 });

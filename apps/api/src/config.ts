@@ -23,6 +23,7 @@ const envSchema = z
     HOST: z.string().default('0.0.0.0'),
     PORT: z.coerce.number().int().min(1).max(65_535).default(3000),
     PUBLIC_API_URL: z.url().default('http://localhost:3000'),
+    PUBLIC_INVITE_URL: z.url().default('http://localhost:3000'),
     APP_NAME: z.string().min(1).default(APP_NAME),
     APP_PROTOCOL: z.string().regex(/^[a-z][a-z0-9+.-]+$/).default(APP_PROTOCOL),
     PLATFORM_OWNER_EMAIL: z.string().trim().toLowerCase().email().optional().or(z.literal('')),
@@ -71,6 +72,8 @@ const envSchema = z
       if (env.ACCESS_TOKEN_SECRET.startsWith('development-') || env.CREDENTIAL_ENCRYPTION_KEY.startsWith('development-') || env.OTP_PEPPER.startsWith('development-')) {
         context.addIssue({ code: 'custom', message: 'Development secrets are forbidden in production' });
       }
+      if (new URL(env.PUBLIC_API_URL).protocol !== 'https:') context.addIssue({ code: 'custom', path: ['PUBLIC_API_URL'], message: 'PUBLIC_API_URL must use HTTPS in production' });
+      if (new URL(env.PUBLIC_INVITE_URL).protocol !== 'https:') context.addIssue({ code: 'custom', path: ['PUBLIC_INVITE_URL'], message: 'PUBLIC_INVITE_URL must use HTTPS in production' });
       if (env.DEV_FIXED_OTP) context.addIssue({ code: 'custom', path: ['DEV_FIXED_OTP'], message: 'DEV_FIXED_OTP is forbidden in production' });
     }
   });
