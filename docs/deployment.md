@@ -1,5 +1,9 @@
 # Deployment runbook
 
+## Каноническая рабочая копия
+
+Production Compose запускается из `/opt/vatrushka`: именно этот путь указан в labels активных контейнеров, принадлежит пользователю `codex` и используется для deploy. Вторую копию `/root/Vatrushka` нельзя обновлять или использовать параллельно. Перед её удалением root должен проверить `git status --short` и последний commit; уникальные изменения необходимо сохранить отдельной веткой либо patch-файлом.
+
 ## LiveKit Cloud mode
 
 1. Ubuntu 22.04/24.04, Docker Engine, Compose v2, public IPv4.
@@ -22,6 +26,31 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
 ```
 
 Backup PostgreSQL выполняйте до обновления schema/image. Миграция `0012_remove_legacy_rooms_contract` намеренно удаляет только уже выведенные из эксплуатации `rooms`, `guest_sessions` и старую `screen_share_leases`; постоянные server channels и `channel_screen_share_leases` она не затрагивает. Следующая `0013_home_activity` добавляет историю для Home. После применения contract-миграции простой rollback image не восстановит удалённые legacy-таблицы, поэтому перед первым обновлением на эту версию обязателен backup.
+
+## Приватный S3 для вложений
+
+Production использует приватный бакет Timeweb Cloud `media-vatrushka`. Заполните server-only переменные из `.env.example`, установите `MEDIA_STORAGE_DRIVER=s3` и не копируйте credentials в desktop env. До сборки production image проверьте `.env` без вывода секретов:
+
+```bash
+cd /opt/vatrushka
+grep -E '^(MEDIA_STORAGE_DRIVER|S3_ENDPOINT|S3_REGION|S3_BUCKET|S3_FORCE_PATH_STYLE|S3_KEY_PREFIX)=' .env
+```
+
+Порядок первого rollout:
+
+```bash
+cd /opt/vatrushka
+docker compose --env-file .env -f infra/docker/docker-compose.yml build --pull api
+docker compose --env-file .env -f infra/docker/docker-compose.yml run --rm --no-deps api \
+  npm run media:verify:s3:prod -w @vatrushka/api
+docker compose --env-file .env -f infra/docker/docker-compose.yml up -d postgres api
+curl -fsS https://api.myvatrushka.ru/health/ready
+docker compose --env-file .env -f infra/docker/docker-compose.yml run --rm api \
+  npm run media:migrate:s3:prod -w @vatrushka/api
+docker compose --env-file .env -f infra/docker/docker-compose.yml up -d caddy
+```
+
+Миграция `0014_simple_molly_hayes` additive; backfill повторяемый. На expand-фазе API оставляет копию content в PostgreSQL, поэтому rollback выполняется возвратом предыдущего образа и `MEDIA_STORAGE_DRIVER=database`. Детали, object key layout и ручная проверка: [object storage](object-storage.md).
 
 API не имеет host `ports`, Swagger отключён production config, Caddy получает TLS автоматически. Не копируйте `.env` в image; Compose передаёт его runtime.
 
@@ -69,6 +98,7 @@ ssh -i C:\Users\Admin\.ssh\id_ed25519_vatrushka_server -N -L 15433:127.0.0.1:543
 
 - `api` — HTTPS API, auth, серверы/каналы и выдача краткоживущих LiveKit participant tokens;
 - `postgres` — пользователи, сессии, серверы, сообщения, permissions и channel screen-share leases;
+- приватный S3 — содержимое вложений каналов и личных сообщений; metadata и права остаются в PostgreSQL/API;
 - `caddy` — TLS, reverse proxy и статический desktop update feed;
 - LiveKit — отдельный Cloud-проект либо отдельный self-hosted media server;
 - Windows-клиент не запускается на VPS: это устанавливаемый артефакт для компьютеров пользователей.

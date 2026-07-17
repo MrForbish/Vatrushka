@@ -17,6 +17,11 @@ const booleanFromString = z
   .default('false')
   .transform((value) => value === 'true');
 
+const booleanFromStringDefaultTrue = z
+  .enum(['true', 'false'])
+  .default('true')
+  .transform((value) => value === 'true');
+
 const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -47,12 +52,33 @@ const envSchema = z
     LIVEKIT_HTTP_URL: z.url().default('http://localhost:7880'),
     LIVEKIT_API_KEY: z.string().min(1).default('devkey'),
     LIVEKIT_API_SECRET: z.string().min(1).default('secret'),
+    MEDIA_STORAGE_DRIVER: z.enum(['database', 's3']).default('database'),
+    S3_ENDPOINT: z.string().default(''),
+    S3_REGION: z.string().min(1).default('ru-1'),
+    S3_BUCKET: z.string().default(''),
+    S3_ACCESS_KEY_ID: z.string().default(''),
+    S3_SECRET_ACCESS_KEY: z.string().default(''),
+    S3_FORCE_PATH_STYLE: booleanFromStringDefaultTrue,
+    S3_KEY_PREFIX: z.string().regex(/^[a-z0-9](?:[a-z0-9/_-]*[a-z0-9])?$/).default('prod'),
     SCREEN_SHARE_LEASE_SECONDS: z.coerce.number().int().positive().default(SCREEN_SHARE_LEASE_SECONDS),
     SCREEN_SHARE_HEARTBEAT_SECONDS: z.coerce.number().int().positive().default(SCREEN_SHARE_HEARTBEAT_SECONDS),
     CORS_ALLOWED_ORIGINS: z.string().default(''),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   })
   .superRefine((env, context) => {
+    if (env.MEDIA_STORAGE_DRIVER === 's3') {
+      const requiredS3 = ['S3_ENDPOINT', 'S3_BUCKET', 'S3_ACCESS_KEY_ID', 'S3_SECRET_ACCESS_KEY'] as const;
+      for (const key of requiredS3) {
+        if (!env[key]) context.addIssue({ code: 'custom', path: [key], message: `${key} is required when MEDIA_STORAGE_DRIVER=s3` });
+      }
+      if (env.S3_ENDPOINT) {
+        try {
+          if (new URL(env.S3_ENDPOINT).protocol !== 'https:') context.addIssue({ code: 'custom', path: ['S3_ENDPOINT'], message: 'S3_ENDPOINT must use HTTPS' });
+        } catch {
+          context.addIssue({ code: 'custom', path: ['S3_ENDPOINT'], message: 'S3_ENDPOINT must be a valid URL' });
+        }
+      }
+    }
     if (env.NODE_ENV === 'production') {
       const required: Array<keyof typeof env> = [
         'DATABASE_URL',

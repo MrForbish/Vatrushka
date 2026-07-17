@@ -273,11 +273,21 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     schema: { tags: ['health'], response: { 200: z.object({ status: z.literal('ready') }), 503: errorResponseSchema } },
   }, async (request, reply) => {
     try {
-      await Promise.all([service.store.healthCheck(), service.media.healthCheck()]);
-      return { status: 'ready' as const };
+      await service.store.healthCheck();
+    } catch {
+      return reply.status(503).send(createApiError('INTERNAL_ERROR', request.id));
+    }
+    try {
+      await service.media.healthCheck();
     } catch {
       return reply.status(503).send(createApiError('LIVEKIT_UNAVAILABLE', request.id));
     }
+    try {
+      await service.objectStorage?.healthCheck();
+    } catch {
+      return reply.status(503).send(createApiError('MEDIA_STORAGE_UNAVAILABLE', request.id));
+    }
+    return { status: 'ready' as const };
   });
 
   api.get('/i/:inviteToken', {

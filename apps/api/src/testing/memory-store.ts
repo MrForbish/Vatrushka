@@ -530,8 +530,18 @@ export class MemoryStore implements DataStore {
       fileName: attachment.fileName,
       mimeType: attachment.mimeType,
       size: attachment.size,
+      storageKey: attachment.storageKey,
       createdAt: attachment.createdAt,
     }));
+  }
+
+  async listChannelAttachmentStorageKeys(channelId: string): Promise<string[]> {
+    const messageIds = new Set([...this.textMessages.values()].filter((message) => message.channelId === channelId).map((message) => message.id));
+    return [...this.messageAttachments.values()].flatMap((attachment) => messageIds.has(attachment.messageId) && attachment.storageKey !== null ? [attachment.storageKey] : []);
+  }
+
+  async listLegacyMessageAttachments(limit: number): Promise<MessageAttachmentRecord[]> {
+    return [...this.messageAttachments.values()].filter((attachment) => attachment.storageKey === null).slice(0, limit).map((attachment) => structuredClone(attachment));
   }
 
   async findMessageAttachment(id: string): Promise<MessageAttachmentRecord | null> {
@@ -541,6 +551,13 @@ export class MemoryStore implements DataStore {
 
   async createMessageAttachment(attachment: MessageAttachmentRecord): Promise<void> {
     this.messageAttachments.set(attachment.id, structuredClone(attachment));
+  }
+
+  async moveMessageAttachmentToStorage(id: string, storageKey: string): Promise<boolean> {
+    const attachment = this.messageAttachments.get(id);
+    if (!attachment || attachment.storageKey !== null) return false;
+    attachment.storageKey = storageKey;
+    return true;
   }
 
   async deleteMessageAttachment(id: string): Promise<boolean> {
@@ -667,7 +684,11 @@ export class MemoryStore implements DataStore {
 
   async listDirectMessageAttachments(messageIds: string[]): Promise<DirectMessageAttachmentMetadata[]> {
     const allowed = new Set(messageIds);
-    return [...this.directMessageAttachments.values()].filter((attachment) => allowed.has(attachment.messageId)).map((attachment) => structuredClone({ id: attachment.id, messageId: attachment.messageId, uploaderUserId: attachment.uploaderUserId, fileName: attachment.fileName, mimeType: attachment.mimeType, size: attachment.size, createdAt: attachment.createdAt }));
+    return [...this.directMessageAttachments.values()].filter((attachment) => allowed.has(attachment.messageId)).map((attachment) => structuredClone({ id: attachment.id, messageId: attachment.messageId, uploaderUserId: attachment.uploaderUserId, fileName: attachment.fileName, mimeType: attachment.mimeType, size: attachment.size, storageKey: attachment.storageKey, createdAt: attachment.createdAt }));
+  }
+
+  async listLegacyDirectMessageAttachments(limit: number): Promise<DirectMessageAttachmentRecord[]> {
+    return [...this.directMessageAttachments.values()].filter((attachment) => attachment.storageKey === null).slice(0, limit).map((attachment) => structuredClone(attachment));
   }
 
   async findDirectMessageAttachment(id: string): Promise<DirectMessageAttachmentRecord | null> {
@@ -677,6 +698,13 @@ export class MemoryStore implements DataStore {
 
   async createDirectMessageAttachment(attachment: DirectMessageAttachmentRecord): Promise<void> {
     this.directMessageAttachments.set(attachment.id, structuredClone(attachment));
+  }
+
+  async moveDirectMessageAttachmentToStorage(id: string, storageKey: string): Promise<boolean> {
+    const attachment = this.directMessageAttachments.get(id);
+    if (!attachment || attachment.storageKey !== null) return false;
+    attachment.storageKey = storageKey;
+    return true;
   }
 
   async deleteDirectMessageAttachment(id: string): Promise<boolean> {

@@ -261,7 +261,18 @@ test('opens the redesigned Home, creates the first server, and restores it after
   await dialog.getByLabel('Название').fill(server.name);
   await dialog.getByRole('button', { name: 'Создать' }).click();
   await expect(window.getByRole('button', { name: 'общий' })).toBeVisible();
-  await window.getByRole('button', { name: 'Главная' }).click();
+  await application.evaluate(({ BrowserWindow }) => {
+    const browserWindow = BrowserWindow.getAllWindows()[0];
+    if (!browserWindow) throw new Error('Main window is unavailable');
+    browserWindow.setSize(900, 700);
+  });
+  const desktopHome = window.locator('.vui-app-shell__workspaces').getByRole('button', { name: 'Главная' });
+  if (await desktopHome.isVisible()) {
+    await desktopHome.click();
+  } else {
+    await window.getByRole('button', { name: 'Открыть список серверов' }).click();
+    await window.getByRole('dialog', { name: 'Серверы' }).getByRole('button', { name: 'Главная' }).click();
+  }
   await expect(window.getByText(server.name).first()).toBeVisible();
   await expect(window.getByRole('heading', { name: 'Продолжить' })).toBeVisible();
 });
@@ -305,7 +316,8 @@ test('accepts a validated invite link after authentication without exposing a ma
   await window.getByRole('button', { name: /Продолжить/u }).click();
   await window.getByLabel('Код из письма').fill('123456');
   await window.getByRole('button', { name: /Подтвердить вход/u }).click();
-  await expect(window.getByText('Сервер по ссылке').first()).toBeVisible();
+  const serverNavigation = window.getByRole('complementary', { name: 'Навигация сервера' });
+  await expect(serverNavigation.getByText('Сервер по ссылке')).toBeVisible();
   await expect(window.getByRole('button', { name: 'общий' })).toBeVisible();
   expect(inviteAccepted).toBe(true);
 });

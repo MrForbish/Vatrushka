@@ -239,9 +239,10 @@ export const messageAttachments = pgTable(
     mimeType: text('mime_type').notNull(),
     size: integer('size').notNull(),
     content: bytea('content').notNull(),
+    storageKey: text('storage_key'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
-  (table) => [index('message_attachments_message_idx').on(table.messageId)],
+  (table) => [index('message_attachments_message_idx').on(table.messageId), uniqueIndex('message_attachments_storage_key_unique').on(table.storageKey)],
 );
 
 export const directConversations = pgTable(
@@ -295,9 +296,10 @@ export const directMessageAttachments = pgTable(
     mimeType: text('mime_type').notNull(),
     size: integer('size').notNull(),
     content: bytea('content').notNull(),
+    storageKey: text('storage_key'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
   },
-  (table) => [index('direct_message_attachments_message_idx').on(table.messageId)],
+  (table) => [index('direct_message_attachments_message_idx').on(table.messageId), uniqueIndex('direct_message_attachments_storage_key_unique').on(table.storageKey)],
 );
 
 export const channelScreenShareLeases = pgTable(
