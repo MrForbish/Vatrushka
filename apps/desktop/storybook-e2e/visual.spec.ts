@@ -32,6 +32,13 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('app-shell-desktop.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('server settings shell', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--server-overview');
+    await expect(page.getByRole('heading', { name: 'Обзор' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Разделы настроек' })).toBeVisible();
+    await expect(page).toHaveScreenshot('settings-shell-server.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('personal Home dashboard', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await openStory(page, 'home-homepage--returning-user');

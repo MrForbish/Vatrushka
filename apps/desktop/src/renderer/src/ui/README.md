@@ -1,6 +1,6 @@
 # Vatrushka UI foundations
 
-This directory is the isolated migration target for the Vatrushka design system. Stage 1 does not import it from the current production `App.tsx`, so existing auth, voice, screen sharing and LiveKit flows remain unchanged.
+This directory is the shared production design system for Vatrushka. The routed settings migration extends the existing `AppShell` and lazy-loads its `SettingsShell`; auth, voice, screen sharing and LiveKit remain owned by the mounted top-level application controller.
 
 ## Commands
 

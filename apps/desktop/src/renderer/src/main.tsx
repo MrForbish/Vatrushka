@@ -8,6 +8,7 @@ import '@fontsource-variable/unbounded/wght.css';
 import '@fontsource/ibm-plex-mono/400.css';
 
 import App from './App.js';
+import { AppRouter } from './app/routes';
 import './ui/foundations/tokens.css';
 import './styles.css';
 
@@ -24,4 +25,4 @@ const queryClient = new QueryClient({
   },
 });
 
-createRoot(root).render(<StrictMode><QueryClientProvider client={queryClient}><App /></QueryClientProvider></StrictMode>);
+createRoot(root).render(<StrictMode><QueryClientProvider client={queryClient}><AppRouter><App /></AppRouter></QueryClientProvider></StrictMode>);

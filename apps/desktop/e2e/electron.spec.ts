@@ -149,6 +149,58 @@ test('revokes another device without exposing its refresh token to the renderer'
   await expect(remote).toHaveCount(0);
 });
 
+test('opens the routed settings shell without replacing the application controller', async () => {
+  const user = { id: 'settings-e2e-user', email: 'settings@myvatrushka.ru', displayName: 'Настройки E2E', platformRole: 'member', hasPassword: true, twoFactorEnabled: false };
+  const home = {
+    user: { id: user.id, displayName: user.displayName, email: user.email, avatarUrl: null, presence: 'online', platformBadge: null },
+    readiness: { connection: 'healthy', audioSetupRequired: false },
+    servers: [], continueItems: [], activeSpaces: [], recentActivity: [],
+    onboarding: { visible: true, steps: [
+      { id: 'create_server', title: 'Создайте свой сервер', description: 'Первый шаг', complete: false, destination: null },
+      { id: 'configure_channels', title: 'Настройте каналы', description: 'Второй шаг', complete: false, destination: null },
+      { id: 'invite_members', title: 'Пригласите участников', description: 'Третий шаг', complete: false, destination: null },
+    ] },
+  };
+  apiServer = createServer((request, response) => {
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    response.setHeader('Content-Type', 'application/json');
+    if (request.method === 'OPTIONS') { response.statusCode = 204; response.end(); return; }
+    const url = new URL(request.url ?? '/', 'http://localhost:3000');
+    if (request.method === 'POST' && url.pathname === '/api/v1/auth/password/begin') { response.end(JSON.stringify({ status: 'SECOND_FACTOR_REQUIRED', factor: 'email', retryAfterSeconds: 60 })); return; }
+    if (request.method === 'POST' && url.pathname === '/api/v1/auth/password/complete') { response.end(JSON.stringify({ accessToken: 'settings-access-token-for-e2e-user-12345', refreshToken: 'settings-refresh-token-for-e2e-user-12345', expiresIn: 900, user })); return; }
+    if (request.method === 'POST' && url.pathname === '/api/v1/auth/refresh') { response.end(JSON.stringify({ accessToken: 'settings-refreshed-access-token-12345', refreshToken: 'settings-refreshed-refresh-token-12345', expiresIn: 900, user })); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/servers') { response.end('[]'); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/home') { response.end(JSON.stringify(home)); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/notifications/messages') { response.end(JSON.stringify({ items: [], cursor: null })); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/direct-conversations') { response.end('[]'); return; }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ code: 'NOT_FOUND' }));
+  });
+  await new Promise<void>((resolve, reject) => apiServer?.listen(3000, () => resolve()).once('error', reject));
+
+  application = await electron.launch({ args: ['.', `--user-data-dir=.e2e-user-data-settings-routes-${process.pid}`], cwd: process.cwd(), env: electronEnvironment() });
+  let window = await application.firstWindow();
+  await window.getByRole('textbox', { name: 'Email' }).fill(user.email);
+  await window.getByRole('textbox', { name: 'Пароль', exact: true }).fill('secure-vatrushka-42');
+  await window.getByRole('button', { name: /Продолжить/u }).click();
+  await window.getByLabel('Код из письма').fill('123456');
+  await window.getByRole('button', { name: /Подтвердить вход/u }).click();
+  await expect(window.getByRole('heading', { name: /Добро пожаловать/u })).toBeVisible();
+
+  await window.evaluate(() => {
+    globalThis.location.hash = '#/settings/profile?settingsPreview=1';
+    globalThis.location.reload();
+  });
+  window = await application.firstWindow();
+  await expect(window.getByRole('heading', { name: 'Мой профиль' })).toBeVisible();
+  await expect(window.getByRole('navigation', { name: 'Разделы настроек' })).toBeVisible();
+  await window.getByRole('button', { name: /Уведомления/u }).click();
+  await expect(window).toHaveURL(/#\/settings\/notifications/u);
+  await window.getByRole('button', { name: 'Вернуться' }).click();
+  await expect(window.getByRole('heading', { name: /Добро пожаловать/u })).toBeVisible();
+});
+
 test('opens the redesigned Home, creates the first server, and restores it after returning', async () => {
   let serverCreated = false;
   const user = { id: 'home-e2e-user', email: 'home@myvatrushka.ru', displayName: 'Домашний пользователь', platformRole: 'member', hasPassword: true, twoFactorEnabled: false };
