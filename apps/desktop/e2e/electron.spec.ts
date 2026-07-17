@@ -209,7 +209,18 @@ test('opens the redesigned Home, creates the first server, and restores it after
   await dialog.getByLabel('Название').fill(server.name);
   await dialog.getByRole('button', { name: 'Создать' }).click();
   await expect(window.getByRole('button', { name: 'общий' })).toBeVisible();
-  await window.getByRole('button', { name: 'Главная' }).click();
+  await application.evaluate(({ BrowserWindow }) => {
+    const browserWindow = BrowserWindow.getAllWindows()[0];
+    if (!browserWindow) throw new Error('Main window is unavailable');
+    browserWindow.setSize(900, 700);
+  });
+  const desktopHome = window.locator('.vui-app-shell__workspaces').getByRole('button', { name: 'Главная' });
+  if (await desktopHome.isVisible()) {
+    await desktopHome.click();
+  } else {
+    await window.getByRole('button', { name: 'Открыть список серверов' }).click();
+    await window.getByRole('dialog', { name: 'Серверы' }).getByRole('button', { name: 'Главная' }).click();
+  }
   await expect(window.getByText(server.name).first()).toBeVisible();
   await expect(window.getByRole('heading', { name: 'Продолжить' })).toBeVisible();
 });
