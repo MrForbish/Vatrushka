@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
-import QRCode from 'qrcode';
 
-import { channelNameSchema, displayNameSchema, messageContentSchema, passwordSchema, roleNameSchema, roomCodeSchema, serverInviteCodeSchema, serverNameSchema, type DesktopSourceInfo, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type LocalSettings, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type TwoFactorSetup } from '@vatrushka/shared';
+import { channelNameSchema, displayNameSchema, messageContentSchema, passwordSchema, roleNameSchema, roomCodeSchema, serverInviteCodeSchema, serverNameSchema, type DesktopSourceInfo, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type LocalSettings, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage } from '@vatrushka/shared';
 
 import { apiClient, ClientError } from './api.js';
-import { AuthPanel, GuestJoinPanel, HomePanel, InvitePanel, ProfilePanel, SecurityPanel } from './components.js';
+import { AuthPanel, GuestJoinPanel, HomePanel, InvitePanel, ProfilePanel } from './components.js';
 import { DirectMessagesView } from './features/direct-messages/index.js';
 import { SourcePicker } from './features/screen-share/index.js';
+import { SecurityCenter } from './features/security/index.js';
 import { ServerView } from './features/servers/index.js';
 import { RoomView } from './features/voice/index.js';
 import { MediaSession } from './media.js';
@@ -25,7 +25,7 @@ export default function App(): ReactNode {
   const [otp, setOtp] = useState('');
   const [password, setPasswordValue] = useState('');
   const [passwordConfirmation, setPasswordConfirmation] = useState('');
-  const [secondFactor, setSecondFactor] = useState<'email' | 'totp'>('email');
+  const [secondFactor, setSecondFactor] = useState<'email' | 'totp' | 'recovery'>('email');
   const [totpAvailable, setTotpAvailable] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [guestName, setGuestName] = useState('');
@@ -57,12 +57,6 @@ export default function App(): ReactNode {
   const [directMessageDraft, setDirectMessageDraft] = useState('');
   const [serverName, setServerName] = useState('');
   const [serverInvite, setServerInvite] = useState('');
-  const [securityStage, setSecurityStage] = useState<'overview' | 'password' | 'totp-enable' | 'totp-disable'>('overview');
-  const [securityCode, setSecurityCode] = useState('');
-  const [securityPassword, setSecurityPassword] = useState('');
-  const [securityPasswordConfirmation, setSecurityPasswordConfirmation] = useState('');
-  const [twoFactorSetup, setTwoFactorSetup] = useState<TwoFactorSetup | null>(null);
-  const [twoFactorQr, setTwoFactorQr] = useState<string | null>(null);
   const notificationCursorRef = useRef<string | null>(null);
   const notificationCursorIdRef = useRef<string | null>(null);
   const notificationUserRef = useRef<string | null>(null);
@@ -315,62 +309,12 @@ export default function App(): ReactNode {
     });
   };
 
-  const switchPasswordFactor = (factor: 'email' | 'totp'): void => {
+  const switchPasswordFactor = (factor: 'email' | 'totp' | 'recovery'): void => {
     void run(async () => {
       const challenge = await apiClient.beginPasswordLogin(email, password, factor);
       setSecondFactor(challenge.factor);
       setRetrySeconds(challenge.retryAfterSeconds);
       setOtp('');
-    });
-  };
-
-  const resetSecurity = (): void => {
-    setSecurityStage('overview');
-    setSecurityCode('');
-    setSecurityPassword('');
-    setSecurityPasswordConfirmation('');
-    setTwoFactorSetup(null);
-    setTwoFactorQr(null);
-    setError(null);
-  };
-
-  const startPasswordSetup = (): void => {
-    void run(async () => {
-      const response = await apiClient.requestPasswordSetup();
-      setRetrySeconds(response.retryAfterSeconds);
-      setSecurityStage('password');
-    });
-  };
-
-  const savePassword = (): void => {
-    void run(async () => {
-      const validPassword = passwordSchema.parse(securityPassword);
-      if (validPassword !== securityPasswordConfirmation) throw new Error('Пароли не совпадают');
-      updateUser(await apiClient.setPassword(securityCode, validPassword));
-      resetSecurity();
-    });
-  };
-
-  const startTwoFactorSetup = (): void => {
-    void run(async () => {
-      const setup = await apiClient.beginTwoFactorSetup();
-      setTwoFactorSetup(setup);
-      setTwoFactorQr(await QRCode.toDataURL(setup.otpauthUri, { width: 220, margin: 1, color: { dark: '#1b1110', light: '#fff8f0' } }));
-      setSecurityStage('totp-enable');
-    });
-  };
-
-  const enableTwoFactor = (): void => {
-    void run(async () => {
-      updateUser(await apiClient.enableTwoFactor(securityCode));
-      resetSecurity();
-    });
-  };
-
-  const disableTwoFactor = (): void => {
-    void run(async () => {
-      updateUser(await apiClient.disableTwoFactor(securityCode));
-      resetSecurity();
     });
   };
 
@@ -835,7 +779,7 @@ export default function App(): ReactNode {
     void window.desktop.copyToClipboard(text);
   };
 
-  const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityPanel user={user} stage={securityStage} code={securityCode} password={securityPassword} passwordConfirmation={securityPasswordConfirmation} setup={twoFactorSetup} qrDataUrl={twoFactorQr} busy={busy} error={error} onCode={setSecurityCode} onPassword={setSecurityPassword} onPasswordConfirmation={setSecurityPasswordConfirmation} onStartPassword={startPasswordSetup} onSavePassword={savePassword} onStartTwoFactor={startTwoFactorSetup} onEnableTwoFactor={enableTwoFactor} onAskDisable={() => { setSecurityCode(''); setSecurityStage('totp-disable'); }} onDisableTwoFactor={disableTwoFactor} onBack={resetSecurity} onClose={() => { resetSecurity(); setSecurityOpen(false); }} /> : null;
+  const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityCenter open user={user} onClose={() => setSecurityOpen(false)} onUserChange={updateUser} onCurrentSessionRevoked={() => { updateUser(null); setScreen('auth'); }} /> : null;
   const directUnreadCount = directConversations.reduce((count, conversation) => count + conversation.unreadCount, 0);
 
   if (screen === 'boot') return <main className="bootScreen"><div className="pulseLogo"><span /></div><span>Подключаем «Ватрушку»…</span></main>;
@@ -843,9 +787,9 @@ export default function App(): ReactNode {
   if (screen === 'profile') return <ProfilePanel value={displayName} busy={busy} error={error} onChange={setDisplayName} onSave={saveProfile} />;
   if (screen === 'invite' && pendingCode) return <InvitePanel code={pendingCode} authenticated={Boolean(user)} error={error} busy={busy} onJoin={() => joinRoom(pendingCode)} onLogin={() => setScreen('auth')} onGuest={() => setScreen('guest')} onBack={() => setScreen(user ? 'home' : 'auth')} />;
   if (screen === 'guest' && pendingCode) return <GuestJoinPanel code={pendingCode} name={guestName} busy={busy} error={error} onName={setGuestName} onJoin={joinGuest} onBack={() => setScreen('invite')} />;
-  if (screen === 'home' && user) return <><HomePanel user={user} version={version} roomCode={roomCode} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} servers={servers} serverName={serverName} serverInvite={serverInvite} directUnreadCount={directUnreadCount} onRoomCode={setRoomCode} onCreate={createRoom} onJoin={() => joinRoom()} onLogout={logout} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onOpenServer={openServer} onDirectMessages={openDirectMessages} />{renderSecurityPanel()}</>;
-  if (screen === 'server' && user && serverDetail) return <><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onConnectVoice={connectVoiceChannel} onCopyInvite={() => void window.desktop.copyToClipboard(`Присоединяйтесь к серверу «${serverDetail.name}»\nКод приглашения: ${serverDetail.inviteCode}`)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onLogout={logout} />{renderSecurityPanel()}</>;
-  if (screen === 'direct' && user) return <><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => { resetSecurity(); setSecurityOpen(true); }} onLogout={logout} />{renderSecurityPanel()}</>;
+  if (screen === 'home' && user) return <><HomePanel user={user} version={version} roomCode={roomCode} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} servers={servers} serverName={serverName} serverInvite={serverInvite} directUnreadCount={directUnreadCount} onRoomCode={setRoomCode} onCreate={createRoom} onJoin={() => joinRoom()} onLogout={logout} onSecurity={() => setSecurityOpen(true)} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onOpenServer={openServer} onDirectMessages={openDirectMessages} />{renderSecurityPanel()}</>;
+  if (screen === 'server' && user && serverDetail) return <><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onConnectVoice={connectVoiceChannel} onCopyInvite={() => void window.desktop.copyToClipboard(`Присоединяйтесь к серверу «${serverDetail.name}»\nКод приглашения: ${serverDetail.inviteCode}`)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => setSecurityOpen(true)} onLogout={logout} />{renderSecurityPanel()}</>;
+  if (screen === 'direct' && user) return <><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} serverInvite={serverInvite} busy={busy} error={error} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onServerName={setServerName} onServerInvite={setServerInvite} onCreateServer={createServer} onJoinServer={joinServer} onSecurity={() => setSecurityOpen(true)} onLogout={logout} />{renderSecurityPanel()}</>;
   if (screen === 'room' && connection) return <><RoomView connection={connection} snapshot={mediaSnapshot} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} locked={locked} busy={busy} error={error} onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))} onShare={showSourcePicker} onCopy={copyInvite} onLeave={leaveRoom} onLock={() => void run(async () => { const result = await apiClient.setRoomLock(connection.roomId, !locked); setLocked(result.isLocked); })} onClose={() => void run(async () => { await apiClient.closeRoom(connection.roomId); await media.disconnect(false); setConnection(null); setScreen('home'); })} onKick={(identity) => void run(() => apiClient.kickMediaParticipant(connection, identity))} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onStartAudio={() => void media.startAudio()} onScreenAudioMute={() => media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)} onScreenAudioVolume={setScreenShareVolume} onParticipantMute={(identity, muted) => media.setParticipantMuted(identity, muted)} onParticipantVolume={(identity, volume) => media.setParticipantVolume(identity, volume)} />{sources && <SourcePicker audioAllowed={connection.canStreamApplicationAudio !== false} busy={busy} sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}</>;
   return <main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>;
 }

@@ -1,4 +1,4 @@
-import type { PermissionOverwriteTargetType, PlatformRole, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
+import type { PermissionOverwriteTargetType, PlatformRole, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
 
 export interface UserRecord {
   id: string;
@@ -31,11 +31,28 @@ export interface SessionRecord {
   tokenHash: string;
   tokenFamilyId: string;
   deviceName: string;
+  trustedAt: Date | null;
   expiresAt: Date;
   revokedAt: Date | null;
   replacedBySessionId: string | null;
   createdAt: Date;
   lastUsedAt: Date;
+}
+
+export interface RecoveryCodeRecord {
+  id: string;
+  userId: string;
+  codeHash: string;
+  createdAt: Date;
+  usedAt: Date | null;
+}
+
+export interface SecurityEventRecord {
+  id: string;
+  userId: string;
+  type: SecurityEventType;
+  deviceName: string | null;
+  createdAt: Date;
 }
 
 export type RoomStatus = 'active' | 'closed' | 'expired';

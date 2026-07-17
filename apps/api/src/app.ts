@@ -39,6 +39,7 @@ import {
   roomCodeSchema,
   roomLockSchema,
   screenShareActionSchema,
+  sessionTrustSchema,
   serverPermissions,
   setPasswordSchema,
   twoFactorCodeSchema,
@@ -70,6 +71,7 @@ const directConversationIdParams = z.object({ conversationId: z.uuid() });
 const messageReactionParams = z.object({ messageId: z.uuid(), emoji: messageReactionSchema });
 const channelParticipantParams = z.object({ channelId: z.uuid(), participantIdentity: z.string().min(3).max(200) });
 const channelOverwriteParams = z.object({ channelId: z.uuid(), targetType: z.enum(['ROLE', 'MEMBER']), targetId: z.uuid() });
+const authSessionParams = z.object({ sessionId: z.uuid() });
 
 const errorResponseSchema = z.object({
   code: z.string(),
@@ -92,6 +94,22 @@ const authResponseSchema = z.object({
   expiresIn: z.number(),
   user: publicUserSchema,
   isNewUser: z.boolean(),
+});
+const userSessionResponseSchema = z.object({
+  id: z.string(),
+  deviceName: z.string(),
+  current: z.boolean(),
+  trusted: z.boolean(),
+  createdAt: z.string(),
+  lastUsedAt: z.string(),
+  expiresAt: z.string(),
+});
+const recoveryCodesResponseSchema = z.object({ recoveryCodes: z.array(z.string()) });
+const securityEventResponseSchema = z.object({
+  id: z.string(),
+  type: z.enum(['SESSION_CREATED', 'SESSION_REVOKED', 'PASSWORD_CHANGED', 'TWO_FACTOR_ENABLED', 'TWO_FACTOR_DISABLED', 'RECOVERY_CODES_REGENERATED', 'REFRESH_TOKEN_REUSE_DETECTED']),
+  deviceName: z.string().nullable(),
+  createdAt: z.string(),
 });
 const connectionSchema = z.object({
   roomId: z.string(),
@@ -284,7 +302,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     schema: {
       tags: ['auth'],
       body: beginPasswordLoginSchema,
-      response: { 200: z.object({ status: z.literal('SECOND_FACTOR_REQUIRED'), factor: z.enum(['email', 'totp']), retryAfterSeconds: z.number() }), ...routeErrors() },
+      response: { 200: z.object({ status: z.literal('SECOND_FACTOR_REQUIRED'), factor: z.enum(['email', 'totp', 'recovery']), retryAfterSeconds: z.number() }), ...routeErrors() },
     },
   }, async (request) => service.beginPasswordLogin(request.body.email, request.body.password, request.body.factor));
 
@@ -309,6 +327,28 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     return reply.status(204).send(null);
   });
 
+  api.get(`${API_PREFIX}/auth/sessions`, {
+    schema: { tags: ['auth'], security: [{ bearerAuth: [] }], response: { 200: z.array(userSessionResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listSessions(request.headers.authorization));
+
+  api.delete(`${API_PREFIX}/auth/sessions`, {
+    config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
+    schema: { tags: ['auth'], security: [{ bearerAuth: [] }], response: { 200: z.object({ revokedCount: z.number() }), ...routeErrors() } },
+  }, async (request) => service.revokeOtherSessions(request.headers.authorization));
+
+  api.patch(`${API_PREFIX}/auth/sessions/:sessionId`, {
+    config: { rateLimit: { max: 20, timeWindow: '10 minutes' } },
+    schema: { tags: ['auth'], security: [{ bearerAuth: [] }], params: authSessionParams, body: sessionTrustSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => {
+    await service.setSessionTrusted(request.headers.authorization, request.params.sessionId, request.body.trusted);
+    return reply.status(204).send(null);
+  });
+
+  api.delete(`${API_PREFIX}/auth/sessions/:sessionId`, {
+    config: { rateLimit: { max: 10, timeWindow: '10 minutes' } },
+    schema: { tags: ['auth'], security: [{ bearerAuth: [] }], params: authSessionParams, response: { 200: z.object({ current: z.boolean() }), ...routeErrors() } },
+  }, async (request) => service.revokeSession(request.headers.authorization, request.params.sessionId));
+
   api.get(`${API_PREFIX}/me`, {
     schema: { tags: ['user'], security: [{ bearerAuth: [] }], response: { 200: publicUserSchema, ...routeErrors() } },
   }, async (request) => service.getMe(request.headers.authorization));
@@ -331,12 +371,23 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   }, async (request) => service.beginTwoFactorSetup(request.headers.authorization));
 
   api.post(`${API_PREFIX}/me/2fa/enable`, {
-    schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: twoFactorCodeSchema, response: { 200: publicUserSchema, ...routeErrors() } },
+    config: { rateLimit: { max: 10, timeWindow: '10 minutes' } },
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: twoFactorCodeSchema, response: { 200: z.object({ user: publicUserSchema, recoveryCodes: z.array(z.string()) }), ...routeErrors() } },
   }, async (request) => service.enableTwoFactor(request.headers.authorization, request.body.code));
 
   api.delete(`${API_PREFIX}/me/2fa`, {
+    config: { rateLimit: { max: 10, timeWindow: '10 minutes' } },
     schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: twoFactorCodeSchema, response: { 200: publicUserSchema, ...routeErrors() } },
   }, async (request) => service.disableTwoFactor(request.headers.authorization, request.body.code));
+
+  api.post(`${API_PREFIX}/me/2fa/recovery-codes`, {
+    config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: twoFactorCodeSchema, response: { 200: recoveryCodesResponseSchema, ...routeErrors() } },
+  }, async (request) => service.regenerateRecoveryCodes(request.headers.authorization, request.body.code));
+
+  api.get(`${API_PREFIX}/me/security-events`, {
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], response: { 200: z.array(securityEventResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listSecurityEvents(request.headers.authorization));
 
   api.get(`${API_PREFIX}/servers`, {
     schema: { tags: ['servers'], security: [{ bearerAuth: [] }], response: { 200: z.array(serverSummaryResponseSchema), ...routeErrors() } },

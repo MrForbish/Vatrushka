@@ -8,6 +8,8 @@ import type {
   LeaseRecord,
   RefreshRotation,
   RoomRecord,
+  RecoveryCodeRecord,
+  SecurityEventRecord,
   SessionRecord,
   UserRecord,
   ServerGraph,
@@ -42,6 +44,8 @@ export class MemoryStore implements DataStore {
   readonly authCodes = new Map<string, AuthCodeRecord>();
   readonly users = new Map<string, UserRecord>();
   readonly sessions = new Map<string, SessionRecord>();
+  readonly recoveryCodes = new Map<string, RecoveryCodeRecord>();
+  readonly securityEvents = new Map<string, SecurityEventRecord>();
   readonly rooms = new Map<string, RoomRecord>();
   readonly guests = new Map<string, GuestSessionRecord>();
   readonly leases = new Map<string, LeaseRecord>();
@@ -171,6 +175,15 @@ export class MemoryStore implements DataStore {
     this.sessions.set(session.tokenHash, structuredClone(session));
   }
 
+  async findSessionById(id: string): Promise<SessionRecord | null> {
+    const row = [...this.sessions.values()].find((session) => session.id === id);
+    return row ? structuredClone(row) : null;
+  }
+
+  async listSessionsForUser(userId: string): Promise<SessionRecord[]> {
+    return [...this.sessions.values()].filter((session) => session.userId === userId).map((session) => structuredClone(session));
+  }
+
   async rotateSession(tokenHash: string, replacement: SessionRecord, now: Date): Promise<RefreshRotation> {
     const session = this.sessions.get(tokenHash);
     if (!session) return { status: 'not_found' };
@@ -187,6 +200,7 @@ export class MemoryStore implements DataStore {
       userId: session.userId,
       tokenFamilyId: session.tokenFamilyId,
       deviceName: session.deviceName,
+      trustedAt: session.trustedAt,
     };
     session.revokedAt = now;
     session.replacedBySessionId = next.id;
@@ -204,6 +218,56 @@ export class MemoryStore implements DataStore {
     for (const session of this.sessions.values()) {
       if (session.tokenFamilyId === familyId && !session.revokedAt) session.revokedAt = now;
     }
+  }
+
+  async revokeSessionFamilyForUser(userId: string, familyId: string, now: Date): Promise<boolean> {
+    let found = false;
+    for (const session of this.sessions.values()) {
+      if (session.userId === userId && session.tokenFamilyId === familyId) {
+        found = true;
+        if (!session.revokedAt) session.revokedAt = now;
+      }
+    }
+    return found;
+  }
+
+  async setSessionFamilyTrusted(userId: string, familyId: string, trustedAt: Date | null): Promise<boolean> {
+    let found = false;
+    for (const session of this.sessions.values()) {
+      if (session.userId === userId && session.tokenFamilyId === familyId) {
+        found = true;
+        session.trustedAt = trustedAt;
+      }
+    }
+    return found;
+  }
+
+  async replaceRecoveryCodes(userId: string, codes: RecoveryCodeRecord[]): Promise<void> {
+    for (const [key, code] of this.recoveryCodes) if (code.userId === userId) this.recoveryCodes.delete(key);
+    for (const code of codes) this.recoveryCodes.set(code.codeHash, structuredClone(code));
+  }
+
+  async consumeRecoveryCode(userId: string, codeHash: string, now: Date): Promise<boolean> {
+    const code = this.recoveryCodes.get(codeHash);
+    if (!code || code.userId !== userId || code.usedAt) return false;
+    code.usedAt = now;
+    return true;
+  }
+
+  async deleteRecoveryCodes(userId: string): Promise<void> {
+    for (const [key, code] of this.recoveryCodes) if (code.userId === userId) this.recoveryCodes.delete(key);
+  }
+
+  async createSecurityEvent(event: SecurityEventRecord): Promise<void> {
+    this.securityEvents.set(event.id, structuredClone(event));
+  }
+
+  async listSecurityEvents(userId: string, limit: number): Promise<SecurityEventRecord[]> {
+    return [...this.securityEvents.values()]
+      .filter((event) => event.userId === userId)
+      .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
+      .slice(0, limit)
+      .map((event) => structuredClone(event));
   }
 
   async createRoom(room: RoomRecord): Promise<boolean> {

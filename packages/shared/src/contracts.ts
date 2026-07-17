@@ -219,13 +219,44 @@ export interface PublicUser {
 
 export interface PasswordLoginChallenge {
   status: 'SECOND_FACTOR_REQUIRED';
-  factor: 'email' | 'totp';
+  factor: 'email' | 'totp' | 'recovery';
   retryAfterSeconds: number;
 }
 
 export interface TwoFactorSetup {
   secret: string;
   otpauthUri: string;
+}
+
+export interface TwoFactorEnableResult {
+  user: PublicUser;
+  recoveryCodes: string[];
+}
+
+export interface UserSession {
+  id: string;
+  deviceName: string;
+  current: boolean;
+  trusted: boolean;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+}
+
+export type SecurityEventType =
+  | 'SESSION_CREATED'
+  | 'SESSION_REVOKED'
+  | 'PASSWORD_CHANGED'
+  | 'TWO_FACTOR_ENABLED'
+  | 'TWO_FACTOR_DISABLED'
+  | 'RECOVERY_CODES_REGENERATED'
+  | 'REFRESH_TOKEN_REUSE_DETECTED';
+
+export interface SecurityEvent {
+  id: string;
+  type: SecurityEventType;
+  deviceName: string | null;
+  createdAt: string;
 }
 
 export interface AuthResponse {
@@ -278,9 +309,10 @@ export interface DesktopSourceInfo {
 
 export interface DesktopBridge {
   getAppVersion(): Promise<string>;
-  getStoredRefreshToken(): Promise<string | null>;
-  storeRefreshToken(token: string): Promise<void>;
-  clearRefreshToken(): Promise<void>;
+  completeAuthSession(path: DesktopAuthCompletionPath, body: unknown, apiBaseUrl: string): Promise<DesktopAuthCompletionResult>;
+  refreshAuthSession(): Promise<DesktopAuthSession | null>;
+  logoutAuthSession(): Promise<void>;
+  clearAuthSession(): Promise<void>;
   listDesktopSources(): Promise<DesktopSourceInfo[]>;
   selectDesktopSource(sourceId: string, includeAudio: boolean): Promise<void>;
   clearSelectedDesktopSource(): Promise<void>;
@@ -292,3 +324,15 @@ export interface DesktopBridge {
   getLocalSettings(): Promise<LocalSettings>;
   updateLocalSettings(settings: LocalSettings): Promise<void>;
 }
+
+export interface DesktopAuthSession {
+  accessToken: string;
+  expiresIn: number;
+  user: PublicUser;
+}
+
+export type DesktopAuthCompletionPath = '/auth/verify-code' | '/auth/register/verify-code' | '/auth/password/complete';
+
+export type DesktopAuthCompletionResult =
+  | { ok: true; session: DesktopAuthSession & { isNewUser: boolean } }
+  | { ok: false; status: number; error: { code: string; message: string; details: unknown } | null };

@@ -1,6 +1,6 @@
 import { boolean, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core';
 
-import type { PermissionOverwriteTargetType, PlatformRole, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
+import type { PermissionOverwriteTargetType, PlatformRole, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => 'bytea' });
 
@@ -45,6 +45,7 @@ export const sessions = pgTable(
     tokenHash: text('token_hash').notNull(),
     tokenFamilyId: uuid('token_family_id').notNull(),
     deviceName: text('device_name').notNull(),
+    trustedAt: timestamp('trusted_at', { withTimezone: true }),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     replacedBySessionId: uuid('replaced_by_session_id'),
@@ -57,6 +58,30 @@ export const sessions = pgTable(
     index('sessions_family_id_idx').on(table.tokenFamilyId),
     index('sessions_expires_at_idx').on(table.expiresAt),
   ],
+);
+
+export const userRecoveryCodes = pgTable(
+  'user_recovery_codes',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    codeHash: text('code_hash').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+    usedAt: timestamp('used_at', { withTimezone: true }),
+  },
+  (table) => [uniqueIndex('user_recovery_codes_hash_unique').on(table.codeHash), index('user_recovery_codes_user_idx').on(table.userId)],
+);
+
+export const securityEvents = pgTable(
+  'security_events',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    type: text('type').$type<SecurityEventType>().notNull(),
+    deviceName: text('device_name'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [index('security_events_user_created_idx').on(table.userId, table.createdAt)],
 );
 
 export const servers = pgTable(

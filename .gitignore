@@ -7,6 +7,7 @@ release/
 .env.*
 !.env.example
 !.env.*.example
+!.env.e2e
 *.log
 *.local
 apps/desktop/build/icon.ico

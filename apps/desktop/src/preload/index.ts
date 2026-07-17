@@ -4,9 +4,10 @@ import type { DesktopBridge, LocalSettings } from '@vatrushka/shared';
 
 const channels = {
   appVersion: 'app:get-version',
-  refreshGet: 'session:get-refresh',
-  refreshStore: 'session:store-refresh',
-  refreshClear: 'session:clear-refresh',
+  authComplete: 'session:complete-auth',
+  authRefresh: 'session:refresh-auth',
+  authLogout: 'session:logout-auth',
+  authClear: 'session:clear-auth',
   sourcesList: 'desktop:list-sources',
   sourceSelect: 'desktop:select-source',
   sourceClear: 'desktop:clear-source',
@@ -39,9 +40,10 @@ ipcRenderer.on(channels.notificationClick, (_event, target: unknown) => {
 
 const bridge: DesktopBridge = {
   getAppVersion: () => ipcRenderer.invoke(channels.appVersion) as Promise<string>,
-  getStoredRefreshToken: () => ipcRenderer.invoke(channels.refreshGet) as Promise<string | null>,
-  storeRefreshToken: (token) => ipcRenderer.invoke(channels.refreshStore, token) as Promise<void>,
-  clearRefreshToken: () => ipcRenderer.invoke(channels.refreshClear) as Promise<void>,
+  completeAuthSession: (path, body, apiBaseUrl) => ipcRenderer.invoke(channels.authComplete, path, body, apiBaseUrl),
+  refreshAuthSession: () => ipcRenderer.invoke(channels.authRefresh),
+  logoutAuthSession: () => ipcRenderer.invoke(channels.authLogout) as Promise<void>,
+  clearAuthSession: () => ipcRenderer.invoke(channels.authClear) as Promise<void>,
   listDesktopSources: () => ipcRenderer.invoke(channels.sourcesList),
   selectDesktopSource: (sourceId, includeAudio) =>
     ipcRenderer.invoke(channels.sourceSelect, { sourceId, includeAudio }) as Promise<void>,

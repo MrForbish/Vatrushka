@@ -56,7 +56,7 @@ export function Brand(): ReactNode {
 interface AuthPanelProps {
   mode: 'password' | 'email' | 'register';
   stage: 'credentials' | 'otp';
-  factor: 'email' | 'totp';
+  factor: 'email' | 'totp' | 'recovery';
   totpAvailable: boolean;
   email: string;
   code: string;
@@ -72,7 +72,7 @@ interface AuthPanelProps {
   onPasswordConfirmationChange(value: string): void;
   onRequest(): void;
   onVerify(): void;
-  onFactor(value: 'email' | 'totp'): void;
+  onFactor(value: 'email' | 'totp' | 'recovery'): void;
   onBack(): void;
 }
 
@@ -82,12 +82,14 @@ export function AuthPanel(props: AuthPanelProps): ReactNode {
     if (props.stage === 'credentials') props.onRequest(); else props.onVerify();
   };
   const title = props.stage === 'otp'
-    ? props.factor === 'totp' ? 'Код из приложения' : 'Проверьте почту'
+    ? props.factor === 'totp' ? 'Код из приложения' : props.factor === 'recovery' ? 'Резервный код' : 'Проверьте почту'
     : props.mode === 'register' ? 'Создайте аккаунт' : props.mode === 'password' ? 'С возвращением' : 'Войдите по email';
   const description = props.stage === 'otp'
     ? props.factor === 'totp'
       ? 'Введите шестизначный код из приложения-аутентификатора.'
-      : <>Шестизначный код отправлен на <strong>{props.email}</strong></>
+      : props.factor === 'recovery'
+        ? 'Введите один из сохранённых одноразовых recovery-кодов.'
+        : <>Шестизначный код отправлен на <strong>{props.email}</strong></>
     : props.mode === 'register'
       ? 'Email будет подтверждён одноразовым кодом. Пароль хранится только в виде защищённого хеша.'
       : props.mode === 'password'
@@ -101,11 +103,11 @@ export function AuthPanel(props: AuthPanelProps): ReactNode {
       <p className="lede">{description}</p>
       {props.stage === 'credentials' && <div className="authModeTabs" role="tablist" aria-label="Способ входа"><button role="tab" aria-selected={props.mode === 'password'} className={props.mode === 'password' ? 'active' : ''} onClick={() => props.onMode('password')}>Пароль</button><button role="tab" aria-selected={props.mode === 'email'} className={props.mode === 'email' ? 'active' : ''} onClick={() => props.onMode('email')}>Код из почты</button><button role="tab" aria-selected={props.mode === 'register'} className={props.mode === 'register' ? 'active' : ''} onClick={() => props.onMode('register')}>Регистрация</button></div>}
       <form onSubmit={submit} className="stack">
-        {props.stage === 'credentials' ? <><label className="field"><span>Email</span><input type="email" autoComplete="email" autoFocus value={props.email} onChange={(event) => props.onEmailChange(event.target.value)} placeholder="you@example.com" /></label>{props.mode !== 'email' && <label className="field"><span>Пароль</span><input type="password" autoComplete={props.mode === 'register' ? 'new-password' : 'current-password'} minLength={10} maxLength={128} value={props.password} onChange={(event) => props.onPasswordChange(event.target.value)} placeholder="Минимум 10 символов" /></label>}{props.mode === 'register' && <label className="field"><span>Повторите пароль</span><input type="password" autoComplete="new-password" minLength={10} maxLength={128} value={props.passwordConfirmation} onChange={(event) => props.onPasswordConfirmationChange(event.target.value)} /></label>}</> : <label className="field"><span>{props.factor === 'totp' ? 'Код 2FA' : 'Код из письма'}</span><input className="otpInput" inputMode="numeric" autoComplete="one-time-code" autoFocus maxLength={6} value={props.code} onChange={(event) => props.onCodeChange(event.target.value.replace(/\D/gu, '').slice(0, 6))} placeholder="••••••" /></label>}
+        {props.stage === 'credentials' ? <><label className="field"><span>Email</span><input type="email" autoComplete="email" autoFocus value={props.email} onChange={(event) => props.onEmailChange(event.target.value)} placeholder="you@example.com" /></label>{props.mode !== 'email' && <label className="field"><span>Пароль</span><input type="password" autoComplete={props.mode === 'register' ? 'new-password' : 'current-password'} minLength={10} maxLength={128} value={props.password} onChange={(event) => props.onPasswordChange(event.target.value)} placeholder="Минимум 10 символов" /></label>}{props.mode === 'register' && <label className="field"><span>Повторите пароль</span><input type="password" autoComplete="new-password" minLength={10} maxLength={128} value={props.passwordConfirmation} onChange={(event) => props.onPasswordConfirmationChange(event.target.value)} /></label>}</> : <label className="field"><span>{props.factor === 'totp' ? 'Код 2FA' : props.factor === 'recovery' ? 'Резервный код' : 'Код из письма'}</span><input className="otpInput" inputMode={props.factor === 'recovery' ? 'text' : 'numeric'} autoComplete="one-time-code" autoFocus maxLength={props.factor === 'recovery' ? 14 : 6} value={props.code} onChange={(event) => props.onCodeChange(props.factor === 'recovery' ? event.target.value.toUpperCase().replace(/[^A-Z2-9-]/gu, '').slice(0, 14) : event.target.value.replace(/\D/gu, '').slice(0, 6))} placeholder={props.factor === 'recovery' ? 'XXXX-XXXX-XXXX' : '••••••'} /></label>}
         {props.error && <div className="errorBanner" role="alert">{props.error}</div>}
-        <button className="primaryButton" type="submit" disabled={props.busy || (props.stage === 'otp' && props.code.length !== 6) || (props.stage === 'credentials' && props.mode !== 'email' && props.password.length < 10)}>{props.busy ? 'Подождите…' : props.stage === 'otp' ? 'Подтвердить вход' : props.mode === 'register' ? 'Создать аккаунт' : props.mode === 'password' ? 'Продолжить' : 'Получить код'} <Icon name="chevron" /></button>
+        <button className="primaryButton" type="submit" disabled={props.busy || (props.stage === 'otp' && props.code.length !== (props.factor === 'recovery' ? 14 : 6)) || (props.stage === 'credentials' && props.mode !== 'email' && props.password.length < 10)}>{props.busy ? 'Подождите…' : props.stage === 'otp' ? 'Подтвердить вход' : props.mode === 'register' ? 'Создать аккаунт' : props.mode === 'password' ? 'Продолжить' : 'Получить код'} <Icon name="chevron" /></button>
       </form>
-      {props.stage === 'otp' && <div className="authLinks"><button className="textButton" onClick={props.onBack}>Назад</button>{props.factor === 'email' && <button className="textButton" onClick={props.onRequest} disabled={props.retrySeconds > 0 || props.busy}>{props.retrySeconds > 0 ? `Отправить снова через ${props.retrySeconds} с` : 'Отправить снова'}</button>}{props.mode === 'password' && props.factor === 'totp' && <button className="textButton" onClick={() => props.onFactor('email')} disabled={props.busy}>Получить код на email</button>}{props.mode === 'password' && props.factor === 'email' && props.totpAvailable && <button className="textButton" onClick={() => props.onFactor('totp')} disabled={props.busy}>Использовать 2FA</button>}</div>}
+      {props.stage === 'otp' && <div className="authLinks"><button className="textButton" onClick={props.onBack}>Назад</button>{props.factor === 'email' && <button className="textButton" onClick={props.onRequest} disabled={props.retrySeconds > 0 || props.busy}>{props.retrySeconds > 0 ? `Отправить снова через ${props.retrySeconds} с` : 'Отправить снова'}</button>}{props.mode === 'password' && props.factor !== 'email' && <button className="textButton" onClick={() => props.onFactor('email')} disabled={props.busy}>Получить код на email</button>}{props.mode === 'password' && props.factor !== 'totp' && props.totpAvailable && <button className="textButton" onClick={() => props.onFactor('totp')} disabled={props.busy}>Использовать 2FA</button>}{props.mode === 'password' && props.totpAvailable && props.factor !== 'recovery' && <button className="textButton" onClick={() => props.onFactor('recovery')} disabled={props.busy}>Ввести резервный код</button>}</div>}
       <p className="privacyNote">Коды действуют 10 минут. Сервер не хранит пароль в открытом виде.</p>
     </section>
   </main>;

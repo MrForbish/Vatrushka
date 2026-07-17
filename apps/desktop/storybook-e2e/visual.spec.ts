@@ -76,4 +76,16 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page.getByRole('heading', { name: 'Права конкретного канала' })).toBeVisible();
     await expect(page).toHaveScreenshot('server-settings-overrides.png', { animations: 'disabled', fullPage: true });
   });
+
+  test('security center protection', async ({ page }) => {
+    await openStory(page, 'features-security-center--protection');
+    await expect(page.getByRole('dialog', { name: 'Безопасность аккаунта' })).toBeVisible();
+    await expect(page).toHaveScreenshot('security-center-protection.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('security center sessions', async ({ page }) => {
+    await openStory(page, 'features-security-center--sessions');
+    await expect(page.getByText('Рабочий ноутбук')).toBeVisible();
+    await expect(page).toHaveScreenshot('security-center-sessions.png', { animations: 'disabled', fullPage: true });
+  });
 });

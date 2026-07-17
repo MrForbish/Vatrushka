@@ -14,7 +14,12 @@ import { z } from 'zod';
 
 import {
   desktopSourceSelectionSchema,
+  completePasswordLoginSchema,
   localSettingsSchema,
+  verifyCodeSchema,
+  verifyRegistrationSchema,
+  type DesktopAuthSession,
+  type DesktopAuthCompletionResult,
   type DesktopSourceInfo,
   type DesktopMessageNotification,
 } from '@vatrushka/shared';
@@ -23,9 +28,10 @@ import type { DesktopStorage } from './storage.js';
 
 export const IPC_CHANNELS = {
   appVersion: 'app:get-version',
-  refreshGet: 'session:get-refresh',
-  refreshStore: 'session:store-refresh',
-  refreshClear: 'session:clear-refresh',
+  authComplete: 'session:complete-auth',
+  authRefresh: 'session:refresh-auth',
+  authLogout: 'session:logout-auth',
+  authClear: 'session:clear-auth',
   sourcesList: 'desktop:list-sources',
   sourceSelect: 'desktop:select-source',
   sourceClear: 'desktop:clear-source',
@@ -52,6 +58,64 @@ const desktopMessageNotificationSchema = z.object({
   serverId: z.uuid(),
   channelId: z.uuid(),
 }).strict();
+
+const apiBaseUrlSchema = z.url().refine((value) => {
+  const url = new URL(value);
+  return url.protocol === 'https:' || (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1'));
+}, 'API URL must use HTTPS');
+const refreshTokenSchema = z.string().min(32).max(512);
+const desktopAuthSessionSchema = z.object({
+  accessToken: z.string().min(32),
+  refreshToken: refreshTokenSchema,
+  expiresIn: z.number().positive(),
+  user: z.object({ id: z.string(), email: z.string(), displayName: z.string().nullable(), platformRole: z.enum(['member', 'admin', 'owner']), hasPassword: z.boolean(), twoFactorEnabled: z.boolean() }),
+  isNewUser: z.boolean().default(false),
+});
+
+const authCompletionPathSchema = z.enum(['/auth/verify-code', '/auth/register/verify-code', '/auth/password/complete']);
+
+function validateAuthCompletionBody(path: z.infer<typeof authCompletionPathSchema>, body: unknown): unknown {
+  if (path === '/auth/verify-code') return verifyCodeSchema.parse(body);
+  if (path === '/auth/register/verify-code') return verifyRegistrationSchema.parse(body);
+  return completePasswordLoginSchema.parse(body);
+}
+
+async function completeAuthSession(storage: DesktopStorage, pathValue: unknown, body: unknown, apiBaseUrlValue: unknown): Promise<DesktopAuthCompletionResult> {
+  const path = authCompletionPathSchema.parse(pathValue);
+  const apiBaseUrl = apiBaseUrlSchema.parse(apiBaseUrlValue).replace(/\/$/u, '');
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(validateAuthCompletionBody(path, body)),
+  });
+  if (!response.ok) {
+    const value = await response.json().catch(() => null) as unknown;
+    const error = value && typeof value === 'object' && 'code' in value && 'message' in value && typeof value.code === 'string' && typeof value.message === 'string'
+      ? { code: value.code, message: value.message, details: 'details' in value ? value.details : null }
+      : null;
+    return { ok: false, status: response.status, error };
+  }
+  const completed = desktopAuthSessionSchema.parse(await response.json());
+  await storage.storeAuthSession({ refreshToken: completed.refreshToken, apiBaseUrl });
+  return { ok: true, session: { accessToken: completed.accessToken, expiresIn: completed.expiresIn, user: completed.user, isNewUser: completed.isNewUser } };
+}
+
+async function refreshAuthSession(storage: DesktopStorage): Promise<DesktopAuthSession | null> {
+  const session = await storage.getAuthSession();
+  if (!session) return null;
+  const response = await fetch(`${session.apiBaseUrl}/auth/refresh`, {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refreshToken: session.refreshToken }),
+  });
+  if (!response.ok) {
+    if (response.status === 401) await storage.clearAuthSession();
+    throw new Error(`Session refresh failed with status ${response.status}`);
+  }
+  const refreshed = desktopAuthSessionSchema.parse(await response.json());
+  await storage.storeAuthSession({ refreshToken: refreshed.refreshToken, apiBaseUrl: session.apiBaseUrl });
+  return { accessToken: refreshed.accessToken, expiresIn: refreshed.expiresIn, user: refreshed.user };
+}
 
 function sourceType(id: string): DesktopSourceInfo['type'] {
   return id.startsWith('screen:') ? 'screen' : 'window';
@@ -106,11 +170,19 @@ export function registerIpc(options: IpcOptions): () => void {
   };
 
   handle(IPC_CHANNELS.appVersion, () => app.getVersion());
-  handle(IPC_CHANNELS.refreshGet, () => options.storage.getRefreshToken());
-  handle(IPC_CHANNELS.refreshStore, async (_event, token: unknown) => {
-    await options.storage.storeRefreshToken(z.string().min(32).max(512).parse(token));
+  handle(IPC_CHANNELS.authComplete, (_event, path: unknown, body: unknown, apiBaseUrl: unknown) => completeAuthSession(options.storage, path, body, apiBaseUrl));
+  handle(IPC_CHANNELS.authRefresh, () => refreshAuthSession(options.storage));
+  handle(IPC_CHANNELS.authLogout, async () => {
+    const session = await options.storage.getAuthSession();
+    try {
+      if (session) await fetch(`${session.apiBaseUrl}/auth/logout`, {
+        method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ refreshToken: session.refreshToken }),
+      });
+    } finally {
+      await options.storage.clearAuthSession();
+    }
   });
-  handle(IPC_CHANNELS.refreshClear, () => options.storage.clearRefreshToken());
+  handle(IPC_CHANNELS.authClear, () => options.storage.clearAuthSession());
   handle(IPC_CHANNELS.sourcesList, listSources);
   handle(IPC_CHANNELS.sourceSelect, async (_event, value: unknown) => {
     const selection = desktopSourceSelectionSchema.parse(value);

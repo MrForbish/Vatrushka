@@ -7,7 +7,8 @@
 - unknown navigation/windows denied;
 - main-frame sender validation and fixed IPC channels; no generic invoke;
 - source ID is one-shot and revalidated immediately before display capture;
-- refresh encrypted by OS `safeStorage`; no plaintext fallback;
+- refresh encrypted by OS `safeStorage`; no plaintext fallback and no preload getter that could return it to arbitrary renderer code;
+- startup refresh, token rotation and logout run in Electron main; renderer receives only the short-lived access JWT;
 - access/LiveKit tokens only in memory; no localStorage;
 - logs rotate at 5 MiB and never intentionally include tokens.
 
@@ -17,7 +18,8 @@ Windows DPAPI protects against other OS users but not every process already runn
 
 - strict Zod validation and unified non-stacktrace errors;
 - OTP HMAC pepper, refresh SHA-256 hashes, JWT issuer/audience/expiry;
-- rate limits, attempt limits, session family revocation;
+- route rate limits covered by integration tests, attempt limits, immediate access-token checks and session family revocation;
+- single-use hashed 2FA recovery codes, active-session management and an append-only security event feed;
 - least-privilege room tokens: microphone/screen sources, no camera;
 - owner checks server-side, guest room binding, room state checks;
 - webhook signature and body checksum validation;

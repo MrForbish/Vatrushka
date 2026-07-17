@@ -1,6 +1,6 @@
 # Ватрушка
 
-«Ватрушка» — настольное приложение для общения на Windows 10/11 x64. Помимо быстрых голосовых комнат до пяти человек, в нём есть постоянные серверы, текстовые и голосовые каналы, история сообщений, роли и права. Регистрация поддерживает пароль с подтверждением по email, вход — email-код или пароль со вторым фактором email/TOTP. В голосе доступны выбор аудиоустройств и демонстрация монитора либо окна с управляемым системным звуком.
+«Ватрушка» — настольное приложение для общения на Windows 10/11 x64. Помимо быстрых голосовых комнат до пяти человек, в нём есть постоянные серверы, текстовые и голосовые каналы, история сообщений, роли и права. Регистрация поддерживает пароль с подтверждением по email, вход — email-код или пароль со вторым фактором email/TOTP/recovery-кодом. В голосе доступны выбор аудиоустройств и демонстрация монитора либо окна с управляемым системным звуком.
 
 ## Архитектура
 
@@ -22,7 +22,7 @@
 - npm workspaces: `apps/desktop`, `apps/api`, `packages/shared`, `packages/config`.
 - Desktop: Electron 43, React 19, electron-vite, LiveKit JS SDK, Zod.
 - API: Node.js, Fastify 5, PostgreSQL, Drizzle ORM, Nodemailer, LiveKit Server SDK.
-- Авторизация: scrypt-пароль, email/TOTP 2FA, access JWT на 15 минут; opaque refresh token на 30 дней с rotation/reuse detection.
+- Авторизация: scrypt-пароль, email/TOTP/recovery 2FA, управление устройствами, access JWT на 15 минут; opaque refresh token на 30 дней с rotation/reuse detection и хранением только в Electron main/safeStorage.
 - Медиа: LiveKit Cloud по умолчанию; self-hosted меняется только значениями `LIVEKIT_*`.
 - Единственная демонстрация обеспечивается транзакционной lease в PostgreSQL, а не только UI.
 - Серверы хранят постоянное членство, каналы, сообщения, иерархию ролей, channel overrides и audit log; права `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` ограничиваются также grant-ами LiveKit-токена.

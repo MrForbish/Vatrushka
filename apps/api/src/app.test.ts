@@ -253,7 +253,11 @@ describe('authentication API', () => {
       payload: { code },
     });
     expect(enabled.statusCode).toBe(200);
-    expect(enabled.json<{ twoFactorEnabled: boolean }>().twoFactorEnabled).toBe(true);
+    const enabledBody = enabled.json<{ user: { twoFactorEnabled: boolean }; recoveryCodes: string[] }>();
+    expect(enabledBody.user.twoFactorEnabled).toBe(true);
+    expect(enabledBody.recoveryCodes).toHaveLength(10);
+    expect(enabledBody.recoveryCodes[0]).toMatch(/^[A-Z2-9]{4}(?:-[A-Z2-9]{4}){2}$/u);
+    expect([...context.store.recoveryCodes.values()][0]?.codeHash).not.toBe(enabledBody.recoveryCodes[0]);
 
     const challenge = await context.app.inject({
       method: 'POST',
@@ -269,6 +273,99 @@ describe('authentication API', () => {
       payload: { email, password, code, factor: 'totp', deviceName: 'Windows Desktop' },
     });
     expect(completed.statusCode).toBe(200);
+
+    const recoveryChallenge = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/begin`,
+      payload: { email, password, factor: 'recovery' },
+    });
+    expect(recoveryChallenge.statusCode).toBe(200);
+    expect(recoveryChallenge.json<{ factor: string }>().factor).toBe('recovery');
+
+    const recoveryLogin = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/complete`,
+      payload: { email, password, code: enabledBody.recoveryCodes[0], factor: 'recovery', deviceName: 'Recovery Desktop' },
+    });
+    expect(recoveryLogin.statusCode).toBe(200);
+
+    const reusedRecoveryCode = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/complete`,
+      payload: { email, password, code: enabledBody.recoveryCodes[0], factor: 'recovery', deviceName: 'Recovery Desktop' },
+    });
+    expect(reusedRecoveryCode.statusCode).toBe(401);
+  });
+
+  it('lists logical device sessions, marks trust, and revokes a whole token family', async () => {
+    const first = await login('sessions@example.com', 'Sessions');
+    context.clock.now = new Date(context.clock.now.getTime() + 61_000);
+    const second = await login('sessions@example.com', 'Sessions');
+    const listed = await context.app.inject({
+      method: 'GET', url: `${API_PREFIX}/auth/sessions`, headers: { authorization: `Bearer ${second.accessToken}` },
+    });
+    expect(listed.statusCode).toBe(200);
+    const sessions = listed.json<Array<{ id: string; current: boolean; trusted: boolean }>>();
+    expect(sessions).toHaveLength(2);
+    expect(sessions.filter((session) => session.current)).toHaveLength(1);
+
+    const current = sessions.find((session) => session.current);
+    const previous = sessions.find((session) => !session.current);
+    if (!current || !previous) throw new Error('Missing sessions');
+    const trusted = await context.app.inject({
+      method: 'PATCH', url: `${API_PREFIX}/auth/sessions/${current.id}`,
+      headers: { authorization: `Bearer ${second.accessToken}` }, payload: { trusted: true },
+    });
+    expect(trusted.statusCode).toBe(204);
+
+    const rotatedSecond = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/refresh`, payload: { refreshToken: second.refreshToken } });
+    expect(rotatedSecond.statusCode).toBe(200);
+    const secondCurrentAccessToken = rotatedSecond.json<{ accessToken: string }>().accessToken;
+    const listedAfterRotation = await context.app.inject({
+      method: 'GET', url: `${API_PREFIX}/auth/sessions`, headers: { authorization: `Bearer ${secondCurrentAccessToken}` },
+    });
+    const sessionsAfterRotation = listedAfterRotation.json<Array<{ current: boolean; trusted: boolean }>>();
+    expect(sessionsAfterRotation).toHaveLength(2);
+    expect(sessionsAfterRotation.find((session) => session.current)?.trusted).toBe(true);
+
+    const revoked = await context.app.inject({
+      method: 'DELETE', url: `${API_PREFIX}/auth/sessions/${previous.id}`,
+      headers: { authorization: `Bearer ${secondCurrentAccessToken}` },
+    });
+    expect(revoked.statusCode).toBe(200);
+    expect(revoked.json()).toEqual({ current: false });
+    const oldAccess = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/me`, headers: { authorization: `Bearer ${first.accessToken}` } });
+    expect(oldAccess.statusCode).toBe(401);
+
+    context.clock.now = new Date(context.clock.now.getTime() + 61_000);
+    const third = await login('sessions@example.com', 'Sessions');
+    const revokedOthers = await context.app.inject({
+      method: 'DELETE', url: `${API_PREFIX}/auth/sessions`, headers: { authorization: `Bearer ${third.accessToken}` },
+    });
+    expect(revokedOthers.statusCode).toBe(200);
+    expect(revokedOthers.json()).toEqual({ revokedCount: 1 });
+    const secondAccess = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/me`, headers: { authorization: `Bearer ${secondCurrentAccessToken}` } });
+    expect(secondAccess.statusCode).toBe(401);
+  });
+
+  it('exposes security events and applies route rate limits', async () => {
+    const auth = await login('events@example.com', 'Events');
+    const events = await context.app.inject({
+      method: 'GET', url: `${API_PREFIX}/me/security-events`, headers: { authorization: `Bearer ${auth.accessToken}` },
+    });
+    expect(events.statusCode).toBe(200);
+    expect(events.json<Array<{ type: string }>>().some((event) => event.type === 'SESSION_CREATED')).toBe(true);
+    expect(context.mailer.securityNotices.some((notice) => notice.title === 'Новый вход в аккаунт')).toBe(true);
+
+    let limitedStatus = 0;
+    for (let attempt = 0; attempt < 11; attempt += 1) {
+      const response = await context.app.inject({
+        method: 'POST', url: `${API_PREFIX}/auth/password/begin`,
+        payload: { email: 'missing@example.com', password: 'missing-password-42', factor: 'auto' },
+      });
+      limitedStatus = response.statusCode;
+    }
+    expect(limitedStatus).toBe(429);
   });
 });
 

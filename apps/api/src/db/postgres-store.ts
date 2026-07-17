@@ -12,6 +12,8 @@ import type {
   LeaseRecord,
   RefreshRotation,
   RoomRecord,
+  RecoveryCodeRecord,
+  SecurityEventRecord,
   SessionRecord,
   UserRecord,
   ServerGraph,
@@ -188,6 +190,15 @@ export class PostgresStore implements DataStore {
     await this.db.insert(schema.sessions).values(session);
   }
 
+  async findSessionById(id: string): Promise<SessionRecord | null> {
+    const [row] = await this.db.select().from(schema.sessions).where(eq(schema.sessions.id, id)).limit(1);
+    return row ?? null;
+  }
+
+  async listSessionsForUser(userId: string): Promise<SessionRecord[]> {
+    return this.db.select().from(schema.sessions).where(eq(schema.sessions.userId, userId)).orderBy(desc(schema.sessions.createdAt));
+  }
+
   async rotateSession(tokenHash: string, replacement: SessionRecord, now: Date): Promise<RefreshRotation> {
     return this.db.transaction(async (tx) => {
       const [session] = await tx
@@ -208,7 +219,7 @@ export class PostgresStore implements DataStore {
         await tx.update(schema.sessions).set({ revokedAt: now }).where(eq(schema.sessions.id, session.id));
         return { status: 'expired', session };
       }
-      const next: SessionRecord = { ...replacement, userId: session.userId, tokenFamilyId: session.tokenFamilyId, deviceName: session.deviceName };
+      const next: SessionRecord = { ...replacement, userId: session.userId, tokenFamilyId: session.tokenFamilyId, deviceName: session.deviceName, trustedAt: session.trustedAt };
       await tx.insert(schema.sessions).values(next);
       await tx
         .update(schema.sessions)
@@ -230,6 +241,54 @@ export class PostgresStore implements DataStore {
       .update(schema.sessions)
       .set({ revokedAt: now })
       .where(and(eq(schema.sessions.tokenFamilyId, familyId), isNull(schema.sessions.revokedAt)));
+  }
+
+  async revokeSessionFamilyForUser(userId: string, familyId: string, now: Date): Promise<boolean> {
+    const rows = await this.db
+      .update(schema.sessions)
+      .set({ revokedAt: now })
+      .where(and(eq(schema.sessions.userId, userId), eq(schema.sessions.tokenFamilyId, familyId), isNull(schema.sessions.revokedAt)))
+      .returning({ id: schema.sessions.id });
+    if (rows.length > 0) return true;
+    const [existing] = await this.db.select({ id: schema.sessions.id }).from(schema.sessions)
+      .where(and(eq(schema.sessions.userId, userId), eq(schema.sessions.tokenFamilyId, familyId))).limit(1);
+    return existing !== undefined;
+  }
+
+  async setSessionFamilyTrusted(userId: string, familyId: string, trustedAt: Date | null): Promise<boolean> {
+    const rows = await this.db
+      .update(schema.sessions)
+      .set({ trustedAt })
+      .where(and(eq(schema.sessions.userId, userId), eq(schema.sessions.tokenFamilyId, familyId)))
+      .returning({ id: schema.sessions.id });
+    return rows.length > 0;
+  }
+
+  async replaceRecoveryCodes(userId: string, codes: RecoveryCodeRecord[]): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      await tx.delete(schema.userRecoveryCodes).where(eq(schema.userRecoveryCodes.userId, userId));
+      if (codes.length > 0) await tx.insert(schema.userRecoveryCodes).values(codes);
+    });
+  }
+
+  async consumeRecoveryCode(userId: string, codeHash: string, now: Date): Promise<boolean> {
+    const rows = await this.db.update(schema.userRecoveryCodes).set({ usedAt: now })
+      .where(and(eq(schema.userRecoveryCodes.userId, userId), eq(schema.userRecoveryCodes.codeHash, codeHash), isNull(schema.userRecoveryCodes.usedAt)))
+      .returning({ id: schema.userRecoveryCodes.id });
+    return rows.length === 1;
+  }
+
+  async deleteRecoveryCodes(userId: string): Promise<void> {
+    await this.db.delete(schema.userRecoveryCodes).where(eq(schema.userRecoveryCodes.userId, userId));
+  }
+
+  async createSecurityEvent(event: SecurityEventRecord): Promise<void> {
+    await this.db.insert(schema.securityEvents).values(event);
+  }
+
+  async listSecurityEvents(userId: string, limit: number): Promise<SecurityEventRecord[]> {
+    return this.db.select().from(schema.securityEvents).where(eq(schema.securityEvents.userId, userId))
+      .orderBy(desc(schema.securityEvents.createdAt)).limit(limit);
   }
 
   async createRoom(room: RoomRecord): Promise<boolean> {

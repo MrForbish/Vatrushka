@@ -212,10 +212,10 @@
 
 .vui-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 0 var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-round); background: var(--color-surface-2); color: var(--color-text-secondary); font: var(--text-caption); }
 .vui-badge--primary { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-text-primary); }
-.vui-badge--success { border-color: var(--color-success); background: var(--color-success-soft); color: var(--color-success); }
-.vui-badge--warning { border-color: var(--color-warning); background: var(--color-warning-soft); color: var(--color-warning); }
-.vui-badge--danger { border-color: var(--color-danger); background: var(--color-danger-soft); color: var(--color-danger); }
-.vui-badge--founder { border-color: var(--color-founder); background: var(--gradient-founder); color: var(--color-founder); }
+.vui-badge--success { border-color: var(--color-success); background: var(--color-success-soft); color: var(--color-text-primary); }
+.vui-badge--warning { border-color: var(--color-warning); background: var(--color-warning-soft); color: var(--color-text-primary); }
+.vui-badge--danger { border-color: var(--color-danger); background: var(--color-danger-soft); color: var(--color-text-primary); }
+.vui-badge--founder { border-color: var(--color-founder); background: var(--gradient-founder); color: var(--color-text-primary); }
 
 .vui-status-dot { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--color-surface-0); border-radius: var(--radius-round); background: var(--status-color); }
 .vui-status-dot--online { --status-color: var(--color-presence-online); }

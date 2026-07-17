@@ -5,6 +5,8 @@ import type {
   LeaseRecord,
   RefreshRotation,
   RoomRecord,
+  RecoveryCodeRecord,
+  SecurityEventRecord,
   SessionRecord,
   UserRecord,
   ServerGraph,
@@ -51,9 +53,18 @@ export interface DataStore {
   updateTwoFactor(id: string, secretEncrypted: string | null, enabled: boolean, now: Date): Promise<UserRecord | null>;
   setPlatformRoleByEmail(email: string, role: PlatformRole, now: Date): Promise<UserRecord | null>;
   createSession(session: SessionRecord): Promise<void>;
+  findSessionById(id: string): Promise<SessionRecord | null>;
+  listSessionsForUser(userId: string): Promise<SessionRecord[]>;
   rotateSession(tokenHash: string, replacement: SessionRecord, now: Date): Promise<RefreshRotation>;
   revokeSessionByHash(tokenHash: string, now: Date): Promise<void>;
   revokeSessionFamily(familyId: string, now: Date): Promise<void>;
+  revokeSessionFamilyForUser(userId: string, familyId: string, now: Date): Promise<boolean>;
+  setSessionFamilyTrusted(userId: string, familyId: string, trustedAt: Date | null): Promise<boolean>;
+  replaceRecoveryCodes(userId: string, codes: RecoveryCodeRecord[]): Promise<void>;
+  consumeRecoveryCode(userId: string, codeHash: string, now: Date): Promise<boolean>;
+  deleteRecoveryCodes(userId: string): Promise<void>;
+  createSecurityEvent(event: SecurityEventRecord): Promise<void>;
+  listSecurityEvents(userId: string, limit: number): Promise<SecurityEventRecord[]>;
   createRoom(room: RoomRecord): Promise<boolean>;
   findRoomById(id: string): Promise<RoomRecord | null>;
   findRoomByCode(code: string): Promise<RoomRecord | null>;
@@ -141,6 +152,7 @@ export interface DataStore {
 
 export interface Mailer {
   sendOtp(email: string, code: string, expiresInMinutes: number): Promise<void>;
+  sendSecurityNotice(email: string, title: string, message: string): Promise<void>;
 }
 
 export interface MediaRoomOptions {

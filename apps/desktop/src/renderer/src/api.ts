@@ -1,7 +1,8 @@
 import {
   API_PREFIX,
   type ApiErrorBody,
-  type AuthResponse,
+  type DesktopAuthCompletionPath,
+  type DesktopAuthSession,
   type DirectConversationSummary,
   type DirectMessage,
   type DirectMessageCandidate,
@@ -18,6 +19,9 @@ import {
   type TextMessage,
   type MessageNotificationPage,
   type TwoFactorSetup,
+  type TwoFactorEnableResult,
+  type UserSession,
+  type SecurityEvent,
 } from '@vatrushka/shared';
 
 const apiBase = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '')}${API_PREFIX}`;
@@ -45,7 +49,6 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
 
 export class ApiClient {
   private accessToken: string | null = null;
-  private refreshToken: string | null = null;
   private refreshPromise: Promise<PublicUser> | null = null;
   private user: PublicUser | null = null;
 
@@ -54,12 +57,12 @@ export class ApiClient {
   }
 
   async restoreSession(): Promise<PublicUser | null> {
-    this.refreshToken = await window.desktop.getStoredRefreshToken();
-    if (!this.refreshToken) return null;
     try {
-      return await this.refresh();
+      const response = await window.desktop.refreshAuthSession();
+      if (!response) return null;
+      this.acceptAccess(response);
+      return response.user;
     } catch {
-      await this.clearSession();
       return null;
     }
   }
@@ -68,39 +71,24 @@ export class ApiClient {
     return this.request('/auth/request-code', { method: 'POST', body: { email } });
   }
 
-  async verifyCode(email: string, code: string): Promise<AuthResponse> {
-    const response = await this.request<AuthResponse>('/auth/verify-code', {
-      method: 'POST',
-      body: { email, code, deviceName: `Ватрушка · ${await window.desktop.getPlatform()} Desktop` },
-    });
-    await this.acceptAuth(response);
-    return response;
+  async verifyCode(email: string, code: string): Promise<DesktopAuthSession & { isNewUser: boolean }> {
+    return this.completeAuth('/auth/verify-code', { email, code, deviceName: await this.deviceName() });
   }
 
   requestRegistration(email: string, password: string): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
     return this.request('/auth/register/request-code', { method: 'POST', body: { email, password } });
   }
 
-  async verifyRegistration(email: string, code: string): Promise<AuthResponse> {
-    const response = await this.request<AuthResponse>('/auth/register/verify-code', {
-      method: 'POST',
-      body: { email, code, deviceName: await this.deviceName() },
-    });
-    await this.acceptAuth(response);
-    return response;
+  async verifyRegistration(email: string, code: string): Promise<DesktopAuthSession & { isNewUser: boolean }> {
+    return this.completeAuth('/auth/register/verify-code', { email, code, deviceName: await this.deviceName() });
   }
 
-  beginPasswordLogin(email: string, password: string, factor: 'auto' | 'email' | 'totp' = 'auto'): Promise<PasswordLoginChallenge> {
+  beginPasswordLogin(email: string, password: string, factor: 'auto' | 'email' | 'totp' | 'recovery' = 'auto'): Promise<PasswordLoginChallenge> {
     return this.request('/auth/password/begin', { method: 'POST', body: { email, password, factor } });
   }
 
-  async completePasswordLogin(email: string, password: string, code: string, factor: 'email' | 'totp'): Promise<AuthResponse> {
-    const response = await this.request<AuthResponse>('/auth/password/complete', {
-      method: 'POST',
-      body: { email, password, code, factor, deviceName: await this.deviceName() },
-    });
-    await this.acceptAuth(response);
-    return response;
+  async completePasswordLogin(email: string, password: string, code: string, factor: 'email' | 'totp' | 'recovery'): Promise<DesktopAuthSession & { isNewUser: boolean }> {
+    return this.completeAuth('/auth/password/complete', { email, password, code, factor, deviceName: await this.deviceName() });
   }
 
   requestPasswordSetup(): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
@@ -117,16 +105,42 @@ export class ApiClient {
     return this.request('/me/2fa/setup', { method: 'POST', auth: true });
   }
 
-  async enableTwoFactor(code: string): Promise<PublicUser> {
-    const user = await this.request<PublicUser>('/me/2fa/enable', { method: 'POST', body: { code }, auth: true });
-    this.user = user;
-    return user;
+  async enableTwoFactor(code: string): Promise<TwoFactorEnableResult> {
+    const result = await this.request<TwoFactorEnableResult>('/me/2fa/enable', { method: 'POST', body: { code }, auth: true });
+    this.user = result.user;
+    return result;
   }
 
   async disableTwoFactor(code: string): Promise<PublicUser> {
     const user = await this.request<PublicUser>('/me/2fa', { method: 'DELETE', body: { code }, auth: true });
     this.user = user;
     return user;
+  }
+
+  regenerateRecoveryCodes(code: string): Promise<{ recoveryCodes: string[] }> {
+    return this.request('/me/2fa/recovery-codes', { method: 'POST', body: { code }, auth: true });
+  }
+
+  listSessions(): Promise<UserSession[]> {
+    return this.request('/auth/sessions', { auth: true });
+  }
+
+  async setSessionTrusted(sessionId: string, trusted: boolean): Promise<void> {
+    await this.request(`/auth/sessions/${sessionId}`, { method: 'PATCH', body: { trusted }, auth: true });
+  }
+
+  async revokeSession(sessionId: string): Promise<{ current: boolean }> {
+    const result = await this.request<{ current: boolean }>(`/auth/sessions/${sessionId}`, { method: 'DELETE', auth: true });
+    if (result.current) await this.clearSession();
+    return result;
+  }
+
+  revokeOtherSessions(): Promise<{ revokedCount: number }> {
+    return this.request('/auth/sessions', { method: 'DELETE', auth: true });
+  }
+
+  listSecurityEvents(): Promise<SecurityEvent[]> {
+    return this.request('/me/security-events', { auth: true });
   }
 
   async updateProfile(displayName: string): Promise<PublicUser> {
@@ -136,11 +150,11 @@ export class ApiClient {
   }
 
   async logout(): Promise<void> {
-    const token = this.refreshToken ?? (await window.desktop.getStoredRefreshToken());
     try {
-      if (token) await this.request('/auth/logout', { method: 'POST', body: { refreshToken: token } });
+      await window.desktop.logoutAuthSession();
     } finally {
-      await this.clearSession();
+      this.accessToken = null;
+      this.user = null;
     }
   }
 
@@ -354,13 +368,9 @@ export class ApiClient {
   private async refresh(): Promise<PublicUser> {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = (async () => {
-      const token = this.refreshToken ?? (await window.desktop.getStoredRefreshToken());
-      if (!token) throw new ClientError('UNAUTHORIZED', 'Сессия не найдена', 401);
-      const response = await this.request<Omit<AuthResponse, 'isNewUser'>>('/auth/refresh', {
-        method: 'POST',
-        body: { refreshToken: token },
-      });
-      await this.acceptAuth(response);
+      const response = await window.desktop.refreshAuthSession();
+      if (!response) throw new ClientError('UNAUTHORIZED', 'Сессия не найдена', 401);
+      this.acceptAccess(response);
       return response.user;
     })();
     try {
@@ -370,18 +380,22 @@ export class ApiClient {
     }
   }
 
-  private async acceptAuth(response: Omit<AuthResponse, 'isNewUser'>): Promise<void> {
+  private async completeAuth(path: DesktopAuthCompletionPath, body: unknown): Promise<DesktopAuthSession & { isNewUser: boolean }> {
+    const result = await window.desktop.completeAuthSession(path, body, apiBase);
+    if (!result.ok) throw new ClientError(result.error?.code ?? 'UNKNOWN_ERROR', result.error?.message ?? 'Не удалось завершить вход', result.status, result.error?.details);
+    this.acceptAccess(result.session);
+    return result.session;
+  }
+
+  private acceptAccess(response: DesktopAuthSession): void {
     this.accessToken = response.accessToken;
-    this.refreshToken = response.refreshToken;
     this.user = response.user;
-    await window.desktop.storeRefreshToken(response.refreshToken);
   }
 
   private async clearSession(): Promise<void> {
     this.accessToken = null;
-    this.refreshToken = null;
     this.user = null;
-    await window.desktop.clearRefreshToken();
+    await window.desktop.clearAuthSession();
   }
 
   private async deviceName(): Promise<string> {
@@ -407,9 +421,14 @@ export class ApiClient {
       throw new ClientError('NETWORK_ERROR', 'Не удалось подключиться к серверу', 0);
     }
 
-    if (response.status === 401 && auth && retry && this.refreshToken) {
-      await this.refresh();
-      return this.request<T>(path, { ...options, retry: false });
+    if (response.status === 401 && auth && retry) {
+      try {
+        await this.refresh();
+        return this.request<T>(path, { ...options, retry: false });
+      } catch (caught) {
+        if (caught instanceof ClientError && caught.status === 401) await this.clearSession();
+        throw caught;
+      }
     }
     if (!response.ok) {
       const error = await response.json().catch(() => null) as ApiErrorBody | null;

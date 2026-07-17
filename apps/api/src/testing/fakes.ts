@@ -2,11 +2,17 @@ import type { Mailer, MediaRoomOptions, MediaService, MediaTokenOptions } from '
 
 export class FakeMailer implements Mailer {
   readonly messages: Array<{ email: string; code: string }> = [];
+  readonly securityNotices: Array<{ email: string; title: string; message: string }> = [];
   shouldFail = false;
 
   async sendOtp(email: string, code: string): Promise<void> {
     if (this.shouldFail) throw new Error('SMTP unavailable');
     this.messages.push({ email, code });
+  }
+
+  async sendSecurityNotice(email: string, title: string, message: string): Promise<void> {
+    if (this.shouldFail) throw new Error('SMTP unavailable');
+    this.securityNotices.push({ email, title, message });
   }
 }
 

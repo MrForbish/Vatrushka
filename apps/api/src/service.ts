@@ -25,7 +25,11 @@ import {
   type DirectConversationSummary,
   type DirectMessage,
   type DirectMessageCandidate,
+  type SecurityEvent,
+  type SecurityEventType,
   type TwoFactorSetup,
+  type TwoFactorEnableResult,
+  type UserSession,
   serverPermissions,
   highestRolePosition,
   resolveChannelPermissions,
@@ -37,7 +41,7 @@ import {
 
 import { AppError } from './app-error.js';
 import type { AppConfig } from './config.js';
-import type { AuthCodeRecord, DirectConversationOverviewRecord, DirectConversationRecord, DirectMessageAttachmentMetadata, DirectMessageAttachmentRecord, DirectMessageWithAuthor, GuestSessionRecord, MessageAttachmentMetadata, MessageAttachmentRecord, MessageNotificationRecord, MessageReactionSummary, RoomRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
+import type { AuthCodeRecord, DirectConversationOverviewRecord, DirectConversationRecord, DirectMessageAttachmentMetadata, DirectMessageAttachmentRecord, DirectMessageWithAuthor, GuestSessionRecord, MessageAttachmentMetadata, MessageAttachmentRecord, MessageNotificationRecord, MessageReactionSummary, RecoveryCodeRecord, RoomRecord, SecurityEventRecord, ServerChannelRecord, ServerRecord, ServerRoleRecord, SessionRecord, TextMessageWithAuthor, UserRecord } from './domain.js';
 import type { DataStore, Mailer, MediaService } from './ports.js';
 import {
   hashOpaqueToken,
@@ -67,6 +71,14 @@ export interface ServiceDependencies {
 export type RoomPrincipal =
   | { kind: 'user'; user: UserRecord }
   | { kind: 'guest'; guest: GuestSessionRecord };
+
+const RECOVERY_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+function randomRecoveryCode(): string {
+  const bytes = randomBytes(12);
+  const characters = [...bytes].map((byte) => RECOVERY_CODE_ALPHABET[byte % RECOVERY_CODE_ALPHABET.length]);
+  return `${characters.slice(0, 4).join('')}-${characters.slice(4, 8).join('')}-${characters.slice(8, 12).join('')}`;
+}
 
 function publicUser(user: UserRecord): PublicUser {
   return {
@@ -231,10 +243,10 @@ export class VatrushkaService {
     return { ...tokens, user: publicUser(user), isNewUser: true };
   }
 
-  async beginPasswordLogin(email: string, password: string, requestedFactor: 'auto' | 'email' | 'totp'): Promise<PasswordLoginChallenge> {
+  async beginPasswordLogin(email: string, password: string, requestedFactor: 'auto' | 'email' | 'totp' | 'recovery'): Promise<PasswordLoginChallenge> {
     const user = await this.requireValidPassword(email, password);
     const factor = requestedFactor === 'auto' ? (user.twoFactorEnabled ? 'totp' : 'email') : requestedFactor;
-    if (factor === 'totp') {
+    if (factor === 'totp' || factor === 'recovery') {
       if (!user.twoFactorEnabled || !user.totpSecretEncrypted) throw new AppError('TWO_FACTOR_NOT_CONFIGURED', 409);
       return { status: 'SECOND_FACTOR_REQUIRED', factor, retryAfterSeconds: 0 };
     }
@@ -242,11 +254,11 @@ export class VatrushkaService {
     return { status: 'SECOND_FACTOR_REQUIRED', factor, retryAfterSeconds: result.retryAfterSeconds };
   }
 
-  async completePasswordLogin(email: string, password: string, code: string, factor: 'email' | 'totp', deviceName: string): Promise<AuthResponse> {
+  async completePasswordLogin(email: string, password: string, code: string, factor: 'email' | 'totp' | 'recovery', deviceName: string): Promise<AuthResponse> {
     const user = await this.requireValidPassword(email, password);
     if (factor === 'email') {
       await this.consumeEmailCode(email, code, 'password_login', 'INVALID_SECOND_FACTOR');
-    } else {
+    } else if (factor === 'totp') {
       if (!user.twoFactorEnabled || !user.totpSecretEncrypted) throw new AppError('TWO_FACTOR_NOT_CONFIGURED', 409);
       let secret: string;
       try {
@@ -255,6 +267,10 @@ export class VatrushkaService {
         throw new AppError('INTERNAL_ERROR', 500);
       }
       if (!verifyTotp(secret, code, this.now().getTime())) throw new AppError('INVALID_SECOND_FACTOR', 401);
+    } else {
+      if (!user.twoFactorEnabled || !(await this.store.consumeRecoveryCode(user.id, hashOpaqueToken(code.toUpperCase()), this.now()))) {
+        throw new AppError('INVALID_SECOND_FACTOR', 401);
+      }
     }
     const promoted = await this.promotePlatformOwner(user, this.now());
     const tokens = await this.createSessionTokens(promoted, deviceName, this.now());
@@ -271,6 +287,7 @@ export class VatrushkaService {
     await this.consumeEmailCode(user.email, code, 'password_setup', 'INVALID_SECOND_FACTOR');
     const updated = await this.store.updatePassword(user.id, await hashPassword(password), this.now());
     if (!updated) throw new AppError('UNAUTHORIZED', 401);
+    await this.recordSecurityEvent(updated, 'PASSWORD_CHANGED', null, 'Пароль изменён', 'Пароль вашего аккаунта был изменён.');
     return publicUser(updated);
   }
 
@@ -288,14 +305,16 @@ export class VatrushkaService {
     return { secret, otpauthUri: totpUri(secret, user.email, this.config.APP_NAME) };
   }
 
-  async enableTwoFactor(authorization: string | undefined, code: string): Promise<PublicUser> {
+  async enableTwoFactor(authorization: string | undefined, code: string): Promise<TwoFactorEnableResult> {
     const user = await this.authenticate(authorization);
     if (!user.totpSecretEncrypted) throw new AppError('TWO_FACTOR_NOT_CONFIGURED', 409);
     const secret = decryptCredential(user.totpSecretEncrypted, this.config.CREDENTIAL_ENCRYPTION_KEY);
     if (!verifyTotp(secret, code, this.now().getTime())) throw new AppError('INVALID_SECOND_FACTOR', 401);
     const updated = await this.store.updateTwoFactor(user.id, user.totpSecretEncrypted, true, this.now());
     if (!updated) throw new AppError('UNAUTHORIZED', 401);
-    return publicUser(updated);
+    const recoveryCodes = await this.replaceRecoveryCodes(updated.id);
+    await this.recordSecurityEvent(updated, 'TWO_FACTOR_ENABLED', null, 'Двухфакторная защита включена', 'Для аккаунта включена двухфакторная аутентификация.');
+    return { user: publicUser(updated), recoveryCodes };
   }
 
   async disableTwoFactor(authorization: string | undefined, code: string): Promise<PublicUser> {
@@ -305,7 +324,19 @@ export class VatrushkaService {
     if (!verifyTotp(secret, code, this.now().getTime())) throw new AppError('INVALID_SECOND_FACTOR', 401);
     const updated = await this.store.updateTwoFactor(user.id, null, false, this.now());
     if (!updated) throw new AppError('UNAUTHORIZED', 401);
+    await this.store.deleteRecoveryCodes(user.id);
+    await this.recordSecurityEvent(updated, 'TWO_FACTOR_DISABLED', null, 'Двухфакторная защита отключена', 'Для аккаунта отключена двухфакторная аутентификация.');
     return publicUser(updated);
+  }
+
+  async regenerateRecoveryCodes(authorization: string | undefined, code: string): Promise<{ recoveryCodes: string[] }> {
+    const user = await this.authenticate(authorization);
+    if (!user.twoFactorEnabled || !user.totpSecretEncrypted) throw new AppError('TWO_FACTOR_NOT_CONFIGURED', 409);
+    const secret = decryptCredential(user.totpSecretEncrypted, this.config.CREDENTIAL_ENCRYPTION_KEY);
+    if (!verifyTotp(secret, code, this.now().getTime())) throw new AppError('INVALID_SECOND_FACTOR', 401);
+    const recoveryCodes = await this.replaceRecoveryCodes(user.id);
+    await this.recordSecurityEvent(user, 'RECOVERY_CODES_REGENERATED', null, 'Резервные коды обновлены', 'Старые резервные коды больше не действуют.');
+    return { recoveryCodes };
   }
 
   async refresh(refreshToken: string): Promise<Omit<AuthResponse, 'isNewUser'>> {
@@ -317,6 +348,7 @@ export class VatrushkaService {
       tokenHash: hashOpaqueToken(replacementToken),
       tokenFamilyId: randomUUID(),
       deviceName: 'rotated',
+      trustedAt: null,
       expiresAt: expiresAt(now, this.config.REFRESH_TOKEN_TTL_DAYS * 86_400),
       revokedAt: null,
       replacedBySessionId: null,
@@ -324,7 +356,11 @@ export class VatrushkaService {
       lastUsedAt: now,
     };
     const rotation = await this.store.rotateSession(hashOpaqueToken(refreshToken), replacement, now);
-    if (rotation.status === 'reused') throw new AppError('SESSION_REVOKED', 401);
+    if (rotation.status === 'reused') {
+      const user = await this.store.findUserById(rotation.session.userId);
+      if (user) await this.recordSecurityEvent(user, 'REFRESH_TOKEN_REUSE_DETECTED', rotation.session.deviceName, 'Подозрительная активность сессии', 'Повторно использован старый токен. Все токены этого устройства отозваны.');
+      throw new AppError('SESSION_REVOKED', 401);
+    }
     if (rotation.status === 'expired') throw new AppError('SESSION_EXPIRED', 401);
     if (rotation.status === 'not_found') throw new AppError('UNAUTHORIZED', 401);
     const user = await this.store.findUserById(rotation.newSession.userId);
@@ -342,17 +378,80 @@ export class VatrushkaService {
   }
 
   async authenticate(authorization: string | undefined): Promise<UserRecord> {
+    return (await this.authenticateContext(authorization)).user;
+  }
+
+  private async authenticateContext(authorization: string | undefined): Promise<{ user: UserRecord; session: SessionRecord }> {
     if (!authorization?.startsWith('Bearer ')) throw new AppError('UNAUTHORIZED', 401);
     try {
       const claims = await verifyAccessToken(authorization.slice('Bearer '.length), this.config);
-      const user = await this.store.findUserById(claims.userId);
-      if (!user) throw new AppError('UNAUTHORIZED', 401);
-      return user;
+      const [user, session] = await Promise.all([this.store.findUserById(claims.userId), this.store.findSessionById(claims.sessionId)]);
+      if (!user || !session || session.userId !== user.id) throw new AppError('UNAUTHORIZED', 401);
+      if (session.revokedAt || isExpired(session.expiresAt, this.now())) throw new AppError('SESSION_REVOKED', 401);
+      return { user, session };
     } catch (error) {
       if (error instanceof AppError) throw error;
       if (error instanceof joseErrors.JWTExpired) throw new AppError('SESSION_EXPIRED', 401);
       throw new AppError('UNAUTHORIZED', 401);
     }
+  }
+
+  async listSessions(authorization: string | undefined): Promise<UserSession[]> {
+    const { user, session: currentSession } = await this.authenticateContext(authorization);
+    const rows = await this.store.listSessionsForUser(user.id);
+    const latestByFamily = new Map<string, SessionRecord>();
+    for (const row of rows) {
+      const current = latestByFamily.get(row.tokenFamilyId);
+      if (!current || row.createdAt > current.createdAt || (row.createdAt.getTime() === current.createdAt.getTime() && current.revokedAt !== null && row.revokedAt === null)) {
+        latestByFamily.set(row.tokenFamilyId, row);
+      }
+    }
+    return [...latestByFamily.values()]
+      .filter((row) => !row.revokedAt && !isExpired(row.expiresAt, this.now()))
+      .sort((left, right) => right.lastUsedAt.getTime() - left.lastUsedAt.getTime())
+      .map((row) => ({
+        id: row.tokenFamilyId,
+        deviceName: row.deviceName,
+        current: row.tokenFamilyId === currentSession.tokenFamilyId,
+        trusted: row.trustedAt !== null,
+        createdAt: row.createdAt.toISOString(),
+        lastUsedAt: row.lastUsedAt.toISOString(),
+        expiresAt: row.expiresAt.toISOString(),
+      }));
+  }
+
+  async revokeSession(authorization: string | undefined, familyId: string): Promise<{ current: boolean }> {
+    const { user, session } = await this.authenticateContext(authorization);
+    const revoked = await this.store.revokeSessionFamilyForUser(user.id, familyId, this.now());
+    if (!revoked) throw new AppError('SESSION_REVOKED', 404);
+    const current = session.tokenFamilyId === familyId;
+    await this.recordSecurityEvent(user, 'SESSION_REVOKED', null, 'Сессия завершена', current ? 'Текущая сессия была завершена.' : 'Одна из сессий вашего аккаунта была завершена.');
+    return { current };
+  }
+
+  async revokeOtherSessions(authorization: string | undefined): Promise<{ revokedCount: number }> {
+    const { user, session } = await this.authenticateContext(authorization);
+    const families = new Set((await this.store.listSessionsForUser(user.id))
+      .filter((candidate) => candidate.tokenFamilyId !== session.tokenFamilyId && !candidate.revokedAt && !isExpired(candidate.expiresAt, this.now()))
+      .map((candidate) => candidate.tokenFamilyId));
+    await Promise.all([...families].map((familyId) => this.store.revokeSessionFamilyForUser(user.id, familyId, this.now())));
+    if (families.size > 0) await this.recordSecurityEvent(user, 'SESSION_REVOKED', null, 'Другие сессии завершены', `Завершено сессий: ${families.size}.`);
+    return { revokedCount: families.size };
+  }
+
+  async setSessionTrusted(authorization: string | undefined, familyId: string, trusted: boolean): Promise<void> {
+    const { user } = await this.authenticateContext(authorization);
+    if (!(await this.store.setSessionFamilyTrusted(user.id, familyId, trusted ? this.now() : null))) throw new AppError('SESSION_REVOKED', 404);
+  }
+
+  async listSecurityEvents(authorization: string | undefined): Promise<SecurityEvent[]> {
+    const user = await this.authenticate(authorization);
+    return (await this.store.listSecurityEvents(user.id, 50)).map((event) => ({
+      id: event.id,
+      type: event.type,
+      deviceName: event.deviceName,
+      createdAt: event.createdAt.toISOString(),
+    }));
   }
 
   async authenticateRoomPrincipal(authorization: string | undefined): Promise<RoomPrincipal> {
@@ -1332,6 +1431,7 @@ export class VatrushkaService {
       tokenHash: hashOpaqueToken(refreshToken),
       tokenFamilyId: randomUUID(),
       deviceName,
+      trustedAt: null,
       expiresAt: expiresAt(now, this.config.REFRESH_TOKEN_TTL_DAYS * 86_400),
       revokedAt: null,
       replacedBySessionId: null,
@@ -1339,11 +1439,42 @@ export class VatrushkaService {
       lastUsedAt: now,
     };
     await this.store.createSession(session);
+    await this.recordSecurityEvent(user, 'SESSION_CREATED', deviceName, 'Новый вход в аккаунт', `Выполнен вход с устройства «${deviceName}».`);
     return {
       accessToken: await issueAccessToken({ userId: user.id, sessionId: session.id }, this.config),
       refreshToken,
       expiresIn: this.config.ACCESS_TOKEN_TTL_SECONDS,
     };
+  }
+
+  private async replaceRecoveryCodes(userId: string): Promise<string[]> {
+    const now = this.now();
+    const codes = Array.from({ length: 10 }, () => randomRecoveryCode());
+    const records: RecoveryCodeRecord[] = codes.map((code) => ({
+      id: randomUUID(),
+      userId,
+      codeHash: hashOpaqueToken(code),
+      createdAt: now,
+      usedAt: null,
+    }));
+    await this.store.replaceRecoveryCodes(userId, records);
+    return codes;
+  }
+
+  private async recordSecurityEvent(
+    user: UserRecord,
+    type: SecurityEventType,
+    deviceName: string | null,
+    title: string,
+    message: string,
+  ): Promise<void> {
+    const event: SecurityEventRecord = { id: randomUUID(), userId: user.id, type, deviceName, createdAt: this.now() };
+    await this.store.createSecurityEvent(event);
+    try {
+      await this.mailer.sendSecurityNotice(user.email, title, message);
+    } catch {
+      // The in-app audit event is authoritative; SMTP outages must not break security actions.
+    }
   }
 
   private async connectionForUser(room: RoomRecord, user: UserRecord, isOwner: boolean): Promise<RoomConnection> {

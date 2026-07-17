@@ -9,6 +9,7 @@ const currentDirectory = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  optimizeDeps: { include: ['qrcode'] },
   test: {
     projects: [
       {

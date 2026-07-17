@@ -12,7 +12,7 @@
     "build": "electron-vite build",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "vitest run --project=renderer",
-    "test:e2e": "npm run build && playwright test",
+    "test:e2e": "electron-vite build --mode e2e && playwright test",
     "package:win": "npm run build && electron-builder --win nsis portable --x64",
     "storybook": "storybook dev -p 6006 --no-open",
     "build-storybook": "storybook build",

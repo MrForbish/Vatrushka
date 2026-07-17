@@ -29,6 +29,7 @@ export const roomCodeSchema = z
   .refine((value) => roomAlphabetPattern.test(value), 'Некорректный код комнаты');
 
 export const otpCodeSchema = z.string().regex(/^\d{6}$/, 'Код должен содержать 6 цифр');
+export const recoveryCodeSchema = z.string().trim().toUpperCase().regex(/^[A-Z2-9]{4}(?:-[A-Z2-9]{4}){2}$/, 'Некорректный резервный код');
 export const passwordSchema = z
   .string()
   .min(10, 'Пароль должен содержать минимум 10 символов')
@@ -46,10 +47,20 @@ export const verifyCodeSchema = z
   .strict();
 export const requestRegistrationSchema = z.object({ email: emailSchema, password: passwordSchema }).strict();
 export const verifyRegistrationSchema = z.object({ email: emailSchema, code: otpCodeSchema, deviceName: z.string().trim().min(1).max(100) }).strict();
-export const beginPasswordLoginSchema = z.object({ email: emailSchema, password: passwordSchema, factor: z.enum(['auto', 'email', 'totp']).default('auto') }).strict();
-export const completePasswordLoginSchema = z.object({ email: emailSchema, password: passwordSchema, code: otpCodeSchema, factor: z.enum(['email', 'totp']), deviceName: z.string().trim().min(1).max(100) }).strict();
+export const beginPasswordLoginSchema = z.object({ email: emailSchema, password: passwordSchema, factor: z.enum(['auto', 'email', 'totp', 'recovery']).default('auto') }).strict();
+export const completePasswordLoginSchema = z.object({
+  email: emailSchema,
+  password: passwordSchema,
+  code: z.string().trim().toUpperCase().min(6).max(32),
+  factor: z.enum(['email', 'totp', 'recovery']),
+  deviceName: z.string().trim().min(1).max(100),
+}).strict().superRefine((value, context) => {
+  const result = value.factor === 'recovery' ? recoveryCodeSchema.safeParse(value.code) : otpCodeSchema.safeParse(value.code);
+  if (!result.success) context.addIssue({ code: 'custom', path: ['code'], message: result.error.issues[0]?.message ?? 'Некорректный код' });
+});
 export const setPasswordSchema = z.object({ code: otpCodeSchema, password: passwordSchema }).strict();
 export const twoFactorCodeSchema = z.object({ code: otpCodeSchema }).strict();
+export const sessionTrustSchema = z.object({ trusted: z.boolean() }).strict();
 export const refreshSchema = z.object({ refreshToken: z.string().min(32).max(512) }).strict();
 export const updateProfileSchema = z.object({ displayName: displayNameSchema }).strict();
 export const guestJoinSchema = z.object({ code: roomCodeSchema, displayName: displayNameSchema }).strict();

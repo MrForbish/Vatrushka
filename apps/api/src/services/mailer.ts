@@ -32,4 +32,15 @@ export class SmtpMailer implements Mailer {
       html: `<main style="font-family:system-ui,sans-serif;max-width:520px;margin:auto;color:#172033"><h1>${escapeHtml(appName)}</h1><p>Ваш одноразовый код:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px">${escapeHtml(code)}</p><p>Код действует ${expiresInMinutes} минут.</p><p style="color:#667085">Если вы не запрашивали код, проигнорируйте письмо.</p></main>`,
     });
   }
+
+  async sendSecurityNotice(email: string, title: string, message: string): Promise<void> {
+    const appName = this.config.APP_NAME;
+    await this.transporter.sendMail({
+      from: { name: this.config.SMTP_FROM_NAME, address: this.config.SMTP_FROM_EMAIL },
+      to: email,
+      subject: `${appName}: ${title}`,
+      text: `${appName}\n\n${message}\n\nЕсли это были не вы, немедленно смените пароль и завершите другие сессии.`,
+      html: `<main style="font-family:system-ui,sans-serif;max-width:520px;margin:auto;color:#172033"><h1>${escapeHtml(appName)}</h1><h2>${escapeHtml(title)}</h2><p>${escapeHtml(message)}</p><p style="color:#b42318">Если это были не вы, немедленно смените пароль и завершите другие сессии.</p></main>`,
+    });
+  }
 }
