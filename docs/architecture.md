@@ -19,6 +19,7 @@ Fastify — единственный компонент, имеющий PostgreS
 9. Desktop опрашивает server detail и message notifications; API дополняет голосовые каналы фактическими LiveKit identities, поэтому membership и media presence не смешиваются.
 10. `MOVE_MEMBERS` нативно переносит уже подключённую identity между LiveKit rooms и повторно применяет channel-scoped publish grants. Короткоживущая команда синхронизирует UI клиента, а для пользователя вне voice инициирует подключение с новым токеном.
 11. Home запрашивает агрегат `GET /api/v1/home`: API объединяет членство, unread-счётчики, фактические LiveKit identities и значимую `user_activity`. TanStack Query сохраняет последний снимок локально, повторно проверяет его при возврате на Home и инвалидируется при изменении состава voice participants/серверов.
+12. User/server settings используют hash routes внутри packaged `file://` renderer. `SettingsShell` загружается отдельным chunk и переиспользует `AppShell`; top-level media controller не размонтируется при переходе в настройки. До API parity новые входы контролируются независимыми build-time feature flags, а старые модалки остаются fallback.
 
 ## Консистентность
 

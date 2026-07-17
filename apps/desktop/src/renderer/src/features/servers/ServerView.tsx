@@ -78,6 +78,7 @@ export interface ServerViewProps {
   onServerName(value: string): void;
   onCreateServer(): void;
   onSecurity(): void;
+  onServerSettings?(): void;
   onLogout(): void;
 }
 
@@ -219,7 +220,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       onCopyInvite={() => { setInviteCopyState('idle'); setInviteOpen(true); }}
       onCreateChannel={openChannelForm}
       onDeleteChannel={props.onDeleteChannel}
-      onManageRoles={() => setRolesOpen(true)}
+      onManageRoles={props.onServerSettings ?? (() => setRolesOpen(true))}
       {...(canMoveMembers && props.onMoveVoiceMember !== undefined ? { onMoveMember: props.onMoveVoiceMember } : {})}
       profile={<UserProfileDock email={props.user.email} founder={props.user.platformRole === 'owner'} name={displayName(props.user)} onLogout={props.onLogout} onSecurity={props.onSecurity} />}
       textChannels={channels.filter((channel) => channel.type === 'text')}

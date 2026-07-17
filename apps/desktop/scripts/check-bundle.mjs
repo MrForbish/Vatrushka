@@ -7,7 +7,7 @@ const desktopDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const rendererDirectory = resolve(desktopDirectory, 'out/renderer');
 const assetsDirectory = resolve(rendererDirectory, 'assets');
 const budgets = {
-  javascript: 2_300_000,
+  javascript: 2_350_000,
   largestJavaScript: 2_200_000,
   styles: 155_000,
   fonts: 500_000,
