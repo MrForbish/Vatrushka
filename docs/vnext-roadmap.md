@@ -25,6 +25,13 @@
 - локальные Manrope/Unbounded, анимации и новый server shell.
 - NSIS auto-update через self-hosted generic feed с progress/restart UI.
 - персональная Home-панель с быстрым возвратом, активными пространствами, недавней активностью, offline-кэшем, onboarding и фактической диагностикой выбранного микрофона.
+- приватное S3-compatible хранилище вложений с backend permission checks, DB rollback-копией и идемпотентным backfill.
+
+## Settings / mentions / presence feature pack
+
+Phase 1 — repo audit и фиксация контрактов — завершена. Принятые решения находятся в [ADR](adr/README.md): общий SettingsShell и hash routes, rollout feature flags, развитие существующего `electron-updater`, structured mentions, presence/realtime и единая DND notification policy.
+
+Следующий этап: общий SettingsShell + Storybook + routing без удаления действующих settings-модалок и без изменения их backend-контрактов.
 
 ## Следующие итерации
 
@@ -41,7 +48,7 @@
 2. Временные/постоянные invite links, kick/ban list и заявки на вступление.
 3. Поиск, закреплённые сообщения, треды и массовые упоминания.
 4. Presence/typing через WebSocket вместо трёхсекундного polling.
-5. Передача файлов через S3-compatible storage с антивирусной проверкой и лимитами.
+5. Антивирусная проверка S3-вложений, квоты и lifecycle/garbage collection.
 
 ### P2 — медиа и платформы
 
