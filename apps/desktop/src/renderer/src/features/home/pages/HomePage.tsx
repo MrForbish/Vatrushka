@@ -77,6 +77,7 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
   const showOnboarding = props.dashboard?.onboarding.visible ?? effectiveServers.length === 0;
   const selectedInviteServer = effectiveServers.find((server) => server.id === inviteServerId) ?? effectiveServers[0];
   const connectionStatus = props.dashboardError ? 'offline' : props.dashboard?.readiness.connection ?? (props.error ? 'degraded' : 'healthy');
+  const presence = props.dashboard?.user.presence ?? 'online';
   const audioReadiness = useAudioReadiness(props.microphoneId, props.connection === null || props.connection === undefined, audioTestRevision);
   const openDestination = (destination: HomeDestination): void => {
     if (props.onOpenDestination) props.onOpenDestination(destination);
@@ -108,9 +109,9 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
 
   return <>
     <AppShell
-      members={<HomeProfileRail onLogout={props.onLogout} onSecurity={props.onSecurity} user={props.user} version={props.version} />}
+      members={<HomeProfileRail onLogout={props.onLogout} onSecurity={props.onSecurity} presence={presence} user={props.user} version={props.version} />}
       membersDrawerTitle="Профиль"
-      renderMembersToggle={(open) => <button aria-label="Открыть профиль" className="home-header__profile-trigger" onClick={open} type="button"><Avatar name={name} size="sm" status="online" /></button>}
+      renderMembersToggle={(open) => <button aria-label="Открыть профиль" className="home-header__profile-trigger" onClick={open} type="button"><Avatar name={name} size="sm" status={presence} /></button>}
       topBar={<div className="home-header"><Icon name="home" size={19} /><span><strong>Главная</strong><small>Ваш персональный центр Vatrushka</small></span><Badge>v{props.version}</Badge></div>}
       variant="home"
       workspaceLibrary={<HomeNavigation directUnreadCount={props.directUnreadCount ?? 0} networkAvailable={connectionStatus !== 'offline'} onCreate={() => setCreateOpen(true)} onDirectMessages={props.onDirectMessages} onLogout={props.onLogout} onOpenServer={props.onOpenServer} onSecurity={props.onSecurity} onSpaces={scrollToSpaces} servers={effectiveServers} user={props.user} />}

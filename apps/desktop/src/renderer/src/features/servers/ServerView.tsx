@@ -158,7 +158,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       name: member.displayName,
       roleLabel,
       founder: member.platformRole === 'owner',
-      ...(member.userId === props.user.id || connectedMemberIds.has(member.userId) ? { status: 'online' as const } : {}),
+      ...(member.presence !== undefined ? { status: member.presence } : connectedMemberIds.has(member.userId) ? { status: 'online' as const } : {}),
       ...(kickAction === undefined ? {} : { actions: kickAction }),
       draggable: canMoveMembers && props.onMoveVoiceMember !== undefined && member.userId !== props.user.id && member.userId !== props.server.ownerUserId,
     };

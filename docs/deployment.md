@@ -8,10 +8,10 @@ Production Compose запускается из `/opt/vatrushka`: именно э
 
 1. Ubuntu 22.04/24.04, Docker Engine, Compose v2, public IPv4.
 2. DNS A/AAAA для `DOMAIN` и `INVITE_DOMAIN`; 80/443 разрешены в provider firewall и UFW.
-3. Скопировать `.env.example` в `.env`, установить `NODE_ENV=production`, `PUBLIC_API_URL`, `PUBLIC_INVITE_URL` и случайные secrets (минимум 32 bytes).
+3. Скопировать `.env.example` в `.env`, установить `NODE_ENV=production`, `PUBLIC_API_URL`, `PUBLIC_INVITE_URL`, `PRESENCE_STORAGE_DRIVER=redis`, случайный `REDIS_PASSWORD` и остальные secrets (минимум 32 bytes).
 4. Создать `updates/` рядом с `.env`, затем выполнить `docker compose --env-file .env -f infra/docker/docker-compose.yml config`.
 5. `docker compose ... build --pull api`.
-6. `docker compose ... up -d postgres api caddy`.
+6. `docker compose ... up -d postgres redis api caddy`.
 7. Проверить `https://$DOMAIN/health/live`, `/health/ready` и redirect `https://$INVITE_DOMAIN/i/<token>`.
 
 ## Operations
@@ -20,12 +20,19 @@ Production Compose запускается из `/opt/vatrushka`: именно э
 docker compose --env-file .env -f infra/docker/docker-compose.yml ps
 docker compose --env-file .env -f infra/docker/docker-compose.yml logs -f --tail=200 api
 docker compose --env-file .env -f infra/docker/docker-compose.yml exec postgres pg_isready
-docker compose --env-file .env -f infra/docker/docker-compose.yml pull caddy postgres
+docker compose --env-file .env -f infra/docker/docker-compose.yml exec redis sh -c 'REDISCLI_AUTH="$REDIS_PASSWORD" redis-cli ping'
+docker compose --env-file .env -f infra/docker/docker-compose.yml pull caddy postgres redis
 docker compose --env-file .env -f infra/docker/docker-compose.yml build --pull api
 docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
 ```
 
 Backup PostgreSQL выполняйте до обновления schema/image. Миграция `0012_remove_legacy_rooms_contract` намеренно удаляет только уже выведенные из эксплуатации `rooms`, `guest_sessions` и старую `screen_share_leases`; постоянные server channels и `channel_screen_share_leases` она не затрагивает. Следующая `0013_home_activity` добавляет историю для Home. После применения contract-миграции простой rollback image не восстановит удалённые legacy-таблицы, поэтому перед первым обновлением на эту версию обязателен backup.
+
+## Redis для presence
+
+Compose запускает `redis:8-alpine` с паролем и публикует его только на `127.0.0.1:6379`. Не открывайте этот порт в UFW/provider firewall. Heartbeat является ephemeral-состоянием, поэтому RDB/AOF намеренно отключены; выбранный статус, custom status и privacy находятся в PostgreSQL и входят в обычный backup.
+
+Для production оставьте `PRESENCE_STORAGE_DRIVER=redis`, задайте отдельный длинный `REDIS_PASSWORD`, а `REDIS_URL` вручную менять не требуется: Compose формирует внутренний URL для API. После rollout проверьте `PING` командой выше и `https://$DOMAIN/health/ready`. После рестарта Redis активный desktop восстановит online не позднее следующего heartbeat; до этого fail-closed статус будет offline.
 
 ## Приватный S3 для вложений
 

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 
-import type { LocalSettings, PublicUser, ServerDetail, ServerPermission, ServerSummary } from '@vatrushka/shared';
+import type { LocalSettings, PublicUser, ServerDetail, ServerPermission, ServerSummary, UserPresence, UserPrivacySettings } from '@vatrushka/shared';
 
 import type { AudioDevices } from '../../audio-devices';
 import { SecurityCenter, type SecurityTab } from '../../features/security';
-import { SettingsPageState, SettingsPlaceholderPage, SettingsShell, UserAudioSettingsPage, UserProfileSettingsPage } from '../../features/settings';
+import { SettingsPageState, SettingsPlaceholderPage, SettingsShell, UserAudioSettingsPage, UserPresenceSettingsPage, UserPrivacySettingsPage, UserProfileSettingsPage } from '../../features/settings';
 import { ConfirmDialog, WorkspaceLibrary, type WorkspaceNavigationItem } from '../../ui';
 import type { SettingsRoute } from './route-paths';
 import { serverSettingsPath, userSettingsPath } from './route-paths';
@@ -20,6 +20,8 @@ export interface SettingsRoutePageProps {
   loading: boolean;
   microphoneId: string | undefined;
   outputId: string | undefined;
+  presence: UserPresence | null;
+  presenceEnabled: boolean;
   route: SettingsRoute;
   settings: LocalSettings;
   server: ServerDetail | null;
@@ -38,6 +40,11 @@ export interface SettingsRoutePageProps {
   onRefreshDevices(): void;
   onTestOutput(): void;
   onUpdateProfile(displayName: string): Promise<PublicUser>;
+  onLoadPresence(): Promise<UserPresence>;
+  onUpdatePresence(input: { preference: UserPresence['preference']; customText: string | null; customTextExpiresAt: string | null }): Promise<UserPresence>;
+  onPresenceChange(presence: UserPresence): void;
+  onLoadPrivacy(): Promise<UserPrivacySettings>;
+  onUpdatePrivacy(input: Pick<UserPrivacySettings, 'directMessages' | 'presenceVisibility' | 'activityVisible'>): Promise<UserPrivacySettings>;
   onCurrentSessionRevoked(): void;
   onUserChange(user: PublicUser): void;
 }
@@ -68,11 +75,11 @@ function securityTabPath(tab: SecurityTab): string {
 }
 
 export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Element {
-  const [profileDirty, setProfileDirty] = useState(false);
+  const [pageDirty, setPageDirty] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
   const pendingNavigationRef = useRef<(() => void) | null>(null);
   const requestNavigation = (action: () => void): void => {
-    if (!profileDirty) {
+    if (!pageDirty) {
       action();
       return;
     }
@@ -82,20 +89,20 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
   const discardAndContinue = (): void => {
     const action = pendingNavigationRef.current;
     pendingNavigationRef.current = null;
-    setProfileDirty(false);
+    setPageDirty(false);
     setDiscardOpen(false);
     action?.();
   };
 
   useEffect(() => {
-    if (!profileDirty) return undefined;
+    if (!pageDirty) return undefined;
     const blockWindowClose = (event: BeforeUnloadEvent): void => {
       event.preventDefault();
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', blockWindowClose);
     return () => window.removeEventListener('beforeunload', blockWindowClose);
-  }, [profileDirty]);
+  }, [pageDirty]);
 
   const workspaces: WorkspaceNavigationItem[] = props.servers.map((server) => ({ id: server.id, name: server.name, memberCount: server.memberCount, activeVoice: false }));
   const workspaceLibrary = <WorkspaceLibrary {...(props.route.kind === 'server' ? { activeWorkspaceId: props.route.serverId } : {})} directUnreadCount={props.directUnreadCount} onCreate={() => requestNavigation(props.onCreateServer)} onDirectMessages={() => requestNavigation(props.onDirectMessages)} onHome={() => requestNavigation(props.onHome)} onSelect={(serverId) => requestNavigation(() => props.onOpenServer(serverId))} workspaces={workspaces} />;
@@ -104,16 +111,20 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
     const item = userSettingsNavigation.find((candidate) => candidate.section === props.route.section)!;
     const securityTab = props.route.subpage === 'backup-codes' ? 'recovery' : userSecurityTabs[props.route.section as keyof typeof userSecurityTabs];
     const content = props.route.section === 'profile'
-      ? <UserProfileSettingsPage onDirtyChange={setProfileDirty} onSave={props.onUpdateProfile} onUserChange={props.onUserChange} user={props.user} />
+      ? <UserProfileSettingsPage onDirtyChange={setPageDirty} onSave={props.onUpdateProfile} onUserChange={props.onUserChange} user={props.user} />
+      : props.route.section === 'status' && props.presenceEnabled
+        ? <UserPresenceSettingsPage onDirtyChange={setPageDirty} onLoad={props.onLoadPresence} onPresenceChange={props.onPresenceChange} onSave={props.onUpdatePresence} presence={props.presence} />
       : props.route.section === 'audio'
         ? <UserAudioSettingsPage busy={props.busy} devices={props.devices} inputLevel={props.inputLevel} microphoneId={props.microphoneId} onMicrophone={props.onMicrophone} onOutput={props.onOutput} onRefresh={props.onRefreshDevices} onTestOutput={props.onTestOutput} outputId={props.outputId} voiceConnected={props.voiceConnected} />
+        : props.route.section === 'privacy'
+          ? <UserPrivacySettingsPage onDirtyChange={setPageDirty} onLoad={props.onLoadPrivacy} onSave={props.onUpdatePrivacy} />
         : securityTab === undefined
           ? <SettingsPlaceholderPage description={item.description} scope="user" title={item.label} />
-          : <SecurityCenter onClose={props.onBack} onCurrentSessionRevoked={props.onCurrentSessionRevoked} onSectionChange={(tab) => props.onNavigate(securityTabPath(tab))} onSettingsChange={props.onNotificationSettingsChange} onUserChange={props.onUserChange} open presentation="page" section={securityTab} settings={props.settings} user={props.user} />;
+          : <SecurityCenter dndActive={props.presence?.preference === 'do_not_disturb'} onClose={props.onBack} onCurrentSessionRevoked={props.onCurrentSessionRevoked} onSectionChange={(tab) => props.onNavigate(securityTabPath(tab))} onSettingsChange={props.onNotificationSettingsChange} onUserChange={props.onUserChange} open presentation="page" section={securityTab} settings={props.settings} user={props.user} />;
     return (
       <>
         <SettingsShell activeSection={props.route.section} entityLabel="Личные настройки" entityName={props.user.displayName ?? props.user.email} items={userSettingsNavigation} onBack={() => requestNavigation(props.onBack)} onSelect={(section) => requestNavigation(() => props.onNavigate(userSettingsPath(section)))} workspaceLibrary={workspaceLibrary}>{content}</SettingsShell>
-        <ConfirmDialog confirmLabel="Не сохранять" danger description="Внесённые изменения отображаемого имени будут потеряны." onClose={() => { pendingNavigationRef.current = null; setDiscardOpen(false); }} onConfirm={discardAndContinue} open={discardOpen} title="Отменить изменения профиля?" />
+        <ConfirmDialog confirmLabel="Не сохранять" danger description="Внесённые изменения будут потеряны." onClose={() => { pendingNavigationRef.current = null; setDiscardOpen(false); }} onConfirm={discardAndContinue} open={discardOpen} title="Отменить изменения?" />
       </>
     );
   }

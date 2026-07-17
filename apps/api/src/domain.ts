@@ -1,4 +1,4 @@
-import type { HomeActivityType, PermissionOverwriteTargetType, PlatformRole, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
+import type { DirectMessagePrivacy, HomeActivityType, PermissionOverwriteTargetType, PlatformRole, PresencePreference, PresenceVisibility, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
 
 export interface UserRecord {
   id: string;
@@ -9,6 +9,12 @@ export interface UserRecord {
   emailVerifiedAt: Date | null;
   totpSecretEncrypted: string | null;
   twoFactorEnabled: boolean;
+  presencePreference: PresencePreference;
+  customStatusText: string | null;
+  customStatusExpiresAt: Date | null;
+  directMessagePrivacy: DirectMessagePrivacy;
+  presenceVisibility: PresenceVisibility;
+  activityVisible: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -250,7 +256,7 @@ export interface ServerGraph {
 }
 
 export type ServerWithMemberCount = ServerRecord & { memberCount: number };
-export type ServerMemberProfile = ServerMemberRecord & Pick<UserRecord, 'displayName' | 'platformRole'>;
+export type ServerMemberProfile = ServerMemberRecord & Pick<UserRecord, 'displayName' | 'platformRole' | 'presencePreference' | 'customStatusText' | 'customStatusExpiresAt' | 'presenceVisibility' | 'updatedAt'>;
 export type TextMessageWithAuthor = TextMessageRecord & Pick<UserRecord, 'displayName' | 'platformRole'>;
 
 export type RefreshRotation =

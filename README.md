@@ -169,12 +169,12 @@ cp .env.example .env
 # направить DNS example.com и api.example.com на IP сервера и заполнить .env
 # NODE_ENV=production, DOMAIN=api.example.com, INVITE_DOMAIN=example.com
 # PUBLIC_API_URL=https://api.example.com, PUBLIC_INVITE_URL=https://example.com
-# удалить DEV_FIXED_OTP, указать SMTP_*, LIVEKIT_* и приватный S3
+# удалить DEV_FIXED_OTP, указать SMTP_*, LIVEKIT_*, приватный S3 и случайный REDIS_PASSWORD
 # сгенерировать ACCESS_TOKEN_SECRET и OTP_PEPPER: openssl rand -hex 32
 mkdir -p updates
 docker compose --env-file .env -f infra/docker/docker-compose.yml config
 docker compose --env-file .env -f infra/docker/docker-compose.yml build --pull api
-docker compose --env-file .env -f infra/docker/docker-compose.yml up -d postgres api caddy
+docker compose --env-file .env -f infra/docker/docker-compose.yml up -d postgres redis api caddy
 docker compose --env-file .env -f infra/docker/docker-compose.yml ps
 curl https://api.example.com/health/ready
 ```
@@ -197,6 +197,7 @@ API наружу не публикуется напрямую; доступен 
 | SMTP | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` |
 | LiveKit | `LIVEKIT_URL`, `LIVEKIT_HTTP_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
 | Object storage | `MEDIA_STORAGE_DRIVER`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_KEY_PREFIX` |
+| Presence | `PRESENCE_STORAGE_DRIVER`, `REDIS_URL`, `REDIS_PASSWORD`, `PRESENCE_HEARTBEAT_SECONDS`, `PRESENCE_TTL_SECONDS` |
 | Media coordination | `SCREEN_SHARE_LEASE_SECONDS`, `SCREEN_SHARE_HEARTBEAT_SECONDS` |
 | Network | `CORS_ALLOWED_ORIGINS`, `DOMAIN`, `INVITE_DOMAIN`, `LIVEKIT_DOMAIN`, `TURN_DOMAIN` |
 | Desktop public | `VITE_PUBLIC_API_BASE_URL` |

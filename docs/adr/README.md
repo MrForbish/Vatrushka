@@ -13,3 +13,4 @@ ADR фиксируют принятые архитектурные решени�
 | [0001](0001-settings-routing-and-feature-flags.md) | accepted | Settings routes, общий shell и rollout flags |
 | [0002](0002-windows-update-strategy.md) | accepted | Фоновое Windows-обновление через существующий electron-updater |
 | [0003](0003-mentions-presence-and-notification-policy.md) | accepted | Structured mentions, presence, realtime и единая notification policy |
+| [0004](0004-redis-presence-store.md) | accepted | Redis для multi-session heartbeat и PostgreSQL для долговечных presence-настроек |

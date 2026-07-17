@@ -4,7 +4,7 @@ import { ConnectionState } from 'livekit-client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { channelNameSchema, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type LocalSettings, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage } from '@vatrushka/shared';
+import { channelNameSchema, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type LocalSettings, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type UserPresence } from '@vatrushka/shared';
 
 import { apiClient, ClientError } from './api.js';
 import { parseSettingsRoute, serverSettingsPath, userSettingsPath, type ServerSettingsSection } from './app/routes';
@@ -32,6 +32,7 @@ export default function App(): ReactNode {
   const navigate = useNavigate();
   const [screen, setScreen] = useState<Screen>('boot');
   const [user, setUser] = useState<PublicUser | null>(null);
+  const [presence, setPresence] = useState<UserPresence | null>(null);
   const userRef = useRef<PublicUser | null>(null);
   const [authMode, setAuthMode] = useState<'password' | 'register'>('password');
   const [authStage, setAuthStage] = useState<'credentials' | 'otp'>('credentials');
@@ -78,6 +79,7 @@ export default function App(): ReactNode {
   const participantConnectionRef = useRef<RoomConnection | null>(null);
   const previousRemoteParticipantsRef = useRef<Set<string> | null>(null);
   const voiceTransitionRef = useRef(false);
+  const lastUserActivityRef = useRef(Date.now());
   const settingsReturnScreenRef = useRef<Screen>('home');
   const mediaSnapshot = useSyncExternalStore(media.subscribe, media.getSnapshot, media.getSnapshot);
   const queryClient = useQueryClient();
@@ -121,14 +123,47 @@ export default function App(): ReactNode {
   }, [connection?.channelId, homePresenceRevision, homeServersRevision, queryClient, screen, user?.id]);
 
   const playVoiceCue = useCallback((cue: VoiceCue): void => {
+    if (presence?.preference === 'do_not_disturb') return;
     voiceCuePlayerRef.current ??= new VoiceCuePlayer();
     voiceCuePlayerRef.current.play(cue, settings.outputDeviceId);
-  }, [settings.outputDeviceId]);
+  }, [presence?.preference, settings.outputDeviceId]);
 
   const updateUser = (next: PublicUser | null): void => {
     userRef.current = next;
     setUser(next);
   };
+  const loadPresence = useCallback(() => apiClient.getPresence(), []);
+  const updatePresenceSettings = useCallback((input: Parameters<typeof apiClient.updatePresence>[0]) => apiClient.updatePresence(input), []);
+  const loadPrivacySettings = useCallback(() => apiClient.getPrivacySettings(), []);
+  const updatePrivacySettings = useCallback((input: Parameters<typeof apiClient.updatePrivacySettings>[0]) => apiClient.updatePrivacySettings(input), []);
+
+  useEffect(() => {
+    if (user === null) {
+      setPresence(null);
+      return undefined;
+    }
+    let active = true;
+    let inFlight = false;
+    const recordActivity = (): void => { lastUserActivityRef.current = Date.now(); };
+    const heartbeat = (): void => {
+      if (inFlight) return;
+      inFlight = true;
+      const idle = Date.now() - lastUserActivityRef.current >= 5 * 60 * 1_000;
+      void apiClient.heartbeatPresence(idle).then((next) => { if (active) setPresence(next); }).catch(() => undefined).finally(() => { inFlight = false; });
+    };
+    window.addEventListener('pointerdown', recordActivity, { passive: true });
+    window.addEventListener('keydown', recordActivity);
+    window.addEventListener('focus', recordActivity);
+    heartbeat();
+    const timer = window.setInterval(heartbeat, 20_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('pointerdown', recordActivity);
+      window.removeEventListener('keydown', recordActivity);
+      window.removeEventListener('focus', recordActivity);
+    };
+  }, [user?.id]);
 
   const refreshDevices = useCallback(async (requestPermission = false): Promise<void> => {
     let permissionStream: MediaStream | null = null;
@@ -965,7 +1000,7 @@ export default function App(): ReactNode {
     void navigate('/', { replace: true });
     setScreen('auth');
   };
-  const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityCenter open user={user} settings={settings} onSettingsChange={updateNotificationSettings} onClose={() => setSecurityOpen(false)} onUserChange={updateUser} onCurrentSessionRevoked={handleCurrentSessionRevoked} /> : null;
+  const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityCenter dndActive={presence?.preference === 'do_not_disturb'} open user={user} settings={settings} onSettingsChange={updateNotificationSettings} onClose={() => setSecurityOpen(false)} onUserChange={updateUser} onCurrentSessionRevoked={handleCurrentSessionRevoked} /> : null;
   const withUpdateStatus = (content: ReactNode): ReactNode => <>{content}<UpdateStatus state={updateState} onInstall={() => void window.desktop.installUpdate().catch((caught) => setError(userMessage(caught)))} /></>;
   const directUnreadCount = directConversations.reduce((count, conversation) => count + conversation.unreadCount, 0);
   const localInputLevel = connection === null ? undefined : mediaSnapshot.participants.find((participant) => participant.isLocal)?.audioLevel;
@@ -1043,9 +1078,16 @@ export default function App(): ReactNode {
         onOutput={(deviceId) => persistDevice('outputDeviceId', deviceId)}
         onRefreshDevices={() => { void run(() => refreshDevices(true)); }}
         onTestOutput={() => playVoiceCue('message')}
+        onLoadPresence={loadPresence}
+        onLoadPrivacy={loadPrivacySettings}
+        onPresenceChange={setPresence}
+        onUpdatePresence={updatePresenceSettings}
+        onUpdatePrivacy={updatePrivacySettings}
         onUpdateProfile={(name) => apiClient.updateProfile(name)}
         onUserChange={updateUser}
         outputId={settings.outputDeviceId}
+        presence={presence}
+        presenceEnabled={featureFlags.presenceStatuses}
         route={settingsRoute}
         server={serverDetail?.id === (settingsRoute.kind === 'server' ? settingsRoute.serverId : '') ? serverDetail : null}
         servers={servers}

@@ -9,6 +9,7 @@ const developmentDefault = import.meta.env.DEV || e2ePreview;
 export const featureFlags = Object.freeze({
   serverSettingsPage: booleanFlag(import.meta.env.VITE_FEATURE_SERVER_SETTINGS_PAGE, developmentDefault),
   userSettingsPage: booleanFlag(import.meta.env.VITE_FEATURE_USER_SETTINGS_PAGE, developmentDefault),
+  presenceStatuses: booleanFlag(import.meta.env.VITE_FEATURE_PRESENCE_STATUSES, developmentDefault),
 });
 
 export type FeatureFlags = typeof featureFlags;

@@ -32,7 +32,7 @@ import type {
   DirectMessageAttachmentMetadata,
   ChannelLeaseRecord,
 } from './domain.js';
-import type { PermissionOverwriteTargetType, PlatformRole } from '@vatrushka/shared';
+import type { DirectMessagePrivacy, PermissionOverwriteTargetType, PlatformRole, PresencePreference, PresenceVisibility } from '@vatrushka/shared';
 
 export interface DataStore {
   healthCheck(): Promise<void>;
@@ -46,6 +46,8 @@ export interface DataStore {
   findUserByEmail(email: string): Promise<UserRecord | null>;
   createUserWithPassword(email: string, passwordHash: string, now: Date): Promise<UserRecord | null>;
   updateDisplayName(id: string, displayName: string, now: Date): Promise<UserRecord | null>;
+  updatePresence(id: string, values: { preference: PresencePreference; customText: string | null; customTextExpiresAt: Date | null }, now: Date): Promise<UserRecord | null>;
+  updatePrivacySettings(id: string, values: { directMessagePrivacy: DirectMessagePrivacy; presenceVisibility: PresenceVisibility; activityVisible: boolean }, now: Date): Promise<UserRecord | null>;
   updatePassword(id: string, passwordHash: string, now: Date): Promise<UserRecord | null>;
   updateTwoFactor(id: string, secretEncrypted: string | null, enabled: boolean, now: Date): Promise<UserRecord | null>;
   setPlatformRoleByEmail(email: string, role: PlatformRole, now: Date): Promise<UserRecord | null>;
@@ -146,6 +148,16 @@ export interface ObjectStorage {
   getObject(key: string): Promise<Buffer>;
   deleteObject(key: string): Promise<void>;
   close(): void;
+}
+
+export type EphemeralPresenceStatus = 'online' | 'idle' | 'offline';
+
+export interface PresenceStore {
+  healthCheck(): Promise<void>;
+  heartbeat(userId: string, sessionId: string, idle: boolean, now: Date, ttlSeconds: number): Promise<void>;
+  removeSession(userId: string, sessionId: string): Promise<void>;
+  status(userId: string, now: Date): Promise<EphemeralPresenceStatus>;
+  close(): Promise<void>;
 }
 
 export interface Mailer {

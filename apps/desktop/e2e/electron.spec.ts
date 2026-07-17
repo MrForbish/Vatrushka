@@ -151,6 +151,8 @@ test('revokes another device without exposing its refresh token to the renderer'
 
 test('opens the routed settings shell without replacing the application controller', async () => {
   let user = { id: 'settings-e2e-user', email: 'settings@myvatrushka.ru', displayName: 'Настройки E2E', platformRole: 'member', hasPassword: true, twoFactorEnabled: true };
+  let presence = { preference: 'online', effectiveStatus: 'online', customText: null, customTextExpiresAt: null, updatedAt: '2026-07-17T10:00:00.000Z' };
+  const privacy = { directMessages: 'shared_servers', presenceVisibility: 'shared_servers', activityVisible: true, updatedAt: '2026-07-17T10:00:00.000Z' };
   const home = {
     user: { id: user.id, displayName: user.displayName, email: user.email, avatarUrl: null, presence: 'online', platformBadge: null },
     readiness: { connection: 'healthy', audioSetupRequired: false },
@@ -177,6 +179,11 @@ test('opens the routed settings shell without replacing the application controll
     if (request.method === 'GET' && url.pathname === '/api/v1/auth/sessions') { response.end('[]'); return; }
     if (request.method === 'GET' && url.pathname === '/api/v1/me/security-events') { response.end('[]'); return; }
     if (request.method === 'PATCH' && url.pathname === '/api/v1/me') { user = { ...user, displayName: 'Новое имя' }; response.end(JSON.stringify(user)); return; }
+    if (request.method === 'POST' && url.pathname === '/api/v1/me/presence/heartbeat') { response.end(JSON.stringify(presence)); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/me/presence') { response.end(JSON.stringify(presence)); return; }
+    if (request.method === 'PATCH' && url.pathname === '/api/v1/me/presence') { presence = { ...presence, preference: 'do_not_disturb', effectiveStatus: 'dnd' }; response.end(JSON.stringify(presence)); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/me/privacy') { response.end(JSON.stringify(privacy)); return; }
+    if (request.method === 'PATCH' && url.pathname === '/api/v1/me/privacy') { response.end(JSON.stringify(privacy)); return; }
     response.statusCode = 404;
     response.end(JSON.stringify({ code: 'NOT_FOUND' }));
   });
@@ -200,7 +207,7 @@ test('opens the routed settings shell without replacing the application controll
   await expect(window.getByRole('navigation', { name: 'Разделы настроек' })).toBeVisible();
   await window.getByRole('textbox', { name: 'Отображаемое имя' }).fill('Новое имя');
   await window.getByRole('button', { name: /Уведомления/u }).click();
-  const discardDialog = window.getByRole('dialog', { name: 'Отменить изменения профиля?' });
+  const discardDialog = window.getByRole('dialog', { name: 'Отменить изменения?' });
   await expect(discardDialog).toBeVisible();
   await discardDialog.getByRole('button', { name: 'Отмена' }).click();
   await expect(window).toHaveURL(/#\/settings\/profile/u);
@@ -211,10 +218,18 @@ test('opens the routed settings shell without replacing the application controll
   await expect(window.getByRole('heading', { name: 'Голос и звук' })).toBeVisible();
   await expect(window.getByRole('button', { name: 'Устройство ввода' })).toContainText('Fake Default Audio Input');
   await expect(window.getByRole('button', { name: 'Динамики / наушники' })).toContainText('Fake Default Audio Output');
+  await window.getByRole('button', { name: /Статус и активность/u }).click();
+  await expect(window.getByRole('heading', { name: 'Статус и активность' })).toBeVisible();
+  await window.getByRole('radio', { name: /Не беспокоить/u }).click();
+  await window.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(window.getByText('Режим «Не беспокоить» активен.')).toBeVisible();
   await window.getByRole('button', { name: /Уведомления/u }).click();
   await expect(window).toHaveURL(/#\/settings\/notifications/u);
   await expect(window.getByRole('heading', { name: 'Уведомления о сообщениях' })).toBeVisible();
   await expect(window.getByRole('switch', { name: 'Push-уведомления' })).toBeVisible();
+  await expect(window.getByRole('switch', { name: 'Push-уведомления' })).toBeDisabled();
+  await window.getByRole('button', { name: /Конфиденциальность/u }).click();
+  await expect(window.getByRole('heading', { name: 'Конфиденциальность' })).toBeVisible();
   await window.getByRole('button', { name: /Безопасность/u }).click();
   await window.getByRole('button', { name: 'Управлять кодами' }).click();
   await expect(window).toHaveURL(/#\/settings\/security\/backup-codes/u);

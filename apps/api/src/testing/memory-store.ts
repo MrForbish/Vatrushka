@@ -99,7 +99,7 @@ export class MemoryStore implements DataStore {
   async getOrCreateUser(email: string, now: Date): Promise<{ user: UserRecord; isNewUser: boolean }> {
     const existing = [...this.users.values()].find((user) => user.email === email);
     if (existing) return { user: structuredClone(existing), isNewUser: false };
-    const user: UserRecord = { id: crypto.randomUUID(), email, displayName: null, platformRole: 'member', passwordHash: null, emailVerifiedAt: now, totpSecretEncrypted: null, twoFactorEnabled: false, createdAt: now, updatedAt: now };
+    const user: UserRecord = { id: crypto.randomUUID(), email, displayName: null, platformRole: 'member', passwordHash: null, emailVerifiedAt: now, totpSecretEncrypted: null, twoFactorEnabled: false, presencePreference: 'online', customStatusText: null, customStatusExpiresAt: null, directMessagePrivacy: 'shared_servers', presenceVisibility: 'shared_servers', activityVisible: true, createdAt: now, updatedAt: now };
     this.users.set(user.id, user);
     return { user: structuredClone(user), isNewUser: true };
   }
@@ -125,6 +125,12 @@ export class MemoryStore implements DataStore {
       emailVerifiedAt: now,
       totpSecretEncrypted: null,
       twoFactorEnabled: false,
+      presencePreference: 'online',
+      customStatusText: null,
+      customStatusExpiresAt: null,
+      directMessagePrivacy: 'shared_servers',
+      presenceVisibility: 'shared_servers',
+      activityVisible: true,
       createdAt: now,
       updatedAt: now,
     };
@@ -137,6 +143,23 @@ export class MemoryStore implements DataStore {
     if (!row) return null;
     row.displayName = displayName;
     row.updatedAt = now;
+    return structuredClone(row);
+  }
+
+  async updatePresence(id: string, values: { preference: UserRecord['presencePreference']; customText: string | null; customTextExpiresAt: Date | null }, now: Date): Promise<UserRecord | null> {
+    const row = this.users.get(id);
+    if (!row) return null;
+    row.presencePreference = values.preference;
+    row.customStatusText = values.customText;
+    row.customStatusExpiresAt = values.customTextExpiresAt;
+    row.updatedAt = now;
+    return structuredClone(row);
+  }
+
+  async updatePrivacySettings(id: string, values: Pick<UserRecord, 'directMessagePrivacy' | 'presenceVisibility' | 'activityVisible'>, now: Date): Promise<UserRecord | null> {
+    const row = this.users.get(id);
+    if (!row) return null;
+    Object.assign(row, values, { updatedAt: now });
     return structuredClone(row);
   }
 
@@ -328,7 +351,7 @@ export class MemoryStore implements DataStore {
     return [...this.serverMembers.values()].filter((member) => member.serverId === serverId).map((member) => {
       const user = this.users.get(member.userId);
       if (!user) throw new Error('Server member user was not found');
-      return { ...structuredClone(member), displayName: user.displayName, platformRole: user.platformRole };
+      return { ...structuredClone(member), displayName: user.displayName, platformRole: user.platformRole, presencePreference: user.presencePreference, customStatusText: user.customStatusText, customStatusExpiresAt: user.customStatusExpiresAt, presenceVisibility: user.presenceVisibility, updatedAt: user.updatedAt };
     });
   }
 

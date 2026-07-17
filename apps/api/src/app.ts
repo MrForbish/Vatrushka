@@ -40,6 +40,9 @@ import {
   setPasswordSchema,
   twoFactorCodeSchema,
   updateProfileSchema,
+  updatePresenceSchema,
+  presenceHeartbeatSchema,
+  updatePrivacySettingsSchema,
   updateMessageSchema,
   updateRoleSchema,
   assignMemberRolesSchema,
@@ -80,6 +83,19 @@ const publicUserSchema = z.object({
   platformRole: z.enum(['member', 'admin', 'owner']),
   hasPassword: z.boolean(),
   twoFactorEnabled: z.boolean(),
+});
+const userPresenceResponseSchema = z.object({
+  preference: z.enum(['online', 'idle', 'do_not_disturb', 'invisible']),
+  effectiveStatus: z.enum(['online', 'idle', 'dnd', 'offline']),
+  customText: z.string().nullable(),
+  customTextExpiresAt: z.string().nullable(),
+  updatedAt: z.string(),
+});
+const userPrivacyResponseSchema = z.object({
+  directMessages: z.enum(['shared_servers', 'nobody']),
+  presenceVisibility: z.enum(['shared_servers', 'nobody']),
+  activityVisible: z.boolean(),
+  updatedAt: z.string(),
 });
 const authResponseSchema = z.object({
   accessToken: z.string(),
@@ -128,7 +144,7 @@ const serverRoleResponseSchema = z.object({ id: z.string(), serverId: z.string()
 const permissionOverwriteResponseSchema = z.object({ channelId: z.string(), targetType: z.enum(['ROLE', 'MEMBER']), targetId: z.string(), allow: z.array(permissionSchema), deny: z.array(permissionSchema) });
 const voiceChannelParticipantResponseSchema = z.object({ identity: z.string(), userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']) });
 const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), unreadCount: z.number(), voiceParticipants: z.array(voiceChannelParticipantResponseSchema).optional(), permissions: z.array(permissionSchema).optional(), permissionOverwrites: z.array(permissionOverwriteResponseSchema).optional() });
-const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema) });
+const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema), presence: z.enum(['online', 'idle', 'dnd', 'offline']).optional(), customStatusText: z.string().nullable().optional() });
 const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteUrl: z.url(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
 const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
 const homeDestinationResponseSchema = z.object({ type: z.enum(['server', 'text_channel', 'voice_channel']), serverId: z.string(), channelId: z.string().optional() });
@@ -287,6 +303,11 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     } catch {
       return reply.status(503).send(createApiError('MEDIA_STORAGE_UNAVAILABLE', request.id));
     }
+    try {
+      await service.presenceStore.healthCheck();
+    } catch {
+      return reply.status(503).send(createApiError('INTERNAL_ERROR', request.id, { dependency: 'presence' }));
+    }
     return { status: 'ready' as const };
   });
 
@@ -368,6 +389,27 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   api.patch(`${API_PREFIX}/me`, {
     schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: updateProfileSchema, response: { 200: publicUserSchema, ...routeErrors() } },
   }, async (request) => service.updateMe(request.headers.authorization, request.body.displayName));
+
+  api.get(`${API_PREFIX}/me/presence`, {
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], response: { 200: userPresenceResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getPresence(request.headers.authorization));
+
+  api.patch(`${API_PREFIX}/me/presence`, {
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: updatePresenceSchema, response: { 200: userPresenceResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updatePresence(request.headers.authorization, request.body));
+
+  api.post(`${API_PREFIX}/me/presence/heartbeat`, {
+    config: { rateLimit: { max: 12, timeWindow: '1 minute' } },
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: presenceHeartbeatSchema, response: { 200: userPresenceResponseSchema, ...routeErrors() } },
+  }, async (request) => service.heartbeatPresence(request.headers.authorization, request.body.idle));
+
+  api.get(`${API_PREFIX}/me/privacy`, {
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], response: { 200: userPrivacyResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getPrivacySettings(request.headers.authorization));
+
+  api.patch(`${API_PREFIX}/me/privacy`, {
+    schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: updatePrivacySettingsSchema, response: { 200: userPrivacyResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updatePrivacySettings(request.headers.authorization, request.body));
 
   api.post(`${API_PREFIX}/me/password/request-code`, {
     config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },

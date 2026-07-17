@@ -13,10 +13,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 - real notification, password/2FA, recovery-code, session and security-activity sections inside routed user settings, including `/settings/security/backup-codes`;
 - routed profile editing for the supported display-name contract, with validation, live preview, save progress and guarded navigation when changes are unsaved;
 - routed voice/audio settings backed by actual Windows `MediaDeviceInfo` input/output labels, persisted device IDs and live microphone readiness diagnostics.
+- Redis-backed multi-session presence with heartbeat TTL, automatic idle, invisible/offline privacy and durable status/custom-text preferences in PostgreSQL;
+- routed status and privacy settings backed by API contracts, including server-enforced direct-message and presence visibility rules;
+- DND delivery policy that suppresses message sounds, desktop notifications and future push delivery while preserving unread counters and notification history.
 
 ### Operations
 
-- documented Timeweb Cloud configuration, `/opt/vatrushka` as the canonical VPS checkout, the expand/backfill sequence and rollback procedure.
+- documented Timeweb Cloud configuration, `/opt/vatrushka` as the canonical VPS checkout, Redis operations, the expand/backfill sequence and rollback procedure.
 
 ## [0.5.0] - 2026-07-17
 

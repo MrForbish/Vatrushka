@@ -5,10 +5,12 @@ import { VatrushkaService } from './service.js';
 import { LiveKitMediaService } from './services/livekit.js';
 import { SmtpMailer } from './services/mailer.js';
 import { createObjectStorage } from './services/object-storage.js';
+import { createPresenceStore } from './services/presence-store.js';
 
 const config = loadConfig();
 const database = createPostgresStore(config.DATABASE_URL);
 const objectStorage = createObjectStorage(config);
+const presenceStore = await createPresenceStore(config);
 if (config.PLATFORM_OWNER_EMAIL) {
   await database.store.setPlatformRoleByEmail(config.PLATFORM_OWNER_EMAIL, 'owner', new Date());
 }
@@ -18,11 +20,13 @@ const service = new VatrushkaService({
   mailer: new SmtpMailer(config),
   media: new LiveKitMediaService(config),
   objectStorage,
+  presenceStore,
 });
 const app = await buildApp({ config, service });
 
 app.addHook('onClose', async () => {
   objectStorage?.close();
+  await presenceStore.close();
   await database.close();
 });
 

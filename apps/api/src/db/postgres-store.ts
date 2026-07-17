@@ -148,6 +148,20 @@ export class PostgresStore implements DataStore {
     return row ?? null;
   }
 
+  async updatePresence(id: string, values: { preference: UserRecord['presencePreference']; customText: string | null; customTextExpiresAt: Date | null }, now: Date): Promise<UserRecord | null> {
+    const [row] = await this.db
+      .update(schema.users)
+      .set({ presencePreference: values.preference, customStatusText: values.customText, customStatusExpiresAt: values.customTextExpiresAt, updatedAt: now })
+      .where(eq(schema.users.id, id))
+      .returning();
+    return row ?? null;
+  }
+
+  async updatePrivacySettings(id: string, values: Pick<UserRecord, 'directMessagePrivacy' | 'presenceVisibility' | 'activityVisible'>, now: Date): Promise<UserRecord | null> {
+    const [row] = await this.db.update(schema.users).set({ ...values, updatedAt: now }).where(eq(schema.users.id, id)).returning();
+    return row ?? null;
+  }
+
   async updatePassword(id: string, passwordHash: string, now: Date): Promise<UserRecord | null> {
     const [row] = await this.db
       .update(schema.users)
@@ -347,12 +361,12 @@ export class PostgresStore implements DataStore {
 
   async listServerMembers(serverId: string): Promise<ServerMemberProfile[]> {
     const rows = await this.db
-      .select({ member: schema.serverMembers, displayName: schema.users.displayName, platformRole: schema.users.platformRole })
+      .select({ member: schema.serverMembers, displayName: schema.users.displayName, platformRole: schema.users.platformRole, presencePreference: schema.users.presencePreference, customStatusText: schema.users.customStatusText, customStatusExpiresAt: schema.users.customStatusExpiresAt, presenceVisibility: schema.users.presenceVisibility, updatedAt: schema.users.updatedAt })
       .from(schema.serverMembers)
       .innerJoin(schema.users, eq(schema.users.id, schema.serverMembers.userId))
       .where(eq(schema.serverMembers.serverId, serverId))
       .orderBy(asc(schema.serverMembers.joinedAt));
-    return rows.map(({ member, displayName, platformRole }) => ({ ...member, displayName, platformRole }));
+    return rows.map(({ member, ...profile }) => ({ ...member, ...profile }));
   }
 
   async listServerRoles(serverId: string): Promise<ServerRoleRecord[]> {

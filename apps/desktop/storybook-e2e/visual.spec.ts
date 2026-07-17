@@ -1,8 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 
 async function openStory(page: Page, id: string): Promise<void> {
-  await page.goto(`/iframe.html?id=${id}&viewMode=story`);
-  await page.waitForLoadState('networkidle');
+  await page.goto(`/iframe.html?id=${id}&viewMode=story`, { waitUntil: 'load' });
+  await page.locator('#storybook-root:not(:empty):visible, [role="dialog"]:visible, [role="complementary"]:visible').first().waitFor({ state: 'attached' });
   await page.evaluate(async () => document.fonts.ready);
 }
 
@@ -59,6 +59,20 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page.getByText('Shure MV7 — рабочий стол')).toBeVisible();
     await expect(page.getByText('Наушники Arctis Nova 7')).toBeVisible();
     await expect(page).toHaveScreenshot('settings-shell-user-audio.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('routed DND presence settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--user-presence-dnd');
+    await expect(page.getByRole('heading', { name: 'Статус и активность' })).toBeVisible();
+    await expect(page.getByText('Режим «Не беспокоить» активен.')).toBeVisible();
+    await expect(page).toHaveScreenshot('settings-shell-user-presence.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('routed user privacy settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--user-privacy');
+    await expect(page.getByRole('heading', { name: 'Конфиденциальность' })).toBeVisible();
+    await expect(page.getByRole('switch', { name: 'Показывать активность' })).toBeVisible();
+    await expect(page).toHaveScreenshot('settings-shell-user-privacy.png', { animations: 'disabled', fullPage: true });
   });
 
   test('personal Home dashboard', async ({ page }) => {
