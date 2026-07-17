@@ -4,6 +4,16 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+### Added
+
+- private S3-compatible storage for channel and direct-message attachments, with API-only credentials and authenticated downloads;
+- idempotent attachment backfill and a production canary that verifies bucket access, write, read and delete;
+- additive `storage_key` migration and temporary PostgreSQL dual-write fallback for rollback-safe rollout.
+
+### Operations
+
+- documented Timeweb Cloud configuration, `/opt/vatrushka` as the canonical VPS checkout, the expand/backfill sequence and rollback procedure.
+
 ## [0.5.0] - 2026-07-17
 
 ### Added

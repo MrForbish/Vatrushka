@@ -101,8 +101,11 @@ export interface DataStore {
   markChannelRead(state: ChannelReadStateRecord): Promise<void>;
   listChannelUnreadCounts(channelIds: string[], userId: string, since: Date): Promise<ChannelUnreadCount[]>;
   listMessageAttachments(messageIds: string[]): Promise<MessageAttachmentMetadata[]>;
+  listChannelAttachmentStorageKeys(channelId: string): Promise<string[]>;
+  listLegacyMessageAttachments(limit: number): Promise<MessageAttachmentRecord[]>;
   findMessageAttachment(id: string): Promise<MessageAttachmentRecord | null>;
   createMessageAttachment(attachment: MessageAttachmentRecord): Promise<void>;
+  moveMessageAttachmentToStorage(id: string, storageKey: string): Promise<boolean>;
   deleteMessageAttachment(id: string): Promise<boolean>;
   listMessageNotifications(userId: string, since: Date, afterId: string | null, limit: number): Promise<MessageNotificationRecord[]>;
   getOrCreateDirectConversation(userAId: string, userBId: string, now: Date): Promise<DirectConversationRecord>;
@@ -119,14 +122,30 @@ export interface DataStore {
   removeDirectMessageReaction(messageId: string, userId: string, emoji: string): Promise<void>;
   markDirectConversationRead(conversationId: string, userId: string, readAt: Date, messageId: string): Promise<boolean>;
   listDirectMessageAttachments(messageIds: string[]): Promise<DirectMessageAttachmentMetadata[]>;
+  listLegacyDirectMessageAttachments(limit: number): Promise<DirectMessageAttachmentRecord[]>;
   findDirectMessageAttachment(id: string): Promise<DirectMessageAttachmentRecord | null>;
   createDirectMessageAttachment(attachment: DirectMessageAttachmentRecord): Promise<void>;
+  moveDirectMessageAttachmentToStorage(id: string, storageKey: string): Promise<boolean>;
   deleteDirectMessageAttachment(id: string): Promise<boolean>;
   claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }>;
   heartbeatChannelLease(channelId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<ChannelLeaseRecord | null>;
   releaseChannelLease(channelId: string, participantIdentity: string): Promise<boolean>;
   releaseChannelLeaseByParticipant(participantIdentity: string): Promise<void>;
   releaseChannelLeaseByChannel(channelId: string): Promise<void>;
+}
+
+export interface ObjectStoragePutInput {
+  key: string;
+  content: Buffer;
+  mimeType: string;
+}
+
+export interface ObjectStorage {
+  healthCheck(): Promise<void>;
+  putObject(input: ObjectStoragePutInput): Promise<void>;
+  getObject(key: string): Promise<Buffer>;
+  deleteObject(key: string): Promise<void>;
+  close(): void;
 }
 
 export interface Mailer {

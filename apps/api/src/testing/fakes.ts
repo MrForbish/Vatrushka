@@ -1,4 +1,32 @@
-import type { Mailer, MediaRoomOptions, MediaService, MediaTokenOptions } from '../ports.js';
+import type { Mailer, MediaRoomOptions, MediaService, MediaTokenOptions, ObjectStorage, ObjectStoragePutInput } from '../ports.js';
+
+export class FakeObjectStorage implements ObjectStorage {
+  readonly objects = new Map<string, { content: Buffer; mimeType: string }>();
+  available = true;
+
+  async healthCheck(): Promise<void> {
+    if (!this.available) throw new Error('Object storage unavailable');
+  }
+
+  async putObject({ content, key, mimeType }: ObjectStoragePutInput): Promise<void> {
+    if (!this.available) throw new Error('Object storage unavailable');
+    this.objects.set(key, { content: Buffer.from(content), mimeType });
+  }
+
+  async getObject(key: string): Promise<Buffer> {
+    if (!this.available) throw new Error('Object storage unavailable');
+    const object = this.objects.get(key);
+    if (!object) throw new Error('Object not found');
+    return Buffer.from(object.content);
+  }
+
+  async deleteObject(key: string): Promise<void> {
+    if (!this.available) throw new Error('Object storage unavailable');
+    this.objects.delete(key);
+  }
+
+  close(): void {}
+}
 
 export class FakeMailer implements Mailer {
   readonly messages: Array<{ email: string; code: string }> = [];
