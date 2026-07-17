@@ -520,6 +520,9 @@ export class CanonicalMessagingStore {
   }
 
   async listNotifications(userId: string, before: Date | null, limit: number, unreadOnly: boolean): Promise<InternalNotification[]> {
+    const cursorClause = before ? 'and notification.created_at < $2' : '';
+    const limitPlaceholder = before ? '$3' : '$2';
+    const parameters = before ? [userId, before, limit] : [userId, limit];
     const result = await this.pool.query<{
       id: string; type: InternalNotification['type']; actor_user_id: string | null; conversation_id: string | null; message_id: string | null; payload: Record<string, unknown>; created_at: Date; read_at: Date | null; dismissed_at: Date | null;
       actor_display_name: string | null; conversation_title: string | null; server_id: string | null; channel_id: string | null;
@@ -536,9 +539,9 @@ export class CanonicalMessagingStore {
         select user_record.display_name, user_record.username from conversation_members member join users user_record on user_record.id = member.user_id
         where member.conversation_id = conversation.id and member.user_id <> $1 and member.left_at is null limit 1
       ) peer on true
-      where notification.user_id = $1 and notification.dismissed_at is null ${before ? 'and notification.created_at < $2' : ''} ${unreadOnly ? 'and notification.read_at is null' : ''}
-      order by notification.created_at desc, notification.id desc limit $3
-    `, [userId, before, limit]);
+      where notification.user_id = $1 and notification.dismissed_at is null ${cursorClause} ${unreadOnly ? 'and notification.read_at is null' : ''}
+      order by notification.created_at desc, notification.id desc limit ${limitPlaceholder}
+    `, parameters);
     return result.rows.map((row) => ({ id: row.id, type: row.type, actorUserId: row.actor_user_id, conversationId: row.conversation_id, messageId: row.message_id, payload: row.payload, createdAt: row.created_at.toISOString(), readAt: row.read_at?.toISOString() ?? null, dismissedAt: row.dismissed_at?.toISOString() ?? null, actorDisplayName: row.actor_display_name, conversationTitle: row.conversation_title, serverId: row.server_id, channelId: row.channel_id }));
   }
 
