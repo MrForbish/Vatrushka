@@ -166,6 +166,8 @@ export default function App(): ReactNode {
   const [serverMessageHistory, setServerMessageHistory] = useState<{ conversationId: string | null; before: string | null; hasMore: boolean; loading: boolean }>({ conversationId: null, before: null, hasMore: false, loading: false });
   const [directMessageHistory, setDirectMessageHistory] = useState<{ conversationId: string | null; before: string | null; hasMore: boolean; loading: boolean }>({ conversationId: null, before: null, hasMore: false, loading: false });
   const [notifications, setNotifications] = useState<InternalNotification[]>([]);
+  const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
+  const [notificationHistory, setNotificationHistory] = useState<{ before: string | null; hasMore: boolean; loading: boolean }>({ before: null, hasMore: false, loading: false });
   const [canonicalConversations, setCanonicalConversations] = useState<ConversationSummary[]>([]);
   const [unreadSummary, setUnreadSummary] = useState<UserUnreadSummary | null>(null);
   const [notificationPreferences, setNotificationPreferences] = useState<UserNotificationPreferences | null>(null);
@@ -490,12 +492,19 @@ export default function App(): ReactNode {
       notificationUserRef.current = user.id;
       shownNotificationIdsRef.current.clear();
       notificationInitializedRef.current = false;
+      setNotifications([]);
+      setNotificationHistory({ before: null, hasMore: false, loading: false });
     }
     let active = true;
     const poll = (): void => {
       void Promise.all([apiClient.listNotifications(undefined, false), apiClient.listConversations()]).then(([items, conversations]) => {
         if (!active) return;
-        setNotifications(items);
+        setNotifications((current) => {
+          const merged = new Map(current.map((item) => [item.id, item]));
+          for (const item of items) merged.set(item.id, item);
+          return [...merged.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+        });
+        setNotificationHistory((current) => current.before === null ? { before: items.at(-1)?.createdAt ?? null, hasMore: items.length === 100, loading: false } : current);
         setCanonicalConversations(conversations);
         const firstLoad = !notificationInitializedRef.current;
         notificationInitializedRef.current = true;
@@ -550,9 +559,34 @@ export default function App(): ReactNode {
     return () => { active = false; };
   }, [realtimeRevision, screen, user]);
 
+  useEffect(() => {
+    const count = user && unreadSummary ? unreadSummary.totalDirectUnread + unreadSummary.totalMentionUnread + unreadSummary.totalReplyUnread : 0;
+    void window.desktop.setBadgeCount(count).catch(() => undefined);
+  }, [unreadSummary, user]);
+
+  useEffect(() => {
+    if (targetMessageId === null || (screen !== 'server' && screen !== 'direct')) return;
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const element = document.querySelector<HTMLElement>(`[data-message-id="${targetMessageId}"]`);
+        if (!element) return;
+        element.dataset.targeted = 'true';
+        element.scrollIntoView({ block: 'center' });
+        element.focus({ preventScroll: true });
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      document.querySelector<HTMLElement>(`[data-message-id="${targetMessageId}"]`)?.removeAttribute('data-targeted');
+    };
+  }, [directMessages, messages, screen, targetMessageId]);
+
   useEffect(() => window.desktop.onMessageNotificationClick((target) => {
     if (!userRef.current) return;
     if (target.conversationId) {
+      setTargetMessageId(target.messageId ?? null);
       setActiveDirectConversationId(target.conversationId);
       setDirectMessages([]);
       setDirectMessageDraft('');
@@ -562,6 +596,7 @@ export default function App(): ReactNode {
     if (!target.serverId || !target.channelId) return;
     const serverId = target.serverId;
     const channelId = target.channelId;
+    setTargetMessageId(target.messageId ?? null);
     void apiClient.getServer(serverId).then((detail) => {
       if (!detail.channels.some((channel) => channel.id === channelId && channel.type === 'text')) return;
       setServerDetail(detail);
@@ -1277,6 +1312,7 @@ export default function App(): ReactNode {
   const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityCenter dndActive={presence?.preference === 'do_not_disturb'} open user={user} settings={settings} onSettingsChange={updateNotificationSettings} onClose={() => setSecurityOpen(false)} onUserChange={updateUser} onCurrentSessionRevoked={handleCurrentSessionRevoked} /> : null;
   const openNotification = (notification: InternalNotification): void => {
     if (!notification.conversationId) return;
+    setTargetMessageId(notification.messageId);
     const conversation = canonicalConversations.find((item) => item.id === notification.conversationId);
     if (conversation?.type === 'server_channel' && conversation.serverId && conversation.channelId) {
       openDestination({ type: 'text_channel', serverId: conversation.serverId, channelId: conversation.channelId });
@@ -1347,7 +1383,19 @@ export default function App(): ReactNode {
     setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? now })));
     void apiClient.markAllNotificationsRead().catch((caught) => setError(userMessage(caught)));
   };
-  const withUpdateStatus = (content: ReactNode): ReactNode => <>{content}{user ? <NotificationCenter items={notifications} onDismiss={dismissNotification} onMarkAllRead={markAllNotificationsRead} onOpen={openNotification} onRead={markNotificationRead} /> : null}<UpdateStatus installBlocked={connection !== null} state={updateState} onInstall={() => void window.desktop.installUpdate().catch((caught) => setError(userMessage(caught)))} /></>;
+  const loadOlderNotifications = (): void => {
+    if (!notificationHistory.before || !notificationHistory.hasMore || notificationHistory.loading) return;
+    setNotificationHistory((current) => ({ ...current, loading: true }));
+    void apiClient.listNotifications(notificationHistory.before, false).then((items) => {
+      setNotifications((current) => {
+        const merged = new Map(current.map((item) => [item.id, item]));
+        for (const item of items) merged.set(item.id, item);
+        return [...merged.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+      });
+      setNotificationHistory({ before: items.at(-1)?.createdAt ?? notificationHistory.before, hasMore: items.length === 100, loading: false });
+    }).catch((caught) => { setNotificationHistory((current) => ({ ...current, loading: false })); setError(userMessage(caught)); });
+  };
+  const withUpdateStatus = (content: ReactNode): ReactNode => <>{content}{user ? <NotificationCenter hasMore={notificationHistory.hasMore} items={notifications} loadingMore={notificationHistory.loading} onDismiss={dismissNotification} onLoadMore={loadOlderNotifications} onMarkAllRead={markAllNotificationsRead} onOpen={openNotification} onRead={markNotificationRead} /> : null}<UpdateStatus installBlocked={connection !== null} state={updateState} onInstall={() => void window.desktop.installUpdate().catch((caught) => setError(userMessage(caught)))} /></>;
   const directUnreadCount = unreadSummary?.totalDirectUnread ?? directConversations.reduce((count, conversation) => count + conversation.unreadCount, 0);
   const serverFirstUnreadMessageId = activeChannelId === null ? null : unreadSummary?.conversations.find((item) => item.conversationId === activeChannelId)?.firstUnreadMessageId ?? null;
   const directFirstUnreadMessageId = activeDirectConversationId === null ? null : unreadSummary?.conversations.find((item) => item.conversationId === activeDirectConversationId)?.firstUnreadMessageId ?? null;

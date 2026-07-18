@@ -13,6 +13,9 @@ export interface NotificationCenterProps {
   onMarkAllRead(): void;
   onOpen(item: InternalNotification): void;
   onRead(id: string): void;
+  hasMore?: boolean | undefined;
+  loadingMore?: boolean | undefined;
+  onLoadMore?(): void;
 }
 
 const filters: Array<{ value: NotificationFilter; label: string }> = [
@@ -41,7 +44,7 @@ function relativeTime(value: string): string {
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short' }).format(new Date(value));
 }
 
-export function NotificationCenter({ items, onDismiss, onMarkAllRead, onOpen, onRead }: NotificationCenterProps): React.JSX.Element {
+export function NotificationCenter({ hasMore = false, items, loadingMore = false, onDismiss, onLoadMore, onMarkAllRead, onOpen, onRead }: NotificationCenterProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const unreadCount = items.filter((item) => item.readAt === null).length;
@@ -72,6 +75,7 @@ export function NotificationCenter({ items, onDismiss, onMarkAllRead, onOpen, on
               <IconButton className="vui-notification-center__dismiss" icon="close" label="Скрыть уведомление" onClick={() => onDismiss(item.id)} size="sm" type="button" />
             </article>;
           })}
+          {hasMore && onLoadMore ? <Button className="vui-notification-center__more" disabled={loadingMore} onClick={onLoadMore} size="sm" type="button" variant="quiet">{loadingMore ? 'Загружаем…' : 'Показать более ранние'}</Button> : null}
         </div>
       </aside>
     </div>

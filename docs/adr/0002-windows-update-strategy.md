@@ -38,3 +38,7 @@
 - Electron E2E с fake updater events;
 - ручной Windows upgrade: предыдущий NSIS → staging build, background download, silent restart, сохранённая сессия и настройки;
 - отдельная проверка во время активного LiveKit-звонка.
+
+## Статус реализации на 2026-07-18
+
+Базовый безопасный контур выпущен без ожидания code-signing сертификата: окно обновления появляется только при реально доступной или уже загруженной версии, повторные команды идемпотентны, а renderer не разрешает restart во время активного LiveKit-звонка. Текущий совместимый с уже установленной 0.5.x NSIS цепочкой режим остаётся assisted (`oneClick: false`), `autoDownload: true`, `autoInstallOnAppQuit: true`, установка вызывается через `quitAndInstall(false, true)`. Переход к one-click и проверка blockers непосредственно в main process остаются отдельным hardening-этапом после матрицы upgrade-тестов; отсутствие подписи принято как временный release risk владельцем продукта.

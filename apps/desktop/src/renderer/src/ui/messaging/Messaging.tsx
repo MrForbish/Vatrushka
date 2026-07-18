@@ -26,7 +26,7 @@ export interface MessageViewModel {
   authorName: string;
   authorBadge?: 'admin' | 'founder';
   content: string;
-  mentions?: Array<{ key: string; userId?: string | undefined; displayName: string; start: number; length: number }>;
+  mentions?: Array<{ key: string; userId?: string | undefined; roleId?: string | undefined; displayName: string; start: number; length: number }>;
   createdAt: string;
   edited?: boolean;
   own?: boolean;
@@ -47,7 +47,7 @@ const deliveryLabels: Record<MessageDeliveryState, string> = {
   failed: 'Не удалось отправить',
 };
 
-function renderMessageContent(content: string, mentions: MessageViewModel['mentions']): ReactNode {
+function renderMessageContent(content: string, mentions: MessageViewModel['mentions'], onMention?: (mention: NonNullable<MessageViewModel['mentions']>[number]) => void): ReactNode {
   if (mentions === undefined || mentions.length === 0) return content;
   const codePoints = [...content];
   const result: ReactNode[] = [];
@@ -55,7 +55,10 @@ function renderMessageContent(content: string, mentions: MessageViewModel['menti
   for (const mention of [...mentions].sort((left, right) => left.start - right.start)) {
     if (mention.start < cursor || mention.start + mention.length > codePoints.length) continue;
     if (mention.start > cursor) result.push(codePoints.slice(cursor, mention.start).join(''));
-    result.push(<span className="vui-message__mention" {...(mention.userId ? { 'data-user-id': mention.userId } : {})} key={`${mention.key}:${mention.start}`}>@{mention.displayName}</span>);
+    const label = `@${mention.displayName}`;
+    result.push(onMention === undefined
+      ? <span className="vui-message__mention" {...(mention.userId ? { 'data-user-id': mention.userId } : {})} key={`${mention.key}:${mention.start}`}>{label}</span>
+      : <button className="vui-message__mention" {...(mention.userId ? { 'data-user-id': mention.userId } : {})} key={`${mention.key}:${mention.start}`} onClick={() => onMention(mention)} type="button">{label}</button>);
     cursor = mention.start + mention.length;
   }
   if (cursor < codePoints.length) result.push(codePoints.slice(cursor).join(''));
@@ -78,7 +81,9 @@ export interface MessageListProps {
   loadingOlder?: boolean | undefined;
   onLoadOlder?: (() => void) | undefined;
   onRetry?: ((messageId: string) => void) | undefined;
+  onMention?: ((mention: NonNullable<MessageViewModel['mentions']>[number]) => void) | undefined;
   firstUnreadMessageId?: string | null | undefined;
+  targetMessageId?: string | null | undefined;
 }
 
 const reactionChoices = ['👍', '👎', '❤️', '🔥', '😂', '😮', '😢', '😡', '🎉', '👏', '✅', '❌', '👀', '🤔', '🙏', '💯', '🚀', '✨', '💪', '🤝', '😍', '🥳', '😎', '🤯', '🙌', '💡', '⚡', '🐱', '🍰', '🧇'];
@@ -95,7 +100,7 @@ function isGroupedWithPrevious(message: MessageViewModel, previous: MessageViewM
   return distance >= 0 && distance <= 5 * 60 * 1_000;
 }
 
-export function MessageList({ channelName, emptyDescription = 'Здесь появится первая история вашего сервера.', emptyTitle, firstUnreadMessageId = null, hasOlder = false, loadingOlder = false, messages, onDelete, onDeleteAttachment, onDownloadAttachment, onEdit, onLoadAttachment, onLoadOlder, onReaction, onReply, onRetry }: MessageListProps): React.JSX.Element {
+export function MessageList({ channelName, emptyDescription = 'Здесь появится первая история вашего сервера.', emptyTitle, firstUnreadMessageId = null, hasOlder = false, loadingOlder = false, messages, onDelete, onDeleteAttachment, onDownloadAttachment, onEdit, onLoadAttachment, onLoadOlder, onMention, onReaction, onReply, onRetry, targetMessageId = null }: MessageListProps): React.JSX.Element {
   const scrollElement = useRef<HTMLDivElement>(null);
   const stickToLatest = useRef(true);
   const prependSnapshot = useRef<{ height: number; top: number } | null>(null);
@@ -131,19 +136,32 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
     prependSnapshot.current = null;
   }, [loadingOlder, messages.length]);
 
+  useEffect(() => {
+    if (targetMessageId === null) return;
+    const index = messages.findIndex((message) => message.id === targetMessageId);
+    if (index < 0) return;
+    if (virtualized) virtualizer.scrollToIndex(index, { align: 'center' });
+    const frame = window.requestAnimationFrame(() => {
+      const element = scrollElement.current?.querySelector<HTMLElement>(`[data-message-id="${targetMessageId}"]`);
+      element?.scrollIntoView({ block: 'center' });
+      element?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [messages, targetMessageId, virtualized, virtualizer]);
+
   if (messages.length === 0) {
     return <div className="vui-message-empty"><span><Icon name="hash" size={28} /></span><h2>{emptyTitle ?? `Начало канала #${channelName}`}</h2><p>{emptyDescription}</p></div>;
   }
   const renderMessage = (message: MessageViewModel, index: number, virtualItem?: VirtualItem): React.JSX.Element => {
     const grouped = isGroupedWithPrevious(message, messages[index - 1]);
     return (
-          <article {...(virtualItem === undefined ? {} : { 'data-index': virtualItem.index, ref: virtualizer.measureElement, style: { transform: `translateY(${virtualItem.start}px)` } })} aria-posinset={index + 1} aria-setsize={messages.length} className="vui-message" data-grouped={grouped || undefined} data-message-id={message.id} data-privileged={message.authorBadge !== undefined || undefined} data-virtualized={virtualItem === undefined ? undefined : true} key={message.id}>
+          <article {...(virtualItem === undefined ? {} : { 'data-index': virtualItem.index, ref: virtualizer.measureElement, style: { transform: `translateY(${virtualItem.start}px)` } })} aria-posinset={index + 1} aria-setsize={messages.length} className="vui-message" data-grouped={grouped || undefined} data-message-id={message.id} data-privileged={message.authorBadge !== undefined || undefined} data-targeted={message.id === targetMessageId || undefined} data-virtualized={virtualItem === undefined ? undefined : true} key={message.id} tabIndex={message.id === targetMessageId ? -1 : undefined}>
             {message.id === firstUnreadMessageId ? <UnreadDivider /> : null}
             {grouped ? <span aria-hidden="true" className="vui-message__avatar-space" /> : <Avatar name={message.authorName} size="md" />}
             <div className="vui-message__content">
               {message.replyPreview === undefined ? null : <div className="vui-message__reply"><Icon name="reply" size={14} /><strong>{message.replyPreview.authorName}</strong><span>{message.replyPreview.content}</span></div>}
               {grouped ? <span className="vui-sr-only">{message.authorName}</span> : <header><strong>{message.authorName}</strong>{message.authorBadge === 'founder' ? <Badge tone="founder">DEV</Badge> : message.authorBadge === 'admin' ? <Badge tone="primary">ADMIN</Badge> : null}<time dateTime={message.createdAt}>{new Date(message.createdAt).toLocaleString('ru-RU', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</time>{message.edited === true ? <small>изменено</small> : null}</header>}
-              {message.deleted === true ? <p className="vui-message__tombstone">Сообщение удалено</p> : message.content.trim().length === 0 ? null : <p>{renderMessageContent(message.content, message.mentions)}</p>}
+              {message.deleted === true ? <p className="vui-message__tombstone">Сообщение удалено</p> : message.content.trim().length === 0 ? null : <p>{renderMessageContent(message.content, message.mentions, onMention)}</p>}
               {message.deleted === true || message.attachments === undefined || message.attachments.length === 0 ? null : <div className="vui-message__attachments">{message.attachments.map((attachment) => <MessageAttachmentCard attachment={attachment} key={attachment.id} onDelete={onDeleteAttachment} onDownload={onDownloadAttachment} onLoad={onLoadAttachment} />)}</div>}
               {message.reactions === undefined || message.reactions.length === 0 ? null : <div aria-label="Реакции" className="vui-message__reactions">{message.reactions.map((reaction) => <button aria-pressed={reaction.reactedByCurrentUser} disabled={onReaction === undefined} key={reaction.emoji} onClick={() => onReaction?.(message.id, reaction.emoji)} type="button"><span>{reaction.emoji}</span><strong>{reaction.count}</strong></button>)}</div>}
               {message.deliveryState === undefined ? null : <div className="vui-message__delivery" data-state={message.deliveryState}><span>{deliveryLabels[message.deliveryState]}</span>{message.deliveryState !== 'failed' || onRetry === undefined ? null : <button onClick={() => onRetry(message.id)} type="button">Повторить</button>}</div>}

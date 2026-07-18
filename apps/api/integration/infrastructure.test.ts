@@ -238,4 +238,27 @@ describe('production infrastructure adapters', () => {
     const pending = await adminPool.query<{ count: number }>('select count(*)::int as count from outbox_events where processed_at is null and failed_at is null');
     expect(pending.rows[0]?.count).toBe(0);
   });
+
+  it('fans Redis Pub/Sub events across backend instances and deduplicates event ids', async () => {
+    const secondInstance = new RedisRealtimeBus(redisUrl);
+    await secondInstance.start();
+    try {
+      const eventId = `integration:${randomUUID()}`;
+      const received = new Promise<string>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Cross-instance event timeout')), 5_000);
+        const unsubscribe = secondInstance.onEvent((event) => {
+          if (event.id !== eventId) return;
+          clearTimeout(timeout);
+          unsubscribe();
+          resolve(event.id);
+        });
+      });
+      const event = { id: eventId, type: 'message.created' as const, occurredAt: new Date().toISOString(), conversationId: null, targetUserIds: [], payload: {} };
+      await expect(realtime.publish(event)).resolves.toBe(true);
+      await expect(received).resolves.toBe(eventId);
+      await expect(realtime.publish(event)).resolves.toBe(false);
+    } finally {
+      await secondInstance.close();
+    }
+  });
 });

@@ -30,4 +30,5 @@
 .vui-notification-center__empty { display: grid; min-height: 260px; padding: 34px; place-items: center; align-content: center; gap: 8px; color: var(--color-text-tertiary); text-align: center; }
 .vui-notification-center__empty strong { color: var(--color-text-primary); }
 .vui-notification-center__empty span { max-width: 260px; font-size: 12px; line-height: 1.5; }
+.vui-notification-center__more { width: calc(100% - 16px); margin: 8px; }
 @media (prefers-reduced-motion: reduce) { .vui-notification-center__panel { transition: none; } }

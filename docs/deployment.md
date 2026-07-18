@@ -59,7 +59,7 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml run --rm api \
 docker compose --env-file .env -f infra/docker/docker-compose.yml up -d caddy
 ```
 
-Миграция `0014_simple_molly_hayes` additive; backfill повторяемый. На expand-фазе API оставляет копию content в PostgreSQL, поэтому rollback выполняется возвратом предыдущего образа и `MEDIA_STORAGE_DRIVER=database`. Детали, object key layout и ручная проверка: [object storage](object-storage.md).
+Миграция `0014_simple_molly_hayes` additive; backfill повторяемый. `0022_square_luminals` добавляет durable очередь удаления S3-объектов. На expand-фазе API оставляет копию legacy content в PostgreSQL, поэтому rollback выполняется возвратом предыдущего образа и `MEDIA_STORAGE_DRIVER=database`. Перед rollout проверьте `MEDIA_CLEANUP_UNFINISHED_HOURS` и `MEDIA_CLEANUP_INTERVAL_SECONDS`. Детали, object key layout и ручная проверка: [object storage](object-storage.md).
 
 API не имеет host `ports`, Swagger отключён production config, Caddy получает TLS автоматически. Не копируйте `.env` в image; Compose передаёт его runtime.
 
@@ -78,7 +78,11 @@ mkdir -p /opt/vatrushka/updates
 curl -fsS https://api.myvatrushka.ru/updates/latest.yml
 ```
 
-Клиент проверяет обновления после запуска, затем раз в четыре часа. UI ничего не показывает во время проверки, при актуальной версии, ошибке feed или unsupported-режиме. Уведомление появляется только после `update-available`, во время загрузки или после `update-downloaded`; пользователь может его скрыть. Скачанное обновление устанавливается только после нажатия «Перезапустить» либо при штатном выходе. Автообновление работает для установленного NSIS-варианта. Переход с 0.3.0 на 0.4.0 требует одной ручной установки, поскольку в 0.3.0 updater ещё отсутствовал.
+Клиент проверяет обновления после запуска, затем раз в четыре часа. UI ничего не показывает во время проверки, при актуальной версии, ошибке feed или unsupported-режиме. Уведомление появляется только после `update-available`, во время загрузки или после `update-downloaded`; пользователь может его скрыть. Скачанное обновление устанавливается только после нажатия «Перезапустить» либо при штатном выходе. Во время активного голосового соединения restart заблокирован до выхода из звонка. Автообновление работает для установленного NSIS-варианта. Переход с 0.3.0 на 0.4.0 требует одной ручной установки, поскольку в 0.3.0 updater ещё отсутствовал.
+
+## Metrics
+
+API отдаёт технические Prometheus-метрики на `GET /metrics`. Разрешите scrape только доверенному Prometheus либо ограничьте route на уровне Caddy/firewall. Минимальные alerts: `chat_outbox_failed_total > 0`, рост `chat_outbox_oldest_age_seconds`, `chat_redis_publish_errors_total`, длительное падение `chat_ws_connections_active` и рост `chat_message_create_errors_total`.
 
 ## Сборка клиента для production API
 

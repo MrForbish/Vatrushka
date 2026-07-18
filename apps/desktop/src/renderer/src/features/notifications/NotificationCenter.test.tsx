@@ -13,3 +13,11 @@ it('filters, reads and dismisses notifications', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Скрыть уведомление' }));
   expect(onDismiss).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
 });
+
+it('requests the next page only when older notifications exist', () => {
+  const onLoadMore = vi.fn();
+  render(<NotificationCenter hasMore items={[]} loadingMore={false} onDismiss={vi.fn()} onLoadMore={onLoadMore} onMarkAllRead={vi.fn()} onOpen={vi.fn()} onRead={vi.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: /Уведомления/u }));
+  fireEvent.click(screen.getByRole('button', { name: 'Показать более ранние' }));
+  expect(onLoadMore).toHaveBeenCalledOnce();
+});

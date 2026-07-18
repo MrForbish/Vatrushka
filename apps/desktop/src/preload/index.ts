@@ -16,6 +16,7 @@ const channels = {
   sourceSelect: 'desktop:select-source',
   sourceClear: 'desktop:clear-source',
   clipboardCopy: 'clipboard:copy',
+  badgeCountSet: 'app:set-badge-count',
   platform: 'app:get-platform',
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
@@ -81,6 +82,7 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(channels.sourceSelect, { sourceId, includeAudio }) as Promise<void>,
   clearSelectedDesktopSource: () => ipcRenderer.invoke(channels.sourceClear) as Promise<void>,
   copyToClipboard: (text) => ipcRenderer.invoke(channels.clipboardCopy, text) as Promise<void>,
+  setBadgeCount: (count) => ipcRenderer.invoke(channels.badgeCountSet, count) as Promise<void>,
   showMessageNotification: (notification) => ipcRenderer.invoke(channels.notificationShow, notification) as Promise<void>,
   onMessageNotificationClick: (callback) => {
     notificationClickCallbacks.add(callback);

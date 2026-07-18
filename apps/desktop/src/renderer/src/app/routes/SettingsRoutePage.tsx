@@ -4,7 +4,7 @@ import type { LocalSettings, PublicUser, ServerDetail, ServerPermission, ServerS
 
 import type { AudioDevices } from '../../audio-devices';
 import { SecurityCenter, type SecurityTab } from '../../features/security';
-import { ServerSettingsPage, SettingsPageState, SettingsPlaceholderPage, SettingsShell, UserAccountSettingsPage, UserAudioSettingsPage, UserNotificationSettingsPage, UserPresenceSettingsPage, UserPrivacySettingsPage, UserProfileSettingsPage } from '../../features/settings';
+import { ServerSettingsPage, SettingsPageState, SettingsShell, UserAccountSettingsPage, UserAudioSettingsPage, UserNotificationSettingsPage, UserPresenceSettingsPage, UserPrivacySettingsPage, UserProfileSettingsPage } from '../../features/settings';
 import { apiClient } from '../../api';
 import { ConfirmDialog, WorkspaceLibrary, type WorkspaceNavigationItem } from '../../ui';
 import type { SettingsRoute } from './route-paths';
@@ -112,7 +112,6 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
   const workspaceLibrary = <WorkspaceLibrary {...(props.route.kind === 'server' ? { activeWorkspaceId: props.route.serverId } : {})} directUnreadCount={props.directUnreadCount} onCreate={() => requestNavigation(props.onCreateServer)} onDirectMessages={() => requestNavigation(props.onDirectMessages)} onHome={() => requestNavigation(props.onHome)} onSelect={(serverId) => requestNavigation(() => props.onOpenServer(serverId))} workspaces={workspaces} />;
 
   if (props.route.kind === 'user') {
-    const item = userSettingsNavigation.find((candidate) => candidate.section === props.route.section)!;
     const securityTab = props.route.subpage === 'backup-codes' ? 'recovery' : userSecurityTabs[props.route.section as keyof typeof userSecurityTabs];
     const content = props.route.section === 'profile'
       ? <UserProfileSettingsPage onAvatar={(file) => apiClient.uploadUserAvatar(file)} onDirtyChange={setPageDirty} onLoad={() => apiClient.getUserProfileSettings()} onResetAvatar={() => apiClient.resetUserAvatar()} onSave={(input) => apiClient.updateUserProfileSettings(input)} onUserChange={props.onUserChange} user={props.user} />
@@ -126,9 +125,7 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
           ? <UserPrivacySettingsPage onDirtyChange={setPageDirty} onLoad={props.onLoadPrivacy} onLoadBlocked={() => apiClient.listBlockedUsers()} onSave={props.onUpdatePrivacy} onUnblock={(userId) => apiClient.unblockUser(userId)} />
         : props.route.section === 'account'
           ? <UserAccountSettingsPage onCancelDeactivation={() => apiClient.cancelAccountDeactivation()} onConfirmEmail={(code) => apiClient.confirmEmailChange(code)} onDeactivate={(input) => apiClient.scheduleAccountDeactivation(input)} onExport={() => apiClient.exportPersonalData()} onLoad={() => apiClient.getUserAccountSettings()} onLogout={props.onLogout} onRequestEmail={(input) => apiClient.requestEmailChange(input)} onUserChange={props.onUserChange} user={props.user} />
-        : securityTab === undefined
-          ? <SettingsPlaceholderPage description={item.description} scope="user" title={item.label} />
-          : <SecurityCenter dndActive={props.presence?.preference === 'do_not_disturb'} onClose={props.onBack} onCurrentSessionRevoked={props.onCurrentSessionRevoked} onSectionChange={(tab) => props.onNavigate(securityTabPath(tab))} onSettingsChange={props.onNotificationSettingsChange} onUserChange={props.onUserChange} open presentation="page" section={securityTab} settings={props.settings} user={props.user} />;
+        : <SecurityCenter dndActive={props.presence?.preference === 'do_not_disturb'} onClose={props.onBack} onCurrentSessionRevoked={props.onCurrentSessionRevoked} onSectionChange={(tab) => props.onNavigate(securityTabPath(tab))} onSettingsChange={props.onNotificationSettingsChange} onUserChange={props.onUserChange} open presentation="page" section={securityTab ?? 'protection'} settings={props.settings} user={props.user} />;
     return (
       <>
         <SettingsShell activeSection={props.route.section} entityLabel="Личные настройки" entityName={props.user.displayName ?? props.user.email} items={userSettingsNavigation} onBack={() => requestNavigation(props.onBack)} onSelect={(section) => requestNavigation(() => props.onNavigate(userSettingsPath(section)))} workspaceLibrary={workspaceLibrary}>{content}</SettingsShell>

@@ -296,6 +296,10 @@ if (!hasLock) {
         selectedSource = selection;
       },
       showMessageNotification,
+      setBadgeCount(count) {
+        app.setBadgeCount(count);
+        tray?.setToolTip(count > 0 ? `${APP_NAME} · непрочитанных: ${count}` : APP_NAME);
+      },
       updater: desktopUpdater,
     });
     await createWindow();

@@ -2,7 +2,7 @@
 
 «Ватрушка» — настольное приложение для общения на Windows 10/11 x64. Основная модель — постоянные серверы с текстовыми и голосовыми каналами, историей сообщений, ролями и правами. Новый аккаунт создаётся с паролем и подтверждением email; каждый вход требует пароль и второй фактор email/TOTP/recovery. В голосе доступны выбор аудиоустройств, подключение по двойному щелчку, звуки входа/выхода и демонстрация монитора либо окна с управляемым системным звуком.
 
-Состав серверов и фактическое присутствие в голосовых каналах обновляются автоматически. Участники видны под названием голосового канала; роль с `MOVE_MEMBERS` может перетащить участника между каналами или направить ещё не подключённого участника в голосовой канал. В текстовом чате доступны attachment-only сообщения, inline-превью изображений, расширенный набор реакций и раздельные настройки Windows push/звука сообщений.
+Состав серверов и фактическое присутствие в голосовых каналах обновляются автоматически. Участники видны под названием голосового канала; роль с `MOVE_MEMBERS` может перетащить участника между каналами или направить ещё не подключённого участника в голосовой канал. В текстовом чате доступны attachment-only сообщения, inline-превью изображений, расширенный набор реакций, `@user`/`@role`/`@everyone`, личные сообщения со статусами доставки/прочтения и раздельные настройки уведомлений пользователя, сервера и канала.
 
 После входа открывается персональная главная: быстрый возврат в недавний канал или активный звонок, до четырёх активных пространств, недавняя активность, проверка реальных Windows-аудиоустройств и onboarding нового пользователя. Данные загружаются через `GET /api/v1/home`, кэшируются для offline-состояния и инвалидируются при изменении голосового присутствия. Ручного присоединения по коду и отдельных временных комнат в приложении нет; сервер принимается только по короткой HTTPS-ссылке/deep link.
 
@@ -21,6 +21,8 @@
                          └──────┬──┴──────┬──┘      └───────────────┘
                                 │         │
                          PostgreSQL   private S3
+                                │
+                              Redis
 ```
 
 - npm workspaces: `apps/desktop`, `apps/api`, `packages/shared`, `packages/config`.
@@ -28,11 +30,12 @@
 - API: Node.js, Fastify 5, PostgreSQL, Drizzle ORM, Nodemailer, LiveKit Server SDK.
 - Авторизация: scrypt-пароль, email/TOTP/recovery 2FA, управление устройствами, access JWT на 15 минут; opaque refresh token на 30 дней с rotation/reuse detection и хранением только в Electron main/safeStorage.
 - Медиа: LiveKit Cloud по умолчанию; self-hosted меняется только значениями `LIVEKIT_*`.
-- Вложения: приватный S3-compatible bucket в production; Fastify остаётся единственной точкой авторизации и владельцем credentials.
+- Сообщения: PostgreSQL — единственный durable source of truth; transactional outbox публикует realtime-события через Redis Pub/Sub в authenticated WebSocket gateway, а HTTP reconciliation восстанавливает пропущенные события.
+- Вложения: приватный S3-compatible bucket в production; Fastify владеет credentials и выдаёт короткоживущие presigned URL только после auth/permission checks.
 - Единственная демонстрация обеспечивается транзакционной lease в PostgreSQL, а не только UI.
 - Серверы хранят постоянное членство, каналы, сообщения, иерархию ролей, channel overrides и audit log; права `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` ограничиваются также grant-ами LiveKit-токена.
 
-Подробности: [архитектура](docs/architecture.md), [ADR](docs/adr/README.md), [Home dashboard](docs/home.md), [аутентификация](docs/auth.md), [медиа](docs/media.md), [объектное хранилище](docs/object-storage.md), [безопасность](docs/security.md).
+Подробности: [архитектура](docs/architecture.md), [messaging/realtime](docs/messaging.md), [ADR](docs/adr/README.md), [Home dashboard](docs/home.md), [аутентификация](docs/auth.md), [медиа](docs/media.md), [объектное хранилище](docs/object-storage.md), [безопасность](docs/security.md).
 
 ## Структура
 
@@ -196,7 +199,7 @@ API наружу не публикуется напрямую; доступен 
 | OTP | `OTP_PEPPER`, `OTP_TTL_SECONDS`, `OTP_RESEND_SECONDS`, `DEV_FIXED_OTP` |
 | SMTP | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` |
 | LiveKit | `LIVEKIT_URL`, `LIVEKIT_HTTP_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
-| Object storage | `MEDIA_STORAGE_DRIVER`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_KEY_PREFIX` |
+| Object storage | `MEDIA_STORAGE_DRIVER`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_KEY_PREFIX`, `MEDIA_MAX_*`, `MEDIA_ALLOWED_MIME_TYPES`, `MEDIA_CLEANUP_*` |
 | Presence | `PRESENCE_STORAGE_DRIVER`, `REDIS_URL`, `REDIS_PASSWORD`, `PRESENCE_HEARTBEAT_SECONDS`, `PRESENCE_TTL_SECONDS` |
 | Media coordination | `SCREEN_SHARE_LEASE_SECONDS`, `SCREEN_SHARE_HEARTBEAT_SECONDS` |
 | Network | `CORS_ALLOWED_ORIGINS`, `DOMAIN`, `INVITE_DOMAIN`, `LIVEKIT_DOMAIN`, `TURN_DOMAIN` |
@@ -232,16 +235,17 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 
 - Production поддерживает LiveKit Cloud и self-hosted single-node; текущий сервер проекта использует self-hosted режим.
 - Отдельные временные комнаты и гостевой вход удалены; голос доступен только авторизованным участникам серверных каналов.
-- Исключение удаляет текущего LiveKit participant или участника сервера. Постоянного ban list пока нет.
+- Модерация поддерживает kick, постоянный ban list, unban и audit log; platform admin не обходит server permissions.
 - Зритель может отдельно выключать и регулировать громкость звука демонстрации; значение сохраняется локально.
 - Демонстрация передаётся одним исходным high-quality слоем с разрешением выбранного источника до 2560×1440, 30 FPS и потолком 8 Mbps. Зритель запрашивает HIGH/30 FPS, а поверх видео показывается фактически декодируемое разрешение; итоговая пропускная способность всё равно зависит от канала ведущего, зрителя и LiveKit/TURN-маршрута.
 - Реальные SMTP delivery, LiveKit Cloud/WebRTC через NAT, Windows microphone/loopback/display capture требуют внешних credentials и устройств и не заменяются unit-тестами.
 - E2E использует виртуальное Chromium-аудиоустройство для проверки разрешения и раскрытия labels; матрица с физическими устройствами и экраном выполняется вручную на Windows.
-- NSIS-клиент обновляется автоматически из generic update feed; portable-сборка не обновляется. Пока нет code signing, E2EE, recording, telemetry и tray mode.
+- NSIS-клиент обновляется автоматически из generic update feed; portable-сборка не обновляется. Закрытие окна сворачивает приложение в tray, а явный выход завершает realtime. Пока нет code signing, E2EE и recording; `/metrics` содержит только технические агрегаты без текста сообщений.
 
 ## Документация
 
 - [Architecture](docs/architecture.md)
+- [Messaging and realtime](docs/messaging.md)
 - [Architecture decisions](docs/adr/README.md)
 - [Auth](docs/auth.md)
 - [Media](docs/media.md)

@@ -31,6 +31,7 @@ test('launches the secure auth shell with an allowlisted preload API', async () 
     'clearAuthSession',
     'clearSelectedDesktopSource',
     'copyToClipboard',
+    'setBadgeCount',
     'getAppVersion',
     'getUpdateState',
     'checkForUpdates',

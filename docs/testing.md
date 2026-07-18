@@ -34,7 +34,7 @@ $env:INTEGRATION_REDIS_URL = 'redis://127.0.0.1:6379/15'
 npm run test:integration
 ```
 
-CI starts isolated PostgreSQL 17 and Redis 8 services, applies the complete Drizzle migration chain, and verifies persistence idempotency plus multi-session presence semantics.
+CI starts isolated PostgreSQL 17 and Redis 8 services, applies the complete Drizzle migration chain, and verifies persistence/idempotency, monotonic read state, notification preferences, durable S3 cleanup jobs, outbox publish/deduplication and multi-session presence semantics.
 
 Unit/CI intentionally does not send SMTP, contact LiveKit or capture microphone/loopback/screen. Before release, execute a two-machine manual matrix on Windows with real SMTP and production LiveKit:
 
@@ -46,7 +46,10 @@ Unit/CI intentionally does not send SMTP, contact LiveKit or capture microphone/
 6. moderation, permissions and `https://<INVITE_DOMAIN>/i/<token>` → `vatrushka://invite/<token>` flow;
 7. leave/window close while microphone/share active;
 8. password login with email factor, TOTP enable/login/disable and recovery login; verify retired passwordless endpoints remain 404;
-9. create/join server, role assignment, denied/allowed text and voice actions, message polling.
+9. create/join server, role assignment, denied/allowed text and voice actions, WebSocket delivery plus HTTP reconnect reconciliation;
 10. inspect the desktop shell and critical dialogs at Windows scaling 100%, 125% and 150%; keyboard focus must remain visible and no primary action may be clipped;
 11. publish a higher test version to a staging feed, verify background download, progress, explicit restart and preserved session/settings.
 12. interrupt the presenter network during voice use, wait for reconnect and verify that screen publication is disabled while reconnecting and succeeds after `Connected` without exposing a raw LiveKit engine timeout.
+13. send a DM between two installed clients and verify `sent → delivered → read`, retry without duplication, first-unread navigation and tombstone after deletion;
+14. verify user/server/channel mute, strict DND, quiet hours, native direct/server notification click and no stale toast after reconnect;
+15. upload/finalize an S3 attachment, abandon a second upload, then verify the cleanup worker completes its durable deletion job after the configured retention.

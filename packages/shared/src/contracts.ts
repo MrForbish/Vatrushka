@@ -760,6 +760,7 @@ export interface DesktopBridge {
   selectDesktopSource(sourceId: string, includeAudio: boolean): Promise<void>;
   clearSelectedDesktopSource(): Promise<void>;
   copyToClipboard(text: string): Promise<void>;
+  setBadgeCount(count: number): Promise<void>;
   showMessageNotification(notification: DesktopMessageNotification): Promise<void>;
   onMessageNotificationClick(callback: (target: DesktopMessageNotificationTarget) => void): () => void;
   onDeepLink(callback: (inviteToken: string) => void): () => void;

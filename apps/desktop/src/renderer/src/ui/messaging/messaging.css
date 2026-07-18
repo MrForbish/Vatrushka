@@ -11,6 +11,7 @@
 .vui-message[data-virtualized='true'] { position: absolute; top: 0; left: 0; width: 100%; content-visibility: visible; }
 .vui-message[data-grouped='true'] { padding-block: var(--space-1); }
 .vui-message:hover { background: var(--color-surface-2); }
+.vui-message[data-targeted='true'] { border-color: color-mix(in srgb, var(--color-cyan), transparent 35%); background: color-mix(in srgb, var(--color-cyan), transparent 90%); animation: vui-message-target 2.4s ease-out; }
 .vui-message[data-privileged='true'] { border-color: color-mix(in srgb, var(--color-founder), transparent 72%); background: var(--gradient-founder); }
 .vui-message__avatar-space { width: 40px; }
 .vui-message__content { min-width: 0; }
@@ -19,7 +20,9 @@
 .vui-message__content time,
 .vui-message__content header small { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-message__content > p { margin: var(--space-1) 0 0; color: var(--color-text-secondary); font: var(--text-body-md); white-space: pre-wrap; word-break: break-word; }
-.vui-message__mention { display: inline; padding: 1px 3px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-primary), transparent 76%); color: var(--color-primary-hover); font-weight: 650; }
+.vui-message__mention { display: inline; padding: 1px 3px; border: 0; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-primary), transparent 76%); color: var(--color-primary-hover); font: inherit; font-weight: 650; }
+button.vui-message__mention { cursor: pointer; }
+button.vui-message__mention:hover { background: color-mix(in srgb, var(--color-primary), transparent 62%); color: var(--color-text-primary); }
 .vui-message__delivery { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); color: var(--color-text-muted); font: var(--text-caption); }
 .vui-message__delivery[data-state='failed'] { color: var(--color-danger); }
 .vui-message__delivery[data-state='read'] { color: var(--color-cyan); }
@@ -89,6 +92,11 @@
 .vui-system-message--primary { border-color: var(--color-primary); background: var(--color-primary-soft); }
 .vui-system-message--warning { border-color: var(--color-warning); background: var(--color-warning-soft); }
 .vui-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; clip-path: inset(50%); }
+
+@keyframes vui-message-target {
+  0%, 35% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-cyan), transparent 35%); }
+  100% { box-shadow: none; }
+}
 
 @media (max-width: 1179px) {
   .vui-message-composer__tools > button:nth-of-type(n+2) { display: none; }

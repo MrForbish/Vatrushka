@@ -8,7 +8,6 @@ import { SecurityCenter, type SecurityClient } from '../../security';
 import { WorkspaceLibrary, type WorkspaceNavigationItem } from '../../../ui';
 import { SettingsPageState } from '../components/SettingsPageState';
 import { SettingsSaveBar } from '../components/SettingsSaveBar';
-import { SettingsPlaceholderPage } from '../pages/SettingsPlaceholderPage';
 import { UserAudioSettingsPage } from '../pages/UserAudioSettingsPage';
 import { UserProfileSettingsPage } from '../pages/UserProfileSettingsPage';
 import { UserPresenceSettingsPage } from '../pages/UserPresenceSettingsPage';
@@ -123,5 +122,5 @@ export const VersionConflict: Story = {
 };
 
 export const UnsavedChanges: Story = {
-  render: (args) => <SettingsShell activeSection="overview" entityLabel="Настройки сервера" entityName="Команда Ватрушки" items={serverSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><SettingsPlaceholderPage description="Основные параметры сервера" scope="server" title="Обзор" /><SettingsSaveBar onCancel={() => undefined} onSave={() => undefined} state="dirty" /></SettingsShell>,
+  render: (args) => <SettingsShell activeSection="overview" entityLabel="Настройки сервера" entityName="Команда Ватрушки" items={serverSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><div><h1>Обзор</h1><p>Основные параметры сервера</p></div><SettingsSaveBar onCancel={() => undefined} onSave={() => undefined} state="dirty" /></SettingsShell>,
 };

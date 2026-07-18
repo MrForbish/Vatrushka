@@ -40,6 +40,7 @@ export const IPC_CHANNELS = {
   sourceSelect: 'desktop:select-source',
   sourceClear: 'desktop:clear-source',
   clipboardCopy: 'clipboard:copy',
+  badgeCountSet: 'app:set-badge-count',
   platform: 'app:get-platform',
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
@@ -53,6 +54,7 @@ interface IpcOptions {
   storage: DesktopStorage;
   setSelectedSource(selection: { sourceId: string; includeAudio: boolean } | null): void;
   showMessageNotification(notification: DesktopMessageNotification): void;
+  setBadgeCount(count: number): void;
   updater: {
     getState(): DesktopUpdateState;
     check(): Promise<void>;
@@ -207,6 +209,7 @@ export function registerIpc(options: IpcOptions): () => void {
   });
   handle(IPC_CHANNELS.sourceClear, () => options.setSelectedSource(null));
   handle(IPC_CHANNELS.clipboardCopy, (_event, value: unknown) => clipboard.writeText(z.string().max(20_000).parse(value)));
+  handle(IPC_CHANNELS.badgeCountSet, (_event, value: unknown) => options.setBadgeCount(z.number().int().min(0).max(99_999).parse(value)));
   handle(IPC_CHANNELS.notificationShow, (_event, value: unknown) => options.showMessageNotification(desktopMessageNotificationSchema.parse(value)));
   handle(IPC_CHANNELS.platform, () => process.platform);
   handle(IPC_CHANNELS.settingsGet, () => options.storage.getSettings());

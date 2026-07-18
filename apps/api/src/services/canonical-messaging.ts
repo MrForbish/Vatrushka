@@ -679,9 +679,14 @@ export class CanonicalMessagingStore {
 
   async unreadSummary(userId: string): Promise<UserUnreadSummary> {
     const startedAt = performance.now();
-    const result = await this.pool.query<{ conversation_id: string; unread_count: number; mention_count: number; first_unread_message_id: string | null; type: CanonicalConversationRecord['type'] }>(`
+    const result = await this.pool.query<{ conversation_id: string; unread_count: number; global_unread_count: number; mention_count: number; first_unread_message_id: string | null; type: CanonicalConversationRecord['type'] }>(`
       select c.id as conversation_id, c.type,
         count(m.id) filter (where m.author_id <> $1 and m.deleted_at is null)::int as unread_count,
+        case when c.type in ('direct', 'group_direct')
+          and coalesce((select level from conversation_notification_preferences where conversation_id = c.id and user_id = $1), 'mentions') <> 'none'
+          and coalesce((select muted_until from conversation_notification_preferences where conversation_id = c.id and user_id = $1), '-infinity'::timestamptz) <= now()
+          and coalesce((select direct_messages_enabled from user_notification_preferences where user_id = $1), true)
+          then count(m.id) filter (where m.author_id <> $1 and m.deleted_at is null)::int else 0 end as global_unread_count,
         (select count(*)::int from conversation_message_mentions mention join messages mentioned_message on mentioned_message.id = mention.message_id
           left join server_notification_preferences server_preferences on server_preferences.server_id = c.server_id and server_preferences.user_id = $1
           left join conversation_notification_preferences conversation_preferences on conversation_preferences.conversation_id = c.id and conversation_preferences.user_id = $1
@@ -704,7 +709,7 @@ export class CanonicalMessagingStore {
     const conversations = result.rows.map((row) => ({ conversationId: row.conversation_id, unreadCount: row.unread_count, mentionCount: row.mention_count, firstUnreadMessageId: row.first_unread_message_id }));
     const replyResult = await this.pool.query<{ count: number }>("select count(*)::int as count from notifications where user_id = $1 and type = 'reply' and read_at is null and dismissed_at is null", [userId]);
     const summary = {
-      totalDirectUnread: result.rows.filter((row) => row.type !== 'server_channel').reduce((sum, row) => sum + row.unread_count, 0),
+      totalDirectUnread: result.rows.filter((row) => row.type !== 'server_channel').reduce((sum, row) => sum + row.global_unread_count, 0),
       totalMentionUnread: result.rows.reduce((sum, row) => sum + row.mention_count, 0),
       totalReplyUnread: replyResult.rows[0]?.count ?? 0,
       conversations,

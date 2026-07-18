@@ -5,7 +5,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { WorkspaceLibrary } from '../../../ui';
 import { SettingsPageState } from '../components/SettingsPageState';
 import { SettingsSaveBar } from '../components/SettingsSaveBar';
-import { SettingsPlaceholderPage } from '../pages/SettingsPlaceholderPage';
 import { SettingsShell } from './SettingsShell';
 
 const sections = [
@@ -21,7 +20,7 @@ describe('SettingsShell', () => {
   it('navigates between sections and returns without rendering a members toggle', async () => {
     const onSelect = vi.fn();
     const onBack = vi.fn();
-    render(<SettingsShell activeSection="profile" entityLabel="Личные настройки" entityName="Илья" items={sections} onBack={onBack} onSelect={onSelect} workspaceLibrary={workspace()}><SettingsPlaceholderPage description="Основные данные" scope="user" title="Мой профиль" /></SettingsShell>);
+    render(<SettingsShell activeSection="profile" entityLabel="Личные настройки" entityName="Илья" items={sections} onBack={onBack} onSelect={onSelect} workspaceLibrary={workspace()}><h1>Мой профиль</h1></SettingsShell>);
 
     expect(screen.getByRole('button', { name: /Мой профиль/u })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('button', { name: 'Открыть участников' })).not.toBeInTheDocument();

@@ -196,10 +196,13 @@ describe('message composer', () => {
     expect(changed).toHaveBeenLastCalledWith([{ type: 'user', userId: '11111111-1111-4111-8111-111111111111', displayName: 'Member', start: 0, length: 7 }]);
   });
 
-  it('renders the current safe label over the original mention text', () => {
-    render(<MessageList channelName="общий" messages={[{ id: 'message', authorId: 'author', authorName: 'Author', content: 'Привет, @Old', mentions: [{ key: 'user:member', userId: 'member', start: 8, length: 4, displayName: 'Renamed' }], createdAt: '2026-01-01T10:00:00.000Z' }]} />);
+  it('renders the current safe label over the original mention text', async () => {
+    const onMention = vi.fn();
+    render(<MessageList channelName="общий" messages={[{ id: 'message', authorId: 'author', authorName: 'Author', content: 'Привет, @Old', mentions: [{ key: 'user:member', userId: 'member', start: 8, length: 4, displayName: 'Renamed' }], createdAt: '2026-01-01T10:00:00.000Z' }]} onMention={onMention} />);
     expect(screen.getByText('@Renamed')).toHaveAttribute('data-user-id', 'member');
     expect(screen.queryByText(/@Old/u)).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: '@Renamed' }));
+    expect(onMention).toHaveBeenCalledWith(expect.objectContaining({ userId: 'member', displayName: 'Renamed' }));
   });
 
   it('selects role mentions and exposes history and delivery recovery actions', async () => {
