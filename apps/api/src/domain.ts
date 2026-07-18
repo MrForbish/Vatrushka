@@ -23,7 +23,7 @@ export interface AuthCodeRecord {
   id: string;
   email: string;
   codeHash: string;
-  purpose: 'login' | 'registration' | 'password_login' | 'password_setup';
+  purpose: 'login' | 'registration' | 'password_login' | 'password_setup' | 'password_reset';
   credentialHash: string | null;
   attempts: number;
   expiresAt: Date;
@@ -75,6 +75,7 @@ export interface UserActivityRecord {
 export interface ServerRecord {
   id: string;
   name: string;
+  description?: string | null;
   inviteToken: string;
   ownerUserId: string;
   createdAt: Date;

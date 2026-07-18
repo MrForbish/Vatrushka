@@ -119,6 +119,14 @@ export class ApiClient {
     return this.completeAuth('/auth/password/complete', { email, password, code, factor, deviceName: await this.deviceName() });
   }
 
+  requestPasswordReset(email: string): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
+    return this.request('/auth/password/reset/request-code', { method: 'POST', body: { email } });
+  }
+
+  completePasswordReset(email: string, code: string, password: string): Promise<{ status: 'PASSWORD_RESET' }> {
+    return this.request('/auth/password/reset/complete', { method: 'POST', body: { email, code, password } });
+  }
+
   requestPasswordSetup(): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
     return this.request('/me/password/request-code', { method: 'POST', auth: true });
   }

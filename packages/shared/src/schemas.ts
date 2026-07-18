@@ -31,6 +31,8 @@ export const uuidSchema = z.uuid();
 
 export const requestRegistrationSchema = z.object({ email: emailSchema, password: passwordSchema }).strict();
 export const verifyRegistrationSchema = z.object({ email: emailSchema, code: otpCodeSchema, deviceName: z.string().trim().min(1).max(100) }).strict();
+export const requestPasswordResetSchema = z.object({ email: emailSchema }).strict();
+export const completePasswordResetSchema = z.object({ email: emailSchema, code: otpCodeSchema, password: passwordSchema }).strict();
 export const beginPasswordLoginSchema = z.object({ email: emailSchema, password: passwordSchema, factor: z.enum(['auto', 'email', 'totp', 'recovery']).default('auto') }).strict();
 export const completePasswordLoginSchema = z.object({
   email: emailSchema,

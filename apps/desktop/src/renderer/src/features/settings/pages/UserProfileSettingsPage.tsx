@@ -90,7 +90,7 @@ export function UserProfileSettingsPage({ onAvatar, onDirtyChange, onLoad, onRes
           {error ? <div className="vui-user-settings-note vui-user-settings-note--error">{error}</div> : null}
           <div className="vui-user-settings-readonly"><span>Email</span><strong>{saved.email}</strong><small>Смена email находится в разделе «Аккаунт».</small></div>
         </article>
-        <article className="vui-user-settings-card vui-user-profile-preview"><header><div><h2>Предпросмотр профиля</h2><p>Так вас видят другие участники.</p></div></header><div className="vui-user-profile-preview__banner" />{saved.avatarUrl ? <img className="vui-user-profile-preview__avatar" alt="Аватар" src={saved.avatarUrl} /> : <Avatar name={previewName} size="lg" status="online" />}<strong>{previewName}</strong><small>{username ? `@${username}` : saved.email}</small>{bio ? <p>{bio}</p> : null}{user.platformRole === 'owner' ? <Badge tone="founder">Основатель · разработчик</Badge> : null}</article>
+        <article className="vui-user-settings-card vui-user-profile-preview"><header><div><h2>Предпросмотр профиля</h2><p>Так вас видят другие участники.</p></div></header><div className="vui-user-profile-preview__banner" />{saved.avatarUrl ? <img className="vui-user-profile-preview__avatar" alt="Аватар" src={saved.avatarUrl} /> : <Avatar name={previewName} size="lg" status="online" />}<strong>{previewName}</strong><small>{username ? `@${username}` : saved.email}</small>{bio ? <p>{bio}</p> : null}{user.platformRole === 'owner' ? <Badge tone="founder">CEO Founder</Badge> : null}</article>
       </div>
       <SettingsSaveBar onCancel={reset} onSave={save} state={saveState === 'idle' && dirty ? 'dirty' : saveState} />
     </section>

@@ -108,6 +108,32 @@ describe('production infrastructure adapters', () => {
     expect(results.filter(({ isNewUser }) => isNewUser)).toHaveLength(1);
   });
 
+  it('atomically resets a password and revokes active PostgreSQL sessions', async () => {
+    const now = new Date('2026-07-18T09:00:00.000Z');
+    const user = await postgres.store.createUserWithPassword(`${randomUUID()}@reset.integration.test`, 'old-password-hash', now);
+    if (!user) throw new Error('Failed to create reset integration user');
+    for (const deviceName of ['Desktop', 'Laptop']) {
+      await postgres.store.createSession({
+        id: randomUUID(),
+        userId: user.id,
+        tokenHash: randomUUID(),
+        tokenFamilyId: randomUUID(),
+        deviceName,
+        trustedAt: null,
+        expiresAt: new Date(now.getTime() + 86_400_000),
+        revokedAt: null,
+        replacedBySessionId: null,
+        createdAt: now,
+        lastUsedAt: now,
+      });
+    }
+
+    const result = await postgres.store.resetPasswordAndRevokeSessions(user.id, 'new-password-hash', new Date(now.getTime() + 1_000));
+    expect(result?.user.passwordHash).toBe('new-password-hash');
+    expect(result?.revokedSessionIds).toHaveLength(2);
+    expect((await postgres.store.listSessionsForUser(user.id)).every((session) => session.revokedAt !== null)).toBe(true);
+  });
+
   it('aggregates and expires presence sessions in Redis', async () => {
     const userId = randomUUID();
     const now = new Date('2026-07-18T10:00:00.000Z');
@@ -201,6 +227,12 @@ describe('production infrastructure adapters', () => {
     const updated = await serverSettings.updateOverview(serverId, { name: 'Updated settings', description: 'Description', language: 'ru', timezone: 'Europe/Moscow', systemChannelId: channelId, welcomeChannelId: channelId, defaultNotificationLevel: 'mentions', defaultVoiceInactivitySeconds: 600, version: 1 }, new Date(now.getTime() + 1_000));
     expect(updated).toMatchObject({ name: 'Updated settings', version: 2, systemChannelId: channelId });
     await expect(serverSettings.updateOverview(serverId, { name: 'Stale', description: null, language: 'ru', timezone: 'UTC', systemChannelId: null, welcomeChannelId: null, defaultNotificationLevel: 'none', defaultVoiceInactivitySeconds: 0, version: 1 }, now)).resolves.toBeNull();
+
+    const channel = (await serverSettings.listChannels(serverId)).find((candidate) => candidate.id === channelId);
+    expect(channel?.version).toBe(1);
+    await expect(serverSettings.updateChannel(serverId, channelId, { name: 'releases', version: channel!.version }, new Date(now.getTime() + 1_100))).resolves.toBe(true);
+    await expect(serverSettings.updateChannel(serverId, channelId, { name: 'stale-name', version: channel!.version }, new Date(now.getTime() + 1_200))).resolves.toBe(false);
+    expect((await serverSettings.listChannels(serverId)).find((candidate) => candidate.id === channelId)).toMatchObject({ name: 'releases', version: 2 });
 
     await expect(postgres.store.updateOwnServerDisplayName(serverId, member.id, 'Публичное имя')).resolves.toBe(true);
     await expect(postgres.store.setServerMemberAlias(serverId, owner.id, member.id, 'Личный псевдоним', now)).resolves.toBe(true);

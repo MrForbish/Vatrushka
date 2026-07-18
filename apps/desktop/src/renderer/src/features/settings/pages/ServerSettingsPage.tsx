@@ -5,13 +5,16 @@ import { serverPermissions, type CreatedServerInvite, type ServerAppearanceSetti
 import { apiClient } from "../../../api";
 import { Button, Checkbox, FilePicker, Input, Select } from "../../../ui";
 import type { ServerSettingsSection } from "../../../app/routes/route-paths";
+import { ChannelPermissionEditor } from "../components/ChannelPermissionEditor";
 import { SettingsPageState } from "../components/SettingsPageState";
+import { permissionDefinitions } from "../model/permission-catalog";
 import "./server-settings-pages.css";
 
 interface Props {
   currentUserId?: string;
   section: ServerSettingsSection;
   server: ServerDetail;
+  refreshRevision?: number;
   onChanged(): Promise<void>;
   onDeleted(): void;
 }
@@ -49,7 +52,7 @@ function Feedback({ error, success }: { error: string | null; success?: string |
   return null;
 }
 
-function Overview({ server, onChanged }: Pick<Props, "server" | "onChanged">): React.JSX.Element {
+function Overview({ refreshRevision = 0, server, onChanged }: Pick<Props, "server" | "onChanged" | "refreshRevision">): React.JSX.Element {
   const [value, setValue] = useState<ServerOverviewSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,7 +62,7 @@ function Overview({ server, onChanged }: Pick<Props, "server" | "onChanged">): R
       .getServerOverviewSettings(server.id)
       .then(setValue)
       .catch((caught) => setError(message(caught)));
-  }, [server.id]);
+  }, [refreshRevision, server.id]);
   useEffect(load, [load]);
   if (!value) return error ? <SettingsPageState description={error} kind="error" onAction={load} /> : <SettingsPageState kind="loading" />;
   const textChannels = server.channels.filter((channel) => channel.type === "text").map((channel) => ({ value: channel.id, label: `# ${channel.name}` }));
@@ -338,20 +341,6 @@ function Members({ server, currentUserId = server.ownerUserId, onChanged }: Pick
   );
 }
 
-const permissionLabels: Partial<Record<ServerPermission, string>> = {
-  VIEW_SERVER: "Просмотр сервера",
-  VIEW_CHANNEL: "Просмотр каналов",
-  SEND_MESSAGES: "Отправка сообщений",
-  CONNECT_VOICE: "Подключение к voice",
-  SPEAK: "Говорить",
-  STREAM_SCREEN: "Демонстрация экрана",
-  MANAGE_CHANNELS: "Управление каналами",
-  MANAGE_ROLES: "Управление ролями",
-  KICK_MEMBERS: "Исключать участников",
-  BAN_MEMBERS: "Блокировать участников",
-  ADMINISTRATOR: "Администратор",
-};
-
 function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): React.JSX.Element {
   const editable = server.roles.filter((role) => role.kind !== "OWNER").sort((left, right) => right.position - left.position);
   const [selectedId, setSelectedId] = useState(editable[0]?.id ?? "new");
@@ -400,7 +389,16 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
           </div>
           <div className="vui-server-permission-grid">
             {serverPermissions.map((permission) => (
-              <Checkbox checked={permissions.includes(permission)} description={permission} key={permission} label={permissionLabels[permission] ?? permission.replaceAll("_", " ").toLowerCase()} onChange={(event) => setPermissions((current) => (event.target.checked ? [...current, permission] : current.filter((item) => item !== permission)))} />
+              <Checkbox
+                checked={permissions.includes(permission)}
+                description={permissionDefinitions[permission].description}
+                key={permission}
+                label={permissionDefinitions[permission].label}
+                onChange={(event) => {
+                  if (permission === "ADMINISTRATOR" && event.target.checked && !window.confirm("Право администратора даёт полный доступ и обходит ограничения каналов. Продолжить?")) return;
+                  setPermissions((current) => (event.target.checked ? [...current, permission] : current.filter((item) => item !== permission)));
+                }}
+              />
             ))}
           </div>
           <Feedback error={error} />
@@ -444,7 +442,7 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
   );
 }
 
-function Channels({ server, onChanged }: Pick<Props, "server" | "onChanged">): React.JSX.Element {
+function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "server" | "onChanged" | "refreshRevision">): React.JSX.Element {
   const [data, setData] = useState<{
     categories: ServerChannelCategory[];
     channels: ServerChannelSettings[];
@@ -455,7 +453,7 @@ function Channels({ server, onChanged }: Pick<Props, "server" | "onChanged">): R
       .getServerChannelSettings(server.id)
       .then(setData)
       .catch((caught) => setError(message(caught)));
-  }, [server.id]);
+  }, [refreshRevision, server.id]);
   useEffect(load, [load]);
   const run = (action: () => Promise<unknown>): void => {
     void action()
@@ -622,6 +620,15 @@ function Channels({ server, onChanged }: Pick<Props, "server" | "onChanged">): R
           </article>
         ))}
       </div>
+      {server.permissions.includes("MANAGE_ROLES") ? (
+        <ChannelPermissionEditor
+          server={server}
+          onSave={async (channelId, targetType, targetId, allow, deny) => {
+            await apiClient.setChannelPermissionOverwrite(channelId, targetType, targetId, allow, deny);
+            await onChanged();
+          }}
+        />
+      ) : null}
     </Page>
   );
 }
@@ -859,6 +866,7 @@ const auditActionLabels: Record<string, string> = {
   CHANNEL_DELETED: "Канал удалён",
   CHANNEL_OVERWRITE_UPDATED: "Права канала изменены",
   CHANNEL_SETTINGS_UPDATED: "Настройки канала изменены",
+  CHANNEL_RENAMED: "Канал переименован",
   INVITE_CREATED: "Приглашение создано",
   INVITE_REVOKED: "Приглашение отозвано",
   MEMBER_BANNED: "Участник заблокирован",
@@ -1034,16 +1042,17 @@ function Danger({ server, onChanged, onDeleted }: Pick<Props, "server" | "onChan
 }
 
 export function ServerSettingsPage(props: Props): React.JSX.Element {
+  const refreshRevision = props.refreshRevision ?? 0;
   const content = useMemo(() => {
-    if (props.section === "overview") return <Overview server={props.server} onChanged={props.onChanged} />;
+    if (props.section === "overview") return <Overview refreshRevision={refreshRevision} server={props.server} onChanged={props.onChanged} />;
     if (props.section === "appearance") return <Appearance server={props.server} onChanged={props.onChanged} />;
     if (props.section === "members") return <Members currentUserId={props.currentUserId ?? props.server.ownerUserId} server={props.server} onChanged={props.onChanged} />;
     if (props.section === "roles") return <Roles server={props.server} onChanged={props.onChanged} />;
-    if (props.section === "channels") return <Channels server={props.server} onChanged={props.onChanged} />;
+    if (props.section === "channels") return <Channels refreshRevision={refreshRevision} server={props.server} onChanged={props.onChanged} />;
     if (props.section === "invites") return <Invites server={props.server} />;
     if (props.section === "moderation") return <Moderation server={props.server} />;
     if (props.section === "audit-log") return <Audit server={props.server} />;
     return <Danger server={props.server} onChanged={props.onChanged} onDeleted={props.onDeleted} />;
-  }, [props.currentUserId, props.section, props.server, props.onChanged, props.onDeleted]);
+  }, [props.currentUserId, props.section, props.server, refreshRevision, props.onChanged, props.onDeleted]);
   return content;
 }

@@ -1,0 +1,132 @@
+name: PR checks
+
+on:
+  workflow_call:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-checks-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: vatrushka_test
+          POSTGRES_USER: vatrushka
+          POSTGRES_PASSWORD: integration-test-password
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U vatrushka -d vatrushka_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports: [6379:6379]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      INTEGRATION_DATABASE_URL: postgresql://vatrushka:integration-test-password@127.0.0.1:5432/vatrushka_test
+      INTEGRATION_REDIS_URL: redis://127.0.0.1:6379/15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+      - run: npm run build -w @vatrushka/shared
+      - run: npm run test:integration
+
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+      - name: Validate GitHub Actions workflows
+        uses: docker://rhysd/actionlint:1.7.12
+      - run: npm run repo-policy:test
+      - run: npm run version:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run db:check
+      - run: npm run build
+      - run: npm run perf:check
+
+  desktop-behavior:
+    runs-on: windows-latest
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v6
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install chromium
+      - run: npm run build -w @vatrushka/shared
+      - name: Storybook interaction budget
+        run: node scripts/ci/run-with-budget.mjs --name "Storybook interaction" --budget-seconds 180 -- npm run test:storybook
+      - name: Electron E2E budget
+        run: node scripts/ci/run-with-budget.mjs --name "Electron E2E" --budget-seconds 90 -- npm run test:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: desktop-behavior-diagnostics
+          path: |
+            apps/desktop/test-results/**
+            apps/desktop/playwright-report/**
+          if-no-files-found: ignore
+
+  visual-regression:
+    runs-on: windows-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-node
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v6
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install chromium
+      - run: npm run build -w @vatrushka/shared
+      - name: Static Storybook visual budget
+        run: node scripts/ci/run-with-budget.mjs --name "Static Storybook visual" --budget-seconds 180 -- npm run test:visual
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: visual-regression-diagnostics
+          path: |
+            apps/desktop/test-results/**
+            apps/desktop/playwright-report/**
+          if-no-files-found: ignore
+
+  desktop-regression:
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    needs: [desktop-behavior, visual-regression]
+    steps:
+      - name: Require both Windows regression suites
+        env:
+          BEHAVIOR_RESULT: ${{ needs.desktop-behavior.result }}
+          VISUAL_RESULT: ${{ needs.visual-regression.result }}
+        shell: bash
+        run: |
+          [[ "$BEHAVIOR_RESULT" == success ]] || { echo "desktop-behavior: $BEHAVIOR_RESULT" >&2; exit 1; }
+          [[ "$VISUAL_RESULT" == success ]] || { echo "visual-regression: $VISUAL_RESULT" >&2; exit 1; }

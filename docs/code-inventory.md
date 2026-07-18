@@ -1,6 +1,6 @@
 # Инвентаризация кода и данных
 
-Дата аудита: 2026-07-18, commit `5902feb`, release 0.6.1.
+Дата аудита: 2026-07-18, базовый commit `4ceedd5`, release 0.6.1.
 
 Этот документ отделяет действительно мертвый код от временной совместимости и от согласованных будущих функций. Он является safety checklist для cleanup PR, а не разрешением удалить все перечисленное одним изменением.
 
@@ -41,14 +41,9 @@ Contract migration допустима только после canonical-only к�
 
 Тесты, проверяющие `404` старых passwordless/room endpoints и отзыв legacy refresh sessions, не являются мертвыми. Это regression/security assertions, запрещающие случайное возвращение удаленного публичного контракта.
 
-### Settings fallback
+### Settings migration
 
-`SecurityCenter`, старый `ServerSettings` и build-time feature flags пока образуют rollback fallback. Production-флаги уже включены по умолчанию, routed pages имеют API parity. Следующий cleanup PR должен:
-
-1. проверить отсутствие уникальных действий в старых компонентах;
-2. добавить parity regression на routed settings;
-3. удалить fallback branches и завершенные flags;
-4. удалить компоненты только если после этого нет imports.
+Завершенные build-time feature flags и production fallback branches удалены после подтверждения API parity routed settings. `SecurityCenter` сохранен: его page presentation обслуживает реальные security routes. Старый modal `features/roles/ServerSettings` удален после переноса channel overrides, проверки опасного права `ADMINISTRATOR` и visual/interaction scenarios в канонический routed `ServerSettingsPage`. API-контракт и таблица `channel_permission_overwrites` остаются активными.
 
 ## Согласованный будущий код — сохранить
 

@@ -1,6 +1,6 @@
 {
   "name": "@vatrushka/api",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
@@ -19,6 +19,8 @@
     "media:migrate:s3:prod": "node dist/scripts/migrate-attachments-to-s3.js",
     "media:verify:s3": "tsx src/scripts/verify-object-storage.ts",
     "media:verify:s3:prod": "node dist/scripts/verify-object-storage.js",
+    "capacity:check": "tsx src/scripts/capacity-check.ts",
+    "capacity:check:prod": "node dist/scripts/capacity-check.js",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
@@ -30,7 +32,7 @@
     "@fastify/swagger": "9.8.1",
     "@fastify/swagger-ui": "6.1.0",
     "@fastify/websocket": "^11.3.0",
-    "@vatrushka/shared": "0.6.2",
+    "@vatrushka/shared": "0.6.3",
     "drizzle-orm": "0.45.2",
     "fastify": "5.10.0",
     "fastify-raw-body": "5.0.0",

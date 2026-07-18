@@ -26,6 +26,7 @@ export interface SettingsRoutePageProps {
   route: SettingsRoute;
   settings: LocalSettings;
   server: ServerDetail | null;
+  serverSettingsRevision: number;
   servers: ServerSummary[];
   user: PublicUser;
   voiceConnected: boolean;
@@ -157,7 +158,7 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
         : props.error !== null ? <SettingsPageState description={props.error} kind="error" />
           : !hasAccess ? <SettingsPageState kind="permission" />
             : props.server === null ? <SettingsPageState kind="loading" />
-              : <ServerSettingsPage currentUserId={props.user.id} key={`${serverRoute.serverId}:${serverRoute.section}`} onChanged={props.onServerChanged} onDeleted={props.onServerDeleted} section={serverRoute.section} server={props.server} />}
+              : <ServerSettingsPage currentUserId={props.user.id} key={`${serverRoute.serverId}:${serverRoute.section}`} onChanged={props.onServerChanged} onDeleted={props.onServerDeleted} refreshRevision={props.serverSettingsRevision} section={serverRoute.section} server={props.server} />}
     </SettingsShell>
   );
 }

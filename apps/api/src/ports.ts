@@ -40,7 +40,6 @@ import type { DirectMessagePrivacy, PermissionOverwriteTargetType, PlatformRole,
 export interface DataStore {
   healthCheck(): Promise<void>;
   replaceAuthCode(code: AuthCodeRecord): Promise<void>;
-  findLatestAuthCode(email: string): Promise<AuthCodeRecord | null>;
   findLatestAuthCodeForPurpose(email: string, purpose: AuthCodeRecord['purpose']): Promise<AuthCodeRecord | null>;
   incrementAuthCodeAttempts(id: string): Promise<number>;
   consumeAuthCode(id: string, at: Date): Promise<boolean>;
@@ -52,6 +51,7 @@ export interface DataStore {
   updatePresence(id: string, values: { preference: PresencePreference; customText: string | null; customTextExpiresAt: Date | null }, now: Date): Promise<UserRecord | null>;
   updatePrivacySettings(id: string, values: { directMessagePrivacy: DirectMessagePrivacy; presenceVisibility: PresenceVisibility; activityVisible: boolean }, now: Date): Promise<UserRecord | null>;
   updatePassword(id: string, passwordHash: string, now: Date): Promise<UserRecord | null>;
+  resetPasswordAndRevokeSessions(id: string, passwordHash: string, now: Date): Promise<{ user: UserRecord; revokedSessionIds: string[] } | null>;
   updateTwoFactor(id: string, secretEncrypted: string | null, enabled: boolean, now: Date): Promise<UserRecord | null>;
   setPlatformRoleByEmail(email: string, role: PlatformRole, now: Date): Promise<UserRecord | null>;
   createSession(session: SessionRecord): Promise<void>;

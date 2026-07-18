@@ -16,6 +16,9 @@ npm run db:check
 npm run perf:bundle
 npm run build
 npm run package:win
+npm run repo-policy:test
+npm run version:check
+npm run capacity:check
 ```
 
 Shared tests cover validation, errors, permissions, expiration and lease logic. API tests use Fastify inject with `MemoryStore`, `MemoryPresenceStore`, `FakeMailer`, `FakeMediaService` and cover password registration, email/TOTP/recovery second factor, refresh rotation/reuse, retired auth/room routes, the Home dashboard/onboarding/activity aggregate, Redis-compatible multi-session presence semantics, DND/privacy enforcement, servers, text/voice channels, messages, attachment-only creation, LiveKit presence, permission-enforced member moves, channel lease concurrency/expiry and signed/unsigned webhooks.
@@ -34,7 +37,26 @@ $env:INTEGRATION_REDIS_URL = 'redis://127.0.0.1:6379/15'
 npm run test:integration
 ```
 
-CI starts isolated PostgreSQL 17 and Redis 8 services, applies the complete Drizzle migration chain, and verifies persistence/idempotency, monotonic read state, notification preferences, durable S3 cleanup jobs, outbox publish/deduplication and multi-session presence semantics.
+CI starts isolated PostgreSQL 17 and Redis 8 services, applies the complete Drizzle migration chain, and verifies persistence/idempotency, atomic password-reset session revocation, monotonic read state, notification preferences, durable S3 cleanup jobs, outbox publish/deduplication and multi-session presence semantics.
+
+## CI и release gates
+
+`pr-checks.yml` является переиспользуемым quality gate для task PR в `develop`: независимые jobs проверяют настоящие PostgreSQL/Redis adapters, lint/typecheck/unit/build/bundle budgets и полный Windows Storybook/Electron/visual набор. Обычный PR не собирает публикуемый installer. Storybook interaction + Electron E2E и 32 последовательных visual scenario выполняются параллельными Windows jobs, после чего единый `desktop-regression` требует успеха обоих. Chromium кэшируется по lockfile; локально быстрые два workers внутри одного visual process были отклонены после деградации на ограниченном GitHub Windows runner.
+
+Visual suite сначала собирает production-like статический Storybook, затем обслуживает `storybook-static` через Vite preview. Это сохраняет однопоточный детерминированный screenshot contract, но исключает холодную Vite-трансформацию при открытии каждой story. `run-with-budget.mjs` измеряет Storybook interaction, Electron E2E и visual шаги, пишет фактическое время в GitHub Step Summary и блокирует существенную регрессию. Job-level timeouts защищают от зависшего runner. Актуальная связь рисков, уровней тестов и viewport находится в [test-coverage-matrix.md](test-coverage-matrix.md).
+
+Baseline PR #23 на GitHub-hosted Windows: Storybook interaction 77,9 секунды, Electron E2E 37,0 секунды, static Storybook visual 90,6 секунды; полный visual job 3:01 вместо 6:01 в PR #21. Эти значения являются ориентиром, а блокирующие budgets намеренно оставляют запас для вариативности cold runner. Static visual budget равен 180 секундам: все 32 сценария обязательны, а запас покрывает наблюдавшийся cold-runner variance без ослабления job timeout.
+
+`release-candidate.yml` повторно вызывает тот же quality gate и дополнительно:
+
+- проверяет release branch/version/changelog;
+- применяет production schema из текущей production-ветки в чистую PostgreSQL, затем накатывает candidate migrations;
+- сохраняет migration/upgrade reports;
+- собирает NSIS/portable и SHA-256;
+- проверяет clean silent install и upgrade поверх installer из production feed;
+- сохраняет RC metadata и installer, не публикуя `latest.yml`.
+
+`release-pr.yml` требует full quality evidence, rollback/release notes и запрещает dev URLs. `production-release.yml` доступен только immutable SemVer tag, повторяет quality gate, собирает stable artifacts и после approval атомарно публикует feed. PR workflow не получает signing/SSH secrets. `sync-check.yml` разрешает обратную синхронизацию только при наличии production tag.
 
 Unit/CI intentionally does not send SMTP, contact LiveKit or capture microphone/loopback/screen. Before release, execute a two-machine manual matrix on Windows with real SMTP and production LiveKit:
 

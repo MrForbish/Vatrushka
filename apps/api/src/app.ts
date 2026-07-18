@@ -20,6 +20,7 @@ import {
   API_PREFIX,
   beginPasswordLoginSchema,
   completePasswordLoginSchema,
+  completePasswordResetSchema,
   createChannelSchema,
   createMessageSchema,
   createDirectConversationSchema,
@@ -35,6 +36,7 @@ import {
   markChannelReadSchema,
   refreshSchema,
   requestRegistrationSchema,
+  requestPasswordResetSchema,
   screenShareActionSchema,
   sessionTrustSchema,
   serverPermissions,
@@ -161,7 +163,7 @@ const userSessionResponseSchema = z.object({
 const recoveryCodesResponseSchema = z.object({ recoveryCodes: z.array(z.string()) });
 const securityEventResponseSchema = z.object({
   id: z.string(),
-  type: z.enum(['SESSION_CREATED', 'SESSION_REVOKED', 'PASSWORD_CHANGED', 'TWO_FACTOR_ENABLED', 'TWO_FACTOR_DISABLED', 'RECOVERY_CODES_REGENERATED', 'REFRESH_TOKEN_REUSE_DETECTED', 'PROFILE_UPDATED', 'USERNAME_CHANGED', 'EMAIL_CHANGED', 'ACCOUNT_DEACTIVATION_SCHEDULED', 'ACCOUNT_DEACTIVATION_CANCELLED']),
+  type: z.enum(['SESSION_CREATED', 'SESSION_REVOKED', 'PASSWORD_CHANGED', 'PASSWORD_RESET', 'TWO_FACTOR_ENABLED', 'TWO_FACTOR_DISABLED', 'RECOVERY_CODES_REGENERATED', 'REFRESH_TOKEN_REUSE_DETECTED', 'PROFILE_UPDATED', 'USERNAME_CHANGED', 'EMAIL_CHANGED', 'ACCOUNT_DEACTIVATION_SCHEDULED', 'ACCOUNT_DEACTIVATION_CANCELLED']),
   deviceName: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -191,7 +193,7 @@ const voiceChannelParticipantResponseSchema = z.object({ identity: z.string(), u
 const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), unreadCount: z.number(), mentionCount: z.number().optional(), voiceParticipants: z.array(voiceChannelParticipantResponseSchema).optional(), permissions: z.array(permissionSchema).optional(), permissionOverwrites: z.array(permissionOverwriteResponseSchema).optional() });
 const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), serverDisplayName: z.string().nullable(), privateAlias: z.string().nullable(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema), presence: z.enum(['online', 'idle', 'dnd', 'offline']).optional(), customStatusText: z.string().nullable().optional() });
 const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteUrl: z.url(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
-const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
+const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ description: z.string().nullable(), channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
 const homeDestinationResponseSchema = z.object({ type: z.enum(['server', 'text_channel', 'voice_channel']), serverId: z.string(), channelId: z.string().optional() });
 const homeServerResponseSchema = serverSummaryResponseSchema.extend({ unreadCount: z.number(), activeVoiceCount: z.number() });
 const homeContinueResponseSchema = z.object({ id: z.string(), type: z.enum(['active_call', 'server', 'text_channel', 'voice_channel']), title: z.string(), subtitle: z.string(), participantCount: z.number(), active: z.boolean(), lastActivityAt: z.string(), destination: homeDestinationResponseSchema });
@@ -413,6 +415,24 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     config: { rateLimit: { max: 15, timeWindow: '10 minutes' } },
     schema: { tags: ['auth'], body: verifyRegistrationSchema, response: { 200: authResponseSchema, ...routeErrors() } },
   }, async (request) => service.verifyRegistration(request.body.email, request.body.code, request.body.deviceName));
+
+  api.post(`${API_PREFIX}/auth/password/reset/request-code`, {
+    config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
+    schema: {
+      tags: ['auth'],
+      body: requestPasswordResetSchema,
+      response: { 200: z.object({ status: z.literal('CODE_SENT'), retryAfterSeconds: z.number() }), ...routeErrors() },
+    },
+  }, async (request) => service.requestPasswordReset(request.body.email));
+
+  api.post(`${API_PREFIX}/auth/password/reset/complete`, {
+    config: { rateLimit: { max: 10, timeWindow: '10 minutes' } },
+    schema: {
+      tags: ['auth'],
+      body: completePasswordResetSchema,
+      response: { 200: z.object({ status: z.literal('PASSWORD_RESET') }), ...routeErrors() },
+    },
+  }, async (request) => service.completePasswordReset(request.body.email, request.body.code, request.body.password));
 
   api.post(`${API_PREFIX}/auth/password/begin`, {
     config: { rateLimit: { max: 10, timeWindow: '10 minutes' } },

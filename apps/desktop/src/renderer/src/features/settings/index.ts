@@ -2,6 +2,7 @@ export * from './components/SettingsNavigation';
 export * from './components/SettingsPageHeader';
 export * from './components/SettingsPageState';
 export * from './components/SettingsSaveBar';
+export * from './components/ChannelPermissionEditor';
 export * from './layouts/SettingsShell';
 export * from './model/settings.types';
 export * from './pages/UserAudioSettingsPage';
