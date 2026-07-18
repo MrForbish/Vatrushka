@@ -32,6 +32,21 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('app-shell-desktop.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('app shell at the supported 1280 by 720 boundary', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openStory(page, 'layouts-app-shell--full-server');
+    await expect(page.getByRole('button', { name: 'Открыть участников' })).toBeVisible();
+    await expect(page).toHaveScreenshot('app-shell-1280.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('app shell at the minimum 1024 by 680 boundary', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 680 });
+    await openStory(page, 'layouts-app-shell--full-server');
+    await page.getByRole('button', { name: 'Открыть список серверов' }).click();
+    await expect(page.getByRole('dialog', { name: 'Серверы' })).toBeVisible();
+    await expect(page).toHaveScreenshot('app-shell-minimum.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('server settings shell', async ({ page }) => {
     await openStory(page, 'features-settings-settings-shell--server-overview');
     await expect(page.getByRole('heading', { name: 'Обзор' })).toBeVisible();
@@ -187,6 +202,7 @@ test.describe('Vatrushka design system visual baseline', () => {
   test('security center sessions', async ({ page }) => {
     await openStory(page, 'features-security-center--sessions');
     await expect(page.getByText('Рабочий ноутбук')).toBeVisible();
+    await page.getByRole('button', { name: 'Сессии' }).focus();
     await expect(page).toHaveScreenshot('security-center-sessions.png', { animations: 'disabled', fullPage: true });
   });
 });

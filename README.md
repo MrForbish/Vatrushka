@@ -254,6 +254,7 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 - [Self-hosted LiveKit](docs/self-hosted-livekit.md)
 - [Security](docs/security.md)
 - [Testing](docs/testing.md)
+- [Test coverage and viewport matrix](docs/test-coverage-matrix.md)
 - [Performance](docs/performance.md)
 - [Release 0.4.4](docs/releases/0.4.4.md)
 - [Release 0.4.3](docs/releases/0.4.3.md)
