@@ -4,6 +4,8 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-18
+
 ### Added
 
 - private S3-compatible storage for channel and direct-message attachments, with API-only credentials and authenticated downloads;

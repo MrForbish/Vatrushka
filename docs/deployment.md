@@ -28,7 +28,7 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml up -d
 
 Backup PostgreSQL выполняйте до обновления schema/image. Миграция `0012_remove_legacy_rooms_contract` намеренно удаляет только уже выведенные из эксплуатации `rooms`, `guest_sessions` и старую `screen_share_leases`; постоянные server channels и `channel_screen_share_leases` она не затрагивает. Следующая `0013_home_activity` добавляет историю для Home. После применения contract-миграции простой rollback image не восстановит удалённые legacy-таблицы, поэтому перед первым обновлением на эту версию обязателен backup.
 
-`0016_nasty_malcolm_colcord` additive-миграция добавляет `message_mentions` и индексы для message/user lookup. Она не переписывает старые сообщения: их `mentions` после rollout останутся пустыми, потому что backend не восстанавливает entities ненадёжным regex-парсингом.
+`0016_nasty_malcolm_colcord` additive-миграция добавляет `message_mentions` и индексы для message/user lookup. Она не переписывает старые сообщения: их `mentions` после rollout останутся пустыми, потому что backend не восстанавливает entities ненадёжным regex-парсингом. `0023_attachment_cleanup_trigger` добавляет database-trigger, который гарантированно ставит S3 object и preview в очередь удаления даже при cascade-delete.
 
 ## Redis для presence
 
@@ -59,7 +59,7 @@ docker compose --env-file .env -f infra/docker/docker-compose.yml run --rm api \
 docker compose --env-file .env -f infra/docker/docker-compose.yml up -d caddy
 ```
 
-Миграция `0014_simple_molly_hayes` additive; backfill повторяемый. `0022_square_luminals` добавляет durable очередь удаления S3-объектов. На expand-фазе API оставляет копию legacy content в PostgreSQL, поэтому rollback выполняется возвратом предыдущего образа и `MEDIA_STORAGE_DRIVER=database`. Перед rollout проверьте `MEDIA_CLEANUP_UNFINISHED_HOURS` и `MEDIA_CLEANUP_INTERVAL_SECONDS`. Детали, object key layout и ручная проверка: [object storage](object-storage.md).
+Миграция `0014_simple_molly_hayes` additive; backfill повторяемый. `0022_square_luminals` добавляет durable очередь удаления S3-объектов, а `0023_attachment_cleanup_trigger` покрывает каскадные удаления вложений. На expand-фазе API оставляет копию legacy content в PostgreSQL, поэтому rollback выполняется возвратом предыдущего образа и `MEDIA_STORAGE_DRIVER=database`. Перед rollout проверьте `MEDIA_CLEANUP_UNFINISHED_HOURS` и `MEDIA_CLEANUP_INTERVAL_SECONDS`. Детали, object key layout и ручная проверка: [object storage](object-storage.md).
 
 API не имеет host `ports`, Swagger отключён production config, Caddy получает TLS автоматически. Не копируйте `.env` в image; Compose передаёт его runtime.
 
