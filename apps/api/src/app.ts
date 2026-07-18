@@ -265,6 +265,7 @@ function routeErrors(): Record<number, typeof errorResponseSchema> {
 
 export async function buildApp(options: BuildAppOptions): Promise<FastifyInstance> {
   const { config, service } = options;
+  const requestStartedAt = new WeakMap<object, number>();
   const app = Fastify({
     logger:
       options.logger === false
@@ -293,6 +294,27 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+  app.addHook('onRequest', (request, _reply, done) => {
+    requestStartedAt.set(request, performance.now());
+    done();
+  });
+  app.addHook('onResponse', (request, reply, done) => {
+    const startedAt = requestStartedAt.get(request) ?? performance.now();
+    const route = request.routeOptions.url || 'unmatched';
+    const labels = {
+      method: request.method,
+      route,
+      status_class: `${Math.floor(reply.statusCode / 100)}xx`,
+    };
+    technicalMetrics.increment('api_http_requests_total', 1, labels);
+    technicalMetrics.observeHistogram(
+      'api_http_request_duration_seconds',
+      Math.max(0, performance.now() - startedAt) / 1_000,
+      [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+      labels,
+    );
+    done();
+  });
   app.addContentTypeParser('application/webhook+json', { parseAs: 'string' }, (_request, body, done) => {
     done(null, body);
   });
@@ -376,7 +398,9 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   }, async (request, reply) => {
     try {
       await service.store.healthCheck();
+      technicalMetrics.set('api_readiness', 1);
     } catch {
+      technicalMetrics.set('api_readiness', 0);
       return reply.status(503).send(createApiError('INTERNAL_ERROR', request.id));
     }
     try {

@@ -103,11 +103,13 @@
 
 ### P1.1 — Prometheus/Grafana
 
-1. Уточнить/стабилизировать API metric names и cardinality.
-2. Развернуть Prometheus, Grafana, node/cAdvisor/PostgreSQL/Redis exporters и blackbox probes.
-3. Ограничить доступ auth/VPN/SSH tunnel; настроить retention, backup dashboards и disk budget.
-4. Собрать dashboards API/WebSocket, messaging/outbox, Redis, PostgreSQL, LiveKit/S3 и host.
-5. После baseline включить alerts по перечню из технической спецификации.
+Статус: базовый приватный stack, exporters, low-cardinality API/runtime metrics, dashboard и alert rules реализованы в `feat/OPS-1-observability`. После production deployment требуется недельный baseline, настройка внешнего получателя alerts и отдельное расширение LiveKit/S3 application-level collectors.
+
+1. Уточнить/стабилизировать API metric names и cardinality. Выполнено для HTTP/runtime/messaging.
+2. Развернуть Prometheus, Grafana, node/cAdvisor/PostgreSQL/Redis exporters и blackbox probes. Конфигурация готова, production rollout выполняется после PR/release.
+3. Ограничить доступ SSH tunnel; настроить retention, versioned dashboards и disk budget. Выполнено в конфигурации.
+4. Собрать dashboards API/WebSocket, messaging/outbox, Redis, PostgreSQL и host. Выполнен overview; детальные LiveKit/S3 collectors остаются следующим срезом.
+5. Включить базовые alert rules. Выполнено; внешний notification receiver и корректировка thresholds — после недельного baseline.
 
 ### P1.2 — сообщества и messaging
 
