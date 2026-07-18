@@ -170,6 +170,13 @@ describe('production infrastructure adapters', () => {
     expect((await messaging.unreadSummary(second.id)).totalReplyUnread).toBe(0);
     expect(await messaging.softDeleteMessage(created.message.id, first.id, false, new Date(now.getTime() + 2_000))).toBe(true);
     expect((await messaging.findMessage(created.message.id, second.id))?.deletedAt).not.toBeNull();
+    const staleAttachmentId = randomUUID();
+    const staleObjectKey = `integration/stale/${staleAttachmentId}`;
+    await messaging.createAttachmentIntent({ id: staleAttachmentId, uploaderUserId: first.id, objectKey: staleObjectKey, originalName: 'stale.txt', mimeType: 'text/plain', sizeBytes: '5', width: null, height: null, durationMs: null, createdAt: now });
+    expect(await messaging.scheduleStaleAttachmentCleanup(new Date(now.getTime() + 1), new Date(now.getTime() + 2_500))).toBe(1);
+    const deletionJobs = await messaging.claimObjectDeletionBatch(10, new Date(now.getTime() + 2_500));
+    expect(deletionJobs).toEqual(expect.arrayContaining([expect.objectContaining({ objectKey: staleObjectKey, attempts: 1 })]));
+    await messaging.completeObjectDeletion(deletionJobs.find((job) => job.objectKey === staleObjectKey)!.id, new Date(now.getTime() + 2_600));
   });
 
   it('persists versioned server settings and constrained invite links', async () => {

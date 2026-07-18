@@ -515,6 +515,25 @@ export const conversationMessageAttachments = pgTable(
   ],
 );
 
+export const objectDeletionJobs = pgTable(
+  'object_deletion_jobs',
+  {
+    id: uuid('id').primaryKey(),
+    objectKey: text('object_key').notNull(),
+    reason: text('reason').notNull(),
+    attempts: integer('attempts').notNull().default(0),
+    availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    failedAt: timestamp('failed_at', { withTimezone: true }),
+    lastError: text('last_error'),
+  },
+  (table) => [
+    uniqueIndex('object_deletion_jobs_object_key_unique').on(table.objectKey),
+    index('object_deletion_jobs_available_idx').on(table.availableAt, table.id),
+  ],
+);
+
 export const conversationMessageReactions = pgTable(
   'conversation_message_reactions',
   {

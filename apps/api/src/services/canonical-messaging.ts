@@ -60,6 +60,12 @@ export interface CanonicalAttachmentRecord {
   createdAt: Date;
 }
 
+export interface ObjectDeletionJob {
+  id: string;
+  objectKey: string;
+  attempts: number;
+}
+
 export interface OutboxEventRecord {
   id: string;
   eventType: string;
@@ -243,19 +249,79 @@ export class CanonicalMessagingStore {
     const client = await this.pool.connect();
     try {
       await client.query('begin');
-      const deleted = await client.query<{ object_key: string; message_id: string; conversation_id: string }>(`
+      const deleted = await client.query<{ object_key: string; preview_object_key: string | null; message_id: string; conversation_id: string }>(`
         delete from conversation_message_attachments attachment
         using messages message
         where attachment.id = $1 and attachment.message_id = message.id
           and (attachment.uploader_user_id = $2 or message.author_id = $2 or $3)
-        returning attachment.object_key, message.id::text as message_id, message.conversation_id
+        returning attachment.object_key, attachment.preview_object_key, message.id::text as message_id, message.conversation_id
       `, [id, actorId, canManage]);
       const row = deleted.rows[0];
       if (!row) { await client.query('rollback'); return null; }
+      await client.query(`
+        insert into object_deletion_jobs (id, object_key, reason, available_at, created_at)
+        values ($1, $2, 'attachment_deleted', $3, $3)
+        on conflict (object_key) do nothing
+      `, [randomUUID(), row.object_key, now]);
+      if (row.preview_object_key) await client.query(`insert into object_deletion_jobs (id, object_key, reason, available_at, created_at) values ($1, $2, 'attachment_preview_deleted', $3, $3) on conflict (object_key) do nothing`, [randomUUID(), row.preview_object_key, now]);
       await client.query('insert into outbox_events (event_type, aggregate_type, aggregate_id, payload, created_at, available_at) values ($1, $2, $3, $4, $5, $5)', ['message.updated', 'conversation', row.conversation_id, { conversationId: row.conversation_id, messageId: row.message_id }, now]);
       await client.query('commit');
       return { objectKey: row.object_key, messageId: row.message_id, conversationId: row.conversation_id };
     } catch (error) { await client.query('rollback'); throw error; } finally { client.release(); }
+  }
+
+  async scheduleStaleAttachmentCleanup(cutoff: Date, now: Date, limit = 100): Promise<number> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('begin');
+      const stale = await client.query<{ id: string; object_key: string; preview_object_key: string | null; reason: string }>(`
+        select attachment.id, attachment.object_key, attachment.preview_object_key,
+          case when attachment.message_id is null then 'unfinished_upload' else 'deleted_message_retention' end as reason
+        from conversation_message_attachments attachment
+        left join messages message on message.id = attachment.message_id
+        where (attachment.message_id is null and attachment.created_at < $1)
+           or (message.deleted_at is not null and message.deleted_at < $1)
+        order by attachment.created_at
+        for update skip locked
+        limit $2
+      `, [cutoff, limit]);
+      for (const attachment of stale.rows) {
+        await client.query(`insert into object_deletion_jobs (id, object_key, reason, available_at, created_at) values ($1, $2, $3, $4, $4) on conflict (object_key) do nothing`, [randomUUID(), attachment.object_key, attachment.reason, now]);
+        if (attachment.preview_object_key) await client.query(`insert into object_deletion_jobs (id, object_key, reason, available_at, created_at) values ($1, $2, 'temporary_preview', $3, $3) on conflict (object_key) do nothing`, [randomUUID(), attachment.preview_object_key, now]);
+      }
+      if (stale.rows.length > 0) await client.query('delete from conversation_message_attachments where id = any($1::uuid[])', [stale.rows.map((attachment) => attachment.id)]);
+      await client.query('commit');
+      return stale.rows.length;
+    } catch (error) { await client.query('rollback'); throw error; } finally { client.release(); }
+  }
+
+  async claimObjectDeletionBatch(limit: number, now: Date): Promise<ObjectDeletionJob[]> {
+    const result = await this.pool.query<{ id: string; object_key: string; attempts: number }>(`
+      with candidates as (
+        select id from object_deletion_jobs
+        where completed_at is null and failed_at is null and available_at <= $2
+        order by available_at, id
+        for update skip locked
+        limit $1
+      )
+      update object_deletion_jobs job set attempts = job.attempts + 1
+      from candidates where job.id = candidates.id
+      returning job.id, job.object_key, job.attempts
+    `, [limit, now]);
+    return result.rows.map((row) => ({ id: row.id, objectKey: row.object_key, attempts: row.attempts }));
+  }
+
+  async completeObjectDeletion(id: string, now: Date): Promise<void> {
+    await this.pool.query('update object_deletion_jobs set completed_at = $2, last_error = null where id = $1', [id, now]);
+  }
+
+  async retryObjectDeletion(id: string, attempts: number, error: string, now: Date): Promise<void> {
+    if (attempts >= 8) {
+      await this.pool.query('update object_deletion_jobs set failed_at = $2, last_error = $3 where id = $1', [id, now, error.slice(0, 1_000)]);
+      return;
+    }
+    const delaySeconds = Math.min(3_600, 2 ** Math.max(1, attempts));
+    await this.pool.query("update object_deletion_jobs set available_at = $2 + ($3 * interval '1 second'), last_error = $4 where id = $1", [id, now, delaySeconds, error.slice(0, 1_000)]);
   }
 
   async listConversations(userId: string): Promise<ConversationSummary[]> {

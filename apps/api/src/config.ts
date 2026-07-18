@@ -66,6 +66,8 @@ const envSchema = z
     MEDIA_MAX_ATTACHMENTS_PER_MESSAGE: z.coerce.number().int().min(1).max(20).default(10),
     MEDIA_MAX_MESSAGE_TOTAL_BYTES: z.coerce.number().int().positive().default(250 * 1024 * 1024),
     MEDIA_ALLOWED_MIME_TYPES: z.string().default('image/gif,image/jpeg,image/png,image/webp,video/mp4,video/webm,audio/mpeg,audio/ogg,audio/wav,application/pdf,application/zip,text/plain'),
+    MEDIA_CLEANUP_UNFINISHED_HOURS: z.coerce.number().int().min(1).max(720).default(24),
+    MEDIA_CLEANUP_INTERVAL_SECONDS: z.coerce.number().int().min(10).max(3_600).default(60),
     PRESENCE_STORAGE_DRIVER: z.enum(['memory', 'redis']).default('memory'),
     REDIS_URL: z.string().default(''),
     PRESENCE_HEARTBEAT_SECONDS: z.coerce.number().int().min(5).max(60).default(20),

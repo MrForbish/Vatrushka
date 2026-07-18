@@ -132,7 +132,14 @@ export class WebSocketGateway {
       }
       connection.alive = false;
       connection.socket.ping();
-      if (connection.userId) await this.bus.refreshConnection(connection.userId);
+      if (connection.userId && connection.authorization) {
+        try {
+          await this.service.authenticate(connection.authorization);
+          await this.bus.refreshConnection(connection.userId);
+        } catch {
+          connection.socket.close(4401, 'Session revoked');
+        }
+      }
     }
   }
 

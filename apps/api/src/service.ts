@@ -2213,7 +2213,6 @@ export class VatrushkaService {
     try {
       const object = await this.objectStorage.headObject(attachment.objectKey);
       if (object.size !== Number(attachment.sizeBytes) || object.mimeType !== attachment.mimeType) {
-        await this.objectStorage.deleteObject(attachment.objectKey);
         throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'file' });
       }
     } catch (error) {
@@ -2253,7 +2252,6 @@ export class VatrushkaService {
     if (access.channel) canManage = (await this.channelPermissionsFor(access.server!, access.channel, user)).has('MANAGE_MESSAGES');
     const deleted = await this.messaging().deleteAttachment(attachmentId, user.id, canManage, this.now());
     if (!deleted) throw new AppError('ATTACHMENT_NOT_FOUND', 404);
-    await this.deleteStoredObjects([deleted.objectKey]);
     const updated = await this.messaging().findMessage(deleted.messageId, user.id);
     if (!updated) throw new AppError('MESSAGE_NOT_FOUND', 404);
     return updated;

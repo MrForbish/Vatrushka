@@ -97,7 +97,12 @@ export class OutboxWorker {
   private timer: NodeJS.Timeout | null = null;
   private running = false;
 
-  constructor(private readonly store: CanonicalMessagingStore, private readonly bus: RedisRealtimeBus, private readonly intervalMs = 500) {}
+  constructor(
+    private readonly store: CanonicalMessagingStore,
+    private readonly bus: RedisRealtimeBus,
+    private readonly intervalMs = 500,
+    private readonly report: (details: { eventId: string; backendInstanceId: number; durationMs: number; result: 'published' | 'retry'; errorCode?: string }) => void = () => undefined,
+  ) {}
 
   start(): void {
     if (this.running) return;
@@ -132,6 +137,7 @@ export class OutboxWorker {
   }
 
   private async process(event: OutboxEventRecord): Promise<void> {
+    const startedAt = performance.now();
     try {
       const recipientIds = Array.isArray(event.payload.recipientIds) ? event.payload.recipientIds.filter((value): value is string => typeof value === 'string') : [];
       if (event.eventType === 'conversation.read_state.updated' && typeof event.payload.userId === 'string') recipientIds.push(event.payload.userId);
@@ -145,8 +151,10 @@ export class OutboxWorker {
         payload: event.payload,
       });
       await this.store.completeOutboxEvent(event.id, new Date());
+      this.report({ eventId: event.id, backendInstanceId: process.pid, durationMs: performance.now() - startedAt, result: 'published' });
     } catch (error) {
       await this.store.retryOutboxEvent(event.id, event.attempts, error instanceof Error ? error.message : 'Unknown realtime publish error', new Date());
+      this.report({ eventId: event.id, backendInstanceId: process.pid, durationMs: performance.now() - startedAt, result: 'retry', errorCode: error instanceof Error ? error.name : 'UNKNOWN' });
     }
   }
 }

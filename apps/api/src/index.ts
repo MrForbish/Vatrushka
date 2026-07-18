@@ -10,6 +10,7 @@ import { createCanonicalMessagingStore } from './services/canonical-messaging.js
 import { createRealtimeBus, OutboxWorker } from './services/realtime.js';
 import { createServerSettingsStore } from './services/server-settings.js';
 import { AccountLifecycleWorker, createIdentitySettingsStore } from './services/identity-settings.js';
+import { createMediaCleanupWorker } from './services/media-cleanup.js';
 
 const config = loadConfig();
 const database = createPostgresStore(config.DATABASE_URL);
@@ -21,8 +22,6 @@ const identitySettingsStore = createIdentitySettingsStore(config.DATABASE_URL);
 const accountLifecycleWorker = new AccountLifecycleWorker(identitySettingsStore, (error) => console.error('Account lifecycle worker failed', error));
 accountLifecycleWorker.start();
 const realtimeBus = await createRealtimeBus(config);
-const outboxWorker = realtimeBus ? new OutboxWorker(canonicalMessagingStore, realtimeBus) : null;
-outboxWorker?.start();
 if (config.PLATFORM_OWNER_EMAIL) {
   await database.store.setPlatformRoleByEmail(config.PLATFORM_OWNER_EMAIL, 'owner', new Date());
 }
@@ -39,10 +38,15 @@ const service = new VatrushkaService({
   identitySettingsStore,
 });
 const app = await buildApp({ config, service, ...(realtimeBus ? { realtimeBus } : {}) });
+const outboxWorker = realtimeBus ? new OutboxWorker(canonicalMessagingStore, realtimeBus, 500, (details) => app.log.info(details, 'Canonical messaging outbox event')) : null;
+outboxWorker?.start();
+const mediaCleanupWorker = createMediaCleanupWorker(config, canonicalMessagingStore, objectStorage, (details) => app.log.info(details, 'Media cleanup job'));
+mediaCleanupWorker?.start();
 
 app.addHook('onClose', async () => {
   objectStorage?.close();
   outboxWorker?.stop();
+  mediaCleanupWorker?.stop();
   await realtimeBus?.close();
   await presenceStore.close();
   await canonicalMessagingStore.close();

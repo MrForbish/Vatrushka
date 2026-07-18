@@ -155,6 +155,13 @@
       "when": 1784335600948,
       "tag": "0021_majestic_zodiak",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1784336929577,
+      "tag": "0022_square_luminals",
+      "breakpoints": true
     }
   ]
 }
