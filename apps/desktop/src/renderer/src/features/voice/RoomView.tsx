@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { ConnectionState, type LocalTrack, type RemoteTrack } from 'livekit-client';
 
 import type { RoomConnection } from '@vatrushka/shared';
@@ -33,6 +34,7 @@ export interface RoomViewProps {
   outputId: string | undefined;
   busy: boolean;
   error: string | null;
+  participantNames?: Record<string, string> | undefined;
   onMute(): void;
   onShare(): void;
   onCopy(): void;
@@ -48,10 +50,11 @@ export interface RoomViewProps {
   onParticipantVolume(identity: string, volume: number): void;
 }
 
-function participantModel(participant: ParticipantView): VoiceParticipantViewModel {
+function participantModel(participant: ParticipantView, participantNames: Record<string, string> = {}): VoiceParticipantViewModel {
+  const userId = /^user_([^_]+)_/u.exec(participant.identity)?.[1];
   return {
     id: participant.identity,
-    name: participant.displayName,
+    name: userId ? participantNames[userId] ?? participant.displayName : participant.displayName,
     isLocal: participant.isLocal,
     isMuted: participant.isMuted,
     isSpeaking: participant.isSpeaking,
@@ -66,7 +69,8 @@ function participantModel(participant: ParticipantView): VoiceParticipantViewMod
 
 export function RoomView(props: RoomViewProps): React.JSX.Element {
   const reconnecting = props.snapshot.connectionState === ConnectionState.Reconnecting || props.snapshot.connectionState === ConnectionState.SignalReconnecting;
-  const participantModels = props.snapshot.participants.map(participantModel);
+  const participantModels = props.snapshot.participants.map((participant) => participantModel(participant, props.participantNames));
+  const screenSharerName = participantModels.find((participant) => participant.isScreenSharing)?.name ?? props.snapshot.screenSharerName ?? 'участник';
   const stripParticipants = participantModels;
   const participantActions = {
     canKick: props.connection.isOwner,
@@ -81,7 +85,7 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
         <div className="vui-room__content">
           {props.snapshot.screenTrack === null
             ? <div className="vui-room__voice-stage">{participantModels.length === 0 ? <div className="vui-room__empty"><Icon name="voice" size={38} /><h1>Ожидаем участников</h1></div> : <div className="vui-room__participant-grid">{participantModels.map((participant) => <VoiceParticipantTile {...participantActions} key={participant.id} participant={participant} />)}</div>}</div>
-            : <div className="vui-room__stream-stage"><div className="vui-room__stream"><ScreenTrack track={props.snapshot.screenTrack} /><div className="vui-room__stream-label"><Badge tone="danger">LIVE</Badge><span>Экран показывает <strong>{props.snapshot.screenSharerName ?? 'участник'}</strong></span></div>{props.snapshot.hasScreenShareAudio ? <div className="vui-room__stream-audio"><div className="vui-room__stream-audio-label"><Icon name="volume" size={18} /><span><strong>Звук трансляции</strong><small>Громкость меняется только для вас</small></span></div><div className="vui-room__stream-audio-controls"><button aria-label={props.snapshot.screenShareAudioMuted ? 'Включить звук трансляции' : 'Выключить звук трансляции'} aria-pressed={props.snapshot.screenShareAudioMuted} onClick={props.onScreenAudioMute} type="button"><Icon name={props.snapshot.screenShareAudioMuted ? 'volumeOff' : 'volume'} size={18} /></button><Slider className="vui-slider--compact" label="Громкость трансляции" max={100} min={0} onChange={(event) => props.onScreenAudioVolume(Number(event.target.value) / 100)} value={props.snapshot.screenShareAudioMuted ? 0 : Math.round(props.snapshot.screenShareAudioVolume * 100)} valueLabel={`${props.snapshot.screenShareAudioMuted ? 0 : Math.round(props.snapshot.screenShareAudioVolume * 100)}%`} /></div></div> : null}</div><VoiceParticipantStrip {...participantActions} participants={stripParticipants} /></div>}
+            : <div className="vui-room__stream-stage"><div className="vui-room__stream"><ScreenTrack audioAvailable={props.snapshot.hasScreenShareAudio && !props.snapshot.screenShareIsLocal} muted={props.snapshot.screenShareAudioMuted} onMute={props.onScreenAudioMute} onVolume={props.onScreenAudioVolume} track={props.snapshot.screenTrack} volume={props.snapshot.screenShareAudioVolume} /><div className="vui-room__stream-label"><Badge tone="danger">LIVE</Badge><span>Экран показывает <strong>{screenSharerName}</strong></span></div></div><VoiceParticipantStrip {...participantActions} participants={stripParticipants} /></div>}
         </div>
         {!props.snapshot.canPlayAudio ? <button className="vui-room__audio-gate" onClick={props.onStartAudio}>Нажмите, чтобы включить звук участников</button> : null}
         {props.error || props.snapshot.error ? <div className="vui-room__error" role="alert">{props.error ?? props.snapshot.error}</div> : null}
@@ -109,18 +113,27 @@ export function VoiceConnectionPanel({ canShare, channelName, onLeave, onMute, o
   return <section className="vui-voice-connection"><button className="vui-voice-connection__summary" onClick={onOpen} type="button"><span className="vui-room__connection" data-state={snapshot.connectionState} /><span><strong>{connected ? 'Голосовая связь подключена' : 'Подключение…'}</strong><small>{channelName} · {snapshot.participants.length} участников</small></span></button><div><IconButton active={snapshot.isMuted} icon={snapshot.isMuted ? 'micOff' : 'mic'} label={snapshot.isMuted ? 'Включить микрофон' : 'Выключить микрофон'} onClick={onMute} size="sm" type="button" /><IconButton active={snapshot.isScreenSharing} disabled={!canShare} icon="screen" label={snapshot.isScreenSharing ? 'Остановить показ' : 'Показать экран'} onClick={onShare} size="sm" type="button" /><IconButton className="vui-voice-connection__leave" icon="logout" label="Выйти из голосового канала" onClick={onLeave} size="sm" type="button" /></div></section>;
 }
 
-function ScreenTrack({ track }: { track: RemoteTrack | LocalTrack }): ReactNode {
+function ScreenTrack({ audioAvailable, muted, onMute, onVolume, track, volume }: { audioAvailable: boolean; muted: boolean; onMute(): void; onVolume(value: number): void; track: RemoteTrack | LocalTrack; volume: number }): ReactNode {
   const ref = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [resolution, setResolution] = useState('Определяем качество…');
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = ref.current;
     if (!element) return;
     track.attach(element);
     return () => { track.detach(element); };
   }, [track]);
+  useEffect(() => {
+    if (menu === null) return undefined;
+    const close = (event: MouseEvent): void => { if (!menuRef.current?.contains(event.target as Node)) setMenu(null); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [menu]);
   const updateResolution = (): void => {
     const element = ref.current;
     if (element?.videoWidth && element.videoHeight) setResolution(`${element.videoWidth} × ${element.videoHeight}`);
   };
-  return <><video ref={ref} autoPlay className="vui-room__video" onLoadedMetadata={updateResolution} onResize={updateResolution} playsInline /><span className="vui-room__stream-quality">{resolution}</span></>;
+  return <div className="vui-room__video-frame" ref={containerRef} onContextMenu={(event) => { if (!audioAvailable) return; event.preventDefault(); setMenu({ x: Math.min(event.clientX, window.innerWidth - 280), y: Math.min(event.clientY, window.innerHeight - 180) }); }}><video ref={ref} autoPlay className="vui-room__video" onLoadedMetadata={updateResolution} onResize={updateResolution} playsInline /><span className="vui-room__stream-quality">{resolution} · 60 FPS</span><IconButton className="vui-room__fullscreen" icon="screen" label="Открыть на весь экран" onClick={() => void containerRef.current?.requestFullscreen()} type="button" />{menu && audioAvailable ? createPortal(<div className="vui-room__stream-context" ref={menuRef} role="menu" style={{ left: menu.x, top: menu.y }}><strong>Звук демонстрации</strong><button aria-pressed={muted} onClick={onMute} role="menuitem" type="button"><Icon name={muted ? 'volumeOff' : 'volume'} size={17} />{muted ? 'Включить звук' : 'Отключить звук'}</button><Slider label="Громкость демонстрации" max={100} min={0} onChange={(event) => onVolume(Number(event.target.value) / 100)} value={muted ? 0 : Math.round(volume * 100)} valueLabel={`${muted ? 0 : Math.round(volume * 100)}%`} /></div>, document.body) : null}</div>;
 }

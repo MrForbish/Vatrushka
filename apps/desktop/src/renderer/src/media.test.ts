@@ -37,7 +37,7 @@ describe('MediaSession audio devices', () => {
 });
 
 describe('MediaSession screen share', () => {
-  function screenShareSession(setScreenShareEnabled: ReturnType<typeof vi.fn>, restrictOwnAudio = true): MediaSession {
+  function screenShareSession(setScreenShareEnabled: (...args: unknown[]) => Promise<void>, restrictOwnAudio = true): MediaSession {
     const session = new MediaSession({} as ApiClient);
     const internals = session as unknown as {
       room: {
@@ -52,15 +52,19 @@ describe('MediaSession screen share', () => {
       startHeartbeat(): void;
       refreshSnapshot(): void;
     };
+    const localParticipant = {
+      isScreenShareEnabled: false,
+      setScreenShareEnabled: vi.fn(async (...args: unknown[]) => {
+        await setScreenShareEnabled(...args);
+        localParticipant.isScreenShareEnabled = args[0] === true;
+      }),
+      getTrackPublication: (source: Track.Source) => source === Track.Source.ScreenShareAudio
+        ? { track: { mediaStreamTrack: { getSettings: () => ({ restrictOwnAudio }) } } }
+        : undefined,
+    };
     internals.room = {
       state: ConnectionState.Connected,
-      localParticipant: {
-        isScreenShareEnabled: true,
-        setScreenShareEnabled,
-        getTrackPublication: (source) => source === Track.Source.ScreenShareAudio
-          ? { track: { mediaStreamTrack: { getSettings: () => ({ restrictOwnAudio }) } } }
-          : undefined,
-      },
+      localParticipant,
     };
     internals.connection = { roomId: 'channel-1', ownerUserId: 'owner-1', livekitUrl: 'ws://test', livekitToken: 'token', participantIdentity: 'local', participantDisplayName: 'Local', isOwner: true, contextType: 'channel', serverId: 'server-1', channelId: 'channel-1' };
     vi.spyOn(internals, 'startHeartbeat').mockImplementation(() => undefined);
@@ -72,18 +76,18 @@ describe('MediaSession screen share', () => {
     const setScreenShareEnabled = vi.fn().mockResolvedValue(undefined);
     const session = screenShareSession(setScreenShareEnabled);
 
-    await session.startScreenShare(true, { width: 3840, height: 2160 });
+    await session.startScreenShare({ width: 3840, height: 2160 });
 
     expect(setScreenShareEnabled).toHaveBeenCalledWith(
       true,
       expect.objectContaining({
         audio: expect.objectContaining({ restrictOwnAudio: { exact: true } }),
-        resolution: { width: 2560, height: 1440, frameRate: 30 },
+        resolution: { width: 1920, height: 1080, frameRate: 60 },
         systemAudio: 'include',
       }),
       expect.objectContaining({
         degradationPreference: 'maintain-resolution',
-        screenShareEncoding: expect.objectContaining({ maxBitrate: 8_000_000, maxFramerate: 30 }),
+        screenShareEncoding: expect.objectContaining({ maxBitrate: 10_000_000, maxFramerate: 60 }),
       }),
     );
   });
@@ -92,19 +96,28 @@ describe('MediaSession screen share', () => {
     const setScreenShareEnabled = vi.fn().mockResolvedValue(undefined);
     const session = screenShareSession(setScreenShareEnabled, false);
 
-    await expect(session.startScreenShare(true)).rejects.toThrow('Windows не смогла исключить голоса участников');
+    await expect(session.startScreenShare()).rejects.toThrow('Windows не смогла безопасно исключить голоса участников');
     expect(setScreenShareEnabled).toHaveBeenLastCalledWith(false);
   });
 
   it('turns the LiveKit publishing timeout into a reconnect instruction', async () => {
     const session = screenShareSession(vi.fn().mockRejectedValue(new Error('publishing rejected as engine not connected within timeout')));
 
-    await expect(session.startScreenShare(false)).rejects.toThrow('Дождитесь переподключения');
+    await expect(session.startScreenShare()).rejects.toThrow('Дождитесь переподключения');
   });
 
   it('reports a closed source instead of a generic publish failure', async () => {
     const session = screenShareSession(vi.fn().mockRejectedValue(new DOMException('gone', 'NotFoundError')));
 
-    await expect(session.startScreenShare(true)).rejects.toThrow('Выбранный экран или окно больше недоступны');
+    await expect(session.startScreenShare()).rejects.toThrow('Выбранный экран или окно больше недоступны');
+  });
+
+  it('publishes the optional 1440p preset at 60 FPS', async () => {
+    const setScreenShareEnabled = vi.fn().mockResolvedValue(undefined);
+    const session = screenShareSession(setScreenShareEnabled);
+
+    await session.startScreenShare({ width: 3840, height: 2160 }, '1440p60');
+
+    expect(setScreenShareEnabled).toHaveBeenCalledWith(true, expect.objectContaining({ resolution: { width: 2560, height: 1440, frameRate: 60 } }), expect.objectContaining({ screenShareEncoding: expect.objectContaining({ maxBitrate: 18_000_000, maxFramerate: 60 }) }));
   });
 });

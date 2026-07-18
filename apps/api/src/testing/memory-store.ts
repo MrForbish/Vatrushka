@@ -49,6 +49,7 @@ export class MemoryStore implements DataStore {
   readonly userActivity = new Map<string, UserActivityRecord>();
   readonly servers = new Map<string, ServerRecord>();
   readonly serverMembers = new Map<string, ServerMemberRecord>();
+  readonly serverMemberAliases = new Map<string, string>();
   readonly serverRoles = new Map<string, ServerRoleRecord>();
   readonly serverMemberRoles = new Set<string>();
   readonly serverChannels = new Map<string, ServerChannelRecord>();
@@ -342,6 +343,26 @@ export class MemoryStore implements DataStore {
     if (this.serverMembers.has(key)) return false;
     this.serverMembers.set(key, structuredClone(member));
     return true;
+  }
+
+  async updateOwnServerDisplayName(serverId: string, userId: string, displayName: string | null): Promise<boolean> {
+    const key = `${serverId}:${userId}`;
+    const member = this.serverMembers.get(key);
+    if (!member) return false;
+    this.serverMembers.set(key, { ...member, nickname: displayName });
+    return true;
+  }
+
+  async setServerMemberAlias(serverId: string, viewerUserId: string, targetUserId: string, alias: string | null): Promise<boolean> {
+    const key = `${serverId}:${viewerUserId}:${targetUserId}`;
+    if (alias === null) this.serverMemberAliases.delete(key);
+    else this.serverMemberAliases.set(key, alias);
+    return true;
+  }
+
+  async listServerMemberAliases(serverId: string, viewerUserId: string): Promise<Array<{ targetUserId: string; alias: string }>> {
+    const prefix = `${serverId}:${viewerUserId}:`;
+    return [...this.serverMemberAliases.entries()].filter(([key]) => key.startsWith(prefix)).map(([key, alias]) => ({ targetUserId: key.slice(prefix.length), alias }));
   }
 
   async removeServerMember(serverId: string, userId: string): Promise<boolean> {

@@ -35,7 +35,9 @@ export const ActiveSpeaker: Story = {
     await expect(canvas.getByText('Говорит')).toBeInTheDocument();
     const activeTile = canvas.getAllByRole('article')[0]!;
     await userEvent.hover(activeTile);
-    await userEvent.click(within(activeTile).getByRole('button', { name: 'Заглушить локально' }));
+    await userEvent.click(within(activeTile).getByRole('button', { name: 'Действия с участником Анна Белова' }));
+    const documentBody = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await documentBody.findByRole('menuitem', { name: 'Отключить звук' }));
     await expect(args.onLocalMute).toHaveBeenCalledWith('anna', true);
     await userEvent.click(canvas.getByRole('button', { name: 'Выключить микрофон' }));
     await expect(args.onMute).toHaveBeenCalledOnce();

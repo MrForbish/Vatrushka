@@ -12,48 +12,44 @@ const sources: DesktopSourceInfo[] = [
 ];
 
 describe('screen share source picker', () => {
-  it('separates screens and application windows and confirms the selected source', async () => {
-    const onAudio = vi.fn();
+  it('separates screens and application windows and confirms the selected source with the default quality', async () => {
     const onSelect = vi.fn();
-    render(<SourcePicker sources={sources} includeAudio platform="win32" onAudio={onAudio} onSelect={onSelect} onCancel={vi.fn()} />);
+    render(<SourcePicker sources={sources} platform="win32" onSelect={onSelect} onCancel={vi.fn()} />);
 
     expect(screen.getByRole('button', { name: 'Экран 1, 2560 × 1440' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByText(/2560 × 1440 · со звуком · защита от дублирования включена/u)).toBeInTheDocument();
+    expect(screen.getByText(/1080p · 60 FPS · звук включён, голоса Ватрушки исключены/u)).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: /^Окно приложения$/u }));
+    await userEvent.click(screen.getByRole('button', { name: 'Окно приложения' }));
     expect(screen.queryByRole('button', { name: 'Экран 1, 2560 × 1440' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Figma — Vatrushka, Только выбранное окно' }));
-    await userEvent.click(screen.getByRole('radio', { name: /Без звука/u }));
-    expect(onAudio).toHaveBeenCalledWith(false);
     await userEvent.click(screen.getByRole('button', { name: 'Начать демонстрацию' }));
-    expect(onSelect).toHaveBeenCalledWith(sources[1]);
+    expect(onSelect).toHaveBeenCalledWith(sources[1], '1080p60');
   });
 
-  it('explains when system audio is unavailable', () => {
-    render(<SourcePicker sources={[{ ...sources[0]!, audioAvailable: false }]} includeAudio={false} platform="linux" onAudio={vi.fn()} onSelect={vi.fn()} onCancel={vi.fn()} />);
+  it('blocks a source that cannot provide system audio', () => {
+    render(<SourcePicker sources={[{ ...sources[0]!, audioAvailable: false }]} platform="win32" onSelect={vi.fn()} onCancel={vi.fn()} />);
 
-    expect(screen.getByRole('radio', { name: /Передавать звук приложения/u })).toBeDisabled();
-    expect(screen.getByText('Системный звук доступен только в приложении для Windows.')).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /Без звука/u })).toBeChecked();
+    expect(screen.getByText('Выбранный источник не предоставляет системный звук.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Начать демонстрацию' })).toBeDisabled();
   });
 
-  it('disables application audio when the channel role denies it', () => {
-    render(<SourcePicker audioAllowed={false} sources={sources} includeAudio={false} platform="win32" onAudio={vi.fn()} onSelect={vi.fn()} onCancel={vi.fn()} />);
+  it('blocks application audio when the channel role denies it', () => {
+    render(<SourcePicker audioAllowed={false} sources={sources} platform="win32" onSelect={vi.fn()} onCancel={vi.fn()} />);
 
-    expect(screen.getByRole('radio', { name: /Передавать звук приложения/u })).toBeDisabled();
     expect(screen.getByText('Ваша роль не разрешает передачу звука приложения.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Начать демонстрацию' })).toBeDisabled();
   });
 
-  it('does not offer loopback audio when own-app exclusion is unsupported', () => {
-    render(<SourcePicker audioProtectionAvailable={false} sources={sources} includeAudio={false} platform="win32" onAudio={vi.fn()} onSelect={vi.fn()} onCancel={vi.fn()} />);
+  it('does not offer unsafe loopback when own-app exclusion is unsupported', () => {
+    render(<SourcePicker audioProtectionAvailable={false} sources={sources} platform="win32" onSelect={vi.fn()} onCancel={vi.fn()} />);
 
-    expect(screen.getByRole('radio', { name: /Передавать звук приложения/u })).toBeDisabled();
-    expect(screen.getByText('Эта версия Windows не умеет безопасно исключать голоса участников из трансляции.')).toBeInTheDocument();
+    expect(screen.getByText('Эта версия Windows не умеет безопасно исключать голоса участников из демонстрации.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Начать демонстрацию' })).toBeDisabled();
   });
 
   it('closes when the empty backdrop is clicked', () => {
     const onCancel = vi.fn();
-    const { container } = render(<SourcePicker sources={sources} includeAudio={false} platform="win32" onAudio={vi.fn()} onSelect={vi.fn()} onCancel={onCancel} />);
+    const { container } = render(<SourcePicker sources={sources} platform="win32" onSelect={vi.fn()} onCancel={onCancel} />);
 
     fireEvent.mouseDown(container.querySelector('.vui-share-picker__backdrop')!);
     expect(onCancel).toHaveBeenCalledOnce();

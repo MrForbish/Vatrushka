@@ -10,6 +10,7 @@ const headset = { deviceId: 'headphones-usb', groupId: 'group-output', kind: 'au
 const meta = {
   title: 'Features/Voice Room',
   component: RoomView,
+  decorators: [(Story) => <div style={{ height: '100vh' }}><Story /></div>],
   parameters: { layout: 'fullscreen' },
   args: {
     connection: { roomId: 'channel-1', ownerUserId: 'founder', livekitUrl: 'wss://livekit.example', livekitToken: 'storybook', participantIdentity: 'user_founder_local', participantDisplayName: 'Илья Форбиш', isOwner: true, contextType: 'channel', serverId: 'server-1', channelId: 'channel-1' },

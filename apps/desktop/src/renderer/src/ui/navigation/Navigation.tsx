@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+
+import type { EffectivePresenceStatus, PresencePreference } from '@vatrushka/shared';
 
 import { Avatar, Badge, Icon, IconButton, SearchInput, StatusDot } from '../primitives';
 import type { IconName } from '../primitives';
@@ -138,15 +140,36 @@ export interface UserProfileDockProps {
   name: string;
   email: string;
   founder?: boolean;
+  status?: EffectivePresenceStatus;
+  onStatus?: (status: PresencePreference) => void | Promise<void>;
   onSecurity: () => void;
   onLogout: () => void;
 }
 
-export function UserProfileDock({ email, founder = false, name, onLogout, onSecurity }: UserProfileDockProps): React.JSX.Element {
+const profileStatusLabels: Record<EffectivePresenceStatus, string> = { online: 'В сети', idle: 'Неактивен', dnd: 'Не беспокоить', offline: 'Невидимый' };
+const profileStatusOptions: Array<{ preference: PresencePreference; status: EffectivePresenceStatus; label: string }> = [
+  { preference: 'online', status: 'online', label: 'В сети' },
+  { preference: 'idle', status: 'idle', label: 'Неактивен' },
+  { preference: 'do_not_disturb', status: 'dnd', label: 'Не беспокоить' },
+  { preference: 'invisible', status: 'offline', label: 'Невидимый' },
+];
+
+export function UserProfileDock({ email, founder = false, name, onLogout, onSecurity, onStatus, status = 'online' }: UserProfileDockProps): React.JSX.Element {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (event: MouseEvent): void => { if (!menuRef.current?.contains(event.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
   return (
     <div className="vui-profile-dock" data-founder={founder || undefined}>
-      <Avatar name={name} size="md" status="online" />
-      <span className="vui-profile-dock__copy"><strong>{name}</strong><small>{founder ? 'Основатель · online' : email}</small></span>
+      <div className="vui-profile-dock__presence" ref={menuRef}>
+        <button aria-expanded={open} aria-label="Изменить статус" onClick={() => setOpen((current) => !current)} type="button"><Avatar name={name} size="md" status={status} /></button>
+        {open && onStatus ? <div className="vui-profile-dock__status-menu" role="menu">{profileStatusOptions.map((option) => <button key={option.preference} onClick={() => { void onStatus(option.preference); setOpen(false); }} role="menuitem" type="button"><StatusDot label={option.label} status={option.status} /><span>{option.label}</span></button>)}</div> : null}
+      </div>
+      <span className="vui-profile-dock__copy"><strong>{name}</strong><small>{founder ? `Основатель · ${profileStatusLabels[status]}` : `${email} · ${profileStatusLabels[status]}`}</small></span>
       <IconButton icon="settings" label="Безопасность и настройки" onClick={onSecurity} size="sm" type="button" />
       <IconButton icon="logout" label="Выйти из аккаунта" onClick={onLogout} size="sm" type="button" />
     </div>

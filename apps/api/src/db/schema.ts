@@ -168,6 +168,21 @@ export const serverMembers = pgTable(
   (table) => [primaryKey({ columns: [table.serverId, table.userId] }), index('server_members_user_idx').on(table.userId)],
 );
 
+export const serverMemberAliases = pgTable(
+  'server_member_aliases',
+  {
+    serverId: uuid('server_id').notNull().references(() => servers.id, { onDelete: 'cascade' }),
+    viewerUserId: uuid('viewer_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    targetUserId: uuid('target_user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    alias: text('alias').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.serverId, table.viewerUserId, table.targetUserId] }),
+    index('server_member_aliases_target_idx').on(table.serverId, table.targetUserId),
+  ],
+);
+
 export const serverRoles = pgTable(
   'server_roles',
   {

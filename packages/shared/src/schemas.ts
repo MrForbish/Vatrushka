@@ -106,10 +106,11 @@ export const serverAppearanceUploadIntentSchema = z.object({
   sizeBytes: z.number().int().positive().max(12 * 1024 * 1024),
 }).strict();
 export const updateServerMemberSchema = z.object({
-  nickname: z.string().trim().min(1).max(32).nullable().optional(),
   mutedUntil: z.iso.datetime().nullable().optional(),
   deafened: z.boolean().optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
+export const updateOwnServerDisplayNameSchema = z.object({ displayName: z.string().trim().min(1).max(32).nullable() }).strict();
+export const updateServerMemberAliasSchema = z.object({ alias: z.string().trim().min(1).max(32).nullable() }).strict();
 export const createServerCategorySchema = z.object({ name: z.string().trim().min(1).max(50), position: z.number().int().min(0).max(999).optional() }).strict();
 export const updateServerCategorySchema = z.object({ name: z.string().trim().min(1).max(50).optional(), position: z.number().int().min(0).max(999).optional() }).strict().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
 export const updateServerChannelSettingsSchema = z.object({

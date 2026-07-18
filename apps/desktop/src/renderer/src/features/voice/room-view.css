@@ -31,16 +31,24 @@
 .vui-room__voice-stage > .vui-voice-strip { width: 100%; }
 .vui-room__stream-stage { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--space-3); height: 100%; }
 .vui-room__stream { position: relative; min-height: 0; overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-xl); background: #030405; box-shadow: var(--shadow-float); }
+.vui-room__video-frame { position: relative; width: 100%; height: 100%; background: #030405; }
+.vui-room__video-frame:fullscreen { display: grid; place-items: center; }
 .vui-room__video { width: 100%; height: 100%; object-fit: contain; }
+.vui-room__fullscreen { position: absolute; right: var(--space-4); bottom: var(--space-4); opacity: .7; }
+.vui-room__fullscreen:hover { opacity: 1; }
 .vui-room__stream-label { position: absolute; top: var(--space-4); left: var(--space-4); display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-canvas), transparent 10%); font: var(--text-caption); }
 .vui-room__stream-quality { position: absolute; top: var(--space-4); right: var(--space-4); padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-canvas), transparent 10%); color: var(--color-text-secondary); font: var(--text-caption); }
-.vui-room__stream-audio { position: absolute; right: var(--space-4); bottom: var(--space-4); display: grid; gap: var(--space-3); min-width: 320px; padding: var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-canvas), transparent 6%); box-shadow: var(--shadow-float); }
+.vui-room__stream-audio { display: none; }
 .vui-room__stream-audio-label { display: flex; align-items: center; gap: var(--space-2); color: var(--color-cyan); }
 .vui-room__stream-audio-label > span { display: grid; }
 .vui-room__stream-audio-label strong { color: var(--color-text-primary); font: var(--text-label-md); }
 .vui-room__stream-audio-label small { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-room__stream-audio-controls { display: grid; grid-template-columns: 36px minmax(180px, 240px); align-items: center; gap: var(--space-3); }
 .vui-room__stream-audio-controls > button { display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: var(--radius-sm); background: var(--color-primary-soft); color: var(--color-cyan); }
+.vui-room__stream-context { position: fixed; z-index: 160; display: grid; width: 270px; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-elevated); box-shadow: var(--shadow-modal); }
+.vui-room__stream-context .vui-slider { min-width: 0; }
+.vui-room__stream-context > button { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+.vui-room__stream-context > button:hover { background: var(--color-surface-3); color: var(--color-text-primary); }
 .vui-room__empty { display: grid; justify-items: center; color: var(--color-text-muted); text-align: center; }
 .vui-room__empty h1 { color: var(--color-text-primary); font: var(--text-display-md); }
 .vui-room__controls { display: flex; justify-content: center; padding-top: var(--space-3); }

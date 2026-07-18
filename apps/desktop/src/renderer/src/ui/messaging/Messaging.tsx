@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
+import { createPortal } from 'react-dom';
 
 import { codePointLength, type ConversationMentionDraft, type MessageDeliveryState } from '@vatrushka/shared';
 
@@ -86,7 +87,7 @@ export interface MessageListProps {
   targetMessageId?: string | null | undefined;
 }
 
-const reactionChoices = ['👍', '👎', '❤️', '🔥', '😂', '😮', '😢', '😡', '🎉', '👏', '✅', '❌', '👀', '🤔', '🙏', '💯', '🚀', '✨', '💪', '🤝', '😍', '🥳', '😎', '🤯', '🙌', '💡', '⚡', '🐱', '🍰', '🧇'];
+const reactionChoices = ['👍', '👎', '❤️', '🔥', '😂', '🤣', '😊', '😍', '🥰', '😎', '🤩', '🥳', '😮', '😱', '🤯', '😢', '😭', '😡', '🤬', '🤔', '🫡', '🤝', '🙏', '👏', '🙌', '💪', '👀', '✅', '❌', '💯', '🎉', '🚀', '✨', '💡', '⚡', '⭐', '🎯', '🏆', '🐱', '🐶', '🍰', '🧇', '☕', '🍕', '🎮', '💻', '🛠️'];
 
 function formatFileSize(size: number): string {
   if (size < 1024) return `${size} Б`;
@@ -190,19 +191,35 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
 function ReactionPicker({ messageId, onReaction }: { messageId: string; onReaction(messageId: string, emoji: string): void }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: 16, top: 16 });
   useEffect(() => {
     if (!open) return;
-    const close = (event: PointerEvent): void => { if (!root.current?.contains(event.target as Node)) setOpen(false); };
+    const close = (event: PointerEvent): void => { if (!root.current?.contains(event.target as Node) && !menu.current?.contains(event.target as Node)) setOpen(false); };
     const escape = (event: KeyboardEvent): void => { if (event.key === 'Escape') setOpen(false); };
     document.addEventListener('pointerdown', close);
     document.addEventListener('keydown', escape);
     return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); };
   }, [open]);
-  return <div className="vui-reaction-picker" ref={root}><IconButton active={open} icon="emoji" label="Добавить реакцию" onClick={() => setOpen((value) => !value)} size="sm" type="button" />{open ? <div aria-label="Выберите реакцию" className="vui-reaction-picker__menu" role="menu">{reactionChoices.map((emoji) => <button aria-label={`Реакция ${emoji}`} key={emoji} onClick={() => { onReaction(messageId, emoji); setOpen(false); }} role="menuitem" type="button">{emoji}</button>)}</div> : null}</div>;
+  const toggle = (): void => {
+    if (!open && root.current) {
+      const rect = root.current.getBoundingClientRect();
+      const menuWidth = 320;
+      const menuHeight = 300;
+      const left = Math.max(16, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 16));
+      const top = window.innerHeight - rect.bottom >= menuHeight + 8
+        ? rect.bottom + 8
+        : Math.max(16, rect.top - menuHeight - 8);
+      setPosition({ left, top });
+    }
+    setOpen((value) => !value);
+  };
+  return <div className="vui-reaction-picker" ref={root}><IconButton active={open} icon="emoji" label="Добавить реакцию" onClick={toggle} size="sm" type="button" />{open ? createPortal(<div aria-label="Выберите реакцию" className="vui-reaction-picker__menu" ref={menu} role="menu" style={{ left: position.left, top: position.top }}>{reactionChoices.map((emoji) => <button aria-label={`Реакция ${emoji}`} key={emoji} onClick={() => { onReaction(messageId, emoji); setOpen(false); }} role="menuitem" type="button">{emoji}</button>)}</div>, document.body) : null}</div>;
 }
 
 function MessageAttachmentCard({ attachment, onDelete, onDownload, onLoad }: { attachment: MessageAttachmentViewModel; onDelete?: ((attachmentId: string) => void) | undefined; onDownload?: ((attachmentId: string, fileName: string) => void) | undefined; onLoad?: ((attachmentId: string) => Promise<Blob>) | undefined }): React.JSX.Element {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState(false);
   const image = attachment.mimeType.startsWith('image/');
   useEffect(() => {
     if (!image || onLoad === undefined || attachment.id.startsWith('optimistic_')) return;
@@ -215,7 +232,13 @@ function MessageAttachmentCard({ attachment, onDelete, onDownload, onLoad }: { a
     }).catch(() => undefined);
     return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [attachment.id, image, onLoad]);
-  return <div className="vui-message-attachment" data-image={imageUrl !== null ? true : undefined}>{imageUrl === null ? <span aria-hidden="true"><Icon name="attachment" size={20} /></span> : <button className="vui-message-attachment__preview" onClick={() => onDownload?.(attachment.id, attachment.fileName)} type="button"><img alt={attachment.fileName} src={imageUrl} /></button>}<span><strong title={attachment.fileName}>{attachment.fileName}</strong><small>{formatFileSize(attachment.size)} · {attachment.mimeType}</small></span>{onDownload === undefined ? null : <IconButton icon="download" label={`Скачать ${attachment.fileName}`} onClick={() => onDownload(attachment.id, attachment.fileName)} size="sm" type="button" />}{attachment.canDelete === true && onDelete !== undefined ? <IconButton icon="close" label={`Удалить ${attachment.fileName}`} onClick={() => onDelete(attachment.id)} size="sm" type="button" /> : null}</div>;
+  useEffect(() => {
+    if (!lightbox) return undefined;
+    const close = (event: KeyboardEvent): void => { if (event.key === 'Escape') setLightbox(false); };
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [lightbox]);
+  return <><div className="vui-message-attachment" data-image={imageUrl !== null ? true : undefined}>{imageUrl === null ? <span aria-hidden="true"><Icon name="attachment" size={20} /></span> : <button aria-label={`Открыть ${attachment.fileName}`} className="vui-message-attachment__preview" onClick={() => setLightbox(true)} type="button"><img alt={attachment.fileName} src={imageUrl} /></button>}<span><strong title={attachment.fileName}>{attachment.fileName}</strong><small>{formatFileSize(attachment.size)} · {attachment.mimeType}</small></span>{onDownload === undefined ? null : <IconButton icon="download" label={`Скачать ${attachment.fileName}`} onClick={() => onDownload(attachment.id, attachment.fileName)} size="sm" type="button" />}{attachment.canDelete === true && onDelete !== undefined ? <IconButton icon="close" label={`Удалить ${attachment.fileName}`} onClick={() => onDelete(attachment.id)} size="sm" type="button" /> : null}</div>{lightbox && imageUrl ? createPortal(<div aria-label={`Просмотр ${attachment.fileName}`} aria-modal="true" className="vui-image-lightbox" onMouseDown={(event) => { if (event.target === event.currentTarget) setLightbox(false); }} role="dialog"><img alt={attachment.fileName} src={imageUrl} /><IconButton icon="close" label="Закрыть изображение" onClick={() => setLightbox(false)} type="button" />{onDownload ? <IconButton icon="download" label={`Скачать ${attachment.fileName}`} onClick={() => onDownload(attachment.id, attachment.fileName)} type="button" /> : null}</div>, document.body) : null}</>;
 }
 
 export interface MessageComposerProps {

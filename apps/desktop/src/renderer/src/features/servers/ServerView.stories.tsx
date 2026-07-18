@@ -62,9 +62,9 @@ const server: ServerDetail = {
   ],
   roles: [{ id: 'everyone', serverId: 'server-1', name: '@everyone', color: '#8d7a72', position: 0, isDefault: true, permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] }],
   members: [
-    { userId: 'owner', displayName: 'Илья Форбиш', platformRole: 'owner', joinedAt: '2026-07-17T00:00:00.000Z', roles: [] },
-    { userId: 'anna', displayName: 'Анна Белова', platformRole: 'member', joinedAt: '2026-07-17T00:00:00.000Z', roles: [] },
-    { userId: 'max', displayName: 'Максим Орлов', platformRole: 'member', joinedAt: '2026-07-17T00:00:00.000Z', roles: [] },
+    { userId: 'owner', displayName: 'Илья Форбиш', serverDisplayName: null, privateAlias: null, platformRole: 'owner', joinedAt: '2026-07-17T00:00:00.000Z', roles: [] },
+    { userId: 'anna', displayName: 'Анна Белова', serverDisplayName: null, privateAlias: null, platformRole: 'member', joinedAt: '2026-07-17T00:00:00.000Z', roles: [] },
+    { userId: 'max', displayName: 'Максим Орлов', serverDisplayName: null, privateAlias: null, platformRole: 'member', joinedAt: '2026-07-17T00:00:00.000Z', roles: [] },
   ],
 };
 

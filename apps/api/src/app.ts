@@ -72,6 +72,8 @@ import {
   updateServerCategorySchema,
   updateServerChannelSettingsSchema,
   updateServerMemberSchema,
+  updateOwnServerDisplayNameSchema,
+  updateServerMemberAliasSchema,
   updateServerModerationSchema,
   updateServerOverviewSchema,
   accountReauthenticationSchema,
@@ -187,7 +189,7 @@ const serverRoleResponseSchema = z.object({ id: z.string(), serverId: z.string()
 const permissionOverwriteResponseSchema = z.object({ channelId: z.string(), targetType: z.enum(['ROLE', 'MEMBER']), targetId: z.string(), allow: z.array(permissionSchema), deny: z.array(permissionSchema) });
 const voiceChannelParticipantResponseSchema = z.object({ identity: z.string(), userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']) });
 const serverChannelResponseSchema = z.object({ id: z.string(), serverId: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), unreadCount: z.number(), mentionCount: z.number().optional(), voiceParticipants: z.array(voiceChannelParticipantResponseSchema).optional(), permissions: z.array(permissionSchema).optional(), permissionOverwrites: z.array(permissionOverwriteResponseSchema).optional() });
-const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema), presence: z.enum(['online', 'idle', 'dnd', 'offline']).optional(), customStatusText: z.string().nullable().optional() });
+const serverMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), serverDisplayName: z.string().nullable(), privateAlias: z.string().nullable(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), roles: z.array(serverRoleResponseSchema), presence: z.enum(['online', 'idle', 'dnd', 'offline']).optional(), customStatusText: z.string().nullable().optional() });
 const serverSummaryResponseSchema = z.object({ id: z.string(), name: z.string(), inviteUrl: z.url(), ownerUserId: z.string(), memberCount: z.number(), createdAt: z.string() });
 const serverDetailResponseSchema = serverSummaryResponseSchema.extend({ channels: z.array(serverChannelResponseSchema), roles: z.array(serverRoleResponseSchema), members: z.array(serverMemberResponseSchema), permissions: z.array(permissionSchema) });
 const homeDestinationResponseSchema = z.object({ type: z.enum(['server', 'text_channel', 'voice_channel']), serverId: z.string(), channelId: z.string().optional() });
@@ -209,7 +211,7 @@ const homeDashboardResponseSchema = z.object({
 const serverAuditLogResponseSchema = z.object({ id: z.string(), serverId: z.string(), actorUserId: z.string().nullable(), actorDisplayName: z.string(), action: z.string(), targetType: z.string(), targetId: z.string().nullable(), before: z.unknown(), after: z.unknown(), createdAt: z.string() });
 const serverOverviewSettingsResponseSchema = z.object({ id: z.string(), name: z.string(), description: z.string().nullable(), language: z.string(), timezone: z.string(), systemChannelId: z.string().nullable(), welcomeChannelId: z.string().nullable(), defaultNotificationLevel: z.enum(['all', 'mentions', 'none']), defaultVoiceInactivitySeconds: z.number(), ownerUserId: z.string(), ownerDisplayName: z.string(), version: z.number(), updatedAt: z.string() });
 const serverAppearanceSettingsResponseSchema = z.object({ iconUrl: z.string().nullable(), bannerUrl: z.string().nullable(), accentColor: z.string().nullable(), version: z.number() });
-const serverSettingsMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), username: z.string().nullable(), nickname: z.string().nullable(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), lastActiveAt: z.string().nullable(), mutedUntil: z.string().nullable(), deafened: z.boolean(), roleIds: z.array(z.string()) });
+const serverSettingsMemberResponseSchema = z.object({ userId: z.string(), displayName: z.string(), username: z.string().nullable(), serverDisplayName: z.string().nullable(), privateAlias: z.string().nullable(), platformRole: z.enum(['member', 'admin', 'owner']), joinedAt: z.string(), lastActiveAt: z.string().nullable(), mutedUntil: z.string().nullable(), deafened: z.boolean(), roleIds: z.array(z.string()) });
 const serverCategoryResponseSchema = z.object({ id: z.string(), name: z.string(), position: z.number() });
 const serverChannelSettingsResponseSchema = z.object({ id: z.string(), name: z.string(), type: z.enum(['text', 'voice']), position: z.number(), categoryId: z.string().nullable(), slowModeSeconds: z.number(), maxParticipants: z.number().nullable(), bitrate: z.number().nullable(), version: z.number(), archivedAt: z.string().nullable() });
 const serverInviteSettingsResponseSchema = z.object({ id: z.string(), createdByUserId: z.string().nullable(), createdByDisplayName: z.string(), destinationChannelId: z.string().nullable(), tokenPreview: z.string(), expiresAt: z.string().nullable(), maxUses: z.number().nullable(), useCount: z.number(), revokedAt: z.string().nullable(), createdAt: z.string() });
@@ -628,6 +630,14 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   api.patch(`${API_PREFIX}/servers/:serverId/settings/members/:userId`, {
     schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverMemberParams, body: updateServerMemberSchema, response: { 204: z.null(), ...routeErrors() } },
   }, async (request, reply) => { await service.updateServerSettingsMember(request.headers.authorization, request.params.serverId, request.params.userId, request.body); return reply.status(204).send(null); });
+
+  api.patch(`${API_PREFIX}/servers/:serverId/members/me/display-name`, {
+    schema: { tags: ['servers'], security: [{ bearerAuth: [] }], params: serverIdParams, body: updateOwnServerDisplayNameSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.updateOwnServerDisplayName(request.headers.authorization, request.params.serverId, request.body.displayName); return reply.status(204).send(null); });
+
+  api.patch(`${API_PREFIX}/servers/:serverId/members/:userId/private-alias`, {
+    schema: { tags: ['servers'], security: [{ bearerAuth: [] }], params: serverMemberParams, body: updateServerMemberAliasSchema, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.updatePrivateServerMemberAlias(request.headers.authorization, request.params.serverId, request.params.userId, request.body.alias); return reply.status(204).send(null); });
 
   api.get(`${API_PREFIX}/servers/:serverId/settings/channels`, {
     schema: { tags: ['server-settings'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: z.object({ categories: z.array(serverCategoryResponseSchema), channels: z.array(serverChannelSettingsResponseSchema) }), ...routeErrors() } },

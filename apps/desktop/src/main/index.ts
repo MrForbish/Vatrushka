@@ -138,7 +138,7 @@ function configureSession(): void {
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob:",
+    "img-src 'self' data: blob: https://*.twcstorage.ru",
     "media-src 'self' blob:",
     "connect-src 'self' https: wss: http://localhost:* ws://localhost:*",
     "font-src 'self' data:",

@@ -1,4 +1,4 @@
-import { useEffect, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 
 const focusableSelector = [
   'a[href]',
@@ -10,6 +10,8 @@ const focusableSelector = [
 ].join(',');
 
 export function useOverlayFocus(open: boolean, panelRef: RefObject<HTMLElement | null>, onClose: () => void): void {
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     if (!open) return undefined;
 
@@ -22,7 +24,7 @@ export function useOverlayFocus(open: boolean, panelRef: RefObject<HTMLElement |
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -52,5 +54,5 @@ export function useOverlayFocus(open: boolean, panelRef: RefObject<HTMLElement |
       document.removeEventListener('keydown', onKeyDown);
       previouslyFocused?.focus();
     };
-  }, [onClose, open, panelRef]);
+  }, [open, panelRef]);
 }

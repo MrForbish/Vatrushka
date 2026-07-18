@@ -434,7 +434,10 @@ export class CanonicalMessagingStore {
     const direction = after ? 'asc' : 'desc';
     const cursor = after ?? before;
     const comparison = after ? '>' : '<';
-    const result = await this.pool.query<MessageRow>(`${this.messageSelect()} where m.conversation_id = $1 ${cursor ? `and m.id ${comparison} $3::bigint` : ''} order by m.id ${direction} limit $4`, [conversationId, userId, cursor, limit + 1]);
+    const values: unknown[] = [conversationId, userId];
+    const cursorClause = cursor === null ? '' : `and m.id ${comparison} $${values.push(cursor)}::bigint`;
+    const limitPlaceholder = `$${values.push(limit + 1)}`;
+    const result = await this.pool.query<MessageRow>(`${this.messageSelect()} where m.conversation_id = $1 ${cursorClause} order by m.id ${direction} limit ${limitPlaceholder}`, values);
     const hasMore = result.rows.length > limit;
     const selected = result.rows.slice(0, limit);
     if (!after) selected.reverse();

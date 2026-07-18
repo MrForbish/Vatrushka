@@ -244,6 +244,8 @@ export interface ServerAuditLogEntry {
 export interface ServerMember {
   userId: string;
   displayName: string;
+  serverDisplayName: string | null;
+  privateAlias: string | null;
   platformRole: PlatformRole;
   joinedAt: string;
   roles: ServerRole[];
@@ -288,7 +290,8 @@ export interface ServerSettingsMember {
   userId: string;
   displayName: string;
   username: string | null;
-  nickname: string | null;
+  serverDisplayName: string | null;
+  privateAlias: string | null;
   platformRole: PlatformRole;
   joinedAt: string;
   lastActiveAt: string | null;

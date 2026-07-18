@@ -40,6 +40,28 @@ export function Button({ children, className, disabled, icon, loading = false, s
   );
 }
 
+export interface FilePickerProps {
+  accept?: string;
+  disabled?: boolean;
+  label: string;
+  selectedName?: string | null | undefined;
+  onFile(file: File): void;
+}
+
+export function FilePicker({ accept, disabled = false, label, onFile, selectedName = null }: FilePickerProps): React.JSX.Element {
+  const inputRef = useRef<HTMLInputElement>(null);
+  return (
+    <div className="vui-file-picker">
+      <span>{label}</span>
+      <div>
+        <Button disabled={disabled} onClick={() => inputRef.current?.click()} size="sm" type="button" variant="secondary">Выбрать файл</Button>
+        <small title={selectedName ?? undefined}>{selectedName ?? 'Файл не выбран'}</small>
+      </div>
+      <input aria-label={`${label}: файл`} accept={accept} disabled={disabled} onChange={(event) => { const file = event.target.files?.[0]; if (file) onFile(file); event.target.value = ''; }} ref={inputRef} tabIndex={-1} type="file" />
+    </div>
+  );
+}
+
 export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'aria-label' | 'children' | 'size'> {
   label: string;
   icon: IconName;

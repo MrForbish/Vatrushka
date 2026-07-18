@@ -555,7 +555,7 @@ export class VatrushkaService {
       throw error;
     }
     const current = await this.store.findUserById(user.id);
-    if (current && before?.username !== input.username) await this.recordSecurityEvent(current, 'USERNAME_CHANGED', null, 'Username изменён', `Username аккаунта изменён на ${input.username ? `@${input.username}` : 'пустое значение'}.`);
+    if (current && before?.username !== input.username) await this.recordSecurityEvent(current, 'USERNAME_CHANGED', null, 'Username изменён', `Username аккаунта изменён на ${input.username ? `@${input.username}` : 'пустое значение'}.`, true);
     else if (current) await this.store.createSecurityEvent({ id: randomUUID(), userId: current.id, type: 'PROFILE_UPDATED', deviceName: null, createdAt: this.now() });
     return this.getUserProfileSettings(authorization);
   }
@@ -1563,6 +1563,8 @@ export class VatrushkaService {
     this.requireCompleteProfile(user);
     const channel = await this.requireVoiceChannel(channelId);
     const server = await this.requireServer(channel.serverId);
+    const serverMember = await this.store.findServerMember(server.id, user.id);
+    const participantDisplayName = serverMember?.nickname ?? user.displayName;
     const permissions = await this.requireChannelPermission(server, channel, user, 'CONNECT_VOICE');
     if (!channel.livekitRoomName) throw new AppError('CHANNEL_NOT_FOUND', 404);
     try {
@@ -1571,7 +1573,7 @@ export class VatrushkaService {
       const token = await this.media.issueToken({
         roomName: channel.livekitRoomName,
         identity,
-        displayName: user.displayName,
+        displayName: participantDisplayName,
         metadata: { serverId: server.id, channelId: channel.id, kind: 'user', platformRole: user.platformRole },
         canPublishMicrophone: permissions.has('SPEAK'),
         canPublishScreen: permissions.has('STREAM_SCREEN'),
@@ -1584,7 +1586,7 @@ export class VatrushkaService {
         livekitUrl: this.config.LIVEKIT_URL,
         livekitToken: token,
         participantIdentity: identity,
-        participantDisplayName: user.displayName,
+        participantDisplayName,
         isOwner: permissions.has('MUTE_MEMBERS'),
         contextType: 'channel',
         serverId: server.id,
@@ -1853,17 +1855,31 @@ export class VatrushkaService {
     const user = await this.authenticate(authorization);
     const server = await this.requireServer(serverId);
     await this.requireServerPermission(server, user, 'VIEW_SERVER');
-    return this.settings().listMembers(serverId, search?.trim() || null);
+    return this.settings().listMembers(serverId, search?.trim() || null, user.id);
   }
 
-  async updateServerSettingsMember(authorization: string | undefined, serverId: string, memberUserId: string, input: { nickname?: string | null | undefined; mutedUntil?: string | null | undefined; deafened?: boolean | undefined }): Promise<void> {
+  async updateOwnServerDisplayName(authorization: string | undefined, serverId: string, displayName: string | null): Promise<void> {
     const user = await this.authenticate(authorization);
     const server = await this.requireServer(serverId);
-    const requestedVoiceModeration = input.mutedUntil !== undefined || input.deafened !== undefined;
-    await this.requireServerPermission(server, user, requestedVoiceModeration ? 'MUTE_MEMBERS' : 'MANAGE_SERVER');
+    if (!(await this.store.findServerMember(server.id, user.id))) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    if (!(await this.store.updateOwnServerDisplayName(server.id, user.id, displayName))) throw new AppError('SERVER_NOT_FOUND', 404);
+  }
+
+  async updatePrivateServerMemberAlias(authorization: string | undefined, serverId: string, memberUserId: string, alias: string | null): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    const [viewer, target] = await Promise.all([this.store.findServerMember(server.id, user.id), this.store.findServerMember(server.id, memberUserId)]);
+    if (!viewer || !target) throw new AppError('SERVER_PERMISSION_DENIED', 403);
+    if (memberUserId === user.id) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'alias', message: 'Для себя используйте отображаемое имя сервера' });
+    await this.store.setServerMemberAlias(server.id, user.id, memberUserId, alias, this.now());
+  }
+
+  async updateServerSettingsMember(authorization: string | undefined, serverId: string, memberUserId: string, input: { mutedUntil?: string | null | undefined; deafened?: boolean | undefined }): Promise<void> {
+    const user = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    await this.requireServerPermission(server, user, 'MUTE_MEMBERS');
     if (memberUserId === server.ownerUserId && memberUserId !== user.id) throw new AppError('SERVER_PERMISSION_DENIED', 403);
-    const memberUpdate: { nickname?: string | null; mutedUntil?: Date | null; deafened?: boolean } = {};
-    if (input.nickname !== undefined) memberUpdate.nickname = input.nickname;
+    const memberUpdate: { mutedUntil?: Date | null; deafened?: boolean } = {};
     if (input.mutedUntil !== undefined) memberUpdate.mutedUntil = input.mutedUntil ? new Date(input.mutedUntil) : null;
     if (input.deafened !== undefined) memberUpdate.deafened = input.deafened;
     const changed = await this.settings().updateMember(serverId, memberUserId, memberUpdate);
@@ -2088,7 +2104,11 @@ export class VatrushkaService {
     const access = await this.requireCanonicalConversation(current.conversationId, user, 'READ_MESSAGE_HISTORY');
     let canManage = false;
     if (access.channel) canManage = (await this.channelPermissionsFor(access.server!, access.channel, user)).has('MANAGE_MESSAGES');
-    if (!(await this.messaging().softDeleteMessage(messageId, user.id, canManage, this.now()))) throw new AppError('MESSAGE_NOT_FOUND', 404);
+    if (current.deletedAt !== null) return;
+    // A realtime delivery may race the initiating request. Deletion is
+    // intentionally idempotent so that race never creates a false 404 toast.
+    const deleted = await this.messaging().softDeleteMessage(messageId, user.id, canManage, this.now());
+    if (!deleted) throw new AppError('MESSAGE_NOT_FOUND', 404);
   }
 
   async setCanonicalReaction(authorization: string | undefined, messageId: string, emoji: string, active: boolean): Promise<ConversationMessage> {
@@ -2352,9 +2372,16 @@ export class VatrushkaService {
     deviceName: string | null,
     title: string,
     message: string,
+    deferNotice = false,
   ): Promise<void> {
     const event: SecurityEventRecord = { id: randomUUID(), userId: user.id, type, deviceName, createdAt: this.now() };
     await this.store.createSecurityEvent(event);
+    if (deferNotice) {
+      // Username changes remain visible in the in-app audit immediately; a slow
+      // SMTP provider must not hold the profile form open.
+      void this.mailer.sendSecurityNotice(user.email, title, message).catch(() => undefined);
+      return;
+    }
     try {
       await this.mailer.sendSecurityNotice(user.email, title, message);
     } catch {
@@ -2500,6 +2527,7 @@ export class VatrushkaService {
     const mentionCounts = new Map(mentionEntries.map((entry) => [entry.channelId, entry.count]));
     const roleById = new Map(publicRoles.map((role) => [role.id, role]));
     const defaultRoles = publicRoles.filter((role) => role.isDefault);
+    const privateAliases = new Map((await this.store.listServerMemberAliases(server.id, user.id)).map((entry) => [entry.targetUserId, entry.alias]));
     const publicMembers: ServerMember[] = await Promise.all(members.map(async (member) => {
       let presence: ServerMember['presence'] = 'offline';
       let customStatusText: string | null = null;
@@ -2515,7 +2543,9 @@ export class VatrushkaService {
       }
       return {
         userId: member.userId,
-        displayName: member.displayName ?? 'Участник',
+        displayName: privateAliases.get(member.userId) ?? member.nickname ?? member.displayName ?? 'Участник',
+        serverDisplayName: member.nickname ?? null,
+        privateAlias: privateAliases.get(member.userId) ?? null,
         platformRole: member.platformRole,
         joinedAt: member.joinedAt.toISOString(),
         roles: [

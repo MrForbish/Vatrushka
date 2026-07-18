@@ -169,6 +169,13 @@
       "when": 1784337738627,
       "tag": "0023_attachment_cleanup_trigger",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784378403856,
+      "tag": "0024_server_member_aliases",
+      "breakpoints": true
     }
   ]
 }

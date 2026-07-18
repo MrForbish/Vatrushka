@@ -51,7 +51,7 @@ export function NotificationCenter({ hasMore = false, items, loadingMore = false
   const filtered = useMemo(() => items.filter((item) => filter === 'all' || item.type === filter || filter === 'system' && (item.type === 'system' || item.type === 'moderation' || item.type === 'server_invite')), [filter, items]);
 
   return (
-    <div className="vui-notification-center" data-open={open || undefined}>
+    <div className="vui-notification-center" data-open={open || undefined} data-settings={window.location.pathname.startsWith('/settings') || undefined}>
       <button aria-expanded={open} aria-label={`Уведомления${unreadCount > 0 ? `, непрочитанных: ${unreadCount}` : ''}`} className="vui-notification-center__trigger" onClick={() => setOpen((current) => !current)} type="button">
         <Icon name="bell" size={19} />
         {unreadCount === 0 ? null : <span>{unreadCount > 99 ? '99+' : unreadCount}</span>}

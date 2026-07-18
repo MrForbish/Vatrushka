@@ -14,9 +14,9 @@ const server: ServerDetail = {
     { id: 'role-everyone', serverId: 'server-1', name: '@everyone', color: '#8f91a8', position: 0, isDefault: true, kind: 'EVERYONE', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'MANAGE_OWN_MESSAGES', 'CONNECT_VOICE', 'SPEAK'] },
   ],
   members: [
-    { userId: 'user-owner', displayName: 'Илья Форбиш', platformRole: 'owner', joinedAt: '2026-07-01T00:00:00.000Z', roles: [] },
-    { userId: 'user-anna', displayName: 'Анна Белова', platformRole: 'member', joinedAt: '2026-07-02T00:00:00.000Z', roles: [{ id: 'role-speaker', serverId: 'server-1', name: 'Ведущий', color: '#53a6a6', position: 10, isDefault: false, kind: 'CUSTOM', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] }] },
-    { userId: 'user-max', displayName: 'Максим Орлов', platformRole: 'member', joinedAt: '2026-07-03T00:00:00.000Z', roles: [] },
+    { userId: 'user-owner', displayName: 'Илья Форбиш', serverDisplayName: null, privateAlias: null, platformRole: 'owner', joinedAt: '2026-07-01T00:00:00.000Z', roles: [] },
+    { userId: 'user-anna', displayName: 'Анна Белова', serverDisplayName: null, privateAlias: null, platformRole: 'member', joinedAt: '2026-07-02T00:00:00.000Z', roles: [{ id: 'role-speaker', serverId: 'server-1', name: 'Ведущий', color: '#53a6a6', position: 10, isDefault: false, kind: 'CUSTOM', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] }] },
+    { userId: 'user-max', displayName: 'Максим Орлов', serverDisplayName: null, privateAlias: null, platformRole: 'member', joinedAt: '2026-07-03T00:00:00.000Z', roles: [] },
   ],
   channels: [
     { id: 'channel-general', serverId: 'server-1', name: 'общий', type: 'text', position: 0, unreadCount: 0, permissions: [...serverPermissions], permissionOverwrites: [{ channelId: 'channel-general', targetType: 'ROLE', targetId: 'role-speaker', allow: ['SEND_MESSAGES'], deny: ['MENTION_EVERYONE'] }] },

@@ -75,6 +75,7 @@ describe('production infrastructure adapters', () => {
       'server_channel_categories',
       'server_invites',
       'server_bans',
+      'server_member_aliases',
       'text_messages',
       'direct_conversations',
       'direct_messages',
@@ -136,6 +137,7 @@ describe('production infrastructure adapters', () => {
     expect(created.created).toBe(true);
     expect(retried.created).toBe(false);
     expect(retried.message.id).toBe(created.message.id);
+    await expect(messaging.listMessages(direct.conversation.id, second.id, null, null, 50)).resolves.toMatchObject({ items: [expect.objectContaining({ id: created.message.id })] });
     expect(await messaging.listNotifications(second.id, null, 10, true)).toHaveLength(1);
 
     const state = await messaging.updateReadState(direct.conversation.id, second.id, created.message.id, created.message.id, now);
@@ -187,10 +189,11 @@ describe('production infrastructure adapters', () => {
   it('persists versioned server settings and constrained invite links', async () => {
     const now = new Date('2026-07-18T13:00:00.000Z');
     const owner = (await postgres.store.getOrCreateUser(`${randomUUID()}@settings.integration.test`, now)).user;
+    const member = (await postgres.store.getOrCreateUser(`${randomUUID()}@settings.integration.test`, now)).user;
     const serverId = randomUUID();
     const channelId = randomUUID();
     await adminPool.query('insert into servers (id, name, invite_code, owner_user_id, created_at, updated_at) values ($1, $2, $3, $4, $5, $5)', [serverId, 'Settings', randomUUID(), owner.id, now]);
-    await adminPool.query('insert into server_members (server_id, user_id, joined_at) values ($1, $2, $3)', [serverId, owner.id, now]);
+    await adminPool.query('insert into server_members (server_id, user_id, joined_at) values ($1, $2, $4), ($1, $3, $4)', [serverId, owner.id, member.id, now]);
     await adminPool.query("insert into server_channels (id, server_id, name, type, position, created_at, updated_at) values ($1, $2, 'general', 'text', 0, $3, $3)", [channelId, serverId, now]);
 
     const initial = await serverSettings.getOverview(serverId);
@@ -198,6 +201,10 @@ describe('production infrastructure adapters', () => {
     const updated = await serverSettings.updateOverview(serverId, { name: 'Updated settings', description: 'Description', language: 'ru', timezone: 'Europe/Moscow', systemChannelId: channelId, welcomeChannelId: channelId, defaultNotificationLevel: 'mentions', defaultVoiceInactivitySeconds: 600, version: 1 }, new Date(now.getTime() + 1_000));
     expect(updated).toMatchObject({ name: 'Updated settings', version: 2, systemChannelId: channelId });
     await expect(serverSettings.updateOverview(serverId, { name: 'Stale', description: null, language: 'ru', timezone: 'UTC', systemChannelId: null, welcomeChannelId: null, defaultNotificationLevel: 'none', defaultVoiceInactivitySeconds: 0, version: 1 }, now)).resolves.toBeNull();
+
+    await expect(postgres.store.updateOwnServerDisplayName(serverId, member.id, 'Публичное имя')).resolves.toBe(true);
+    await expect(postgres.store.setServerMemberAlias(serverId, owner.id, member.id, 'Личный псевдоним', now)).resolves.toBe(true);
+    expect((await serverSettings.listMembers(serverId, null, owner.id)).find((candidate) => candidate.userId === member.id)).toMatchObject({ serverDisplayName: 'Публичное имя', privateAlias: 'Личный псевдоним' });
 
     const rawToken = randomUUID();
     const created = await serverSettings.createInvite({ id: randomUUID(), serverId, actorUserId: owner.id, destinationChannelId: channelId, tokenHash: rawToken, tokenPreview: '…token', expiresAt: new Date(now.getTime() + 60_000), maxUses: 1, now });
