@@ -4,6 +4,12 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+### CI and quality
+
+- Visual regression now runs against one production-like static Storybook build instead of recompiling stories through the development server.
+- GitHub Actions reports and enforces duration budgets for Storybook interaction, Electron E2E and visual suites, with job-level hang protection.
+- The visual contract now includes the supported 1280×720 and minimum 1024×680 App Shell boundaries; the risk-to-test matrix is documented.
+
 ### Added
 
 - в нижнюю плашку профиля добавлены синхронизированные с LiveKit кнопки mute/deafen; отключение входящего звука также выключает микрофон, голоса участников и звук демонстрации, не сбрасывая индивидуальные уровни громкости.

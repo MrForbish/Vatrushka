@@ -14,9 +14,9 @@ export default defineConfig({
     viewport: { width: 1440, height: 900 },
   },
   webServer: {
-    command: 'npm run storybook -- --ci',
+    command: 'npm run visual:serve',
     url: 'http://127.0.0.1:6006',
     reuseExistingServer: true,
-    timeout: 120_000,
+    timeout: 30_000,
   },
 });

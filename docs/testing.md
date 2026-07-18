@@ -40,7 +40,9 @@ CI starts isolated PostgreSQL 17 and Redis 8 services, applies the complete Driz
 
 ## CI и release gates
 
-`pr-checks.yml` является переиспользуемым quality gate для task PR в `develop`: независимые jobs проверяют настоящие PostgreSQL/Redis adapters, lint/typecheck/unit/build/bundle budgets и полный Windows Storybook/Electron/visual набор. Обычный PR не собирает публикуемый installer. Storybook interaction + Electron E2E и 29 последовательных visual scenarios выполняются параллельными Windows jobs, после чего единый `desktop-regression` требует успеха обоих. Chromium кэшируется по lockfile; локально быстрые два workers внутри одного visual process были отклонены после деградации на ограниченном GitHub Windows runner.
+`pr-checks.yml` является переиспользуемым quality gate для task PR в `develop`: независимые jobs проверяют настоящие PostgreSQL/Redis adapters, lint/typecheck/unit/build/bundle budgets и полный Windows Storybook/Electron/visual набор. Обычный PR не собирает публикуемый installer. Storybook interaction + Electron E2E и 31 последовательный visual scenario выполняются параллельными Windows jobs, после чего единый `desktop-regression` требует успеха обоих. Chromium кэшируется по lockfile; локально быстрые два workers внутри одного visual process были отклонены после деградации на ограниченном GitHub Windows runner.
+
+Visual suite сначала собирает production-like статический Storybook, затем обслуживает `storybook-static` через Vite preview. Это сохраняет однопоточный детерминированный screenshot contract, но исключает холодную Vite-трансформацию при открытии каждой story. `run-with-budget.mjs` измеряет Storybook interaction, Electron E2E и visual шаги, пишет фактическое время в GitHub Step Summary и блокирует существенную регрессию. Job-level timeouts защищают от зависшего runner. Актуальная связь рисков, уровней тестов и viewport находится в [test-coverage-matrix.md](test-coverage-matrix.md).
 
 `release-candidate.yml` повторно вызывает тот же quality gate и дополнительно:
 
