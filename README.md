@@ -35,7 +35,7 @@
 - Единственная демонстрация обеспечивается транзакционной lease в PostgreSQL, а не только UI.
 - Серверы хранят постоянное членство, каналы, сообщения, иерархию ролей, channel overrides и audit log; права `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` ограничиваются также grant-ами LiveKit-токена.
 
-Подробности: [архитектура](docs/architecture.md), [messaging/realtime](docs/messaging.md), [ADR](docs/adr/README.md), [Home dashboard](docs/home.md), [аутентификация](docs/auth.md), [медиа](docs/media.md), [объектное хранилище](docs/object-storage.md), [безопасность](docs/security.md).
+Каноническая документация начинается с [единого индекса](docs/README.md): [бизнес-спецификация](docs/product-specification.md), [техническая спецификация](docs/technical-specification.md) и [roadmap](docs/vnext-roadmap.md). Детальные ADR, runbook и release notes остаются поддерживающими документами.
 
 ## Структура
 

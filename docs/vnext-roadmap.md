@@ -1,69 +1,121 @@
-# Vatrushka vNext: сверка ТЗ и roadmap
+# Vatrushka: roadmap
 
-## Что изменилось относительно исходного MVP
+Обновлено для версии 0.6.1. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
 
-Исходное ТЗ уже требовало подписанный выбор монитора/окна, системный звук демонстрации и выбор устройств записи/воспроизведения. Эти пункты доведены до рабочего UI: источники сгруппированы, безопасный системный звук включается автоматически, зритель отдельно меняет его громкость/mute через контекстное меню, а собственный вывод «Ватрушки» обязательно исключается из loopback capture.
+## Состояние продукта
 
-Пароли, TOTP, текстовый чат, постоянные серверы/каналы и сложные роли были явно вынесены за границы MVP. В vNext они стали единственным постоянным контуром; быстрые комнаты, гостевой вход и passwordless-авторизация удалены в 0.4.0.
+### Готово и используется
 
-## Реализовано в vNext
+- password + обязательный email/TOTP/recovery второй фактор;
+- постоянные серверы, текстовые/голосовые каналы, короткие invite links;
+- роли, 40 permissions, channel overrides и audit log;
+- Home dashboard, routed User/Server Settings и presence через Redis;
+- canonical messaging, mentions, reactions, read/delivery, notification center;
+- authenticated WebSocket, transactional outbox и HTTP reconciliation;
+- приватные S3 attachments и durable cleanup;
+- реальные Windows audio devices, voice, screen share, системный звук и PostgreSQL lease;
+- self-hosted LiveKit/TURN;
+- NSIS auto-update с self-hosted feed;
+- unit, integration PostgreSQL/Redis, Storybook interaction, Electron и visual regression CI.
 
-- регистрация с scrypt-паролем и подтверждением email;
-- вход с обязательным вторым фактором: email или TOTP;
-- QR-настройка и отключение TOTP в клиенте;
-- одноразовые recovery-коды, активные/доверенные устройства, отзыв сессий и журнал событий безопасности;
-- platform owner/admin с отдельным визуальным статусом;
-- постоянные серверы и приглашения;
-- текстовые и голосовые каналы;
-- история, создание и удаление сообщений;
-- системные роли `@everyone`/`Владелец`, назначаемые роли и редактируемая иерархия;
-- 40 server permissions с `ADMINISTRATOR`, защитой от повышения собственных привилегий и готовыми шаблонами ролей;
-- channel-specific overrides для ролей и участников с состояниями inherit/allow/deny;
-- audit log изменений каналов, ролей, назначений и участников;
-- техническое ограничение `SPEAK`, `STREAM_SCREEN` и `STREAM_APPLICATION_AUDIO` отдельными LiveKit grants;
-- транзакционные screen-share leases для голосовых каналов;
-- локальные Manrope/Unbounded, анимации и новый server shell.
-- NSIS auto-update через self-hosted generic feed с progress/restart UI.
-- персональная Home-панель с быстрым возвратом, активными пространствами, недавней активностью, offline-кэшем, onboarding и фактической диагностикой выбранного микрофона.
-- приватное S3-compatible хранилище вложений с backend permission checks, DB rollback-копией и идемпотентным backfill.
-- публичное имя пользователя внутри сервера и viewer-scoped приватные псевдонимы других участников; приватный псевдоним применяется только в представлении назначившего его пользователя и не меняет профиль цели.
+### Работает, но требует укрепления
 
-## Settings / mentions / presence feature pack
+- UI в целом соответствует дизайн-системе, но нет формальной матрицы адаптива для всех экранов;
+- Storybook покрывает основные компоненты, но не все production edge states и viewport;
+- canonical messaging все еще содержит legacy compatibility reads/tables;
+- крупные orchestration-файлы затрудняют безопасные изменения;
+- `/metrics` реализован, но не собирается production Prometheus;
+- installer не подписан code-signing сертификатом;
+- password reset отсутствует;
+- rename канала доступен в Server Settings, но не из обычного списка каналов;
+- описание сервера сохраняется, но не показывается в рабочем server shell.
 
-Phase 1 — repo audit и фиксация контрактов — завершена. Принятые решения находятся в [ADR](adr/README.md): общий SettingsShell и hash routes, rollout feature flags, развитие существующего `electron-updater`, structured mentions, presence/realtime и единая DND notification policy.
+## План выполнения
 
-Phase 2 — общий `SettingsShell`, типизированные routes, staged feature flags, Storybook и Electron navigation tests — завершена. Старые модалки сохранены как production fallback до полного parity.
+### P0.1 — документация и доказательная очистка
 
-Phase 3 завершена вертикальными срезами без UI-заглушек. Routed user settings подключены к реальным API для профиля, avatar, уникального username, bio, presence/privacy, уведомлений, пароля/2FA/recovery, сессий, security activity, смены email, блокировок, экспорта и 14-дневной деактивации. Routed server settings функционально покрывают overview, appearance, members, roles/permissions, categories/channels, invites, moderation, audit и danger zone.
+1. Поддерживать `product-specification.md`, `technical-specification.md` и этот roadmap как канонические документы.
+2. Построить import/runtime/API/schema inventory; разделить `dead`, `compatibility`, `future-approved`.
+3. Удалить неиспользуемые UI fallback, feature flags и дублирующий ADR только после подтверждения parity.
+4. Сначала перевести desktop на canonical-only messaging, затем наблюдать adoption и отдельной contract migration удалить legacy routes/tables/mapping columns.
+5. Декомпозировать `App.tsx`, API `app.ts/service.ts` и PostgreSQL store по bounded context без большого переписывания.
 
-Messaging transport завершён: `@` autocomplete поддерживает пользователей, роли и `@everyone`; API хранит stable Unicode entities, проверяет membership/permissions и server moderation limit. Canonical PostgreSQL messages доставляются через transactional outbox → Redis Pub/Sub → authenticated WebSocket, а HTTP polling остаётся редким reconciliation после reconnect. Реализованы ЛС, read receipts, cursor history, optimistic retry, tombstones, notification center, DND/mute/quiet hours и durable S3 cleanup.
+Критерий: каждый удаленный контракт имеет поиск отсутствующих consumers, тест и migration/rollback note.
 
-## Следующие итерации
+### P0.2 — UI/Storybook quality gate
 
-### P0 — эксплуатационная готовность
+1. Составить экран → story → reference → viewport matrix.
+2. Проверить 1440×900, 1280×720, узкое desktop-окно и Windows scaling 100/125/150%.
+3. Добавить stories для long Russian copy, empty/loading/error/permission/conflict, menus/modals и переполнения.
+4. Исправить overlap, clipping, z-index, focus trap, outside click, hit areas и нерабочие действия.
+5. Запретить локальные дубли токенов и сырые browser controls в production UI.
 
-1. Восстановление забытого пароля через отдельный ограниченный email-flow.
-2. Code signing автообновляемого Windows-клиента и отдельные release channels stable/beta.
-3. Подключение `/metrics` к Prometheus/Grafana и production alerts для outbox/Redis/WebSocket.
-4. Нагрузочные тесты PostgreSQL, Redis, LiveKit и S3.
+Критерий: visual/interaction/a11y CI зеленый, все действия достижимы мышью и клавиатурой, критический текст не обрезан.
 
-### P1 — полноценное сообщество
+### P0.3 — профильная voice-плашка
 
-1. Приватные категории и drag-and-drop порядка каналов.
-2. Временные/постоянные invite links, kick/ban list и заявки на вступление.
-3. Поиск, закреплённые сообщения и треды.
-4. Group DM UI (schema остаётся выключенной feature flag до отдельного UX-среза).
-5. Антивирусная проверка S3-вложений и per-user/server storage quotas; lifecycle/garbage collection уже автоматизирован.
+1. Добавить рядом с настройками две icon buttons: микрофон и входящий звук.
+2. Синхронизировать их с фактическим LiveKit/media snapshot, а не локальной иллюзией состояния.
+3. Deafen выключает входящий звук и микрофон; undeafen не включает микрофон неожиданно.
+4. Добавить tooltip, aria-label, disabled/reconnecting состояния и unit/Storybook/E2E tests.
+
+### P0.4 — server shell usability
+
+1. Показать описание сервера в server header/about surface с empty и overflow состояниями.
+2. Добавить «Переименовать» в контекстное меню канала с permission check, validation, optimistic conflict и audit.
+3. Отправлять channel/server updated realtime events и сразу обновлять sidebar/top bar/settings caches.
+4. Привести platform owner UI к лаконичному `CEO Founder`; убрать желтую подложку его сообщений, оставить компактный badge/accent.
+
+### P0.5 — CI и тестовое покрытие
+
+1. Зафиксировать mapping риска к тестам и удалить только дублирующие/неактуальные сценарии.
+2. Кэшировать Playwright Chromium по версии lockfile/Playwright.
+3. Ускорить visual suite безопасным параллелизмом после проверки детерминизма; не сокращать screenshots.
+4. Исключить повторные холодные сборки Storybook там, где interaction и visual могут использовать один артефакт.
+5. Параллелить независимые CI jobs и сохранять traces/screenshots только при ошибке.
+6. Добавить измерение duration по этапам и регрессионный бюджет pipeline.
+
+Цель: сократить `desktop-regression` с наблюдавшихся ~11 минут до 6–7 минут на cold runner без потери сценариев.
+
+### P0.6 — эксплуатационная готовность
+
+1. Реализовать отдельный rate-limited password reset с отзывом сессий и security event.
+2. Добавить code signing и stable/beta update channels после получения сертификата; updater до этого продолжает работать с явным документированным риском SmartScreen.
+3. Выполнить load tests PostgreSQL/Redis/API/WebSocket/LiveKit/S3 и установить capacity limits.
+
+### P1.1 — Prometheus/Grafana
+
+1. Уточнить/стабилизировать API metric names и cardinality.
+2. Развернуть Prometheus, Grafana, node/cAdvisor/PostgreSQL/Redis exporters и blackbox probes.
+3. Ограничить доступ auth/VPN/SSH tunnel; настроить retention, backup dashboards и disk budget.
+4. Собрать dashboards API/WebSocket, messaging/outbox, Redis, PostgreSQL, LiveKit/S3 и host.
+5. После baseline включить alerts по перечню из технической спецификации.
+
+### P1.2 — сообщества и messaging
+
+- drag-and-drop порядка каналов и приватные категории;
+- заявки на вступление и расширенные invite policies;
+- поиск, закрепленные сообщения и threads;
+- group DM UI после отдельного UX-среза;
+- antivirus scanning и storage quotas для S3.
 
 ### P2 — медиа и платформы
 
-1. Камеры, сетка участников и noise suppression уровня Krisp/RNNoise.
-2. Запись встречи только с явным согласием участников и политикой хранения.
-3. Web/mobile companion, push notifications и синхронизация настроек.
-4. End-to-end encryption для приватных каналов после отдельного threat model.
+- камеры, сетка и noise suppression;
+- запись только с явным согласием и retention policy;
+- web/mobile companion и push;
+- E2EE после отдельного threat model.
 
-## Осознанные ограничения текущей версии
+## Очередность PR
 
-- WebSocket является основным realtime-транспортом, но клиент намеренно сохраняет 30-секундный HTTP reconciliation;
-- server settings имеют kick и ban list; заявки на вступление ещё не реализованы;
-- installer пока не подписан; auto-update работает только в установленной NSIS-версии, а portable build обновляется вручную.
+1. `docs/source-of-truth` — канонические документы и inventory.
+2. `cleanup/safe-runtime` — доказуемо мертвые frontend/backend элементы без schema contract.
+3. `ui/profile-audio-controls` — mute/deafen.
+4. `ui/server-description-channel-rename` — описание, rename и realtime.
+5. `ui/founder-treatment` — `CEO Founder` и сообщения.
+6. `quality/storybook-responsive` — viewport/edge-state fixes.
+7. `ci/desktop-regression-speed` — cache/parallelism/timing.
+8. `migration/canonical-messaging-contract` — только после client adoption gate.
+9. `ops/observability` — Prometheus/Grafana.
+
+Каждый PR проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Runtime-PR выкатывается после merge с backup и health checks; Windows update публикуется только когда изменения нужны установленному клиенту.
