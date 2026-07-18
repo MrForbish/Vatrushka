@@ -184,8 +184,8 @@ export const conversationHistoryQuerySchema = z.object({
 }).strict().refine((value) => !(value.before && value.after), 'before and after are mutually exclusive');
 export const conversationMentionInputSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('user'), userId: uuidSchema, start: z.number().int().min(0).max(4_000).optional(), length: z.number().int().min(1).max(257).optional() }).strict(),
-  z.object({ type: z.literal('role'), roleId: uuidSchema }).strict(),
-  z.object({ type: z.literal('everyone') }).strict(),
+  z.object({ type: z.literal('role'), roleId: uuidSchema, start: z.number().int().min(0).max(4_000).optional(), length: z.number().int().min(1).max(257).optional() }).strict(),
+  z.object({ type: z.literal('everyone'), start: z.number().int().min(0).max(4_000).optional(), length: z.number().int().min(1).max(257).optional() }).strict(),
 ]);
 export const createConversationMessageSchema = z.object({
   clientMessageId: uuidSchema,
@@ -208,6 +208,16 @@ export const notificationQuerySchema = z.object({
   unreadOnly: z.coerce.boolean().default(false),
 }).strict();
 export const notificationPreferenceLevelSchema = z.enum(['all', 'mentions', 'none']);
+export const updateServerNotificationPreferencesSchema = z.object({
+  level: notificationPreferenceLevelSchema,
+  mutedUntil: z.iso.datetime().nullable(),
+  suppressEveryone: z.boolean(),
+  suppressRoles: z.boolean(),
+}).strict();
+export const updateConversationNotificationPreferencesSchema = z.object({
+  level: notificationPreferenceLevelSchema,
+  mutedUntil: z.iso.datetime().nullable(),
+}).strict();
 export const notificationPreviewModeSchema = z.enum(['full', 'sender_only', 'hidden']);
 export const updateUserNotificationPreferencesSchema = z.object({
   desktopEnabled: z.boolean(),

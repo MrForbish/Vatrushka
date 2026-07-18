@@ -7,10 +7,13 @@ import type {
   ConversationMessagePage,
   ConversationReadState,
   ConversationSummary,
+  ConversationNotificationPreferences,
   InternalNotification,
+  ServerNotificationPreferences,
   UserNotificationPreferences,
   UserUnreadSummary,
 } from '@vatrushka/shared';
+import { technicalMetrics } from './metrics.js';
 
 export interface CanonicalConversationRecord {
   id: string;
@@ -388,12 +391,14 @@ export class CanonicalMessagingStore {
   }
 
   async createMessage(input: CreateCanonicalMessageInput): Promise<{ message: ConversationMessage; created: boolean }> {
+    const startedAt = Date.now();
     const client = await this.pool.connect();
     try {
       await client.query('begin');
       const existing = await client.query<{ id: string }>('select id::text from messages where author_id = $1 and client_message_id = $2', [input.authorId, input.clientMessageId]);
       if (existing.rows[0]) {
         await client.query('commit');
+        technicalMetrics.observe('chat_message_create_duration_ms', Date.now() - startedAt);
         return { message: (await this.findMessage(existing.rows[0].id, input.authorId))!, created: false };
       }
       if (input.replyToMessageId) {
@@ -413,27 +418,93 @@ export class CanonicalMessagingStore {
       for (const mention of input.mentions) {
         await client.query(`insert into conversation_message_mentions (id, message_id, mention_type, mentioned_user_id, mentioned_role_id, start, length, created_at) values ($1, $2::bigint, $3, $4, $5, $6, $7, $8)`, [randomUUID(), messageId, mention.type, mention.userId ?? null, mention.roleId ?? null, mention.start ?? null, mention.length ?? null, input.now]);
       }
-      const recipients = new Map<string, 'direct_message' | 'mention' | 'reply'>();
-      const conversation = await client.query<{ type: CanonicalConversationRecord['type'] }>('select type from conversations where id = $1 for update', [input.conversationId]);
+      const signals = new Map<string, 'direct_message' | 'mention' | 'reply'>();
+      const mentionKinds = new Map<string, Set<'user' | 'role' | 'everyone'>>();
+      const eventRecipients = new Set<string>();
+      const conversation = await client.query<{ type: CanonicalConversationRecord['type']; server_id: string | null }>('select type, server_id from conversations where id = $1 for update', [input.conversationId]);
       if (conversation.rows[0]?.type !== 'server_channel') {
         const members = await client.query<{ user_id: string }>('select user_id from conversation_members where conversation_id = $1 and user_id <> $2 and left_at is null', [input.conversationId, input.authorId]);
-        for (const member of members.rows) recipients.set(member.user_id, 'direct_message');
+        for (const member of members.rows) { signals.set(member.user_id, 'direct_message'); eventRecipients.add(member.user_id); }
+      } else if (conversation.rows[0].server_id) {
+        const members = await client.query<{ user_id: string }>('select user_id from server_members where server_id = $1 and user_id <> $2', [conversation.rows[0].server_id, input.authorId]);
+        for (const member of members.rows) eventRecipients.add(member.user_id);
       }
-      for (const mention of input.mentions) if (mention.userId && mention.userId !== input.authorId && !recipients.has(mention.userId)) recipients.set(mention.userId, 'mention');
+      for (const mention of input.mentions) {
+        if (mention.userId && mention.userId !== input.authorId) {
+          if (!signals.has(mention.userId)) signals.set(mention.userId, 'mention');
+          mentionKinds.set(mention.userId, new Set([...(mentionKinds.get(mention.userId) ?? []), 'user']));
+        }
+        if (conversation.rows[0]?.server_id && mention.type === 'everyone') {
+          const members = await client.query<{ user_id: string }>('select user_id from server_members where server_id = $1 and user_id <> $2', [conversation.rows[0].server_id, input.authorId]);
+          for (const member of members.rows) { if (!signals.has(member.user_id)) signals.set(member.user_id, 'mention'); mentionKinds.set(member.user_id, new Set([...(mentionKinds.get(member.user_id) ?? []), 'everyone'])); }
+        }
+        if (conversation.rows[0]?.server_id && mention.type === 'role' && mention.roleId) {
+          const members = await client.query<{ user_id: string }>('select user_id from server_member_roles where server_id = $1 and role_id = $2 and user_id <> $3', [conversation.rows[0].server_id, mention.roleId, input.authorId]);
+          for (const member of members.rows) { if (!signals.has(member.user_id)) signals.set(member.user_id, 'mention'); mentionKinds.set(member.user_id, new Set([...(mentionKinds.get(member.user_id) ?? []), 'role'])); }
+        }
+      }
       if (input.replyToMessageId) {
         const reply = await client.query<{ author_id: string }>('select author_id from messages where id = $1::bigint', [input.replyToMessageId]);
         const replyAuthor = reply.rows[0]?.author_id;
-        if (replyAuthor && replyAuthor !== input.authorId && !recipients.has(replyAuthor)) recipients.set(replyAuthor, 'reply');
+        if (replyAuthor && replyAuthor !== input.authorId && !signals.has(replyAuthor)) signals.set(replyAuthor, 'reply');
       }
-      for (const [recipientId, type] of recipients) {
+      const notificationTypes = new Map<string, 'message' | 'direct_message' | 'mention' | 'reply'>();
+      if (conversation.rows[0]?.type !== 'server_channel') {
+        const preferences = await client.query<{ user_id: string; level: 'all' | 'mentions' | 'none'; muted: boolean; direct_messages_enabled: boolean }>(`
+          select member.user_id, coalesce(conversation_preferences.level, 'mentions') as level,
+            coalesce(conversation_preferences.muted_until, '-infinity'::timestamptz) > $2 as muted,
+            coalesce(user_preferences.direct_messages_enabled, true) as direct_messages_enabled
+          from conversation_members member
+          left join conversation_notification_preferences conversation_preferences on conversation_preferences.conversation_id = member.conversation_id and conversation_preferences.user_id = member.user_id
+          left join user_notification_preferences user_preferences on user_preferences.user_id = member.user_id
+          where member.conversation_id = $1 and member.user_id <> $3 and member.left_at is null and not exists(select 1 from blocked_users where
+            (blocker_user_id = member.user_id and blocked_user_id = $3) or (blocker_user_id = $3 and blocked_user_id = member.user_id))
+        `, [input.conversationId, input.now, input.authorId]);
+        for (const preference of preferences.rows) {
+          const signal = signals.get(preference.user_id);
+          if (signal && preference.direct_messages_enabled && !preference.muted && preference.level !== 'none') notificationTypes.set(preference.user_id, signal);
+        }
+      } else if (conversation.rows[0].server_id) {
+        const preferences = await client.query<{ user_id: string; level: 'all' | 'mentions' | 'none'; muted: boolean; suppress_everyone: boolean; suppress_roles: boolean; mentions_enabled: boolean }>(`
+          select member.user_id, coalesce(conversation_preferences.level, server_preferences.level, server.default_notification_level, 'mentions') as level,
+            (coalesce(conversation_preferences.muted_until, '-infinity'::timestamptz) > $3 or coalesce(server_preferences.muted_until, '-infinity'::timestamptz) > $3) as muted,
+            coalesce(server_preferences.suppress_everyone, false) as suppress_everyone, coalesce(server_preferences.suppress_roles, false) as suppress_roles,
+            coalesce(user_preferences.mentions_enabled, true) as mentions_enabled
+          from server_members member join servers server on server.id = member.server_id
+          left join server_notification_preferences server_preferences on server_preferences.server_id = member.server_id and server_preferences.user_id = member.user_id
+          left join conversation_notification_preferences conversation_preferences on conversation_preferences.conversation_id = $1 and conversation_preferences.user_id = member.user_id
+          left join user_notification_preferences user_preferences on user_preferences.user_id = member.user_id
+          where member.server_id = $2 and member.user_id <> $4 and not exists(select 1 from blocked_users where
+            (blocker_user_id = member.user_id and blocked_user_id = $4) or (blocker_user_id = $4 and blocked_user_id = member.user_id))
+        `, [input.conversationId, conversation.rows[0].server_id, input.now, input.authorId]);
+        for (const preference of preferences.rows) {
+          if (preference.muted || preference.level === 'none') continue;
+          const signal = signals.get(preference.user_id);
+          if (signal === 'reply') { if (preference.mentions_enabled) notificationTypes.set(preference.user_id, 'reply'); continue; }
+          if (signal === 'mention') {
+            const kinds = mentionKinds.get(preference.user_id) ?? new Set();
+            const allowedMention = kinds.has('user') || (kinds.has('role') && !preference.suppress_roles) || (kinds.has('everyone') && !preference.suppress_everyone);
+            if (allowedMention && preference.mentions_enabled) notificationTypes.set(preference.user_id, 'mention');
+            continue;
+          }
+          if (preference.level === 'all') notificationTypes.set(preference.user_id, 'message');
+        }
+      }
+      for (const [recipientId, type] of notificationTypes) {
         await client.query('insert into notifications (id, user_id, type, actor_user_id, conversation_id, message_id, payload, created_at) values ($1, $2, $3, $4, $5, $6::bigint, $7, $8)', [randomUUID(), recipientId, type, input.authorId, input.conversationId, messageId, { preview: input.content.slice(0, 160) }, input.now]);
       }
       await client.query('update conversations set updated_at = $2 where id = $1', [input.conversationId, input.now]);
-      await client.query('insert into outbox_events (event_type, aggregate_type, aggregate_id, payload, created_at, available_at) values ($1, $2, $3, $4, $5, $5)', ['message.created', 'conversation', input.conversationId, { conversationId: input.conversationId, messageId, recipientIds: [...recipients.keys()] }, input.now]);
+      await client.query('insert into outbox_events (event_type, aggregate_type, aggregate_id, payload, created_at, available_at) values ($1, $2, $3, $4, $5, $5)', ['message.created', 'conversation', input.conversationId, { conversationId: input.conversationId, messageId, recipientIds: [...eventRecipients] }, input.now]);
       await client.query('commit');
+      technicalMetrics.increment('chat_messages_created_total');
+      technicalMetrics.increment('chat_notifications_created_total', notificationTypes.size);
+      technicalMetrics.increment('chat_notifications_suppressed_total', Math.max(0, eventRecipients.size - notificationTypes.size));
+      technicalMetrics.observe('chat_message_create_duration_ms', Date.now() - startedAt);
       return { message: (await this.findMessage(messageId, input.authorId))!, created: true };
     } catch (error) {
       await client.query('rollback');
+      technicalMetrics.increment('chat_message_create_errors_total');
+      technicalMetrics.observe('chat_message_create_duration_ms', Date.now() - startedAt);
       throw error;
     } finally {
       client.release();
@@ -508,11 +579,21 @@ export class CanonicalMessagingStore {
   }
 
   async unreadSummary(userId: string): Promise<UserUnreadSummary> {
+    const startedAt = performance.now();
     const result = await this.pool.query<{ conversation_id: string; unread_count: number; mention_count: number; first_unread_message_id: string | null; type: CanonicalConversationRecord['type'] }>(`
       select c.id as conversation_id, c.type,
         count(m.id) filter (where m.author_id <> $1 and m.deleted_at is null)::int as unread_count,
         (select count(*)::int from conversation_message_mentions mention join messages mentioned_message on mentioned_message.id = mention.message_id
-          where mentioned_message.conversation_id = c.id and mentioned_message.deleted_at is null and mentioned_message.id > coalesce(state.last_read_message_id, 0) and mention.mentioned_user_id = $1) as mention_count,
+          left join server_notification_preferences server_preferences on server_preferences.server_id = c.server_id and server_preferences.user_id = $1
+          left join conversation_notification_preferences conversation_preferences on conversation_preferences.conversation_id = c.id and conversation_preferences.user_id = $1
+          left join user_notification_preferences user_preferences on user_preferences.user_id = $1
+          where mentioned_message.conversation_id = c.id and mentioned_message.deleted_at is null and mentioned_message.id > coalesce(state.last_read_message_id, 0)
+            and coalesce(conversation_preferences.level, server_preferences.level, (select default_notification_level from servers where id = c.server_id), 'mentions') <> 'none'
+            and coalesce(conversation_preferences.muted_until, '-infinity'::timestamptz) <= now() and coalesce(server_preferences.muted_until, '-infinity'::timestamptz) <= now()
+            and coalesce(user_preferences.mentions_enabled, true)
+            and (mention.mentioned_user_id = $1
+              or (mention.mention_type = 'everyone' and not coalesce(server_preferences.suppress_everyone, false))
+              or (mention.mention_type = 'role' and not coalesce(server_preferences.suppress_roles, false) and exists(select 1 from server_member_roles assignment where assignment.server_id = c.server_id and assignment.user_id = $1 and assignment.role_id = mention.mentioned_role_id)))) as mention_count,
         min(m.id)::text as first_unread_message_id
       from conversations c
       left join conversation_read_states state on state.conversation_id = c.id and state.user_id = $1
@@ -523,12 +604,14 @@ export class CanonicalMessagingStore {
     `, [userId]);
     const conversations = result.rows.map((row) => ({ conversationId: row.conversation_id, unreadCount: row.unread_count, mentionCount: row.mention_count, firstUnreadMessageId: row.first_unread_message_id }));
     const replyResult = await this.pool.query<{ count: number }>("select count(*)::int as count from notifications where user_id = $1 and type = 'reply' and read_at is null and dismissed_at is null", [userId]);
-    return {
+    const summary = {
       totalDirectUnread: result.rows.filter((row) => row.type !== 'server_channel').reduce((sum, row) => sum + row.unread_count, 0),
       totalMentionUnread: result.rows.reduce((sum, row) => sum + row.mention_count, 0),
       totalReplyUnread: replyResult.rows[0]?.count ?? 0,
       conversations,
     };
+    technicalMetrics.observe('chat_unread_recalculation_duration_ms', performance.now() - startedAt);
+    return summary;
   }
 
   async listNotifications(userId: string, before: Date | null, limit: number, unreadOnly: boolean): Promise<InternalNotification[]> {
@@ -582,6 +665,59 @@ export class CanonicalMessagingStore {
     return this.getNotificationPreferences(userId, now);
   }
 
+  async getServerNotificationPreferences(serverId: string, userId: string, now: Date): Promise<ServerNotificationPreferences | null> {
+    const result = await this.pool.query<{ level: ServerNotificationPreferences['level']; muted_until: Date | null; suppress_everyone: boolean; suppress_roles: boolean; updated_at: Date }>(`
+      insert into server_notification_preferences (server_id, user_id, level, updated_at)
+      select $1, $2, server.default_notification_level, $3 from servers server
+      where server.id = $1 and exists(select 1 from server_members where server_id = $1 and user_id = $2)
+      on conflict (server_id, user_id) do update set server_id = excluded.server_id
+      returning level, muted_until, suppress_everyone, suppress_roles, updated_at
+    `, [serverId, userId, now]);
+    const row = result.rows[0];
+    return row ? { serverId, level: row.level, mutedUntil: row.muted_until?.toISOString() ?? null, suppressEveryone: row.suppress_everyone, suppressRoles: row.suppress_roles, updatedAt: row.updated_at.toISOString() } : null;
+  }
+
+  async updateServerNotificationPreferences(serverId: string, userId: string, input: Omit<ServerNotificationPreferences, 'serverId' | 'updatedAt'>, now: Date): Promise<ServerNotificationPreferences | null> {
+    const result = await this.pool.query<{ level: ServerNotificationPreferences['level']; muted_until: Date | null; suppress_everyone: boolean; suppress_roles: boolean; updated_at: Date }>(`
+      insert into server_notification_preferences (server_id, user_id, level, muted_until, suppress_everyone, suppress_roles, updated_at)
+      select $1, $2, $3, $4, $5, $6, $7 where exists(select 1 from server_members where server_id = $1 and user_id = $2)
+      on conflict (server_id, user_id) do update set level = excluded.level, muted_until = excluded.muted_until,
+        suppress_everyone = excluded.suppress_everyone, suppress_roles = excluded.suppress_roles, updated_at = excluded.updated_at
+      returning level, muted_until, suppress_everyone, suppress_roles, updated_at
+    `, [serverId, userId, input.level, input.mutedUntil ? new Date(input.mutedUntil) : null, input.suppressEveryone, input.suppressRoles, now]);
+    const row = result.rows[0];
+    return row ? { serverId, level: row.level, mutedUntil: row.muted_until?.toISOString() ?? null, suppressEveryone: row.suppress_everyone, suppressRoles: row.suppress_roles, updatedAt: row.updated_at.toISOString() } : null;
+  }
+
+  async getConversationNotificationPreferences(conversationId: string, userId: string, now: Date): Promise<ConversationNotificationPreferences | null> {
+    const result = await this.pool.query<{ level: ConversationNotificationPreferences['level']; muted_until: Date | null; updated_at: Date }>(`
+      insert into conversation_notification_preferences (conversation_id, user_id, level, updated_at)
+      select conversation.id, $2, coalesce(server_preferences.level, server.default_notification_level, 'mentions'), $3
+      from conversations conversation
+      left join servers server on server.id = conversation.server_id
+      left join server_notification_preferences server_preferences on server_preferences.server_id = conversation.server_id and server_preferences.user_id = $2
+      where conversation.id = $1 and ((conversation.type = 'server_channel' and exists(select 1 from server_members where server_id = conversation.server_id and user_id = $2))
+        or (conversation.type <> 'server_channel' and exists(select 1 from conversation_members where conversation_id = conversation.id and user_id = $2 and left_at is null)))
+      on conflict (conversation_id, user_id) do update set conversation_id = excluded.conversation_id
+      returning level, muted_until, updated_at
+    `, [conversationId, userId, now]);
+    const row = result.rows[0];
+    return row ? { conversationId, level: row.level, mutedUntil: row.muted_until?.toISOString() ?? null, updatedAt: row.updated_at.toISOString() } : null;
+  }
+
+  async updateConversationNotificationPreferences(conversationId: string, userId: string, input: Omit<ConversationNotificationPreferences, 'conversationId' | 'updatedAt'>, now: Date): Promise<ConversationNotificationPreferences | null> {
+    const result = await this.pool.query<{ level: ConversationNotificationPreferences['level']; muted_until: Date | null; updated_at: Date }>(`
+      insert into conversation_notification_preferences (conversation_id, user_id, level, muted_until, updated_at)
+      select conversation.id, $2, $3, $4, $5 from conversations conversation where conversation.id = $1 and
+        ((conversation.type = 'server_channel' and exists(select 1 from server_members where server_id = conversation.server_id and user_id = $2))
+        or (conversation.type <> 'server_channel' and exists(select 1 from conversation_members where conversation_id = conversation.id and user_id = $2 and left_at is null)))
+      on conflict (conversation_id, user_id) do update set level = excluded.level, muted_until = excluded.muted_until, updated_at = excluded.updated_at
+      returning level, muted_until, updated_at
+    `, [conversationId, userId, input.level, input.mutedUntil ? new Date(input.mutedUntil) : null, now]);
+    const row = result.rows[0];
+    return row ? { conversationId, level: row.level, mutedUntil: row.muted_until?.toISOString() ?? null, updatedAt: row.updated_at.toISOString() } : null;
+  }
+
   async markNotificationRead(userId: string, notificationId: string, now: Date): Promise<boolean> {
     const result = await this.pool.query('update notifications set read_at = coalesce(read_at, $3) where id = $1 and user_id = $2 returning id', [notificationId, userId, now]);
     return result.rowCount === 1;
@@ -595,6 +731,16 @@ export class CanonicalMessagingStore {
   async markAllNotificationsRead(userId: string, now: Date): Promise<number> {
     const result = await this.pool.query('update notifications set read_at = $2 where user_id = $1 and read_at is null and dismissed_at is null', [userId, now]);
     return result.rowCount ?? 0;
+  }
+
+  async outboxMetrics(now: Date): Promise<{ pending: number; failed: number; oldestAgeSeconds: number }> {
+    const result = await this.pool.query<{ pending: number; failed: number; oldest_age_seconds: number }>(`
+      select count(*) filter(where processed_at is null and failed_at is null)::int as pending,
+        count(*) filter(where failed_at is not null)::int as failed,
+        coalesce(extract(epoch from ($1 - min(created_at) filter(where processed_at is null and failed_at is null))), 0)::float as oldest_age_seconds
+      from outbox_events
+    `, [now]);
+    return { pending: result.rows[0]?.pending ?? 0, failed: result.rows[0]?.failed ?? 0, oldestAgeSeconds: Math.max(0, result.rows[0]?.oldest_age_seconds ?? 0) };
   }
 }
 

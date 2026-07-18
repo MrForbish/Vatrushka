@@ -24,6 +24,7 @@ const filters: Array<{ value: NotificationFilter; label: string }> = [
 ];
 
 const titles: Record<InternalNotification['type'], string> = {
+  message: 'Новое сообщение',
   direct_message: 'Личное сообщение',
   mention: 'Вас упомянули',
   reply: 'Новый ответ',

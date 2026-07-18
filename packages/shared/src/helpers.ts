@@ -91,3 +91,26 @@ export function materializeMentionLabels(
   parts.push(source.slice(sourceCursor).join(''));
   return { content: parts.join(''), mentions: materialized };
 }
+
+export function materializeConversationMentionLabels<T extends { type: 'user' | 'role' | 'everyone'; userId?: string | undefined; roleId?: string | undefined; start: number; length: number; displayName: string }>(
+  content: string,
+  mentions: T[],
+): { content: string; mentions: T[] } {
+  const source = [...content];
+  const parts: string[] = [];
+  const materialized: T[] = [];
+  let sourceCursor = 0;
+  let outputLength = 0;
+  for (const mention of [...mentions].sort((left, right) => left.start - right.start)) {
+    if (mention.start < sourceCursor || mention.start + mention.length > source.length) continue;
+    const prefix = source.slice(sourceCursor, mention.start).join('');
+    const label = `@${mention.displayName}`;
+    parts.push(prefix, label);
+    outputLength += codePointLength(prefix);
+    materialized.push({ ...mention, start: outputLength, length: codePointLength(label) });
+    outputLength += codePointLength(label);
+    sourceCursor = mention.start + mention.length;
+  }
+  parts.push(source.slice(sourceCursor).join(''));
+  return { content: parts.join(''), mentions: materialized };
+}

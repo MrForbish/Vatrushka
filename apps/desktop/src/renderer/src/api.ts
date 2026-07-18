@@ -14,6 +14,8 @@ import {
   type InternalNotification,
   type UserUnreadSummary,
   type UserNotificationPreferences,
+  type ServerNotificationPreferences,
+  type ConversationNotificationPreferences,
   type HomeDashboardResponse,
   type PasswordLoginChallenge,
   type PublicUser,
@@ -486,6 +488,22 @@ export class ApiClient {
 
   updateNotificationPreferences(input: Omit<UserNotificationPreferences, 'updatedAt'>): Promise<UserNotificationPreferences> {
     return this.request('/me/notification-preferences', { method: 'PUT', body: input, auth: true });
+  }
+
+  getServerNotificationPreferences(serverId: string): Promise<ServerNotificationPreferences> {
+    return this.request(`/servers/${serverId}/notification-preferences`, { auth: true });
+  }
+
+  updateServerNotificationPreferences(serverId: string, input: Omit<ServerNotificationPreferences, 'serverId' | 'updatedAt'>): Promise<ServerNotificationPreferences> {
+    return this.request(`/servers/${serverId}/notification-preferences`, { method: 'PUT', body: input, auth: true });
+  }
+
+  getConversationNotificationPreferences(conversationId: string): Promise<ConversationNotificationPreferences> {
+    return this.request(`/conversations/${conversationId}/notification-preferences`, { auth: true });
+  }
+
+  updateConversationNotificationPreferences(conversationId: string, input: Omit<ConversationNotificationPreferences, 'conversationId' | 'updatedAt'>): Promise<ConversationNotificationPreferences> {
+    return this.request(`/conversations/${conversationId}/notification-preferences`, { method: 'PUT', body: input, auth: true });
   }
 
   listNotifications(before?: string, unreadOnly = false): Promise<InternalNotification[]> {

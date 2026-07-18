@@ -4,7 +4,7 @@ import { ConnectionState } from 'livekit-client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { channelNameSchema, codePointLength, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type ConversationMessage, type ConversationSummary, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type InternalNotification, type LocalSettings, type MessageMentionInput, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type UserNotificationPreferences, type UserPresence, type UserUnreadSummary } from '@vatrushka/shared';
+import { channelNameSchema, codePointLength, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type ConversationMentionDraft, type ConversationMessage, type ConversationSummary, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type InternalNotification, type LocalSettings, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type UserNotificationPreferences, type UserPresence, type UserUnreadSummary } from '@vatrushka/shared';
 
 import { apiClient, ClientError } from './api.js';
 import { parseSettingsRoute, serverSettingsPath, userSettingsPath, type ServerSettingsSection } from './app/routes';
@@ -40,6 +40,13 @@ function toTextMessage(message: ConversationMessage, server: ServerDetail, user:
     authorPlatformRole: author?.platformRole ?? (message.author.id === user.id ? user.platformRole : 'member'),
     content: message.content,
     mentions: message.mentions.flatMap((mention) => mention.type === 'user' && mention.userId && mention.start !== null && mention.length !== null ? [{ userId: mention.userId, start: mention.start, length: mention.length, displayName: server.members.find((member) => member.userId === mention.userId)?.displayName ?? 'Участник' }] : []),
+    conversationMentions: message.mentions.flatMap((mention): ConversationMentionDraft[] => {
+      if (mention.start === null || mention.length === null) return [];
+      if (mention.type === 'user' && mention.userId) return [{ type: 'user', userId: mention.userId, start: mention.start, length: mention.length, displayName: server.members.find((member) => member.userId === mention.userId)?.displayName ?? 'Участник' }];
+      if (mention.type === 'role' && mention.roleId) return [{ type: 'role', roleId: mention.roleId, start: mention.start, length: mention.length, displayName: server.roles.find((role) => role.id === mention.roleId)?.name.replace(/^@/u, '') ?? 'роль' }];
+      if (mention.type === 'everyone') return [{ type: 'everyone', start: mention.start, length: mention.length, displayName: 'everyone' }];
+      return [];
+    }),
     replyTo: message.replyTo === null ? null : { messageId: message.replyTo.id, authorUserId: message.replyTo.authorId, authorDisplayName: message.replyTo.authorDisplayName, content: message.replyTo.content },
     reactions: message.reactions,
     attachments: message.attachments.map((attachment) => ({ id: attachment.id, messageId: message.id, fileName: attachment.fileName, mimeType: attachment.mimeType, size: Number(attachment.sizeBytes), createdAt: message.createdAt })),
@@ -77,6 +84,12 @@ function mergeDirectSummaries(legacy: DirectConversationSummary[], canonical: Co
       updatedAt: current.updatedAt,
     };
   }).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+function mergeMessages<T extends { id: string; createdAt: string }>(current: T[], incoming: T[]): T[] {
+  const byId = new Map(current.map((message) => [message.id, message]));
+  for (const message of incoming) byId.set(message.id, message);
+  return [...byId.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
 }
 
 function quietHoursActive(preferences: UserNotificationPreferences | null, now = new Date()): boolean {
@@ -132,6 +145,8 @@ export default function App(): ReactNode {
   const [activeDirectConversationId, setActiveDirectConversationId] = useState<string | null>(null);
   const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
   const [directMessageDraft, setDirectMessageDraft] = useState('');
+  const [serverMessageHistory, setServerMessageHistory] = useState<{ conversationId: string | null; before: string | null; hasMore: boolean; loading: boolean }>({ conversationId: null, before: null, hasMore: false, loading: false });
+  const [directMessageHistory, setDirectMessageHistory] = useState<{ conversationId: string | null; before: string | null; hasMore: boolean; loading: boolean }>({ conversationId: null, before: null, hasMore: false, loading: false });
   const [notifications, setNotifications] = useState<InternalNotification[]>([]);
   const [canonicalConversations, setCanonicalConversations] = useState<ConversationSummary[]>([]);
   const [unreadSummary, setUnreadSummary] = useState<UserUnreadSummary | null>(null);
@@ -147,6 +162,8 @@ export default function App(): ReactNode {
   const participantConnectionRef = useRef<RoomConnection | null>(null);
   const previousRemoteParticipantsRef = useRef<Set<string> | null>(null);
   const voiceTransitionRef = useRef(false);
+  const serverMessageRetryRef = useRef(new Map<string, () => void>());
+  const directMessageRetryRef = useRef(new Map<string, () => void>());
   const typingExpiryTimersRef = useRef(new Map<string, number>());
   const typingStopTimerRef = useRef<number | null>(null);
   const lastUserActivityRef = useRef(Date.now());
@@ -467,11 +484,14 @@ export default function App(): ReactNode {
         const fresh = firstLoad ? [] : items.filter((notification) => !shownNotificationIdsRef.current.has(notification.id));
         for (const notification of items) shownNotificationIdsRef.current.add(notification.id);
         for (const notification of fresh) {
+          if (Date.now() - new Date(notification.createdAt).getTime() > 5 * 60_000) continue;
           if (presence?.preference === 'do_not_disturb') continue;
           if (quietHoursActive(notificationPreferences)) continue;
           if (notification.type === 'direct_message' && notificationPreferences?.directMessagesEnabled === false) continue;
           if ((notification.type === 'mention' || notification.type === 'reply') && notificationPreferences?.mentionsEnabled === false) continue;
           const conversation = notification.conversationId ? conversations.find((item) => item.id === notification.conversationId) : null;
+          const visibleConversationId = screen === 'server' ? activeChannelId : screen === 'direct' ? activeDirectConversationId : null;
+          if (document.hasFocus() && document.visibilityState === 'visible' && notification.conversationId === visibleConversationId) continue;
           const preview = typeof notification.payload.preview === 'string' ? notification.payload.preview : 'Новое событие';
           if (notificationPreferences?.soundEnabled ?? settings.messageSoundsEnabled) playVoiceCue('message');
           if ((notificationPreferences?.desktopEnabled ?? settings.desktopNotificationsEnabled) && (!document.hasFocus() || document.visibilityState !== 'visible') && conversation?.serverId && conversation.channelId) {
@@ -491,7 +511,7 @@ export default function App(): ReactNode {
     poll();
     const timer = window.setInterval(poll, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [notificationPreferences, playVoiceCue, presence?.preference, realtimeRevision, screen, settings.desktopNotificationsEnabled, settings.messageSoundsEnabled, user]);
+  }, [activeChannelId, activeDirectConversationId, notificationPreferences, playVoiceCue, presence?.preference, realtimeRevision, screen, settings.desktopNotificationsEnabled, settings.messageSoundsEnabled, user]);
 
   useEffect(() => {
     if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
@@ -555,7 +575,10 @@ export default function App(): ReactNode {
       void apiClient.listConversationMessages(conversationId).then((page) => {
         if (!active) return;
         const items = page.items.filter((message) => message.deletedAt === null).map((message) => toDirectMessage(message, user, directConversations));
-        setDirectMessages((current) => [...items, ...current.filter((message) => message.id.startsWith('optimistic_'))]);
+        setDirectMessages((current) => mergeMessages(current, items));
+        setDirectMessageHistory((current) => current.conversationId === conversationId && current.before !== null
+          ? current
+          : { conversationId, before: page.pageInfo.before, hasMore: page.pageInfo.hasMore, loading: false });
         const latest = items.at(-1);
         if (latest) {
           if (document.visibilityState === 'visible' && document.hasFocus()) void apiClient.updateConversationReadState(conversationId, { lastDeliveredMessageId: latest.id, lastReadMessageId: latest.id }).catch((caught) => { if (active) setError(userMessage(caught)); });
@@ -578,7 +601,10 @@ export default function App(): ReactNode {
       void apiClient.listConversationMessages(channel.id).then((page) => {
         if (!active) return;
         const items = page.items.filter((message) => message.deletedAt === null).map((message) => toTextMessage(message, serverDetail, user));
-        setMessages((current) => [...items, ...current.filter((message) => message.id.startsWith('optimistic_'))]);
+        setMessages((current) => mergeMessages(current, items));
+        setServerMessageHistory((current) => current.conversationId === channel.id && current.before !== null
+          ? current
+          : { conversationId: channel.id, before: page.pageInfo.before, hasMore: page.pageInfo.hasMore, loading: false });
         const latest = items.at(-1);
         if (latest) {
           if (document.visibilityState === 'visible' && document.hasFocus()) {
@@ -702,6 +728,7 @@ export default function App(): ReactNode {
     setActiveDirectConversationId(conversationId);
     setDirectMessages([]);
     setDirectMessageDraft('');
+    setDirectMessageHistory({ conversationId: null, before: null, hasMore: false, loading: false });
     setError(null);
   };
 
@@ -735,7 +762,7 @@ export default function App(): ReactNode {
     });
   };
 
-  const sendMessage = (replyToMessageId?: string, files: File[] = [], draftMentions: MessageMentionInput[] = []): void => {
+  const sendMessage = (replyToMessageId?: string, files: File[] = [], draftMentions: ConversationMentionDraft[] = []): void => {
     void run(async () => {
       if (!activeChannelId || !user || !serverDetail) return;
       const content = messageDraft.trim().length > 0 ? messageContentSchema.parse(messageDraft) : files.length > 0 ? '' : messageContentSchema.parse(messageDraft);
@@ -751,31 +778,38 @@ export default function App(): ReactNode {
         authorDisplayName: user.displayName ?? user.email.split('@')[0] ?? 'Пользователь',
         authorPlatformRole: user.platformRole,
         content,
-        mentions: mentions.map((mention) => ({ ...mention, displayName: serverDetail?.members.find((member) => member.userId === mention.userId)?.displayName ?? 'Участник' })),
+        mentions: mentions.flatMap((mention) => mention.type === 'user' && mention.userId ? [{ userId: mention.userId, start: mention.start, length: mention.length, displayName: mention.displayName }] : []),
+        conversationMentions: mentions,
         replyTo: replyTarget === null ? null : { messageId: replyTarget.id, authorUserId: replyTarget.authorUserId, authorDisplayName: replyTarget.authorDisplayName, content: replyTarget.content },
         reactions: [],
         attachments: files.map((file) => ({ id: `optimistic_${crypto.randomUUID()}`, messageId: optimisticId, fileName: file.name, mimeType: file.type, size: file.size, createdAt: new Date().toISOString() })),
         createdAt: new Date().toISOString(),
         editedAt: null,
+        deliveryState: 'sending',
       };
       setMessageDraft('');
       setMessages((current) => [...current, optimistic]);
-      try {
+      const attempt = async (): Promise<void> => {
+        setMessages((current) => current.map((message) => message.id === optimisticId ? { ...message, deliveryState: 'sending' } : message));
+        try {
         const attachmentIds = await Promise.all(files.map((file) => apiClient.uploadConversationAttachment(file)));
         const canonical = await apiClient.createConversationMessage(activeChannelId, {
           clientMessageId,
           content,
           ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
           attachmentIds,
-          mentions: mentions.map((mention) => ({ type: 'user' as const, userId: mention.userId, start: mention.start, length: mention.length })),
+          mentions: mentions.map((mention) => ({ type: mention.type, ...(mention.userId ? { userId: mention.userId } : {}), ...(mention.roleId ? { roleId: mention.roleId } : {}), start: mention.start, length: mention.length })),
         });
         const created = toTextMessage(canonical, serverDetail, user);
         setMessages((current) => [...current.filter((message) => message.id !== optimisticId && message.id !== created.id), created]);
-      } catch (caught) {
-        setMessages((current) => current.filter((message) => message.id !== optimisticId));
-        setMessageDraft(content);
-        throw caught;
-      }
+        serverMessageRetryRef.current.delete(optimisticId);
+        } catch (caught) {
+          setMessages((current) => current.map((message) => message.id === optimisticId ? { ...message, deliveryState: 'failed' } : message));
+          throw caught;
+        }
+      };
+      serverMessageRetryRef.current.set(optimisticId, () => { void run(attempt); });
+      await attempt();
     });
   };
 
@@ -809,13 +843,13 @@ export default function App(): ReactNode {
 
   const loadAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadConversationAttachment(attachmentId), []);
 
-  const updateMessage = (messageId: string, value: string, draftMentions: MessageMentionInput[] = []): void => {
+  const updateMessage = (messageId: string, value: string, draftMentions: ConversationMentionDraft[] = []): void => {
     void run(async () => {
       const content = messageContentSchema.parse(value);
       const leadingCodePoints = codePointLength(value) - codePointLength(value.trimStart());
       const mentions = draftMentions.map((mention) => ({ ...mention, start: mention.start - leadingCodePoints })).filter((mention) => mention.start >= 0 && mention.start + mention.length <= codePointLength(content));
       if (!activeChannelId || !serverDetail || !user) return;
-      const canonical = await apiClient.updateConversationMessage(activeChannelId, messageId, content, mentions.map((mention) => ({ type: 'user', userId: mention.userId, start: mention.start, length: mention.length })));
+      const canonical = await apiClient.updateConversationMessage(activeChannelId, messageId, content, mentions.map((mention) => ({ type: mention.type, ...(mention.userId ? { userId: mention.userId } : {}), ...(mention.roleId ? { roleId: mention.roleId } : {}), start: mention.start, length: mention.length })));
       const updated = toTextMessage(canonical, serverDetail, user);
       setMessageDraft('');
       setMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
@@ -854,21 +888,27 @@ export default function App(): ReactNode {
         attachments: files.map((file) => ({ id: `optimistic_${crypto.randomUUID()}`, messageId: optimisticId, fileName: file.name, mimeType: file.type, size: file.size, createdAt: new Date().toISOString() })),
         createdAt: new Date().toISOString(),
         editedAt: null,
+        deliveryState: 'sending',
       };
       setDirectMessageDraft('');
       setDirectMessages((current) => [...current, optimistic]);
-      try {
+      const attempt = async (): Promise<void> => {
+        setDirectMessages((current) => current.map((message) => message.id === optimisticId ? { ...message, deliveryState: 'sending' } : message));
+        try {
         const attachmentIds = await Promise.all(files.map((file) => apiClient.uploadConversationAttachment(file)));
         const canonical = await apiClient.createConversationMessage(conversationId, { clientMessageId, content, ...(replyToMessageId === undefined ? {} : { replyToMessageId }), attachmentIds });
         const created = toDirectMessage(canonical, user, directConversations);
         setDirectMessages((current) => [...current.filter((message) => message.id !== optimisticId && message.id !== created.id), created]);
         const [legacy, conversations] = await Promise.all([apiClient.listDirectConversations(), apiClient.listConversations()]);
         setDirectConversations(mergeDirectSummaries(legacy, conversations));
-      } catch (caught) {
-        setDirectMessages((current) => current.filter((message) => message.id !== optimisticId));
-        setDirectMessageDraft(content);
-        throw caught;
-      }
+        directMessageRetryRef.current.delete(optimisticId);
+        } catch (caught) {
+          setDirectMessages((current) => current.map((message) => message.id === optimisticId ? { ...message, deliveryState: 'failed' } : message));
+          throw caught;
+        }
+      };
+      directMessageRetryRef.current.set(optimisticId, () => { void run(attempt); });
+      await attempt();
     });
   };
 
@@ -1212,6 +1252,34 @@ export default function App(): ReactNode {
     }
   };
 
+  const loadOlderDirectMessages = (): void => {
+    const conversationId = activeDirectConversationId;
+    if (conversationId === null || directMessageHistory.conversationId !== conversationId || directMessageHistory.before === null || !directMessageHistory.hasMore || directMessageHistory.loading || !user) return;
+    setDirectMessageHistory((current) => ({ ...current, loading: true }));
+    void apiClient.listConversationMessages(conversationId, { before: directMessageHistory.before, limit: 100 }).then((page) => {
+      const older = page.items.filter((message) => message.deletedAt === null).map((message) => toDirectMessage(message, user, directConversations));
+      setDirectMessages((current) => mergeMessages(current, older));
+      setDirectMessageHistory({ conversationId, before: page.pageInfo.before, hasMore: page.pageInfo.hasMore, loading: false });
+    }).catch((caught) => {
+      setDirectMessageHistory((current) => ({ ...current, loading: false }));
+      setError(userMessage(caught));
+    });
+  };
+
+  const loadOlderServerMessages = (): void => {
+    const conversationId = activeChannelId;
+    if (conversationId === null || serverMessageHistory.conversationId !== conversationId || serverMessageHistory.before === null || !serverMessageHistory.hasMore || serverMessageHistory.loading || !user || !serverDetail) return;
+    setServerMessageHistory((current) => ({ ...current, loading: true }));
+    void apiClient.listConversationMessages(conversationId, { before: serverMessageHistory.before, limit: 100 }).then((page) => {
+      const older = page.items.filter((message) => message.deletedAt === null).map((message) => toTextMessage(message, serverDetail, user));
+      setMessages((current) => mergeMessages(current, older));
+      setServerMessageHistory({ conversationId, before: page.pageInfo.before, hasMore: page.pageInfo.hasMore, loading: false });
+    }).catch((caught) => {
+      setServerMessageHistory((current) => ({ ...current, loading: false }));
+      setError(userMessage(caught));
+    });
+  };
+
   const blockDirectParticipant = (participantUserId: string): void => {
     void run(async () => {
       await apiClient.blockUser(participantUserId);
@@ -1241,7 +1309,7 @@ export default function App(): ReactNode {
     setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? now })));
     void apiClient.markAllNotificationsRead().catch((caught) => setError(userMessage(caught)));
   };
-  const withUpdateStatus = (content: ReactNode): ReactNode => <>{content}{user ? <NotificationCenter items={notifications} onDismiss={dismissNotification} onMarkAllRead={markAllNotificationsRead} onOpen={openNotification} onRead={markNotificationRead} /> : null}<UpdateStatus state={updateState} onInstall={() => void window.desktop.installUpdate().catch((caught) => setError(userMessage(caught)))} /></>;
+  const withUpdateStatus = (content: ReactNode): ReactNode => <>{content}{user ? <NotificationCenter items={notifications} onDismiss={dismissNotification} onMarkAllRead={markAllNotificationsRead} onOpen={openNotification} onRead={markNotificationRead} /> : null}<UpdateStatus installBlocked={connection !== null} state={updateState} onInstall={() => void window.desktop.installUpdate().catch((caught) => setError(userMessage(caught)))} /></>;
   const directUnreadCount = unreadSummary?.totalDirectUnread ?? directConversations.reduce((count, conversation) => count + conversation.unreadCount, 0);
   const serverTypingText = activeChannelId ? (typingUsers[activeChannelId] ?? []).map((id) => serverDetail?.members.find((member) => member.userId === id)?.displayName).filter((name): name is string => Boolean(name)).slice(0, 3).join(', ') : '';
   const directTypingText = activeDirectConversationId ? (typingUsers[activeDirectConversationId] ?? []).map((id) => directConversations.find((conversation) => conversation.id === activeDirectConversationId)?.participant.userId === id ? directConversations.find((conversation) => conversation.id === activeDirectConversationId)?.participant.displayName : null).filter((name): name is string => Boolean(name)).join(', ') : '';
@@ -1357,8 +1425,8 @@ export default function App(): ReactNode {
     </Suspense>,
   );
   if (screen === 'home' && user) return withUpdateStatus(<><HomePage user={user} version={version} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} inputLevel={localInputLevel} busy={busy} error={error} servers={servers} serverName={serverName} directUnreadCount={directUnreadCount} connection={connection} dashboard={homeDashboardQuery.data} dashboardLoading={homeDashboardQuery.isFetching && homeDashboardQuery.data === undefined} dashboardError={homeDashboardQuery.error ? userMessage(homeDashboardQuery.error) : null} onRetryDashboard={() => void homeDashboardQuery.refetch()} onLogout={logout} onSecurity={openUserSettings} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onTestOutput={() => playVoiceCue('message')} onServerName={setServerName} onCreateServer={createServer} onOpenServer={openServer} onOpenDestination={openDestination} onReturnToCall={openConnectedVoice} onDirectMessages={openDirectMessages} onCopyInvite={(inviteUrl) => window.desktop.copyToClipboard(inviteUrl)} />{renderSecurityPanel()}</>);
-  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} typingText={serverTypingText} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); void apiClient.recordOpenedChannel(channelId).catch(() => undefined); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onLoadAttachment={loadAttachment} onConnectVoice={connectVoiceChannel} onMoveVoiceMember={moveVoiceMember} onCopyInvite={() => window.desktop.copyToClipboard(serverDetail.inviteUrl)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} {...(featureFlags.serverSettingsPage ? { onServerSettings: () => openServerSettings('roles') } : {})} onLogout={logout} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} audioProtectionAvailable={supportsOwnAudioExclusion()} busy={busy} sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}{renderSecurityPanel()}</>);
-  if (screen === 'direct' && user) return withUpdateStatus(<><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} busy={busy} error={error} typingText={directTypingText} blockedParticipantIds={blockedDirectUserIds} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onBlockParticipant={blockDirectParticipant} onUnblockParticipant={unblockDirectParticipant} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onLoadAttachment={loadDirectAttachment} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onLogout={logout} />{renderSecurityPanel()}</>);
+  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} typingText={serverTypingText} hasOlderMessages={serverMessageHistory.conversationId === activeChannelId && serverMessageHistory.hasMore} loadingOlderMessages={serverMessageHistory.loading} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setServerMessageHistory({ conversationId: null, before: null, hasMore: false, loading: false }); setError(null); void apiClient.recordOpenedChannel(channelId).catch(() => undefined); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onLoadAttachment={loadAttachment} onLoadOlderMessages={loadOlderServerMessages} onRetryMessage={(messageId) => serverMessageRetryRef.current.get(messageId)?.()} onConnectVoice={connectVoiceChannel} onMoveVoiceMember={moveVoiceMember} onCopyInvite={() => window.desktop.copyToClipboard(serverDetail.inviteUrl)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} {...(featureFlags.serverSettingsPage ? { onServerSettings: () => openServerSettings('roles') } : {})} onLogout={logout} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} audioProtectionAvailable={supportsOwnAudioExclusion()} busy={busy} sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}{renderSecurityPanel()}</>);
+  if (screen === 'direct' && user) return withUpdateStatus(<><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} busy={busy} error={error} typingText={directTypingText} blockedParticipantIds={blockedDirectUserIds} hasOlderMessages={directMessageHistory.conversationId === activeDirectConversationId && directMessageHistory.hasMore} loadingOlderMessages={directMessageHistory.loading} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onBlockParticipant={blockDirectParticipant} onUnblockParticipant={unblockDirectParticipant} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onLoadAttachment={loadDirectAttachment} onLoadOlderMessages={loadOlderDirectMessages} onRetryMessage={(messageId) => directMessageRetryRef.current.get(messageId)?.()} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onLogout={logout} />{renderSecurityPanel()}</>);
   return withUpdateStatus(<main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>);
 }
 

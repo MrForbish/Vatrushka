@@ -1,5 +1,8 @@
 .vui-message-list { height: 100%; min-height: 0; overflow-y: auto; padding: var(--space-5) var(--space-6); }
 .vui-message-list__virtual { position: relative; width: 100%; }
+.vui-message-list__older { display: block; margin: var(--space-3) auto var(--space-2); padding: 7px 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-round); background: var(--color-surface-0); color: var(--color-text-secondary); font: var(--text-label-sm); }
+.vui-message-list__older:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-text-primary); }
+.vui-message-list__older:disabled { opacity: .6; }
 .vui-message-empty { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; min-height: 100%; padding: var(--space-6); }
 .vui-message-empty > span { display: grid; width: 56px; height: 56px; place-items: center; border-radius: var(--radius-lg); background: var(--color-surface-3); color: var(--color-cyan); }
 .vui-message-empty h2 { margin: var(--space-4) 0 var(--space-1); font: var(--text-heading-lg); }
@@ -17,6 +20,9 @@
 .vui-message__content header small { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-message__content > p { margin: var(--space-1) 0 0; color: var(--color-text-secondary); font: var(--text-body-md); white-space: pre-wrap; word-break: break-word; }
 .vui-message__mention { display: inline; padding: 1px 3px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-primary), transparent 76%); color: var(--color-primary-hover); font-weight: 650; }
+.vui-message__delivery { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); color: var(--color-text-muted); font: var(--text-caption); }
+.vui-message__delivery[data-state='failed'] { color: var(--color-danger); }
+.vui-message__delivery button { padding: 0; border: 0; background: transparent; color: inherit; font: var(--text-label-sm); text-decoration: underline; }
 .vui-message__reply { display: flex; align-items: center; gap: var(--space-2); min-width: 0; margin-bottom: var(--space-1); color: var(--color-text-muted); font: var(--text-caption); }
 .vui-message__reply strong { color: var(--color-text-secondary); }
 .vui-message__reply span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -4,6 +4,7 @@ import type { RealtimeEvent, RealtimeEventType } from '@vatrushka/shared';
 
 import type { AppConfig } from '../config.js';
 import type { CanonicalMessagingStore, OutboxEventRecord } from './canonical-messaging.js';
+import { technicalMetrics } from './metrics.js';
 
 type RedisClient = ReturnType<typeof createClient>;
 type EventListener = (event: RealtimeEvent) => void;
@@ -42,8 +43,13 @@ export class RedisRealtimeBus {
     const dedupeKey = `vatrushka:realtime:dedupe:${event.id}`;
     const accepted = await this.publisher.set(dedupeKey, '1', { NX: true, EX: 24 * 60 * 60 });
     if (accepted !== 'OK') return false;
-    await this.publisher.publish(this.channel, JSON.stringify(event));
-    return true;
+    try {
+      await this.publisher.publish(this.channel, JSON.stringify(event));
+      return true;
+    } catch (error) {
+      technicalMetrics.increment('chat_redis_publish_errors_total');
+      throw error;
+    }
   }
 
   async registerConnection(userId: string, connectionId: string, deviceId: string): Promise<void> {
@@ -108,6 +114,10 @@ export class OutboxWorker {
   async drainOnce(): Promise<number> {
     const events = await this.store.claimOutboxBatch(100, new Date());
     for (const event of events) await this.process(event);
+    const metrics = await this.store.outboxMetrics(new Date());
+    technicalMetrics.set('chat_outbox_pending_total', metrics.pending);
+    technicalMetrics.set('chat_outbox_failed_total', metrics.failed);
+    technicalMetrics.set('chat_outbox_oldest_age_seconds', metrics.oldestAgeSeconds);
     return events.length;
   }
 

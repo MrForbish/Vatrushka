@@ -5,7 +5,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { MessageMentionInput, RoomConnection, ServerDetail } from '@vatrushka/shared';
+import type { ConversationMentionDraft, RoomConnection, ServerDetail } from '@vatrushka/shared';
 
 import { AuthPanel } from './components.js';
 import { HomePage } from './features/home/index.js';
@@ -184,22 +184,40 @@ describe('message composer', () => {
     const changed = vi.fn();
     function Harness(): React.JSX.Element {
       const [value, setValue] = useState('');
-      const [mentions, setMentions] = useState<MessageMentionInput[]>([]);
-      return <MessageComposer channelName="общий" mentionCandidates={[{ userId: '11111111-1111-4111-8111-111111111111', displayName: 'Member' }]} mentions={mentions} onChange={setValue} onMentionsChange={(next) => { setMentions(next); changed(next); }} onSubmit={noop} value={value} />;
+      const [mentions, setMentions] = useState<ConversationMentionDraft[]>([]);
+      return <MessageComposer channelName="общий" mentionCandidates={[{ type: 'user', userId: '11111111-1111-4111-8111-111111111111', displayName: 'Member' }]} mentions={mentions} onChange={setValue} onMentionsChange={(next) => { setMentions(next); changed(next); }} onSubmit={noop} value={value} />;
     }
     render(<Harness />);
     const editor = screen.getByRole('textbox', { name: 'Сообщение' });
     await userEvent.type(editor, '@mem');
-    expect(screen.getByRole('listbox', { name: 'Упомянуть участника' })).toBeInTheDocument();
+    expect(screen.getByRole('listbox', { name: 'Упомянуть участника или роль' })).toBeInTheDocument();
     await userEvent.keyboard('{Enter}');
     expect(editor).toHaveValue('@Member');
-    expect(changed).toHaveBeenLastCalledWith([{ userId: '11111111-1111-4111-8111-111111111111', start: 0, length: 7 }]);
+    expect(changed).toHaveBeenLastCalledWith([{ type: 'user', userId: '11111111-1111-4111-8111-111111111111', displayName: 'Member', start: 0, length: 7 }]);
   });
 
   it('renders the current safe label over the original mention text', () => {
-    render(<MessageList channelName="общий" messages={[{ id: 'message', authorId: 'author', authorName: 'Author', content: 'Привет, @Old', mentions: [{ userId: 'member', start: 8, length: 4, displayName: 'Renamed' }], createdAt: '2026-01-01T10:00:00.000Z' }]} />);
+    render(<MessageList channelName="общий" messages={[{ id: 'message', authorId: 'author', authorName: 'Author', content: 'Привет, @Old', mentions: [{ key: 'user:member', userId: 'member', start: 8, length: 4, displayName: 'Renamed' }], createdAt: '2026-01-01T10:00:00.000Z' }]} />);
     expect(screen.getByText('@Renamed')).toHaveAttribute('data-user-id', 'member');
     expect(screen.queryByText(/@Old/u)).not.toBeInTheDocument();
+  });
+
+  it('selects role mentions and exposes history and delivery recovery actions', async () => {
+    const onMentionsChange = vi.fn();
+    const onLoadOlder = vi.fn();
+    const onRetry = vi.fn();
+    function Harness(): React.JSX.Element {
+      const [value, setValue] = useState('');
+      return <><MessageComposer channelName="общий" mentionCandidates={[{ type: 'role', roleId: '33333333-3333-4333-8333-333333333333', displayName: 'Разработчики' }]} onChange={setValue} onMentionsChange={onMentionsChange} onSubmit={noop} value={value} /><MessageList channelName="общий" hasOlder messages={[{ id: 'failed', authorId: 'author', authorName: 'Author', content: 'Повторить меня', createdAt: '2026-01-01T10:00:00.000Z', deliveryState: 'failed' }]} onLoadOlder={onLoadOlder} onRetry={onRetry} /></>;
+    }
+    render(<Harness />);
+    await userEvent.type(screen.getByRole('textbox', { name: 'Сообщение' }), '@раз');
+    await userEvent.keyboard('{Enter}');
+    expect(onMentionsChange).toHaveBeenLastCalledWith([{ type: 'role', roleId: '33333333-3333-4333-8333-333333333333', displayName: 'Разработчики', start: 0, length: 13 }]);
+    await userEvent.click(screen.getByRole('button', { name: 'Показать более ранние сообщения' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+    expect(onLoadOlder).toHaveBeenCalledOnce();
+    expect(onRetry).toHaveBeenCalledWith('failed');
   });
 });
 

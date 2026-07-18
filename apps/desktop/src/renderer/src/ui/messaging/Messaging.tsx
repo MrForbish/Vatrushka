@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
 
-import { codePointLength, type MessageMention, type MessageMentionInput } from '@vatrushka/shared';
+import { codePointLength, type ConversationMentionDraft } from '@vatrushka/shared';
 
 import { Avatar, Badge, Icon, IconButton } from '../primitives';
 import './messaging.css';
@@ -26,7 +26,7 @@ export interface MessageViewModel {
   authorName: string;
   authorBadge?: 'admin' | 'founder';
   content: string;
-  mentions?: MessageMention[];
+  mentions?: Array<{ key: string; userId?: string | undefined; displayName: string; start: number; length: number }>;
   createdAt: string;
   edited?: boolean;
   own?: boolean;
@@ -35,9 +35,10 @@ export interface MessageViewModel {
   replyPreview?: { authorName: string; content: string };
   reactions?: MessageReactionViewModel[];
   attachments?: MessageAttachmentViewModel[];
+  deliveryState?: 'sending' | 'failed';
 }
 
-function renderMessageContent(content: string, mentions: MessageMention[] | undefined): ReactNode {
+function renderMessageContent(content: string, mentions: MessageViewModel['mentions']): ReactNode {
   if (mentions === undefined || mentions.length === 0) return content;
   const codePoints = [...content];
   const result: ReactNode[] = [];
@@ -45,7 +46,7 @@ function renderMessageContent(content: string, mentions: MessageMention[] | unde
   for (const mention of [...mentions].sort((left, right) => left.start - right.start)) {
     if (mention.start < cursor || mention.start + mention.length > codePoints.length) continue;
     if (mention.start > cursor) result.push(codePoints.slice(cursor, mention.start).join(''));
-    result.push(<span className="vui-message__mention" data-user-id={mention.userId} key={`${mention.userId}:${mention.start}`}>@{mention.displayName}</span>);
+    result.push(<span className="vui-message__mention" {...(mention.userId ? { 'data-user-id': mention.userId } : {})} key={`${mention.key}:${mention.start}`}>@{mention.displayName}</span>);
     cursor = mention.start + mention.length;
   }
   if (cursor < codePoints.length) result.push(codePoints.slice(cursor).join(''));
@@ -64,6 +65,10 @@ export interface MessageListProps {
   onDownloadAttachment?: (attachmentId: string, fileName: string) => void;
   onDeleteAttachment?: (attachmentId: string) => void;
   onLoadAttachment?: ((attachmentId: string) => Promise<Blob>) | undefined;
+  hasOlder?: boolean | undefined;
+  loadingOlder?: boolean | undefined;
+  onLoadOlder?: (() => void) | undefined;
+  onRetry?: ((messageId: string) => void) | undefined;
 }
 
 const reactionChoices = ['👍', '👎', '❤️', '🔥', '😂', '😮', '😢', '😡', '🎉', '👏', '✅', '❌', '👀', '🤔', '🙏', '💯', '🚀', '✨', '💪', '🤝', '😍', '🥳', '😎', '🤯', '🙌', '💡', '⚡', '🐱', '🍰', '🧇'];
@@ -80,9 +85,10 @@ function isGroupedWithPrevious(message: MessageViewModel, previous: MessageViewM
   return distance >= 0 && distance <= 5 * 60 * 1_000;
 }
 
-export function MessageList({ channelName, emptyDescription = 'Здесь появится первая история вашего сервера.', emptyTitle, messages, onDelete, onDeleteAttachment, onDownloadAttachment, onEdit, onLoadAttachment, onReaction, onReply }: MessageListProps): React.JSX.Element {
+export function MessageList({ channelName, emptyDescription = 'Здесь появится первая история вашего сервера.', emptyTitle, hasOlder = false, loadingOlder = false, messages, onDelete, onDeleteAttachment, onDownloadAttachment, onEdit, onLoadAttachment, onLoadOlder, onReaction, onReply, onRetry }: MessageListProps): React.JSX.Element {
   const scrollElement = useRef<HTMLDivElement>(null);
   const stickToLatest = useRef(true);
+  const prependSnapshot = useRef<{ height: number; top: number } | null>(null);
   const virtualized = messages.length > 50;
   const getItemKey = useCallback((index: number) => messages[index]?.id ?? index, [messages]);
   const virtualizer = useVirtualizer({
@@ -107,6 +113,14 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
     return () => window.cancelAnimationFrame(frame);
   }, [messages.length, virtualized, virtualizer]);
 
+  useLayoutEffect(() => {
+    const snapshot = prependSnapshot.current;
+    const element = scrollElement.current;
+    if (snapshot === null || element === null || loadingOlder) return;
+    element.scrollTop = snapshot.top + element.scrollHeight - snapshot.height;
+    prependSnapshot.current = null;
+  }, [loadingOlder, messages.length]);
+
   if (messages.length === 0) {
     return <div className="vui-message-empty"><span><Icon name="hash" size={28} /></span><h2>{emptyTitle ?? `Начало канала #${channelName}`}</h2><p>{emptyDescription}</p></div>;
   }
@@ -121,6 +135,7 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
               {message.content.trim().length === 0 ? null : <p>{renderMessageContent(message.content, message.mentions)}</p>}
               {message.attachments === undefined || message.attachments.length === 0 ? null : <div className="vui-message__attachments">{message.attachments.map((attachment) => <MessageAttachmentCard attachment={attachment} key={attachment.id} onDelete={onDeleteAttachment} onDownload={onDownloadAttachment} onLoad={onLoadAttachment} />)}</div>}
               {message.reactions === undefined || message.reactions.length === 0 ? null : <div aria-label="Реакции" className="vui-message__reactions">{message.reactions.map((reaction) => <button aria-pressed={reaction.reactedByCurrentUser} disabled={onReaction === undefined} key={reaction.emoji} onClick={() => onReaction?.(message.id, reaction.emoji)} type="button"><span>{reaction.emoji}</span><strong>{reaction.count}</strong></button>)}</div>}
+              {message.deliveryState === undefined ? null : <div className="vui-message__delivery" data-state={message.deliveryState}>{message.deliveryState === 'sending' ? 'Отправляем…' : <><span>Не удалось отправить</span>{onRetry === undefined ? null : <button onClick={() => onRetry(message.id)} type="button">Повторить</button>}</>}</div>}
             </div>
             <div aria-label={`Действия с сообщением ${message.authorName}`} className="vui-message__actions" role="group">
               {onReply === undefined ? null : <IconButton icon="reply" label="Ответить" onClick={() => onReply(message)} size="sm" type="button" />}
@@ -136,6 +151,7 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
     : messages.map((message, index) => renderMessage(message, index));
   return (
     <div aria-label={`Сообщения канала ${channelName}`} className="vui-message-list" onScroll={(event) => { const element = event.currentTarget; stickToLatest.current = element.scrollHeight - element.scrollTop - element.clientHeight < 120; }} ref={scrollElement} role="feed">
+      {hasOlder && onLoadOlder !== undefined ? <button className="vui-message-list__older" disabled={loadingOlder} onClick={() => { const element = scrollElement.current; if (element) prependSnapshot.current = { height: element.scrollHeight, top: element.scrollTop }; onLoadOlder(); }} type="button">{loadingOlder ? 'Загружаем историю…' : 'Показать более ранние сообщения'}</button> : null}
       {content}
     </div>
   );
@@ -186,9 +202,18 @@ export interface MessageComposerProps {
   onRemoveAttachment?: (id: string) => void;
   leadingActions?: ReactNode;
   placeholder?: string;
-  mentions?: MessageMentionInput[];
-  mentionCandidates?: Array<{ userId: string; displayName: string }>;
-  onMentionsChange?: (mentions: MessageMentionInput[]) => void;
+  mentions?: ConversationMentionDraft[];
+  mentionCandidates?: MentionCandidate[];
+  onMentionsChange?: (mentions: ConversationMentionDraft[]) => void;
+}
+
+export type MentionCandidate =
+  | { type: 'user'; userId: string; displayName: string; detail?: string }
+  | { type: 'role'; roleId: string; displayName: string; detail?: string }
+  | { type: 'everyone'; displayName: string; detail?: string };
+
+function mentionKey(mention: MentionCandidate | ConversationMentionDraft): string {
+  return mention.type === 'user' ? `user:${mention.userId ?? ''}` : mention.type === 'role' ? `role:${mention.roleId ?? ''}` : 'everyone';
 }
 
 function mentionTrigger(value: string, caret: number): { start: number; query: string } | null {
@@ -198,7 +223,7 @@ function mentionTrigger(value: string, caret: number): { start: number; query: s
   return { start: before.length - (match[1]?.length ?? 0) - 1, query: match[1] ?? '' };
 }
 
-function reconcileMentions(previous: string, next: string, mentions: MessageMentionInput[]): MessageMentionInput[] {
+function reconcileMentions(previous: string, next: string, mentions: ConversationMentionDraft[]): ConversationMentionDraft[] {
   const left = [...previous];
   const right = [...next];
   let prefix = 0;
@@ -221,9 +246,9 @@ export function MessageComposer({ attachments = [], busy = false, canSend = true
   const [trigger, setTrigger] = useState<{ start: number; query: string } | null>(null);
   const [activeCandidate, setActiveCandidate] = useState(0);
   const hasPayload = value.trim().length > 0 || (context?.mode !== 'edit' && attachments.length > 0);
-  const uniqueMentioned = new Set(mentions.map((mention) => mention.userId));
+  const uniqueMentioned = new Set(mentions.map(mentionKey));
   const candidates = trigger === null ? [] : mentionCandidates
-    .filter((candidate) => (uniqueMentioned.size < 10 || uniqueMentioned.has(candidate.userId)) && candidate.displayName.toLocaleLowerCase('ru-RU').includes(trigger.query.toLocaleLowerCase('ru-RU')))
+    .filter((candidate) => (uniqueMentioned.size < 10 || uniqueMentioned.has(mentionKey(candidate))) && candidate.displayName.toLocaleLowerCase('ru-RU').includes(trigger.query.toLocaleLowerCase('ru-RU')))
     .slice(0, 8);
   useEffect(() => { setActiveCandidate(0); }, [trigger?.query]);
   const submit = (event?: FormEvent): void => {
@@ -241,7 +266,7 @@ export function MessageComposer({ attachments = [], busy = false, canSend = true
     onMentionsChange?.(nextMentions);
     setTrigger(mentionTrigger(next, caret));
   };
-  const selectMention = (candidate: { userId: string; displayName: string }): void => {
+  const selectMention = (candidate: MentionCandidate): void => {
     if (trigger === null) return;
     const caret = textarea.current?.selectionStart ?? value.length;
     const before = value.slice(0, trigger.start);
@@ -250,7 +275,7 @@ export function MessageComposer({ attachments = [], busy = false, canSend = true
     const label = `@${candidate.displayName}`;
     const next = `${before}${label}${separator}${after}`;
     const nextMentions = reconcileMentions(value, next, mentions);
-    nextMentions.push({ userId: candidate.userId, start: codePointLength(before), length: codePointLength(label) });
+    nextMentions.push({ type: candidate.type, ...(candidate.type === 'user' ? { userId: candidate.userId } : candidate.type === 'role' ? { roleId: candidate.roleId } : {}), displayName: candidate.displayName, start: codePointLength(before), length: codePointLength(label) });
     nextMentions.sort((left, right) => left.start - right.start);
     onChange(next);
     onMentionsChange?.(nextMentions);
@@ -285,7 +310,7 @@ export function MessageComposer({ attachments = [], busy = false, canSend = true
       <div className="vui-message-composer__body">
         <div className="vui-message-composer__tools">{leadingActions}<input accept=".gif,.jpg,.jpeg,.pdf,.png,.txt,.webp,.zip,application/pdf,application/zip,image/gif,image/jpeg,image/png,image/webp,text/plain" aria-label="Выбрать вложения" className="vui-sr-only" disabled={!canSend || busy || onFilesSelected === undefined} multiple onChange={selectFiles} ref={fileInput} type="file" /><IconButton disabled={!canSend || busy || onFilesSelected === undefined || attachments.length >= 4} icon="attachment" label={attachments.length >= 4 ? 'Можно прикрепить не больше четырёх файлов' : 'Прикрепить файлы'} onClick={() => fileInput.current?.click()} size="sm" type="button" /><IconButton disabled icon="emoji" label="Emoji и GIF пока недоступны" size="sm" type="button" /><IconButton disabled icon="mic" label="Голосовые сообщения появятся позже" size="sm" type="button" /></div>
         <div className="vui-message-composer__editor">
-          {candidates.length === 0 ? null : <div aria-label="Упомянуть участника" className="vui-message-composer__mentions" role="listbox">{candidates.map((candidate, index) => <button aria-selected={index === activeCandidate} key={candidate.userId} onMouseDown={(event) => event.preventDefault()} onClick={() => selectMention(candidate)} role="option" type="button"><Avatar name={candidate.displayName} size="sm" /><span><strong>{candidate.displayName}</strong><small>@участник</small></span></button>)}</div>}
+          {candidates.length === 0 ? null : <div aria-label="Упомянуть участника или роль" className="vui-message-composer__mentions" role="listbox">{candidates.map((candidate, index) => <button aria-selected={index === activeCandidate} key={mentionKey(candidate)} onMouseDown={(event) => event.preventDefault()} onClick={() => selectMention(candidate)} role="option" type="button"><Avatar name={candidate.displayName} size="sm" /><span><strong>{candidate.displayName}</strong><small>{candidate.detail ?? (candidate.type === 'user' ? '@участник' : candidate.type === 'role' ? '@роль' : 'Все участники')}</small></span></button>)}</div>}
           <textarea aria-label="Сообщение" disabled={!canSend} maxLength={4000} onChange={(event) => updateValue(event.target.value, event.target.selectionStart)} onClick={(event) => setTrigger(mentionTrigger(value, event.currentTarget.selectionStart))} onKeyDown={onComposerKeyDown} placeholder={canSend ? placeholder ?? `Написать в #${channelName}` : 'У вас нет права отправлять сообщения'} ref={textarea} rows={1} value={value} />
         </div>
         <IconButton disabled={!canSend || busy || !hasPayload} icon="send" label={context?.mode === 'edit' ? 'Сохранить сообщение' : 'Отправить сообщение'} size="md" type="submit" />

@@ -27,6 +27,7 @@ import {
   type WorkspaceNavigationItem,
 } from '../../ui';
 import './direct-messages.css';
+import { NotificationSettingsDialog } from '../notifications/NotificationSettingsDialog';
 
 const allowedAttachmentTypes = new Set(['application/pdf', 'application/zip', 'image/gif', 'image/jpeg', 'image/png', 'image/webp', 'text/plain']);
 const maxAttachmentBytes = 8 * 1024 * 1024;
@@ -44,6 +45,8 @@ export interface DirectMessagesViewProps {
   error: string | null;
   typingText?: string | undefined;
   blockedParticipantIds?: string[] | undefined;
+  hasOlderMessages?: boolean | undefined;
+  loadingOlderMessages?: boolean | undefined;
   onHome(): void;
   onSwitchServer(serverId: string): void;
   onConversation(conversationId: string): void;
@@ -58,6 +61,8 @@ export interface DirectMessagesViewProps {
   onDeleteAttachment(attachmentId: string): void;
   onDownloadAttachment(attachmentId: string, fileName: string): void;
   onLoadAttachment?(attachmentId: string): Promise<Blob>;
+  onLoadOlderMessages?(): void;
+  onRetryMessage?(messageId: string): void;
   onServerName(value: string): void;
   onCreateServer(): void;
   onSecurity(): void;
@@ -82,6 +87,7 @@ export function DirectMessagesView(props: DirectMessagesViewProps): React.JSX.El
   const [pendingAttachments, setPendingAttachments] = useState<Array<{ id: string; file: File }>>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
+  const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false);
   const activeConversation = props.conversations.find((conversation) => conversation.id === props.activeConversationId) ?? null;
   const activeParticipantBlocked = activeConversation !== null && (props.blockedParticipantIds ?? []).includes(activeConversation.participant.userId);
 
@@ -141,6 +147,7 @@ export function DirectMessagesView(props: DirectMessagesViewProps): React.JSX.El
     attachments: message.attachments.map((attachment) => ({ ...attachment, canDelete: message.authorUserId === props.user.id })),
     ...(message.replyTo === null ? {} : { replyPreview: { authorName: message.replyTo.authorDisplayName, content: message.replyTo.content } }),
     reactions: message.reactions,
+    ...(message.deliveryState === undefined ? {} : { deliveryState: message.deliveryState }),
     ...(message.authorPlatformRole === 'owner' ? { authorBadge: 'founder' as const } : message.authorPlatformRole === 'admin' ? { authorBadge: 'admin' as const } : {}),
   }));
 
@@ -157,14 +164,14 @@ export function DirectMessagesView(props: DirectMessagesViewProps): React.JSX.El
   const members = activeConversation === null
     ? <MemberPanel members={[]} />
     : <MemberPanel members={[{ id: props.user.id, name: userDisplayName(props.user), founder: props.user.platformRole === 'owner', roleLabel: 'Вы', status: 'online' }, { id: activeConversation.participant.userId, name: activeConversation.participant.displayName, founder: activeConversation.participant.platformRole === 'owner', roleLabel: 'Собеседник' }]} />;
-  const topBar = <div className="vui-direct-topbar"><Icon name="message" size={19} /><span><strong>{activeConversation?.participant.displayName ?? 'Личные сообщения'}</strong><small>{activeConversation === null ? 'Выберите или создайте диалог' : activeParticipantBlocked ? 'Пользователь заблокирован' : 'Приватный диалог'}</small></span>{activeConversation === null ? null : <Button className="vui-direct-topbar__block" onClick={() => activeParticipantBlocked ? props.onUnblockParticipant(activeConversation.participant.userId) : setBlockConfirmOpen(true)} size="sm" type="button" variant="quiet">{activeParticipantBlocked ? 'Разблокировать' : 'Заблокировать'}</Button>}</div>;
+  const topBar = <div className="vui-direct-topbar"><Icon name="message" size={19} /><span><strong>{activeConversation?.participant.displayName ?? 'Личные сообщения'}</strong><small>{activeConversation === null ? 'Выберите или создайте диалог' : activeParticipantBlocked ? 'Пользователь заблокирован' : 'Приватный диалог'}</small></span>{activeConversation === null ? null : <><Button className="vui-direct-topbar__notifications" onClick={() => setNotificationSettingsOpen(true)} size="sm" type="button" variant="quiet">Уведомления</Button><Button className="vui-direct-topbar__block" onClick={() => activeParticipantBlocked ? props.onUnblockParticipant(activeConversation.participant.userId) : setBlockConfirmOpen(true)} size="sm" type="button" variant="quiet">{activeParticipantBlocked ? 'Разблокировать' : 'Заблокировать'}</Button></>}</div>;
 
   return (
     <>
       <AppShell members={members} membersDrawerTitle="Участники диалога" serverContext={conversationList} topBar={topBar} workspaceDrawerTitle="Серверы" workspaceLibrary={workspaceLibrary}>
         {activeConversation === null
           ? <div className="vui-direct-welcome"><span><Icon name="message" size={38} /></span><h1>Личные сообщения</h1><p>Общайтесь один на один с людьми из ваших серверов.</p><Button icon="plus" onClick={() => setNewConversationOpen(true)}>Начать диалог</Button></div>
-          : <section className="vui-message-stage"><MessageList channelName={activeConversation.participant.displayName} emptyDescription="Отправьте первое сообщение — оно будет видно только участникам этого диалога." emptyTitle={`Начало диалога с ${activeConversation.participant.displayName}`} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onLoadAttachment={props.onLoadAttachment} onEdit={(message) => { setReplyingMessage(null); setEditingMessage(message); setPendingAttachments([]); setAttachmentError(null); props.onMessageDraft(message.content); }} onReaction={props.onMessageReaction} onReply={(message) => { setEditingMessage(null); setReplyingMessage(message); }} />{props.typingText ? <div aria-live="polite" className="vui-message-typing"><span /><strong>{props.typingText}</strong> печатает…</div> : null}{activeParticipantBlocked ? <div className="vui-direct-blocked-notice"><strong>Вы заблокировали этого пользователя</strong><span>Новые сообщения недоступны, пока вы его не разблокируете.</span><Button onClick={() => props.onUnblockParticipant(activeConversation.participant.userId)} size="sm" type="button" variant="secondary">Разблокировать</Button></div> : <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} channelName={activeConversation.participant.displayName} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext: cancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext: cancelContext } : {})} {...(editingMessage === null ? { onFilesSelected: addAttachments } : {})} onChange={props.onMessageDraft} onRemoveAttachment={(id) => { setPendingAttachments((current) => current.filter((attachment) => attachment.id !== id)); setAttachmentError(null); }} onSubmit={submitMessage} placeholder={`Написать ${activeConversation.participant.displayName}`} value={props.messageDraft} />}{attachmentError === null ? null : <div className="vui-server-error vui-server-error--attachment" role="alert">{attachmentError}</div>}{props.error === null ? null : <div className="vui-server-error vui-server-error--floating" role="alert">{props.error}</div>}</section>}
+          : <section className="vui-message-stage"><MessageList channelName={activeConversation.participant.displayName} emptyDescription="Отправьте первое сообщение — оно будет видно только участникам этого диалога." emptyTitle={`Начало диалога с ${activeConversation.participant.displayName}`} hasOlder={props.hasOlderMessages} loadingOlder={props.loadingOlderMessages} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onLoadAttachment={props.onLoadAttachment} onLoadOlder={props.onLoadOlderMessages} onRetry={props.onRetryMessage} onEdit={(message) => { setReplyingMessage(null); setEditingMessage(message); setPendingAttachments([]); setAttachmentError(null); props.onMessageDraft(message.content); }} onReaction={props.onMessageReaction} onReply={(message) => { setEditingMessage(null); setReplyingMessage(message); }} />{props.typingText ? <div aria-live="polite" className="vui-message-typing"><span /><strong>{props.typingText}</strong> печатает…</div> : null}{activeParticipantBlocked ? <div className="vui-direct-blocked-notice"><strong>Вы заблокировали этого пользователя</strong><span>Новые сообщения недоступны, пока вы его не разблокируете.</span><Button onClick={() => props.onUnblockParticipant(activeConversation.participant.userId)} size="sm" type="button" variant="secondary">Разблокировать</Button></div> : <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} channelName={activeConversation.participant.displayName} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext: cancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext: cancelContext } : {})} {...(editingMessage === null ? { onFilesSelected: addAttachments } : {})} onChange={props.onMessageDraft} onRemoveAttachment={(id) => { setPendingAttachments((current) => current.filter((attachment) => attachment.id !== id)); setAttachmentError(null); }} onSubmit={submitMessage} placeholder={`Написать ${activeConversation.participant.displayName}`} value={props.messageDraft} />}{attachmentError === null ? null : <div className="vui-server-error vui-server-error--attachment" role="alert">{attachmentError}</div>}{props.error === null ? null : <div className="vui-server-error vui-server-error--floating" role="alert">{props.error}</div>}</section>}
       </AppShell>
 
       <Modal onClose={() => setNewConversationOpen(false)} open={newConversationOpen} title="Новый личный диалог">
@@ -176,6 +183,7 @@ export function DirectMessagesView(props: DirectMessagesViewProps): React.JSX.El
       </Modal>
 
       <ConfirmDialog danger description={`Вы не сможете обмениваться новыми сообщениями с пользователем ${activeConversation?.participant.displayName ?? ''}. История диалога сохранится.`} confirmLabel="Заблокировать" loading={props.busy} onClose={() => setBlockConfirmOpen(false)} onConfirm={() => { if (activeConversation !== null) props.onBlockParticipant(activeConversation.participant.userId); setBlockConfirmOpen(false); }} open={blockConfirmOpen && activeConversation !== null} title="Заблокировать пользователя?" />
+      {activeConversation === null ? null : <NotificationSettingsDialog conversationId={activeConversation.id} onClose={() => setNotificationSettingsOpen(false)} open={notificationSettingsOpen} title={activeConversation.participant.displayName} />}
     </>
   );
 }

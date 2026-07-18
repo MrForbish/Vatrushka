@@ -19,7 +19,7 @@
 .vui-direct-topbar > span { display: grid; }
 .vui-direct-topbar strong { font: var(--text-heading-sm); }
 .vui-direct-topbar small { color: var(--color-text-muted); font: var(--text-caption); }
-.vui-direct-topbar__block { margin-left: auto; }
+.vui-direct-topbar__notifications { margin-left: auto; }
 .vui-direct-blocked-notice { display: flex; align-items: center; justify-content: center; gap: var(--space-3); min-height: 76px; padding: var(--space-3) var(--space-5); border-top: 1px solid var(--color-border-subtle); background: var(--color-surface-0); color: var(--color-text-secondary); }
 .vui-direct-blocked-notice strong { color: var(--color-text-primary); font: var(--text-label-md); }
 .vui-direct-blocked-notice span { font: var(--text-body-sm); }

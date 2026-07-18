@@ -6,6 +6,7 @@ import { realtimeClientCommandSchema, type RealtimeEvent } from '@vatrushka/shar
 
 import type { VatrushkaService } from '../service.js';
 import type { RedisRealtimeBus } from './realtime.js';
+import { technicalMetrics } from './metrics.js';
 
 interface ConnectionState {
   id: string;
@@ -19,6 +20,7 @@ interface ConnectionState {
 
 export class WebSocketGateway {
   private readonly connections = new Map<string, ConnectionState>();
+  private readonly seenDevices = new Set<string>();
   private readonly heartbeat: NodeJS.Timeout;
   private readonly unsubscribe: () => void;
 
@@ -31,6 +33,7 @@ export class WebSocketGateway {
   handle(socket: WebSocket): void {
     const state: ConnectionState = { id: randomUUID(), socket, userId: null, deviceId: null, authorization: null, subscriptions: new Set(), alive: true };
     this.connections.set(state.id, state);
+    technicalMetrics.set('chat_ws_connections_active', this.connections.size);
     const authTimeout = setTimeout(() => {
       if (!state.userId) socket.close(4401, 'Authentication timeout');
     }, 5_000);
@@ -40,6 +43,7 @@ export class WebSocketGateway {
     socket.on('close', () => {
       clearTimeout(authTimeout);
       this.connections.delete(state.id);
+      technicalMetrics.set('chat_ws_connections_active', this.connections.size);
       if (state.userId) void this.bus.unregisterConnection(state.userId, state.id);
     });
     socket.on('error', () => undefined);
@@ -51,6 +55,7 @@ export class WebSocketGateway {
     this.unsubscribe();
     for (const connection of this.connections.values()) connection.socket.close(1001, 'Server shutdown');
     this.connections.clear();
+    technicalMetrics.set('chat_ws_connections_active', 0);
   }
 
   private async onMessage(state: ConnectionState, raw: RawData): Promise<void> {
@@ -68,6 +73,9 @@ export class WebSocketGateway {
         state.userId = user.id;
         state.deviceId = command.deviceId;
         state.authorization = `Bearer ${command.token}`;
+        const deviceKey = `${user.id}:${command.deviceId}`;
+        if (this.seenDevices.has(deviceKey)) technicalMetrics.increment('chat_ws_reconnects_total');
+        else this.seenDevices.add(deviceKey);
         await this.bus.registerConnection(user.id, state.id, command.deviceId);
         return this.send(state, { type: 'authenticated', userId: user.id });
       }
@@ -106,6 +114,7 @@ export class WebSocketGateway {
   }
 
   private deliver(event: RealtimeEvent): void {
+    technicalMetrics.observe('chat_ws_delivery_latency_ms', Math.max(0, Date.now() - new Date(event.occurredAt).getTime()));
     for (const connection of this.connections.values()) {
       if (!connection.userId || connection.socket.readyState !== connection.socket.OPEN) continue;
       const targeted = event.targetUserIds.includes(connection.userId);

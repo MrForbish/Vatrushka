@@ -46,6 +46,8 @@ import {
   type InternalNotification,
   type UserUnreadSummary,
   type UserNotificationPreferences,
+  type ServerNotificationPreferences,
+  type ConversationNotificationPreferences,
   type BlockedUserSettings,
   type UserAccountSettings,
   type UserProfileSettings,
@@ -2121,6 +2123,38 @@ export class VatrushkaService {
     return this.messaging().updateNotificationPreferences(user.id, input, this.now());
   }
 
+  async getServerNotificationPreferences(authorization: string | undefined, serverId: string): Promise<ServerNotificationPreferences> {
+    const user = await this.authenticate(authorization);
+    await this.requireServerPermission(await this.requireServer(serverId), user, 'VIEW_SERVER');
+    const preferences = await this.messaging().getServerNotificationPreferences(serverId, user.id, this.now());
+    if (!preferences) throw new AppError('SERVER_NOT_FOUND', 404);
+    return preferences;
+  }
+
+  async updateServerNotificationPreferences(authorization: string | undefined, serverId: string, input: Omit<ServerNotificationPreferences, 'serverId' | 'updatedAt'>): Promise<ServerNotificationPreferences> {
+    const user = await this.authenticate(authorization);
+    await this.requireServerPermission(await this.requireServer(serverId), user, 'VIEW_SERVER');
+    const preferences = await this.messaging().updateServerNotificationPreferences(serverId, user.id, input, this.now());
+    if (!preferences) throw new AppError('SERVER_NOT_FOUND', 404);
+    return preferences;
+  }
+
+  async getConversationNotificationPreferences(authorization: string | undefined, conversationId: string): Promise<ConversationNotificationPreferences> {
+    const user = await this.authenticate(authorization);
+    await this.requireCanonicalConversation(conversationId, user, 'READ_MESSAGE_HISTORY');
+    const preferences = await this.messaging().getConversationNotificationPreferences(conversationId, user.id, this.now());
+    if (!preferences) throw new AppError('DIRECT_CONVERSATION_NOT_FOUND', 404);
+    return preferences;
+  }
+
+  async updateConversationNotificationPreferences(authorization: string | undefined, conversationId: string, input: Omit<ConversationNotificationPreferences, 'conversationId' | 'updatedAt'>): Promise<ConversationNotificationPreferences> {
+    const user = await this.authenticate(authorization);
+    await this.requireCanonicalConversation(conversationId, user, 'READ_MESSAGE_HISTORY');
+    const preferences = await this.messaging().updateConversationNotificationPreferences(conversationId, user.id, input, this.now());
+    if (!preferences) throw new AppError('DIRECT_CONVERSATION_NOT_FOUND', 404);
+    return preferences;
+  }
+
   async listCanonicalNotifications(authorization: string | undefined, before: string | undefined, limit: number, unreadOnly: boolean): Promise<InternalNotification[]> {
     const user = await this.authenticate(authorization);
     return this.messaging().listNotifications(user.id, before ? new Date(before) : null, limit, unreadOnly);
@@ -2236,6 +2270,9 @@ export class VatrushkaService {
   }
 
   private async validateCanonicalMentions(access: { conversation: { id: string; type: 'server_channel' | 'direct' | 'group_direct' }; server: ServerRecord | null; channel: ServerChannelRecord | null }, author: UserRecord, mentions: CanonicalMentionInput[]): Promise<void> {
+    for (const mention of mentions) {
+      if ((mention.start === undefined) !== (mention.length === undefined)) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'mentions' });
+    }
     if (access.conversation.type !== 'server_channel') {
       for (const mention of mentions) if (mention.type !== 'user' || !mention.userId || !(await this.messaging().isDirectMember(access.conversation.id, mention.userId))) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'mentions' });
       return;
@@ -2243,11 +2280,14 @@ export class VatrushkaService {
     const server = access.server!;
     const channel = access.channel!;
     const roles = await this.store.listServerRoles(server.id);
+    const moderation = this.serverSettingsStore ? await this.serverSettingsStore.getModeration(server.id) : null;
+    if (moderation && mentions.length > moderation.mentionLimitPerMessage) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'mentions', message: `Не больше ${moderation.mentionLimitPerMessage} упоминаний в сообщении` });
     for (const mention of mentions) {
       if (mention.type === 'everyone') {
         await this.requireChannelPermission(server, channel, author, 'MENTION_EVERYONE');
       } else if (mention.type === 'role') {
         if (!mention.roleId || !roles.some((role) => role.id === mention.roleId)) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'mentions' });
+        await this.requireChannelPermission(server, channel, author, 'MENTION_EVERYONE');
       } else {
         const mentioned = mention.userId ? await this.store.findUserById(mention.userId) : null;
         if (!mention.userId || !mentioned || !(await this.store.findServerMember(server.id, mention.userId))) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'mentions' });

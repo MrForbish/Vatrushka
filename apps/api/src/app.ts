@@ -56,6 +56,8 @@ import {
   notificationQuerySchema,
   createAttachmentIntentSchema,
   updateUserNotificationPreferencesSchema,
+  updateServerNotificationPreferencesSchema,
+  updateConversationNotificationPreferencesSchema,
   reorderRoleSchema,
   archiveServerSchema,
   banServerMemberSchema,
@@ -86,6 +88,7 @@ import type { AppConfig } from './config.js';
 import { MAX_ATTACHMENT_BYTES, type VatrushkaService } from './service.js';
 import type { RedisRealtimeBus } from './services/realtime.js';
 import { WebSocketGateway } from './services/websocket-gateway.js';
+import { technicalMetrics } from './services/metrics.js';
 
 const serverIdParams = z.object({ serverId: z.uuid() });
 const channelIdParams = z.object({ channelId: z.uuid() });
@@ -239,7 +242,9 @@ const canonicalMessagePageResponseSchema = z.object({ items: z.array(canonicalMe
 const canonicalReadStateResponseSchema = z.object({ conversationId: z.string(), lastDeliveredMessageId: z.string().nullable(), lastReadMessageId: z.string().nullable(), lastDeliveredAt: z.string().nullable(), lastReadAt: z.string().nullable(), mentionCount: z.number() });
 const unreadSummaryResponseSchema = z.object({ totalDirectUnread: z.number(), totalMentionUnread: z.number(), totalReplyUnread: z.number(), conversations: z.array(z.object({ conversationId: z.string(), unreadCount: z.number(), mentionCount: z.number(), firstUnreadMessageId: z.string().nullable() })) });
 const userNotificationPreferencesResponseSchema = updateUserNotificationPreferencesSchema.extend({ updatedAt: z.string() });
-const internalNotificationResponseSchema = z.object({ id: z.string(), type: z.enum(['direct_message', 'mention', 'reply', 'server_invite', 'moderation', 'system']), actorUserId: z.string().nullable(), conversationId: z.string().nullable(), messageId: z.string().nullable(), payload: z.record(z.string(), z.unknown()), createdAt: z.string(), readAt: z.string().nullable(), dismissedAt: z.string().nullable(), actorDisplayName: z.string().nullable().optional(), conversationTitle: z.string().nullable().optional(), serverId: z.string().nullable().optional(), channelId: z.string().nullable().optional() });
+const serverNotificationPreferencesResponseSchema = updateServerNotificationPreferencesSchema.extend({ serverId: z.uuid(), updatedAt: z.string() });
+const conversationNotificationPreferencesResponseSchema = updateConversationNotificationPreferencesSchema.extend({ conversationId: z.uuid(), updatedAt: z.string() });
+const internalNotificationResponseSchema = z.object({ id: z.string(), type: z.enum(['message', 'direct_message', 'mention', 'reply', 'server_invite', 'moderation', 'system']), actorUserId: z.string().nullable(), conversationId: z.string().nullable(), messageId: z.string().nullable(), payload: z.record(z.string(), z.unknown()), createdAt: z.string(), readAt: z.string().nullable(), dismissedAt: z.string().nullable(), actorDisplayName: z.string().nullable().optional(), conversationTitle: z.string().nullable().optional(), serverId: z.string().nullable().optional(), channelId: z.string().nullable().optional() });
 const attachmentIntentResponseSchema = z.object({ attachmentId: z.string(), uploadUrl: z.url(), headers: z.record(z.string(), z.string()), expiresAt: z.string() });
 
 export interface BuildAppOptions {
@@ -789,6 +794,18 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     return reply.status(result.created ? 201 : 200).send(result.message);
   });
 
+  api.get('/metrics', {
+    schema: { tags: ['health'], response: { 200: z.string() } },
+  }, async (_request, reply) => {
+    if (service.canonicalMessagingStore) {
+      const outbox = await service.canonicalMessagingStore.outboxMetrics(new Date());
+      technicalMetrics.set('chat_outbox_pending_total', outbox.pending);
+      technicalMetrics.set('chat_outbox_failed_total', outbox.failed);
+      technicalMetrics.set('chat_outbox_oldest_age_seconds', outbox.oldestAgeSeconds);
+    }
+    return reply.type('text/plain; version=0.0.4; charset=utf-8').send(technicalMetrics.render());
+  });
+
   api.patch(`${API_PREFIX}/conversations/:conversationId/messages/:messageId`, {
     schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: canonicalMessageParams, body: updateConversationMessageSchema, response: { 200: canonicalMessageResponseSchema, ...routeErrors() } },
   }, async (request) => service.updateCanonicalMessage(request.headers.authorization, request.params.messageId, request.body.content, request.body.mentions));
@@ -823,6 +840,22 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   api.put(`${API_PREFIX}/me/notification-preferences`, {
     schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], body: updateUserNotificationPreferencesSchema, response: { 200: userNotificationPreferencesResponseSchema, ...routeErrors() } },
   }, async (request) => service.updateNotificationPreferences(request.headers.authorization, request.body));
+
+  api.get(`${API_PREFIX}/servers/:serverId/notification-preferences`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], params: serverIdParams, response: { 200: serverNotificationPreferencesResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getServerNotificationPreferences(request.headers.authorization, request.params.serverId));
+
+  api.put(`${API_PREFIX}/servers/:serverId/notification-preferences`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], params: serverIdParams, body: updateServerNotificationPreferencesSchema, response: { 200: serverNotificationPreferencesResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateServerNotificationPreferences(request.headers.authorization, request.params.serverId, request.body));
+
+  api.get(`${API_PREFIX}/conversations/:conversationId/notification-preferences`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], params: conversationIdParams, response: { 200: conversationNotificationPreferencesResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getConversationNotificationPreferences(request.headers.authorization, request.params.conversationId));
+
+  api.put(`${API_PREFIX}/conversations/:conversationId/notification-preferences`, {
+    schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], params: conversationIdParams, body: updateConversationNotificationPreferencesSchema, response: { 200: conversationNotificationPreferencesResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateConversationNotificationPreferences(request.headers.authorization, request.params.conversationId, request.body));
 
   api.get(`${API_PREFIX}/notifications`, {
     schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], querystring: notificationQuerySchema, response: { 200: z.array(internalNotificationResponseSchema), ...routeErrors() } },

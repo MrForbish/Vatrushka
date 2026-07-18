@@ -6,7 +6,7 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () =>
 
 export const conversationType = pgEnum('conversation_type', ['server_channel', 'direct', 'group_direct']);
 export const conversationMentionType = pgEnum('conversation_mention_type', ['user', 'role', 'everyone']);
-export const notificationType = pgEnum('notification_type', ['direct_message', 'mention', 'reply', 'server_invite', 'moderation', 'system']);
+export const notificationType = pgEnum('notification_type', ['message', 'direct_message', 'mention', 'reply', 'server_invite', 'moderation', 'system']);
 
 export const users = pgTable(
   'users',

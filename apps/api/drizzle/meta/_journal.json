@@ -148,6 +148,13 @@
       "when": 1784330780452,
       "tag": "0020_notification_preview_mode",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1784335600948,
+      "tag": "0021_majestic_zodiak",
+      "breakpoints": true
     }
   ]
 }

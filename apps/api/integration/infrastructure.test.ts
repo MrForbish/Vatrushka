@@ -122,9 +122,10 @@ describe('production infrastructure adapters', () => {
     const now = new Date('2026-07-18T12:00:00.000Z');
     const first = (await postgres.store.getOrCreateUser(`${randomUUID()}@integration.test`, now)).user;
     const second = (await postgres.store.getOrCreateUser(`${randomUUID()}@integration.test`, now)).user;
+    const third = (await postgres.store.getOrCreateUser(`${randomUUID()}@integration.test`, now)).user;
     const serverId = randomUUID();
     await adminPool.query('insert into servers (id, name, invite_code, owner_user_id, created_at, updated_at) values ($1, $2, $3, $4, $5, $5)', [serverId, 'Integration', randomUUID(), first.id, now]);
-    await adminPool.query('insert into server_members (server_id, user_id, joined_at) values ($1, $2, $4), ($1, $3, $4)', [serverId, first.id, second.id, now]);
+    await adminPool.query('insert into server_members (server_id, user_id, joined_at) values ($1, $2, $5), ($1, $3, $5), ($1, $4, $5)', [serverId, first.id, second.id, third.id, now]);
     const direct = await messaging.getOrCreateDirectConversation(first.id, second.id, now);
     expect(direct.allowed).toBe(true);
 
@@ -146,6 +147,21 @@ describe('production infrastructure adapters', () => {
     const preferences = await messaging.updateNotificationPreferences(second.id, { desktopEnabled: false, soundEnabled: true, previewMode: 'sender_only', directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: '22:00', quietHoursEnd: '08:00', quietHoursTimezone: 'Europe/Moscow' }, now);
     expect((await messaging.getNotificationPreferences(second.id, now)).previewMode).toBe('sender_only');
     expect(preferences.desktopEnabled).toBe(false);
+    const channelId = randomUUID();
+    const roleId = randomUUID();
+    await adminPool.query("insert into server_channels (id, server_id, name, type, position, created_at, updated_at) values ($1, $2, 'mentions', 'text', 0, $3, $3)", [channelId, serverId, now]);
+    await adminPool.query("insert into conversations (id, type, server_id, channel_id, created_by_user_id, created_at, updated_at) values ($1, 'server_channel', $2, $1, $3, $4, $4)", [channelId, serverId, first.id, now]);
+    await adminPool.query("insert into server_roles (id, server_id, name, color, position, is_default, kind, permissions, created_at, updated_at) values ($1, $2, 'Developers', '#5865f2', 10, false, 'CUSTOM', '[]'::jsonb, $3, $3)", [roleId, serverId, now]);
+    await adminPool.query('insert into server_member_roles (server_id, user_id, role_id) values ($1, $2, $3)', [serverId, second.id, roleId]);
+    expect(await messaging.getServerNotificationPreferences(serverId, second.id, now)).toMatchObject({ level: 'mentions', suppressEveryone: false });
+    await messaging.createMessage({ conversationId: channelId, authorId: first.id, clientMessageId: randomUUID(), content: '@Developers deploy', replyToMessageId: null, attachmentIds: [], mentions: [{ type: 'role', roleId, start: 0, length: 11 }], now: new Date(now.getTime() + 1_600) });
+    expect((await messaging.listNotifications(second.id, null, 20, true)).some((notification) => notification.type === 'mention' && notification.conversationId === channelId)).toBe(true);
+    await messaging.createMessage({ conversationId: channelId, authorId: first.id, clientMessageId: randomUUID(), content: '@everyone release', replyToMessageId: null, attachmentIds: [], mentions: [{ type: 'everyone', start: 0, length: 9 }], now: new Date(now.getTime() + 1_700) });
+    expect((await messaging.listNotifications(third.id, null, 20, true)).some((notification) => notification.type === 'mention' && notification.conversationId === channelId)).toBe(true);
+    await messaging.updateServerNotificationPreferences(serverId, second.id, { level: 'all', mutedUntil: null, suppressEveryone: false, suppressRoles: false }, new Date(now.getTime() + 1_710));
+    await messaging.updateConversationNotificationPreferences(channelId, second.id, { level: 'all', mutedUntil: null }, new Date(now.getTime() + 1_720));
+    await messaging.createMessage({ conversationId: channelId, authorId: first.id, clientMessageId: randomUUID(), content: 'ordinary update', replyToMessageId: null, attachmentIds: [], mentions: [], now: new Date(now.getTime() + 1_730) });
+    expect((await messaging.listNotifications(second.id, null, 30, true)).some((notification) => notification.type === 'message' && notification.conversationId === channelId)).toBe(true);
     await messaging.updateReadState(direct.conversation.id, second.id, mentioned.message.id, mentioned.message.id, new Date(now.getTime() + 1_800));
     expect((await messaging.unreadSummary(second.id)).totalReplyUnread).toBe(0);
     expect(await messaging.softDeleteMessage(created.message.id, first.id, false, new Date(now.getTime() + 2_000))).toBe(true);

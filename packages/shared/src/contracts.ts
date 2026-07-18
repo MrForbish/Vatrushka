@@ -364,6 +364,7 @@ export interface TextMessage {
   authorPlatformRole: PlatformRole;
   content: string;
   mentions?: MessageMention[];
+  conversationMentions?: ConversationMentionDraft[];
   replyTo: {
     messageId: string;
     authorUserId: string;
@@ -378,6 +379,7 @@ export interface TextMessage {
   attachments: MessageAttachment[];
   createdAt: string;
   editedAt: string | null;
+  deliveryState?: 'sending' | 'failed';
 }
 
 export interface MessageAttachment {
@@ -438,11 +440,20 @@ export interface DirectMessage {
   attachments: MessageAttachment[];
   createdAt: string;
   editedAt: string | null;
+  deliveryState?: 'sending' | 'failed';
 }
 
 export type ConversationType = 'server_channel' | 'direct' | 'group_direct';
 export type ConversationMentionType = 'user' | 'role' | 'everyone';
-export type ConversationNotificationType = 'direct_message' | 'mention' | 'reply' | 'server_invite' | 'moderation' | 'system';
+export interface ConversationMentionDraft {
+  type: ConversationMentionType;
+  userId?: string | undefined;
+  roleId?: string | undefined;
+  start: number;
+  length: number;
+  displayName: string;
+}
+export type ConversationNotificationType = 'message' | 'direct_message' | 'mention' | 'reply' | 'server_invite' | 'moderation' | 'system';
 
 export interface ConversationSummary {
   id: string;
@@ -503,6 +514,24 @@ export interface UserNotificationPreferences {
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
   quietHoursTimezone: string | null;
+  updatedAt: string;
+}
+
+export type NotificationPreferenceLevel = 'all' | 'mentions' | 'none';
+
+export interface ServerNotificationPreferences {
+  serverId: string;
+  level: NotificationPreferenceLevel;
+  mutedUntil: string | null;
+  suppressEveryone: boolean;
+  suppressRoles: boolean;
+  updatedAt: string;
+}
+
+export interface ConversationNotificationPreferences {
+  conversationId: string;
+  level: NotificationPreferenceLevel;
+  mutedUntil: string | null;
   updatedAt: string;
 }
 
