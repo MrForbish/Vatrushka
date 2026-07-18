@@ -24,6 +24,7 @@ test.describe('Vatrushka design system visual baseline', () => {
 
   test('confirm dialog', async ({ page }) => {
     await openStory(page, 'overlays-modal-confirmdialog-drawer--confirm-destructive');
+    await page.getByRole('button', { name: 'Удалить канал' }).focus();
     await expect(page).toHaveScreenshot('overlay-confirm-dialog.png', { animations: 'disabled', fullPage: true });
   });
 
@@ -109,6 +110,12 @@ test.describe('Vatrushka design system visual baseline', () => {
     await openStory(page, 'screens-current--password-login');
     await expect(page.getByRole('heading', { name: 'С возвращением' })).toBeVisible();
     await expect(page).toHaveScreenshot('password-login.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('password reset', async ({ page }) => {
+    await openStory(page, 'screens-current--password-reset');
+    await expect(page.getByRole('heading', { name: 'Задайте новый пароль' })).toBeVisible();
+    await expect(page).toHaveScreenshot('password-reset.png', { animations: 'disabled', fullPage: true });
   });
 
   test('app shell compact drawers', async ({ page }) => {

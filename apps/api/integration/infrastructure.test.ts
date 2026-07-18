@@ -108,6 +108,32 @@ describe('production infrastructure adapters', () => {
     expect(results.filter(({ isNewUser }) => isNewUser)).toHaveLength(1);
   });
 
+  it('atomically resets a password and revokes active PostgreSQL sessions', async () => {
+    const now = new Date('2026-07-18T09:00:00.000Z');
+    const user = await postgres.store.createUserWithPassword(`${randomUUID()}@reset.integration.test`, 'old-password-hash', now);
+    if (!user) throw new Error('Failed to create reset integration user');
+    for (const deviceName of ['Desktop', 'Laptop']) {
+      await postgres.store.createSession({
+        id: randomUUID(),
+        userId: user.id,
+        tokenHash: randomUUID(),
+        tokenFamilyId: randomUUID(),
+        deviceName,
+        trustedAt: null,
+        expiresAt: new Date(now.getTime() + 86_400_000),
+        revokedAt: null,
+        replacedBySessionId: null,
+        createdAt: now,
+        lastUsedAt: now,
+      });
+    }
+
+    const result = await postgres.store.resetPasswordAndRevokeSessions(user.id, 'new-password-hash', new Date(now.getTime() + 1_000));
+    expect(result?.user.passwordHash).toBe('new-password-hash');
+    expect(result?.revokedSessionIds).toHaveLength(2);
+    expect((await postgres.store.listSessionsForUser(user.id)).every((session) => session.revokedAt !== null)).toBe(true);
+  });
+
   it('aggregates and expires presence sessions in Redis', async () => {
     const userId = randomUUID();
     const now = new Date('2026-07-18T10:00:00.000Z');

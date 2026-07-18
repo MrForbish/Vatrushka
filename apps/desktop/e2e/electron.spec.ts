@@ -71,6 +71,40 @@ test('supports keyboard-only authentication with a visible focus indicator', asy
   await expect(window.getByLabel('Повторите пароль')).toBeVisible();
 });
 
+test('completes password reset and returns to login with a confirmation', async () => {
+  apiServer = createServer((request, response) => {
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+    response.setHeader('Content-Type', 'application/json');
+    if (request.method === 'OPTIONS') { response.statusCode = 204; response.end(); return; }
+    const url = new URL(request.url ?? '/', 'http://localhost:3000');
+    if (request.method === 'POST' && url.pathname === '/api/v1/auth/password/reset/request-code') {
+      response.end(JSON.stringify({ status: 'CODE_SENT', retryAfterSeconds: 60 }));
+      return;
+    }
+    if (request.method === 'POST' && url.pathname === '/api/v1/auth/password/reset/complete') {
+      response.end(JSON.stringify({ status: 'PASSWORD_RESET' }));
+      return;
+    }
+    response.statusCode = 404;
+    response.end(JSON.stringify({ code: 'NOT_FOUND' }));
+  });
+  await new Promise<void>((resolve, reject) => apiServer?.listen(3000, () => resolve()).once('error', reject));
+
+  application = await electron.launch({ args: ['.', `--user-data-dir=.e2e-user-data-reset-${process.pid}`], cwd: process.cwd(), env: electronEnvironment() });
+  const window = await application.firstWindow();
+  await window.getByRole('button', { name: 'Забыли пароль?' }).click();
+  await expect(window.getByRole('heading', { name: 'Восстановление пароля' })).toBeVisible();
+  await window.getByLabel('Email').fill('reset@example.com');
+  await window.getByRole('button', { name: 'Отправить код' }).click();
+  await window.getByLabel('Код из письма').fill('123456');
+  await window.getByRole('textbox', { name: 'Новый пароль', exact: true }).fill('new-secure-password-42');
+  await window.getByRole('textbox', { name: 'Повторите новый пароль', exact: true }).fill('new-secure-password-42');
+  await window.getByRole('button', { name: 'Сохранить новый пароль' }).click();
+  await expect(window.getByRole('heading', { name: 'С возвращением' })).toBeVisible();
+  await expect(window.getByRole('status')).toHaveText('Пароль изменён. Войдите с новым паролем.');
+});
+
 test('grants audio permission and exposes device labels to the trusted renderer', async () => {
   application = await electron.launch({
     args: ['.', '--use-fake-device-for-media-stream', '--user-data-dir=.e2e-user-data-media'],

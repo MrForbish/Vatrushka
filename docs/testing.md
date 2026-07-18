@@ -18,6 +18,7 @@ npm run build
 npm run package:win
 npm run repo-policy:test
 npm run version:check
+npm run capacity:check
 ```
 
 Shared tests cover validation, errors, permissions, expiration and lease logic. API tests use Fastify inject with `MemoryStore`, `MemoryPresenceStore`, `FakeMailer`, `FakeMediaService` and cover password registration, email/TOTP/recovery second factor, refresh rotation/reuse, retired auth/room routes, the Home dashboard/onboarding/activity aggregate, Redis-compatible multi-session presence semantics, DND/privacy enforcement, servers, text/voice channels, messages, attachment-only creation, LiveKit presence, permission-enforced member moves, channel lease concurrency/expiry and signed/unsigned webhooks.
@@ -36,11 +37,11 @@ $env:INTEGRATION_REDIS_URL = 'redis://127.0.0.1:6379/15'
 npm run test:integration
 ```
 
-CI starts isolated PostgreSQL 17 and Redis 8 services, applies the complete Drizzle migration chain, and verifies persistence/idempotency, monotonic read state, notification preferences, durable S3 cleanup jobs, outbox publish/deduplication and multi-session presence semantics.
+CI starts isolated PostgreSQL 17 and Redis 8 services, applies the complete Drizzle migration chain, and verifies persistence/idempotency, atomic password-reset session revocation, monotonic read state, notification preferences, durable S3 cleanup jobs, outbox publish/deduplication and multi-session presence semantics.
 
 ## CI и release gates
 
-`pr-checks.yml` является переиспользуемым quality gate для task PR в `develop`: независимые jobs проверяют настоящие PostgreSQL/Redis adapters, lint/typecheck/unit/build/bundle budgets и полный Windows Storybook/Electron/visual набор. Обычный PR не собирает публикуемый installer. Storybook interaction + Electron E2E и 31 последовательный visual scenario выполняются параллельными Windows jobs, после чего единый `desktop-regression` требует успеха обоих. Chromium кэшируется по lockfile; локально быстрые два workers внутри одного visual process были отклонены после деградации на ограниченном GitHub Windows runner.
+`pr-checks.yml` является переиспользуемым quality gate для task PR в `develop`: независимые jobs проверяют настоящие PostgreSQL/Redis adapters, lint/typecheck/unit/build/bundle budgets и полный Windows Storybook/Electron/visual набор. Обычный PR не собирает публикуемый installer. Storybook interaction + Electron E2E и 32 последовательных visual scenario выполняются параллельными Windows jobs, после чего единый `desktop-regression` требует успеха обоих. Chromium кэшируется по lockfile; локально быстрые два workers внутри одного visual process были отклонены после деградации на ограниченном GitHub Windows runner.
 
 Visual suite сначала собирает production-like статический Storybook, затем обслуживает `storybook-static` через Vite preview. Это сохраняет однопоточный детерминированный screenshot contract, но исключает холодную Vite-трансформацию при открытии каждой story. `run-with-budget.mjs` измеряет Storybook interaction, Electron E2E и visual шаги, пишет фактическое время в GitHub Step Summary и блокирует существенную регрессию. Job-level timeouts защищают от зависшего runner. Актуальная связь рисков, уровней тестов и viewport находится в [test-coverage-matrix.md](test-coverage-matrix.md).
 

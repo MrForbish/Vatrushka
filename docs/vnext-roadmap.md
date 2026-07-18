@@ -7,6 +7,7 @@
 ### Готово и используется
 
 - password + обязательный email/TOTP/recovery второй фактор;
+- безопасный password reset через отдельный email-код с отзывом всех активных сессий;
 - постоянные серверы, текстовые/голосовые каналы, короткие invite links;
 - роли, 40 permissions, channel overrides и audit log;
 - Home dashboard, routed User/Server Settings и presence через Redis;
@@ -26,7 +27,6 @@
 - крупные orchestration-файлы затрудняют безопасные изменения;
 - `/metrics` реализован, но не собирается production Prometheus;
 - installer не подписан code-signing сертификатом;
-- password reset отсутствует;
 
 ## План выполнения
 
@@ -97,9 +97,9 @@
 
 ### P0.6 — эксплуатационная готовность
 
-1. Реализовать отдельный rate-limited password reset с отзывом сессий и security event.
+1. Реализовать отдельный rate-limited password reset с отзывом сессий и security event. Реализовано в WEB-24: neutral request response, отдельный hashed OTP purpose, atomic PostgreSQL revoke, presence cleanup, security notice и desktop/visual flow.
 2. Добавить code signing и stable/beta update channels после получения сертификата; updater до этого продолжает работать с явным документированным риском SmartScreen.
-3. Выполнить load tests PostgreSQL/Redis/API/WebSocket/LiveKit/S3 и установить capacity limits.
+3. Выполнить load tests PostgreSQL/Redis/API/WebSocket/LiveKit/S3 и установить capacity limits. Добавлен opt-in safety-guarded harness и начальные p95 budgets; production baseline и media-plane ceiling должны быть зафиксированы release evidence после выпуска кода.
 
 ### P1.1 — Prometheus/Grafana
 

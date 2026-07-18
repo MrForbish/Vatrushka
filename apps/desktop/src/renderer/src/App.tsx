@@ -124,7 +124,7 @@ export default function App(): ReactNode {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [presence, setPresence] = useState<UserPresence | null>(null);
   const userRef = useRef<PublicUser | null>(null);
-  const [authMode, setAuthMode] = useState<'password' | 'register'>('password');
+  const [authMode, setAuthMode] = useState<'password' | 'register' | 'reset'>('password');
   const [authStage, setAuthStage] = useState<'credentials' | 'otp'>('credentials');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -143,6 +143,7 @@ export default function App(): ReactNode {
   const [retrySeconds, setRetrySeconds] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [sources, setSources] = useState<DesktopSourceInfo[] | null>(null);
   const [settingsServerLoading, setSettingsServerLoading] = useState(false);
   const [settingsServerError, setSettingsServerError] = useState<string | null>(null);
@@ -729,7 +730,10 @@ export default function App(): ReactNode {
   const requestCode = (): void => {
     void run(async () => {
       let response: { retryAfterSeconds: number };
-      if (authMode === 'register') {
+      if (authMode === 'reset') {
+        response = await apiClient.requestPasswordReset(email);
+        setSecondFactor('email');
+      } else if (authMode === 'register') {
         const validPassword = passwordSchema.parse(password);
         if (validPassword !== passwordConfirmation) throw new Error('Пароли не совпадают');
         response = await apiClient.requestRegistration(email, validPassword);
@@ -748,6 +752,18 @@ export default function App(): ReactNode {
 
   const verifyCode = (): void => {
     void run(async () => {
+      if (authMode === 'reset') {
+        const validPassword = passwordSchema.parse(password);
+        if (validPassword !== passwordConfirmation) throw new Error('Пароли не совпадают');
+        await apiClient.completePasswordReset(email, otp, validPassword);
+        setAuthMode('password');
+        setAuthStage('credentials');
+        setOtp('');
+        setPasswordValue('');
+        setPasswordConfirmation('');
+        setAuthNotice('Пароль изменён. Войдите с новым паролем.');
+        return;
+      }
       const response = authMode === 'register'
         ? await apiClient.verifyRegistration(email, otp)
         : await apiClient.completePasswordLogin(email, password, otp, secondFactor);
@@ -1435,7 +1451,7 @@ export default function App(): ReactNode {
   };
 
   if (screen === 'boot') return withUpdateStatus(<main className="bootScreen"><div className="pulseLogo"><span /></div><span>Подключаем «Ватрушку»…</span></main>);
-  if (screen === 'auth') return withUpdateStatus(<AuthPanel mode={authMode} stage={authStage} factor={secondFactor} totpAvailable={totpAvailable} email={email} code={otp} password={password} passwordConfirmation={passwordConfirmation} retrySeconds={retrySeconds} busy={busy} error={error} onMode={(mode) => { setAuthMode(mode); setAuthStage('credentials'); setOtp(''); setError(null); }} onEmailChange={setEmail} onCodeChange={setOtp} onPasswordChange={setPasswordValue} onPasswordConfirmationChange={setPasswordConfirmation} onRequest={requestCode} onVerify={verifyCode} onFactor={switchPasswordFactor} onBack={() => { setAuthStage('credentials'); setOtp(''); setError(null); }} />);
+  if (screen === 'auth') return withUpdateStatus(<AuthPanel mode={authMode} stage={authStage} factor={secondFactor} totpAvailable={totpAvailable} email={email} code={otp} password={password} passwordConfirmation={passwordConfirmation} retrySeconds={retrySeconds} busy={busy} error={error} notice={authNotice} onMode={(mode) => { setAuthMode(mode); setAuthStage('credentials'); setOtp(''); setPasswordValue(''); setPasswordConfirmation(''); setError(null); setAuthNotice(null); }} onReset={() => { setAuthMode('reset'); setAuthStage('credentials'); setOtp(''); setPasswordValue(''); setPasswordConfirmation(''); setError(null); setAuthNotice(null); }} onEmailChange={setEmail} onCodeChange={setOtp} onPasswordChange={setPasswordValue} onPasswordConfirmationChange={setPasswordConfirmation} onRequest={requestCode} onVerify={verifyCode} onFactor={switchPasswordFactor} onBack={() => { setAuthStage('credentials'); setOtp(''); setError(null); }} />);
   if (screen === 'profile') return withUpdateStatus(<ProfilePanel value={displayName} busy={busy} error={error} onChange={setDisplayName} onSave={saveProfile} />);
   if (settingsRoute !== null && user !== null) return withUpdateStatus(
     <Suspense fallback={<main className="bootScreen"><div className="pulseLogo"><span /></div><span>Открываем настройки…</span></main>}>

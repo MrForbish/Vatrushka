@@ -179,6 +179,77 @@ describe('authentication API', () => {
     expect([...context.store.sessions.values()][0]?.tokenHash).not.toBe(response.json<{ refreshToken: string }>().refreshToken);
   });
 
+  it('resets a password without account enumeration and revokes every active session', async () => {
+    const first = await login('reset@example.com', 'Reset User');
+    const second = await login('reset@example.com', 'Reset User');
+    context.clock.now = new Date(context.clock.now.getTime() + 61_000);
+
+    const requested = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/reset/request-code`,
+      payload: { email: 'reset@example.com' },
+    });
+    const unknownRequested = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/reset/request-code`,
+      payload: { email: 'unknown@example.com' },
+    });
+    expect(requested.statusCode).toBe(200);
+    expect(unknownRequested.statusCode).toBe(200);
+    expect(requested.json()).toEqual(unknownRequested.json());
+
+    const completed = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/reset/complete`,
+      payload: { email: 'reset@example.com', code: '123456', password: 'new-secure-password-73' },
+    });
+    expect(completed.statusCode).toBe(200);
+    expect(completed.json()).toEqual({ status: 'PASSWORD_RESET' });
+    expect([...context.store.sessions.values()].filter((session) => session.userId === first.userId).every((session) => session.revokedAt !== null)).toBe(true);
+    expect(context.mailer.securityNotices.at(-1)?.title).toBe('Пароль восстановлен');
+    expect([...context.store.securityEvents.values()].some((event) => event.userId === first.userId && event.type === 'PASSWORD_RESET')).toBe(true);
+
+    const oldPassword = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/begin`,
+      payload: { email: 'reset@example.com', password: 'secure-vatrushka-42', factor: 'email' },
+    });
+    const newPassword = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/begin`,
+      payload: { email: 'reset@example.com', password: 'new-secure-password-73', factor: 'email' },
+    });
+    expect(oldPassword.statusCode).toBe(401);
+    expect(newPassword.statusCode).toBe(200);
+
+    const firstRefresh = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/refresh`, payload: { refreshToken: first.refreshToken } });
+    const secondRefresh = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/refresh`, payload: { refreshToken: second.refreshToken } });
+    expect(firstRefresh.statusCode).toBe(401);
+    expect(secondRefresh.statusCode).toBe(401);
+
+    const unknownCompleted = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/reset/complete`,
+      payload: { email: 'unknown@example.com', code: '123456', password: 'new-secure-password-73' },
+    });
+    expect(unknownCompleted.statusCode).toBe(401);
+    expect(unknownCompleted.json<{ code: string }>().code).toBe('INVALID_OTP');
+  });
+
+  it('rate limits password-reset requests by client address', async () => {
+    const responses = [];
+    for (let index = 0; index < 6; index += 1) {
+      responses.push(await context.app.inject({
+        method: 'POST',
+        url: `${API_PREFIX}/auth/password/reset/request-code`,
+        payload: { email: `reset-rate-${index}@example.com` },
+      }));
+    }
+    expect(responses.slice(0, 5).every((response) => response.statusCode === 200)).toBe(true);
+    expect(responses[5]?.statusCode).toBe(429);
+    expect(responses[5]?.json<{ code: string }>().code).toBe('RATE_LIMITED');
+  });
+
   it('rejects an invalid, expired, and exhausted registration code', async () => {
     await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/request-code`, payload: { email: 'anna@example.com', password: 'secure-vatrushka-42' } });
     const invalid = await context.app.inject({

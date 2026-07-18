@@ -304,6 +304,23 @@ export class VatrushkaService {
     return { ...tokens, user: publicUser(user), isNewUser: true };
   }
 
+  async requestPasswordReset(email: string): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
+    // The same response and SMTP path are used for registered and unknown
+    // addresses so the endpoint does not disclose whether an account exists.
+    return this.issueEmailCode(email, 'password_reset');
+  }
+
+  async completePasswordReset(email: string, code: string, password: string): Promise<{ status: 'PASSWORD_RESET' }> {
+    await this.consumeEmailCode(email, code, 'password_reset', 'INVALID_OTP');
+    const user = await this.store.findUserByEmail(email);
+    if (!user?.passwordHash) throw new AppError('INVALID_OTP', 401);
+    const result = await this.store.resetPasswordAndRevokeSessions(user.id, await hashPassword(password), this.now());
+    if (!result) throw new AppError('INVALID_OTP', 401);
+    await Promise.allSettled(result.revokedSessionIds.map((sessionId) => this.presenceStore.removeSession(user.id, sessionId)));
+    await this.recordSecurityEvent(result.user, 'PASSWORD_RESET', null, 'Пароль восстановлен', 'Пароль аккаунта был восстановлен по коду из письма. Все активные сессии завершены.');
+    return { status: 'PASSWORD_RESET' };
+  }
+
   async beginPasswordLogin(email: string, password: string, requestedFactor: 'auto' | 'email' | 'totp' | 'recovery'): Promise<PasswordLoginChallenge> {
     const user = await this.requireValidPassword(email, password);
     const factor = requestedFactor === 'auto' ? (user.twoFactorEnabled ? 'totp' : 'email') : requestedFactor;
@@ -1735,7 +1752,7 @@ export class VatrushkaService {
     credentialHash: string | null = null,
   ): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
     const now = this.now();
-    const latest = await this.store.findLatestAuthCode(email);
+    const latest = await this.store.findLatestAuthCodeForPurpose(email, purpose);
     if (latest) {
       const retryAt = latest.createdAt.getTime() + this.config.OTP_RESEND_SECONDS * 1000;
       if (retryAt > now.getTime()) {
