@@ -45,7 +45,7 @@ CI starts isolated PostgreSQL 17 and Redis 8 services, applies the complete Driz
 
 Visual suite сначала собирает production-like статический Storybook, затем обслуживает `storybook-static` через Vite preview. Это сохраняет однопоточный детерминированный screenshot contract, но исключает холодную Vite-трансформацию при открытии каждой story. `run-with-budget.mjs` измеряет Storybook interaction, Electron E2E и visual шаги, пишет фактическое время в GitHub Step Summary и блокирует существенную регрессию. Job-level timeouts защищают от зависшего runner. Актуальная связь рисков, уровней тестов и viewport находится в [test-coverage-matrix.md](test-coverage-matrix.md).
 
-Baseline PR #23 на GitHub-hosted Windows: Storybook interaction 77,9 секунды, Electron E2E 37,0 секунды, static Storybook visual 90,6 секунды; полный visual job 3:01 вместо 6:01 в PR #21. Эти значения являются ориентиром, а блокирующие budgets намеренно оставляют запас для вариативности cold runner.
+Baseline PR #23 на GitHub-hosted Windows: Storybook interaction 77,9 секунды, Electron E2E 37,0 секунды, static Storybook visual 90,6 секунды; полный visual job 3:01 вместо 6:01 в PR #21. Эти значения являются ориентиром, а блокирующие budgets намеренно оставляют запас для вариативности cold runner. Static visual budget равен 180 секундам: все 32 сценария обязательны, а запас покрывает наблюдавшийся cold-runner variance без ослабления job timeout.
 
 `release-candidate.yml` повторно вызывает тот же quality gate и дополнительно:
 
