@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-07-18
+
+### Fixed
+
+- Windows production packaging now requires and verifies the public API URL, preventing an installer from silently targeting `http://localhost:3000`;
+- release-candidate and production workflows explicitly build the desktop client for `https://api.myvatrushka.ru`.
+
 ## [0.6.1] - 2026-07-18
 
 ### Added

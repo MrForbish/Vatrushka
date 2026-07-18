@@ -87,6 +87,8 @@ jobs:
   windows-package:
     runs-on: windows-latest
     needs: [verify, desktop-regression]
+    env:
+      VITE_PUBLIC_API_BASE_URL: https://api.myvatrushka.ru
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
