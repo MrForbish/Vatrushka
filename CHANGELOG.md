@@ -4,6 +4,8 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.3] - 2026-07-18
+
 ### CI and quality
 
 - Visual regression now runs against one production-like static Storybook build instead of recompiling stories through the development server.
