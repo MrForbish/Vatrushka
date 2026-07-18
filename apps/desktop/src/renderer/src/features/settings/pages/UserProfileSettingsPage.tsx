@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 
 import { displayNameSchema, usernameSchema, type PublicUser, type UserProfileSettings } from '@vatrushka/shared';
 
@@ -32,7 +32,7 @@ export function UserProfileSettingsPage({ onAvatar, onDirtyChange, onLoad, onRes
   const load = useCallback(() => { setLoading(true); setError(null); void onLoad().then(apply).catch((caught) => setError(errorMessage(caught))).finally(() => setLoading(false)); }, [onLoad]);
   useEffect(load, [load]);
   const dirty = saved !== null && (displayName !== saved.displayName || (username || null) !== saved.username || (bio || null) !== saved.bio);
-  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  useLayoutEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
   if (loading && !saved) return <SettingsPageState kind="loading" />;
   if (!saved) return <SettingsPageState {...(error ? { description: error } : {})} kind="error" onAction={load} />;

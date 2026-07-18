@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 
 import type { NotificationPreviewMode, UserNotificationPreferences } from '@vatrushka/shared';
 
@@ -33,7 +33,7 @@ export function UserNotificationSettingsPage({ dndActive, onDirtyChange, onLoad,
   const apply = (next: UserNotificationPreferences): void => { setSaved(next); setForm(editable(next)); setQuietEnabled(next.quietHoursStart !== null); };
   const load = useCallback((): void => { setLoading(true); setError(null); void onLoad().then(apply).catch((caught: unknown) => setError(caught instanceof Error ? caught.message : 'Не удалось загрузить настройки уведомлений')).finally(() => setLoading(false)); }, [onLoad]);
   useEffect(load, [load]);
-  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  useLayoutEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
   if (loading && saved === null) return <SettingsPageState kind="loading" />;
   if (error !== null && saved === null) return <SettingsPageState description={error} kind="error" onAction={load} />;

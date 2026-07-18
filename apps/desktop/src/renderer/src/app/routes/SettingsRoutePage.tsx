@@ -78,6 +78,10 @@ function securityTabPath(tab: SecurityTab): string {
   return userSettingsPath(tab === 'notifications' ? 'notifications' : tab === 'sessions' ? 'sessions' : 'activity');
 }
 
+const loadUserProfileSettings = () => apiClient.getUserProfileSettings();
+const loadBlockedUsers = () => apiClient.listBlockedUsers();
+const loadUserAccountSettings = () => apiClient.getUserAccountSettings();
+
 export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Element {
   const [pageDirty, setPageDirty] = useState(false);
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -114,7 +118,7 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
   if (props.route.kind === 'user') {
     const securityTab = props.route.subpage === 'backup-codes' ? 'recovery' : userSecurityTabs[props.route.section as keyof typeof userSecurityTabs];
     const content = props.route.section === 'profile'
-      ? <UserProfileSettingsPage onAvatar={(file) => apiClient.uploadUserAvatar(file)} onDirtyChange={setPageDirty} onLoad={() => apiClient.getUserProfileSettings()} onResetAvatar={() => apiClient.resetUserAvatar()} onSave={(input) => apiClient.updateUserProfileSettings(input)} onUserChange={props.onUserChange} user={props.user} />
+      ? <UserProfileSettingsPage onAvatar={(file) => apiClient.uploadUserAvatar(file)} onDirtyChange={setPageDirty} onLoad={loadUserProfileSettings} onResetAvatar={() => apiClient.resetUserAvatar()} onSave={(input) => apiClient.updateUserProfileSettings(input)} onUserChange={props.onUserChange} user={props.user} />
       : props.route.section === 'status' && props.presenceEnabled
         ? <UserPresenceSettingsPage onDirtyChange={setPageDirty} onLoad={props.onLoadPresence} onPresenceChange={props.onPresenceChange} onSave={props.onUpdatePresence} presence={props.presence} />
       : props.route.section === 'audio'
@@ -122,9 +126,9 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
       : props.route.section === 'notifications'
         ? <UserNotificationSettingsPage dndActive={props.presence?.preference === 'do_not_disturb'} onDirtyChange={setPageDirty} onLoad={props.onLoadNotificationPreferences} onPreviewSound={props.onTestOutput} onSave={props.onUpdateNotificationPreferences} />
       : props.route.section === 'privacy'
-          ? <UserPrivacySettingsPage onDirtyChange={setPageDirty} onLoad={props.onLoadPrivacy} onLoadBlocked={() => apiClient.listBlockedUsers()} onSave={props.onUpdatePrivacy} onUnblock={(userId) => apiClient.unblockUser(userId)} />
+          ? <UserPrivacySettingsPage onDirtyChange={setPageDirty} onLoad={props.onLoadPrivacy} onLoadBlocked={loadBlockedUsers} onSave={props.onUpdatePrivacy} onUnblock={(userId) => apiClient.unblockUser(userId)} />
         : props.route.section === 'account'
-          ? <UserAccountSettingsPage onCancelDeactivation={() => apiClient.cancelAccountDeactivation()} onConfirmEmail={(code) => apiClient.confirmEmailChange(code)} onDeactivate={(input) => apiClient.scheduleAccountDeactivation(input)} onExport={() => apiClient.exportPersonalData()} onLoad={() => apiClient.getUserAccountSettings()} onLogout={props.onLogout} onRequestEmail={(input) => apiClient.requestEmailChange(input)} onUserChange={props.onUserChange} user={props.user} />
+          ? <UserAccountSettingsPage onCancelDeactivation={() => apiClient.cancelAccountDeactivation()} onConfirmEmail={(code) => apiClient.confirmEmailChange(code)} onDeactivate={(input) => apiClient.scheduleAccountDeactivation(input)} onExport={() => apiClient.exportPersonalData()} onLoad={loadUserAccountSettings} onLogout={props.onLogout} onRequestEmail={(input) => apiClient.requestEmailChange(input)} onUserChange={props.onUserChange} user={props.user} />
         : <SecurityCenter dndActive={props.presence?.preference === 'do_not_disturb'} onClose={props.onBack} onCurrentSessionRevoked={props.onCurrentSessionRevoked} onSectionChange={(tab) => props.onNavigate(securityTabPath(tab))} onSettingsChange={props.onNotificationSettingsChange} onUserChange={props.onUserChange} open presentation="page" section={securityTab ?? 'protection'} settings={props.settings} user={props.user} />;
     return (
       <>

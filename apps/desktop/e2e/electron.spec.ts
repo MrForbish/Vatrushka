@@ -152,8 +152,10 @@ test('revokes another device without exposing its refresh token to the renderer'
 
 test('opens the routed settings shell without replacing the application controller', async () => {
   let user = { id: 'settings-e2e-user', email: 'settings@myvatrushka.ru', displayName: 'Настройки E2E', platformRole: 'member', hasPassword: true, twoFactorEnabled: true };
+  let profile = { id: user.id, email: user.email, displayName: user.displayName, username: 'settings_e2e', bio: null, avatarUrl: null, usernameChangedAt: null, updatedAt: '2026-07-17T10:00:00.000Z' };
   let presence = { preference: 'online', effectiveStatus: 'online', customText: null, customTextExpiresAt: null, updatedAt: '2026-07-17T10:00:00.000Z' };
   const privacy = { directMessages: 'shared_servers', presenceVisibility: 'shared_servers', activityVisible: true, updatedAt: '2026-07-17T10:00:00.000Z' };
+  const notificationPreferences = { desktopEnabled: true, soundEnabled: true, previewMode: 'full', directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: null, quietHoursEnd: null, quietHoursTimezone: null, updatedAt: '2026-07-17T10:00:00.000Z' };
   const home = {
     user: { id: user.id, displayName: user.displayName, email: user.email, avatarUrl: null, presence: 'online', platformBadge: null },
     readiness: { connection: 'healthy', audioSetupRequired: false },
@@ -179,19 +181,22 @@ test('opens the routed settings shell without replacing the application controll
     if (request.method === 'GET' && url.pathname === '/api/v1/direct-conversations') { response.end('[]'); return; }
     if (request.method === 'GET' && url.pathname === '/api/v1/auth/sessions') { response.end('[]'); return; }
     if (request.method === 'GET' && url.pathname === '/api/v1/me/security-events') { response.end('[]'); return; }
-    if (request.method === 'PATCH' && url.pathname === '/api/v1/me') { user = { ...user, displayName: 'Новое имя' }; response.end(JSON.stringify(user)); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/users/me/profile') { response.end(JSON.stringify(profile)); return; }
+    if (request.method === 'PATCH' && url.pathname === '/api/v1/users/me/profile') { user = { ...user, displayName: 'Новое имя' }; profile = { ...profile, displayName: user.displayName }; response.end(JSON.stringify(profile)); return; }
     if (request.method === 'POST' && url.pathname === '/api/v1/me/presence/heartbeat') { response.end(JSON.stringify(presence)); return; }
     if (request.method === 'GET' && url.pathname === '/api/v1/me/presence') { response.end(JSON.stringify(presence)); return; }
     if (request.method === 'PATCH' && url.pathname === '/api/v1/me/presence') { presence = { ...presence, preference: 'do_not_disturb', effectiveStatus: 'dnd' }; response.end(JSON.stringify(presence)); return; }
     if (request.method === 'GET' && url.pathname === '/api/v1/me/privacy') { response.end(JSON.stringify(privacy)); return; }
     if (request.method === 'PATCH' && url.pathname === '/api/v1/me/privacy') { response.end(JSON.stringify(privacy)); return; }
+    if (request.method === 'GET' && url.pathname === '/api/v1/me/notification-preferences') { response.end(JSON.stringify(notificationPreferences)); return; }
+    if (request.method === 'PUT' && url.pathname === '/api/v1/me/notification-preferences') { response.end(JSON.stringify(notificationPreferences)); return; }
     response.statusCode = 404;
     response.end(JSON.stringify({ code: 'NOT_FOUND' }));
   });
   await new Promise<void>((resolve, reject) => apiServer?.listen(3000, () => resolve()).once('error', reject));
 
   application = await electron.launch({ args: ['.', '--use-fake-device-for-media-stream', `--user-data-dir=.e2e-user-data-settings-routes-${process.pid}`], cwd: process.cwd(), env: electronEnvironment() });
-  let window = await application.firstWindow();
+  const window = await application.firstWindow();
   await window.getByRole('textbox', { name: 'Email' }).fill(user.email);
   await window.getByRole('textbox', { name: 'Пароль', exact: true }).fill('secure-vatrushka-42');
   await window.getByRole('button', { name: /Продолжить/u }).click();
@@ -201,41 +206,44 @@ test('opens the routed settings shell without replacing the application controll
 
   await window.evaluate(() => {
     globalThis.location.hash = '#/settings/profile?settingsPreview=1';
-    globalThis.location.reload();
   });
-  window = await application.firstWindow();
+  await expect(window).toHaveURL(/#\/settings\/profile/u);
   await expect(window.getByRole('heading', { name: 'Мой профиль' })).toBeVisible();
-  await expect(window.getByRole('navigation', { name: 'Разделы настроек' })).toBeVisible();
+  const settingsNavigation = window.getByRole('navigation', { name: 'Разделы настроек' });
+  await expect(settingsNavigation).toBeVisible();
   await window.getByRole('textbox', { name: 'Отображаемое имя' }).fill('Новое имя');
-  await window.getByRole('button', { name: /Уведомления/u }).click();
+  await expect(window.getByText('Есть изменения', { exact: true })).toBeVisible();
+  await settingsNavigation.getByRole('button', { name: /Уведомления/u }).click();
   const discardDialog = window.getByRole('dialog', { name: 'Отменить изменения?' });
   await expect(discardDialog).toBeVisible();
   await discardDialog.getByRole('button', { name: 'Отмена' }).click();
   await expect(window).toHaveURL(/#\/settings\/profile/u);
   await window.getByRole('button', { name: 'Сохранить' }).click();
   await expect(window.locator('.vui-user-profile-preview').getByText('Новое имя', { exact: true })).toBeVisible();
-  await window.getByRole('button', { name: /Голос и звук/u }).click();
+  await settingsNavigation.getByRole('button', { name: /Голос и звук/u }).click();
   await expect(window).toHaveURL(/#\/settings\/audio/u);
   await expect(window.getByRole('heading', { name: 'Голос и звук' })).toBeVisible();
   await expect(window.getByRole('button', { name: 'Устройство ввода' })).toContainText('Fake Default Audio Input');
   await expect(window.getByRole('button', { name: 'Динамики / наушники' })).toContainText('Fake Default Audio Output');
-  await window.getByRole('button', { name: /Статус и активность/u }).click();
+  await settingsNavigation.getByRole('button', { name: /Статус и активность/u }).click();
   await expect(window.getByRole('heading', { name: 'Статус и активность' })).toBeVisible();
   await window.getByRole('radio', { name: /Не беспокоить/u }).click();
   await window.getByRole('button', { name: 'Сохранить' }).click();
   await expect(window.getByText('Режим «Не беспокоить» активен.')).toBeVisible();
-  await window.getByRole('button', { name: /Уведомления/u }).click();
+  await settingsNavigation.getByRole('button', { name: /Уведомления/u }).click();
   await expect(window).toHaveURL(/#\/settings\/notifications/u);
-  await expect(window.getByRole('heading', { name: 'Уведомления о сообщениях' })).toBeVisible();
-  await expect(window.getByRole('switch', { name: 'Push-уведомления' })).toBeVisible();
-  await expect(window.getByRole('switch', { name: 'Push-уведомления' })).toBeDisabled();
-  await window.getByRole('button', { name: /Конфиденциальность/u }).click();
+  await expect(window.getByRole('heading', { name: 'Уведомления' })).toBeVisible();
+  const desktopNotifications = window.getByRole('switch', { name: /Desktop-уведомления/u });
+  await expect(desktopNotifications).toBeVisible();
+  await expect(desktopNotifications).toBeChecked();
+  await expect(window.getByText('Статус «Не беспокоить» активен.', { exact: true })).toBeVisible();
+  await settingsNavigation.getByRole('button', { name: /Конфиденциальность/u }).click();
   await expect(window.getByRole('heading', { name: 'Конфиденциальность' })).toBeVisible();
-  await window.getByRole('button', { name: /Безопасность/u }).click();
+  await settingsNavigation.getByRole('button', { name: /Безопасность/u }).click();
   await window.getByRole('button', { name: 'Управлять кодами' }).click();
   await expect(window).toHaveURL(/#\/settings\/security\/backup-codes/u);
   await expect(window.getByRole('heading', { name: 'Резервные коды' })).toBeVisible();
-  await window.getByRole('button', { name: /Устройства и сессии/u }).click();
+  await settingsNavigation.getByRole('button', { name: /Устройства и сессии/u }).click();
   await expect(window).toHaveURL(/#\/settings\/sessions/u);
   await expect(window.getByRole('heading', { name: 'Активные устройства' })).toBeVisible();
   await window.getByRole('button', { name: 'Вернуться' }).click();

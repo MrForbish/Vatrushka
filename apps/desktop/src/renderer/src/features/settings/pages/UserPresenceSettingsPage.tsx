@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 
 import type { PresencePreference, UserPresence } from '@vatrushka/shared';
 
@@ -64,7 +64,7 @@ export function UserPresenceSettingsPage({ onDirtyChange, onLoad, onPresenceChan
     void onLoad().then(applyPresence).catch((caught: unknown) => setLoadError(caught instanceof Error ? caught.message : 'Не удалось загрузить статус')).finally(() => setLoading(false));
   }, [applyPresence, onLoad]);
 
-  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  useLayoutEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
   useEffect(() => {
     let active = true;

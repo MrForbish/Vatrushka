@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 
 import type { BlockedUserSettings, DirectMessagePrivacy, PresenceVisibility, UserPrivacySettings } from '@vatrushka/shared';
 
@@ -31,7 +31,7 @@ export function UserPrivacySettingsPage({ onDirtyChange, onLoad, onLoadBlocked, 
 
   useEffect(load, [load]);
   useEffect(() => { void onLoadBlocked().then(setBlocked).catch(() => undefined); }, [onLoadBlocked]);
-  useEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
+  useLayoutEffect(() => onDirtyChange(dirty), [dirty, onDirtyChange]);
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
   if (loading && saved === null) return <SettingsPageState kind="loading" />;
   if (error !== null && saved === null) return <SettingsPageState description={error} kind="error" onAction={load} />;
