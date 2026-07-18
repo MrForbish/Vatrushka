@@ -73,7 +73,7 @@ export class IdentitySettingsStore {
 
   async blockUser(userId: string, blockedUserId: string, now: Date): Promise<boolean> {
     const result = await this.pool.query(`insert into blocked_users (blocker_user_id, blocked_user_id, created_at)
-      select $1, $2, $3 where $1 <> $2 and exists (select 1 from users where id = $2 and deleted_at is null)
+      select $1::uuid, $2::uuid, $3 where $1::uuid <> $2::uuid and exists (select 1 from users where id = $2::uuid and deleted_at is null)
       on conflict (blocker_user_id, blocked_user_id) do nothing`, [userId, blockedUserId, now]);
     return result.rowCount === 1;
   }

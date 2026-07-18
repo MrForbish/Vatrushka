@@ -704,7 +704,7 @@ export class CanonicalMessagingStore {
       left join messages m on m.conversation_id = c.id and m.id > coalesce(state.last_read_message_id, 0)
       where (c.type = 'server_channel' and exists (select 1 from server_members sm where sm.server_id = c.server_id and sm.user_id = $1))
          or (c.type in ('direct', 'group_direct') and exists (select 1 from conversation_members cm where cm.conversation_id = c.id and cm.user_id = $1 and cm.left_at is null))
-      group by c.id, c.type, state.mention_count
+      group by c.id, c.type, state.last_read_message_id
     `, [userId]);
     const conversations = result.rows.map((row) => ({ conversationId: row.conversation_id, unreadCount: row.unread_count, mentionCount: row.mention_count, firstUnreadMessageId: row.first_unread_message_id }));
     const replyResult = await this.pool.query<{ count: number }>("select count(*)::int as count from notifications where user_id = $1 and type = 'reply' and read_at is null and dismissed_at is null", [userId]);
