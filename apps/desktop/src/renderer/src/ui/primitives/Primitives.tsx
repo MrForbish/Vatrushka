@@ -57,7 +57,7 @@ export function FilePicker({ accept, disabled = false, label, onFile, selectedNa
         <Button disabled={disabled} onClick={() => inputRef.current?.click()} size="sm" type="button" variant="secondary">Выбрать файл</Button>
         <small title={selectedName ?? undefined}>{selectedName ?? 'Файл не выбран'}</small>
       </div>
-      <input accept={accept} disabled={disabled} onChange={(event) => { const file = event.target.files?.[0]; if (file) onFile(file); event.target.value = ''; }} ref={inputRef} tabIndex={-1} type="file" />
+      <input aria-label={`${label}: файл`} accept={accept} disabled={disabled} onChange={(event) => { const file = event.target.files?.[0]; if (file) onFile(file); event.target.value = ''; }} ref={inputRef} tabIndex={-1} type="file" />
     </div>
   );
 }
