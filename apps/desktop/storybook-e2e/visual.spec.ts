@@ -135,7 +135,8 @@ test.describe('Vatrushka design system visual baseline', () => {
 
   test('screen share audio volume controls', async ({ page }) => {
     await openStory(page, 'features-voice-room--screen-share-viewer');
-    await expect(page.getByRole('slider', { name: 'Громкость трансляции' })).toBeVisible();
+    await page.locator('.vui-room__video-frame').click({ button: 'right' });
+    await expect(page.getByRole('slider', { name: 'Громкость демонстрации' })).toBeVisible();
     await expect(page).toHaveScreenshot('screen-share-audio-volume.png', { animations: 'disabled', fullPage: true });
   });
 

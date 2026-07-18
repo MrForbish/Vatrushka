@@ -46,6 +46,7 @@
 .vui-room__stream-audio-controls { display: grid; grid-template-columns: 36px minmax(180px, 240px); align-items: center; gap: var(--space-3); }
 .vui-room__stream-audio-controls > button { display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: var(--radius-sm); background: var(--color-primary-soft); color: var(--color-cyan); }
 .vui-room__stream-context { position: fixed; z-index: 160; display: grid; width: 270px; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-elevated); box-shadow: var(--shadow-modal); }
+.vui-room__stream-context .vui-slider { min-width: 0; }
 .vui-room__stream-context > button { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; }
 .vui-room__stream-context > button:hover { background: var(--color-surface-3); color: var(--color-text-primary); }
 .vui-room__empty { display: grid; justify-items: center; color: var(--color-text-muted); text-align: center; }
