@@ -4,6 +4,8 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-07-18
+
 ### Added
 
 - публичное отображаемое имя участника внутри конкретного сервера и приватные псевдонимы других участников, видимые только назначившему их пользователю;
