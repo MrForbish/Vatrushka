@@ -459,6 +459,29 @@ describe('home dashboard API', () => {
 });
 
 describe('servers, channels, messages, and roles API', () => {
+  it('separates a public server display name from viewer-private member aliases', async () => {
+    const owner = await login('alias-owner@example.com', 'Owner');
+    const member = await login('alias-member@example.com', 'Member');
+    const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Имена' } });
+    const server = created.json<{ id: string; inviteUrl: string; channels: Array<{ id: string; type: string }> }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteTokenFromUrl(server.inviteUrl)}/accept`, headers: { authorization: `Bearer ${member.accessToken}` } });
+
+    const publicName = await context.app.inject({ method: 'PATCH', url: `${API_PREFIX}/servers/${server.id}/members/me/display-name`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { displayName: 'Местный участник' } });
+    expect(publicName.statusCode).toBe(204);
+    const privateAlias = await context.app.inject({ method: 'PATCH', url: `${API_PREFIX}/servers/${server.id}/members/${member.userId}/private-alias`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { alias: 'Мой помощник' } });
+    expect(privateAlias.statusCode).toBe(204);
+
+    const ownerView = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    expect(ownerView.json<{ members: Array<{ userId: string; displayName: string; serverDisplayName: string | null; privateAlias: string | null }> }>().members.find((candidate) => candidate.userId === member.userId)).toMatchObject({ displayName: 'Мой помощник', serverDisplayName: 'Местный участник', privateAlias: 'Мой помощник' });
+    const memberView = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(memberView.json<{ members: Array<{ userId: string; displayName: string; serverDisplayName: string | null; privateAlias: string | null }> }>().members.find((candidate) => candidate.userId === member.userId)).toMatchObject({ displayName: 'Местный участник', serverDisplayName: 'Местный участник', privateAlias: null });
+
+    const voice = server.channels.find((channel) => channel.type === 'voice');
+    if (!voice) throw new Error('Missing voice channel');
+    const connected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/connect`, headers: { authorization: `Bearer ${member.accessToken}` } });
+    expect(connected.json<{ participantDisplayName: string }>().participantDisplayName).toBe('Местный участник');
+  });
+
   it('creates a server and lets another user join through its short invite link', async () => {
     const owner = await login('community-owner@example.com', 'Owner');
     const created = await context.app.inject({

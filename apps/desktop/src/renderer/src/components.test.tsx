@@ -117,8 +117,9 @@ describe('room UI', () => {
     expect(screen.getByTestId('screen-share-control')).toBeEnabled();
     expect(screen.getByText('Голосовая связь активна')).toBeInTheDocument();
     expect(document.querySelector('.vui-room__participant-grid')?.children).toHaveLength(2);
-    expect(screen.getByRole('button', { name: 'Исключить Visitor' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Заглушить локально' }));
+    fireEvent.contextMenu(screen.getByRole('img', { name: 'Visitor' }).closest('article')!);
+    expect(screen.getByRole('menuitem', { name: 'Исключить из канала' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Отключить звук' }));
     expect(onParticipantMute).toHaveBeenCalledWith('user_visitor-1_remote', true);
     await userEvent.click(screen.getByRole('button', { name: 'Устройства' }));
     await userEvent.click(screen.getByLabelText('Устройство ввода'));
@@ -134,6 +135,7 @@ describe('room UI', () => {
   it('keeps the participant volume control mounted when the active speaker changes', () => {
     const commonProps = { connection, devices: voiceDevices, microphoneId: undefined, outputId: undefined, busy: false, error: null, onMute: noop, onShare: noop, onCopy: noop, onLeave: noop, onKick: noop, onMicrophone: noop, onOutput: noop, onRefreshDevices: noop, onStartAudio: noop, onScreenAudioMute: noop, onScreenAudioVolume: noop, onParticipantMute: noop, onParticipantVolume: noop };
     const { rerender } = render(<RoomView {...commonProps} snapshot={baseSnapshot} />);
+    fireEvent.contextMenu(screen.getByRole('img', { name: 'Visitor' }).closest('article')!);
     const volumeSlider = screen.getByRole('slider', { name: 'Громкость Visitor' });
     const nextSnapshot = {
       ...baseSnapshot,
@@ -162,11 +164,11 @@ describe('room UI', () => {
     const snapshot = { ...baseSnapshot, screenTrack: track, screenSharerName: 'Visitor', screenShareIsLocal: false, hasScreenShareAudio: true, screenShareAudioVolume: 0.7 };
     render(<RoomView connection={connection} snapshot={snapshot} devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} onMute={noop} onShare={noop} onCopy={noop} onLeave={noop} onKick={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onStartAudio={noop} onScreenAudioMute={onScreenAudioMute} onScreenAudioVolume={onScreenAudioVolume} onParticipantMute={noop} onParticipantVolume={noop} />);
 
-    expect(screen.getByText('Звук трансляции')).toBeInTheDocument();
-    expect(screen.getByText('Громкость меняется только для вас')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Выключить звук трансляции' }));
+    fireEvent.contextMenu(document.querySelector('.vui-room__video-frame')!);
+    expect(screen.getByText('Звук демонстрации')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Отключить звук' }));
     expect(onScreenAudioMute).toHaveBeenCalledOnce();
-    fireEvent.change(screen.getByRole('slider', { name: 'Громкость трансляции' }), { target: { value: '35' } });
+    fireEvent.change(screen.getByRole('slider', { name: 'Громкость демонстрации' }), { target: { value: '35' } });
     expect(onScreenAudioVolume).toHaveBeenCalledWith(0.35);
   });
 });
@@ -249,7 +251,7 @@ describe('server UI', () => {
       { id: 'voice-1', serverId: 'server-1', name: 'Голосовой', type: 'voice', position: 1, unreadCount: 0, voiceParticipants: [{ identity: 'user_user-1_desktop', userId: 'user-1', displayName: 'Anna', platformRole: 'owner' }] },
     ],
     roles: [{ id: 'role-1', serverId: 'server-1', name: '@everyone', color: '#8d7a72', position: 0, isDefault: true, permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] }],
-    members: [{ userId: 'user-1', displayName: 'Anna', platformRole: 'owner', joinedAt: '2026-01-01T00:00:00.000Z', roles: [] }],
+    members: [{ userId: 'user-1', displayName: 'Anna', serverDisplayName: null, privateAlias: null, platformRole: 'owner', joinedAt: '2026-01-01T00:00:00.000Z', roles: [] }],
   };
 
   it('shows persistent channels, messages, members, and role management', async () => {

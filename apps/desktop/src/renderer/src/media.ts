@@ -60,7 +60,8 @@ const initialSnapshot: MediaSnapshot = {
   error: null,
 };
 
-const screenShareEncoding = { maxBitrate: 8_000_000, maxFramerate: 30, priority: 'high' as const };
+export type ScreenShareQuality = '1080p60' | '1440p60';
+const defaultScreenShareEncoding = { maxBitrate: 10_000_000, maxFramerate: 60, priority: 'high' as const };
 const publishingReadyTimeoutMs = 20_000;
 
 class UserFacingMediaError extends Error {}
@@ -73,9 +74,11 @@ export class MediaSession {
   private screenShareAudioVolume = 1;
   private screenShareAudioMuted = false;
   private stoppingScreenShare = false;
+  private screenShareTransition: Promise<void> = Promise.resolve();
   private readonly participantVolumes = new Map<string, number>();
   private readonly locallyMutedParticipants = new Set<string>();
   private readonly listeners = new Set<() => void>();
+  private readonly terminationListeners = new Set<(reason: unknown) => void>();
 
   constructor(private readonly api: ApiClient) {}
 
@@ -84,6 +87,11 @@ export class MediaSession {
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  };
+
+  subscribeTerminated = (listener: (reason: unknown) => void): (() => void) => {
+    this.terminationListeners.add(listener);
+    return () => this.terminationListeners.delete(listener);
   };
 
   async connect(connection: RoomConnection, settings: LocalSettings): Promise<void> {
@@ -104,7 +112,7 @@ export class MediaSession {
       },
       ...(settings.outputDeviceId ? { audioOutput: { deviceId: settings.outputDeviceId } } : {}),
       publishDefaults: {
-        screenShareEncoding,
+        screenShareEncoding: defaultScreenShareEncoding,
         simulcast: false,
       },
     };
@@ -223,33 +231,41 @@ export class MediaSession {
     });
   }
 
-  async startScreenShare(includeAudio: boolean, source: Pick<DesktopSourceInfo, 'width' | 'height'> = {}): Promise<void> {
+  async startScreenShare(source: Pick<DesktopSourceInfo, 'width' | 'height'> = {}, quality: ScreenShareQuality = '1080p60'): Promise<void> {
+    const operation = this.screenShareTransition.then(() => this.startScreenShareInternal(source, quality));
+    this.screenShareTransition = operation.catch(() => undefined);
+    return operation;
+  }
+
+  private async startScreenShareInternal(source: Pick<DesktopSourceInfo, 'width' | 'height'>, quality: ScreenShareQuality): Promise<void> {
     if (!this.room || !this.connection) throw new Error('Комната не подключена');
     await this.waitForPublishingReady();
+    if (this.room.localParticipant.isScreenShareEnabled) await this.stopScreenShareInternal(true);
     this.stoppingScreenShare = false;
-    const resolution = screenShareResolution(source);
+    const resolution = screenShareResolution(source, quality);
+    const encoding = quality === '1440p60'
+      ? { maxBitrate: 18_000_000, maxFramerate: 60, priority: 'high' as const }
+      : defaultScreenShareEncoding;
     try {
       await this.room.localParticipant.setScreenShareEnabled(
         true,
         {
-          audio: includeAudio
-            ? {
-                restrictOwnAudio: { exact: true },
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-              }
-            : false,
+          audio: {
+            restrictOwnAudio: { exact: true },
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+          },
           video: true,
           resolution,
           contentHint: 'detail',
-          systemAudio: includeAudio ? 'include' : 'exclude',
+          systemAudio: 'include',
         },
-        { degradationPreference: 'maintain-resolution', screenShareEncoding, simulcast: false },
+        { degradationPreference: 'maintain-resolution', screenShareEncoding: encoding, simulcast: false },
       );
-      if (includeAudio && !this.isOwnAudioRestricted()) {
-        await this.stopScreenShare(false);
-        throw new UserFacingMediaError('Windows не смогла исключить голоса участников из системного звука. Запустите демонстрацию без звука, чтобы не создавать эхо.');
+      if (!this.isOwnAudioRestricted()) {
+        await this.stopScreenShareInternal(false);
+        throw new UserFacingMediaError('Windows не смогла безопасно исключить голоса участников из звука демонстрации. Показ остановлен, чтобы не создавать эхо.');
       }
     } catch (error) {
       throw new Error(screenShareErrorMessage(error), { cause: error });
@@ -259,6 +275,12 @@ export class MediaSession {
   }
 
   async stopScreenShare(release = true): Promise<void> {
+    const operation = this.screenShareTransition.then(() => this.stopScreenShareInternal(release));
+    this.screenShareTransition = operation.catch(() => undefined);
+    return operation;
+  }
+
+  private async stopScreenShareInternal(release: boolean): Promise<void> {
     this.stopHeartbeat();
     const room = this.room;
     if (room?.localParticipant.isScreenShareEnabled) {
@@ -268,7 +290,7 @@ export class MediaSession {
       } catch {
         // Continue with the server-side release even if unpublishing failed.
       } finally {
-        window.setTimeout(() => { this.stoppingScreenShare = false; }, 1_000);
+        this.stoppingScreenShare = false;
       }
     }
     if (release && this.connection) {
@@ -345,7 +367,7 @@ export class MediaSession {
         }
         if (publication.source === Track.Source.ScreenShare) {
           publication.setVideoQuality(VideoQuality.HIGH);
-          publication.setVideoFPS(30);
+          publication.setVideoFPS(60);
         }
         refresh();
       })
@@ -355,7 +377,10 @@ export class MediaSession {
       })
       .on(RoomEvent.AudioPlaybackStatusChanged, refresh)
       .on(RoomEvent.MediaDevicesError, (error) => this.patch({ error: deviceErrorMessage(error) }))
-      .on(RoomEvent.Disconnected, () => this.patch({ connectionState: ConnectionState.Disconnected }));
+      .on(RoomEvent.Disconnected, (reason) => {
+        this.patch({ connectionState: ConnectionState.Disconnected });
+        for (const listener of this.terminationListeners) listener(reason);
+      });
   }
 
   private refreshSnapshot(): void {
@@ -473,20 +498,22 @@ function screenShareErrorMessage(error: unknown): string {
     return 'Связь с голосовым сервером прервалась во время запуска демонстрации. Дождитесь переподключения и повторите попытку.';
   }
   if (error instanceof DOMException && error.name === 'NotAllowedError') return 'Доступ к записи экрана запрещён. Разрешите его в настройках Windows.';
-  if (error instanceof DOMException && error.name === 'OverconstrainedError') return 'Windows не смогла безопасно захватить системный звук без голосов участников. Запустите демонстрацию без звука.';
+  if (error instanceof DOMException && error.name === 'OverconstrainedError') return 'Windows не смогла безопасно захватить звук без голосов участников. Демонстрация не запущена.';
   if (error instanceof DOMException && error.name === 'NotFoundError') return 'Выбранный экран или окно больше недоступны';
   if (error instanceof DOMException && error.name === 'NotReadableError') return 'Не удалось прочитать выбранный экран или окно';
   if (error instanceof DOMException && error.name === 'AbortError') return 'Запуск демонстрации был отменён';
   return 'Не удалось запустить демонстрацию экрана';
 }
 
-function screenShareResolution(source: Pick<DesktopSourceInfo, 'width' | 'height'>): { width: number; height: number; frameRate: number } {
+function screenShareResolution(source: Pick<DesktopSourceInfo, 'width' | 'height'>, quality: ScreenShareQuality): { width: number; height: number; frameRate: number } {
   const sourceWidth = source.width ?? 2560;
   const sourceHeight = source.height ?? 1440;
-  const scale = Math.min(1, 2560 / sourceWidth, 1440 / sourceHeight);
+  const maxWidth = quality === '1440p60' ? 2560 : 1920;
+  const maxHeight = quality === '1440p60' ? 1440 : 1080;
+  const scale = Math.min(1, maxWidth / sourceWidth, maxHeight / sourceHeight);
   return {
     width: Math.max(2, Math.round((sourceWidth * scale) / 2) * 2),
     height: Math.max(2, Math.round((sourceHeight * scale) / 2) * 2),
-    frameRate: 30,
+    frameRate: 60,
   };
 }

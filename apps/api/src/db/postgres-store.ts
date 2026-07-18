@@ -354,6 +354,27 @@ export class PostgresStore implements DataStore {
     return rows.length === 1;
   }
 
+  async updateOwnServerDisplayName(serverId: string, userId: string, displayName: string | null): Promise<boolean> {
+    const rows = await this.db.update(schema.serverMembers).set({ nickname: displayName }).where(and(eq(schema.serverMembers.serverId, serverId), eq(schema.serverMembers.userId, userId))).returning({ userId: schema.serverMembers.userId });
+    return rows.length === 1;
+  }
+
+  async setServerMemberAlias(serverId: string, viewerUserId: string, targetUserId: string, alias: string | null, now: Date): Promise<boolean> {
+    if (alias === null) {
+      await this.db.delete(schema.serverMemberAliases).where(and(eq(schema.serverMemberAliases.serverId, serverId), eq(schema.serverMemberAliases.viewerUserId, viewerUserId), eq(schema.serverMemberAliases.targetUserId, targetUserId)));
+      return true;
+    }
+    await this.db.insert(schema.serverMemberAliases).values({ serverId, viewerUserId, targetUserId, alias, updatedAt: now }).onConflictDoUpdate({
+      target: [schema.serverMemberAliases.serverId, schema.serverMemberAliases.viewerUserId, schema.serverMemberAliases.targetUserId],
+      set: { alias, updatedAt: now },
+    });
+    return true;
+  }
+
+  async listServerMemberAliases(serverId: string, viewerUserId: string): Promise<Array<{ targetUserId: string; alias: string }>> {
+    return this.db.select({ targetUserId: schema.serverMemberAliases.targetUserId, alias: schema.serverMemberAliases.alias }).from(schema.serverMemberAliases).where(and(eq(schema.serverMemberAliases.serverId, serverId), eq(schema.serverMemberAliases.viewerUserId, viewerUserId)));
+  }
+
   async removeServerMember(serverId: string, userId: string): Promise<boolean> {
     return this.db.transaction(async (tx) => {
       await tx.delete(schema.serverMemberRoles).where(and(eq(schema.serverMemberRoles.serverId, serverId), eq(schema.serverMemberRoles.userId, userId)));

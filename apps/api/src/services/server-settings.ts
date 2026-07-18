@@ -112,34 +112,35 @@ export class ServerSettingsStore {
     return result.rowCount === 1;
   }
 
-  async listMembers(serverId: string, search: string | null): Promise<ServerSettingsMember[]> {
+  async listMembers(serverId: string, search: string | null, viewerUserId: string): Promise<ServerSettingsMember[]> {
     const result = await this.pool.query<{
-      user_id: string; display_name: string | null; username: string | null; nickname: string | null; platform_role: 'member' | 'admin' | 'owner';
+      user_id: string; display_name: string | null; username: string | null; nickname: string | null; private_alias: string | null; platform_role: 'member' | 'admin' | 'owner';
       joined_at: Date; last_active_at: Date | null; muted_until: Date | null; deafened: boolean; role_ids: string[];
     }>(`
-      select member.user_id, user_record.display_name, user_record.username, member.nickname, user_record.platform_role,
+      select member.user_id, user_record.display_name, user_record.username, member.nickname, private_alias.alias as private_alias, user_record.platform_role,
         member.joined_at, member.last_active_at, member.muted_until, member.deafened,
         coalesce(array_agg(assignment.role_id) filter (where assignment.role_id is not null), '{}') as role_ids
       from server_members member join users user_record on user_record.id = member.user_id
+      left join server_member_aliases private_alias on private_alias.server_id = member.server_id and private_alias.viewer_user_id = $3 and private_alias.target_user_id = member.user_id
       left join server_member_roles assignment on assignment.server_id = member.server_id and assignment.user_id = member.user_id
       where member.server_id = $1 and ($2::text is null or coalesce(member.nickname, user_record.display_name, user_record.username, '') ilike '%' || $2 || '%')
-      group by member.user_id, user_record.display_name, user_record.username, member.nickname, user_record.platform_role,
+      group by member.user_id, user_record.display_name, user_record.username, member.nickname, private_alias.alias, user_record.platform_role,
         member.joined_at, member.last_active_at, member.muted_until, member.deafened
       order by coalesce(member.nickname, user_record.display_name, user_record.username) asc nulls last limit 500
-    `, [serverId, search]);
+    `, [serverId, search, viewerUserId]);
     return result.rows.map((row) => ({
       userId: row.user_id, displayName: row.display_name ?? row.username ?? 'Удалённый пользователь', username: row.username,
-      nickname: row.nickname, platformRole: row.platform_role, joinedAt: row.joined_at.toISOString(), lastActiveAt: row.last_active_at?.toISOString() ?? null,
+      serverDisplayName: row.nickname, privateAlias: row.private_alias, platformRole: row.platform_role, joinedAt: row.joined_at.toISOString(), lastActiveAt: row.last_active_at?.toISOString() ?? null,
       mutedUntil: row.muted_until?.toISOString() ?? null, deafened: row.deafened, roleIds: row.role_ids,
     }));
   }
 
-  async updateMember(serverId: string, userId: string, input: { nickname?: string | null; mutedUntil?: Date | null; deafened?: boolean }): Promise<boolean> {
+  async updateMember(serverId: string, userId: string, input: { mutedUntil?: Date | null; deafened?: boolean }): Promise<boolean> {
     const result = await this.pool.query(`
-      update server_members set nickname = case when $3 then $4 else nickname end,
-        muted_until = case when $5 then $6 else muted_until end, deafened = case when $7 then $8 else deafened end,
+      update server_members set muted_until = case when $3 then $4 else muted_until end,
+        deafened = case when $5 then $6 else deafened end,
         last_active_at = coalesce(last_active_at, now()) where server_id = $1 and user_id = $2
-    `, [serverId, userId, input.nickname !== undefined, input.nickname ?? null, input.mutedUntil !== undefined, input.mutedUntil ?? null, input.deafened !== undefined, input.deafened ?? false]);
+    `, [serverId, userId, input.mutedUntil !== undefined, input.mutedUntil ?? null, input.deafened !== undefined, input.deafened ?? false]);
     return result.rowCount === 1;
   }
 

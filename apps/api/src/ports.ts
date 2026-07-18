@@ -75,6 +75,9 @@ export interface DataStore {
   findServerByInviteToken(inviteToken: string): Promise<ServerRecord | null>;
   findServerMember(serverId: string, userId: string): Promise<ServerMemberRecord | null>;
   addServerMember(member: ServerMemberRecord): Promise<boolean>;
+  updateOwnServerDisplayName(serverId: string, userId: string, displayName: string | null): Promise<boolean>;
+  setServerMemberAlias(serverId: string, viewerUserId: string, targetUserId: string, alias: string | null, now: Date): Promise<boolean>;
+  listServerMemberAliases(serverId: string, viewerUserId: string): Promise<Array<{ targetUserId: string; alias: string }>>;
   removeServerMember(serverId: string, userId: string): Promise<boolean>;
   listServerMembers(serverId: string): Promise<ServerMemberProfile[]>;
   listServerRoles(serverId: string): Promise<ServerRoleRecord[]>;

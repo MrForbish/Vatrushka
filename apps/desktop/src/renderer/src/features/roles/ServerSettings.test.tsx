@@ -22,8 +22,8 @@ const server: ServerDetail = {
     { id: 'role-everyone', serverId: 'server-1', name: '@everyone', color: '#8f91a8', position: 0, isDefault: true, kind: 'EVERYONE', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY'] },
   ],
   members: [
-    { userId: 'user-owner', displayName: 'Илья', platformRole: 'owner', joinedAt: '2026-01-01T00:00:00.000Z', roles: [] },
-    { userId: 'user-member', displayName: 'Анна', platformRole: 'member', joinedAt: '2026-01-02T00:00:00.000Z', roles: [] },
+    { userId: 'user-owner', displayName: 'Илья', serverDisplayName: null, privateAlias: null, platformRole: 'owner', joinedAt: '2026-01-01T00:00:00.000Z', roles: [] },
+    { userId: 'user-member', displayName: 'Анна', serverDisplayName: null, privateAlias: null, platformRole: 'member', joinedAt: '2026-01-02T00:00:00.000Z', roles: [] },
   ],
   channels: [
     { id: 'channel-general', serverId: 'server-1', name: 'общий', type: 'text', position: 0, unreadCount: 0, permissions: [...serverPermissions], permissionOverwrites: [{ channelId: 'channel-general', targetType: 'ROLE', targetId: 'role-moderator', allow: [], deny: ['SEND_MESSAGES'] }] },

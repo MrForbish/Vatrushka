@@ -71,6 +71,11 @@
 .vui-profile-dock__copy strong { font: var(--text-label-md); }
 .vui-profile-dock__copy small { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-profile-dock[data-founder='true'] .vui-profile-dock__copy small { color: var(--color-founder); }
+.vui-profile-dock__presence { position: relative; }
+.vui-profile-dock__presence > button { display: grid; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
+.vui-profile-dock__status-menu { position: absolute; z-index: 90; bottom: calc(100% + var(--space-3)); left: 0; display: grid; width: 190px; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-elevated); box-shadow: var(--shadow-float); }
+.vui-profile-dock__status-menu button { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; text-align: left; }
+.vui-profile-dock__status-menu button:hover { background: var(--color-surface-3); color: var(--color-text-primary); }
 
 .vui-server-topbar { display: flex; align-items: center; gap: var(--space-3); min-width: 0; width: 100%; height: 100%; }
 .vui-server-topbar__title { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }

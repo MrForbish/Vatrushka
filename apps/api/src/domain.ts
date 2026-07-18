@@ -85,6 +85,7 @@ export interface ServerMemberRecord {
   serverId: string;
   userId: string;
   joinedAt: Date;
+  nickname?: string | null;
 }
 
 export interface ServerRoleRecord {

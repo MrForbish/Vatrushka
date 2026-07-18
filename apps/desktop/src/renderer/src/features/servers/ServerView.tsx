@@ -4,6 +4,8 @@ import {
   materializeConversationMentionLabels,
   type ConversationMentionDraft,
   type PermissionOverwriteTargetType,
+  type PresencePreference,
+  type UserPresence,
   type PublicUser,
   type ServerAuditLogEntry,
   type ServerDetail,
@@ -11,6 +13,8 @@ import {
   type ServerSummary,
   type TextMessage,
 } from '@vatrushka/shared';
+
+import { apiClient } from '../../api';
 
 import {
   AppShell,
@@ -90,6 +94,7 @@ export interface ServerViewProps {
   onSecurity(): void;
   onServerSettings?(): void;
   onLogout(): void;
+  onPresenceChange?(presence: UserPresence): void;
 }
 
 const allowedAttachmentTypes = new Set(['application/pdf', 'application/zip', 'image/gif', 'image/jpeg', 'image/png', 'image/webp', 'text/plain']);
@@ -113,6 +118,16 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [draftMentions, setDraftMentions] = useState<ConversationMentionDraft[]>([]);
   const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false);
+  const ownMember = props.server.members.find((member) => member.userId === props.user.id);
+  const [profileStatus, setProfileStatus] = useState(ownMember?.presence ?? 'offline');
+
+  useEffect(() => { setProfileStatus(ownMember?.presence ?? 'offline'); }, [ownMember?.presence]);
+  const updateProfileStatus = async (preference: PresencePreference): Promise<void> => {
+    const current = await apiClient.getPresence();
+    const next = await apiClient.updatePresence({ preference, customText: current.customText, customTextExpiresAt: current.customTextExpiresAt });
+    setProfileStatus(next.effectiveStatus);
+    props.onPresenceChange?.(next);
+  };
 
   useEffect(() => {
     setEditingMessage(null);
@@ -236,7 +251,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       onDeleteChannel={props.onDeleteChannel}
       onManageRoles={props.onServerSettings ?? (() => setRolesOpen(true))}
       {...(canMoveMembers && props.onMoveVoiceMember !== undefined ? { onMoveMember: props.onMoveVoiceMember } : {})}
-      profile={<UserProfileDock email={props.user.email} founder={props.user.platformRole === 'owner'} name={displayName(props.user)} onLogout={props.onLogout} onSecurity={props.onSecurity} />}
+      profile={<UserProfileDock email={props.user.email} founder={props.user.platformRole === 'owner'} name={ownMember?.displayName ?? displayName(props.user)} onLogout={props.onLogout} onSecurity={props.onSecurity} onStatus={updateProfileStatus} status={profileStatus} />}
       textChannels={channels.filter((channel) => channel.type === 'text')}
       voiceChannels={channels.filter((channel) => channel.type === 'voice')}
     />

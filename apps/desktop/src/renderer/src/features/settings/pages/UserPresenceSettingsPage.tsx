@@ -41,6 +41,13 @@ function expiryOption(expiresAt: string | null): string {
   return 'four-hours';
 }
 
+function presenceTone(preference: PresencePreference): 'success' | 'warning' | 'danger' | 'neutral' {
+  if (preference === 'online') return 'success';
+  if (preference === 'idle') return 'warning';
+  if (preference === 'do_not_disturb') return 'danger';
+  return 'neutral';
+}
+
 export function UserPresenceSettingsPage({ onDirtyChange, onLoad, onPresenceChange, onSave, presence }: UserPresenceSettingsPageProps): React.JSX.Element {
   const [preference, setPreference] = useState<PresencePreference>(presence?.preference ?? 'online');
   const [customText, setCustomText] = useState(presence?.customText ?? '');
@@ -99,8 +106,8 @@ export function UserPresenceSettingsPage({ onDirtyChange, onLoad, onPresenceChan
   if (loadError !== null && presence === null) return <SettingsPageState description={loadError} kind="error" onAction={load} />;
   return (
     <section className="vui-user-settings-page" aria-labelledby="user-presence-settings-title">
-      <header className="vui-user-settings-page__heading"><div><span>Присутствие</span><h1 id="user-presence-settings-title">Статус и активность</h1><p>Статус синхронизируется через сервер и применяется на всех ваших устройствах.</p></div><Badge tone={preference === 'do_not_disturb' ? 'danger' : 'neutral'}>{presenceOptions.find((option) => option.value === preference)?.label}</Badge></header>
-      <article className="vui-user-settings-card"><header><div><h2>Кто видит вас сейчас</h2><p>Ручной выбор имеет приоритет над автоматическим idle.</p></div></header><div className="vui-presence-options" role="radiogroup" aria-label="Статус присутствия">{presenceOptions.map((option) => <button aria-checked={preference === option.value} key={option.value} onClick={() => { setPreference(option.value); setSaveState('dirty'); }} role="radio" type="button"><StatusDot label={option.label} status={option.status} /><span><strong>{option.label}</strong><small>{option.description}</small></span></button>)}</div></article>
+      <header className="vui-user-settings-page__heading"><div><span>Присутствие</span><h1 id="user-presence-settings-title">Статус и активность</h1><p>Статус синхронизируется через сервер и применяется на всех ваших устройствах.</p></div><Badge tone={presenceTone(preference)}>{presenceOptions.find((option) => option.value === preference)?.label}</Badge></header>
+      <article className="vui-user-settings-card"><header><div><h2>Кто видит вас сейчас</h2><p>Выбранный вами статус не изменится автоматически, когда вы отходите от компьютера.</p></div></header><div className="vui-presence-options" role="radiogroup" aria-label="Статус присутствия">{presenceOptions.map((option) => <button aria-checked={preference === option.value} key={option.value} onClick={() => { setPreference(option.value); setSaveState('dirty'); }} role="radio" type="button"><StatusDot label={option.label} status={option.status} /><span><strong>{option.label}</strong><small>{option.description}</small></span></button>)}</div></article>
       <article className="vui-user-settings-card"><header><div><h2>Пользовательский статус</h2><p>Короткая подпись рядом с вашим профилем.</p></div></header><Input label="Текст статуса" maxLength={128} onChange={(event) => { setCustomText(event.target.value); setSaveState('dirty'); }} placeholder="Например: работаю над релизом" value={customText} /><Select disabled={customText.trim().length === 0} label="Очистить статус" onValueChange={(value) => { setClearAfter(value); setSaveState('dirty'); }} options={[{ value: 'hour', label: 'Через 1 час' }, { value: 'four-hours', label: 'Через 4 часа' }, { value: 'today', label: 'Сегодня' }, { value: 'never', label: 'Не очищать' }]} value={clearAfter} /></article>
       {preference === 'do_not_disturb' ? <aside className="vui-user-settings-note vui-user-settings-note--dnd"><strong>Режим «Не беспокоить» активен.</strong> Все звуки и внешние уведомления отключены, но сообщения и unread-счётчики сохраняются.</aside> : null}
       <SettingsSaveBar onCancel={reset} onSave={save} state={saveState === 'idle' && dirty ? 'dirty' : saveState} />

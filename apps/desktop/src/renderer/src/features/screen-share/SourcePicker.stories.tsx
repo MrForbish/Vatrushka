@@ -23,10 +23,8 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   args: {
     sources,
-    includeAudio: true,
     platform: 'win32',
     busy: false,
-    onAudio: fn(),
     onSelect: fn(),
     onCancel: fn(),
   },
@@ -42,9 +40,7 @@ export const SelectApplication: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: /^Окно приложения$/u }));
     await userEvent.click(canvas.getByRole('button', { name: 'Visual Studio Code, Только выбранное окно' }));
-    await userEvent.click(canvas.getByRole('radio', { name: /Без звука/u }));
-    await expect(args.onAudio).toHaveBeenCalledWith(false);
     await userEvent.click(canvas.getByRole('button', { name: 'Начать демонстрацию' }));
-    await expect(args.onSelect).toHaveBeenCalledWith(sources[3]);
+    await expect(args.onSelect).toHaveBeenCalledWith(sources[3], '1080p60');
   },
 };

@@ -319,8 +319,16 @@ export class ApiClient {
     return this.request(`/servers/${serverId}/settings/members${query}`, { auth: true });
   }
 
-  async updateServerSettingsMember(serverId: string, userId: string, input: { nickname?: string | null; mutedUntil?: string | null; deafened?: boolean }): Promise<void> {
+  async updateServerSettingsMember(serverId: string, userId: string, input: { mutedUntil?: string | null; deafened?: boolean }): Promise<void> {
     await this.request(`/servers/${serverId}/settings/members/${userId}`, { method: 'PATCH', body: input, auth: true });
+  }
+
+  async updateOwnServerDisplayName(serverId: string, displayName: string | null): Promise<void> {
+    await this.request(`/servers/${serverId}/members/me/display-name`, { method: 'PATCH', body: { displayName }, auth: true });
+  }
+
+  async updatePrivateServerMemberAlias(serverId: string, userId: string, alias: string | null): Promise<void> {
+    await this.request(`/servers/${serverId}/members/${userId}/private-alias`, { method: 'PATCH', body: { alias }, auth: true });
   }
 
   getServerChannelSettings(serverId: string): Promise<{ categories: ServerChannelCategory[]; channels: ServerChannelSettings[] }> {
