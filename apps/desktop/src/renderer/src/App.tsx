@@ -4,18 +4,16 @@ import { ConnectionState } from 'livekit-client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { channelNameSchema, codePointLength, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type ConversationMemberReadState, type ConversationMentionDraft, type ConversationMessage, type ConversationSummary, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type InternalNotification, type LocalSettings, type MessageDeliveryState, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type UserNotificationPreferences, type UserPresence, type UserUnreadSummary } from '@vatrushka/shared';
+import { channelNameSchema, codePointLength, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, serverNameSchema, type ConversationMemberReadState, type ConversationMentionDraft, type ConversationMessage, type ConversationSummary, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type InternalNotification, type LocalSettings, type MessageDeliveryState, type PublicUser, type RoomConnection, type ServerDetail, type ServerSummary, type TextMessage, type UserNotificationPreferences, type UserPresence, type UserUnreadSummary } from '@vatrushka/shared';
 
 import { apiClient, ClientError } from './api.js';
 import { parseSettingsRoute, serverSettingsPath, userSettingsPath, type ServerSettingsSection } from './app/routes';
 import { splitAudioDevices, type AudioDevices } from './audio-devices.js';
 import { AuthPanel, ProfilePanel } from './components.js';
-import { featureFlags } from './config/feature-flags';
 import { DirectMessagesView } from './features/direct-messages/index.js';
 import { HomePage, homeDashboardQueryKey, useHomeDashboard } from './features/home/index.js';
 import { NotificationCenter } from './features/notifications/NotificationCenter.js';
 import { SourcePicker, type ScreenShareQuality } from './features/screen-share/index.js';
-import { SecurityCenter } from './features/security/index.js';
 import { ServerView } from './features/servers/index.js';
 import { UpdateStatus } from './features/update/index.js';
 import { diffRemoteParticipants, RoomView, VoiceConnectionPanel, VoiceCuePlayer, type VoiceCue } from './features/voice/index.js';
@@ -126,7 +124,7 @@ export default function App(): ReactNode {
   const [user, setUser] = useState<PublicUser | null>(null);
   const [presence, setPresence] = useState<UserPresence | null>(null);
   const userRef = useRef<PublicUser | null>(null);
-  const [authMode, setAuthMode] = useState<'password' | 'register'>('password');
+  const [authMode, setAuthMode] = useState<'password' | 'register' | 'reset'>('password');
   const [authStage, setAuthStage] = useState<'credentials' | 'otp'>('credentials');
   const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
@@ -145,13 +143,12 @@ export default function App(): ReactNode {
   const [retrySeconds, setRetrySeconds] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [sources, setSources] = useState<DesktopSourceInfo[] | null>(null);
-  const [securityOpen, setSecurityOpen] = useState(false);
   const [settingsServerLoading, setSettingsServerLoading] = useState(false);
   const [settingsServerError, setSettingsServerError] = useState<string | null>(null);
   const [servers, setServers] = useState<ServerSummary[]>([]);
   const [serverDetail, setServerDetail] = useState<ServerDetail | null>(null);
-  const [serverAuditLog, setServerAuditLog] = useState<ServerAuditLogEntry[]>([]);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [messages, setMessages] = useState<TextMessage[]>([]);
   const [messageDraft, setMessageDraft] = useState('');
@@ -171,6 +168,7 @@ export default function App(): ReactNode {
   const [unreadSummary, setUnreadSummary] = useState<UserUnreadSummary | null>(null);
   const [notificationPreferences, setNotificationPreferences] = useState<UserNotificationPreferences | null>(null);
   const [realtimeRevision, setRealtimeRevision] = useState(0);
+  const [serverSettingsRevision, setServerSettingsRevision] = useState(0);
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [serverName, setServerName] = useState('');
   const [pendingInviteToken, setPendingInviteToken] = useState<string | null>(null);
@@ -203,7 +201,6 @@ export default function App(): ReactNode {
   const settingsRouteResult = parseSettingsRoute(location.pathname);
   const settingsRoute = settingsRouteResult?.kind === 'invalid' ? null : settingsRouteResult;
   const invalidSettingsCanonicalPath = settingsRouteResult?.kind === 'invalid' ? settingsRouteResult.canonicalPath : null;
-  const settingsRouteKind = settingsRoute?.kind ?? null;
   const settingsServerRouteId = settingsRoute?.kind === 'server' ? settingsRoute.serverId : null;
   const activeChannelIsText = activeChannelId !== null && Boolean(serverDetail?.channels.some((channel) => channel.id === activeChannelId && channel.type === 'text'));
 
@@ -226,6 +223,7 @@ export default function App(): ReactNode {
     const refresh = (): void => setRealtimeRevision((current) => current + 1);
     const unsubscribeEvent = realtime.onEvent((event) => {
       refresh();
+      if (event.type === 'server.updated' || event.type === 'server.channel.updated') setServerSettingsRevision((current) => current + 1);
       if ((event.type !== 'typing.started' && event.type !== 'typing.stopped') || !event.conversationId || typeof event.payload.userId !== 'string' || event.payload.userId === user.id) return;
       const conversationId = event.conversationId;
       const typingUserId = event.payload.userId;
@@ -290,12 +288,6 @@ export default function App(): ReactNode {
   }, [invalidSettingsCanonicalPath, navigate]);
 
   useEffect(() => {
-    if (settingsRouteKind === null) return;
-    const enabled = settingsRouteKind === 'user' ? featureFlags.userSettingsPage : featureFlags.serverSettingsPage;
-    if (!enabled) void navigate('/', { replace: true });
-  }, [navigate, settingsRouteKind]);
-
-  useEffect(() => {
     if (settingsServerRouteId === null || user === null || serverDetail?.id === settingsServerRouteId) return;
     let active = true;
     setSettingsServerLoading(true);
@@ -303,7 +295,6 @@ export default function App(): ReactNode {
     void apiClient.getServer(settingsServerRouteId).then((detail) => {
       if (!active) return;
       setServerDetail(detail);
-      setServerAuditLog([]);
       setActiveChannelId((current) => current !== null && detail.channels.some((channel) => channel.id === current) ? current : detail.channels[0]?.id ?? null);
     }).catch((caught) => { if (active) setSettingsServerError(userMessage(caught)); }).finally(() => { if (active) setSettingsServerLoading(false); });
     return () => { active = false; };
@@ -729,7 +720,6 @@ export default function App(): ReactNode {
     void run(async () => {
       const detail = await apiClient.acceptServerInvite(inviteToken);
       setServerDetail(detail);
-      setServerAuditLog([]);
       setActiveChannelId(detail.channels.find((channel) => channel.type === 'text')?.id ?? detail.channels[0]?.id ?? null);
       setMessages([]);
       setServers(await apiClient.listServers());
@@ -740,7 +730,10 @@ export default function App(): ReactNode {
   const requestCode = (): void => {
     void run(async () => {
       let response: { retryAfterSeconds: number };
-      if (authMode === 'register') {
+      if (authMode === 'reset') {
+        response = await apiClient.requestPasswordReset(email);
+        setSecondFactor('email');
+      } else if (authMode === 'register') {
         const validPassword = passwordSchema.parse(password);
         if (validPassword !== passwordConfirmation) throw new Error('Пароли не совпадают');
         response = await apiClient.requestRegistration(email, validPassword);
@@ -759,6 +752,18 @@ export default function App(): ReactNode {
 
   const verifyCode = (): void => {
     void run(async () => {
+      if (authMode === 'reset') {
+        const validPassword = passwordSchema.parse(password);
+        if (validPassword !== passwordConfirmation) throw new Error('Пароли не совпадают');
+        await apiClient.completePasswordReset(email, otp, validPassword);
+        setAuthMode('password');
+        setAuthStage('credentials');
+        setOtp('');
+        setPasswordValue('');
+        setPasswordConfirmation('');
+        setAuthNotice('Пароль изменён. Войдите с новым паролем.');
+        return;
+      }
       const response = authMode === 'register'
         ? await apiClient.verifyRegistration(email, otp)
         : await apiClient.completePasswordLogin(email, password, otp, secondFactor);
@@ -790,7 +795,6 @@ export default function App(): ReactNode {
     void run(async () => {
       const detail = await apiClient.getServer(destination.serverId);
       setServerDetail(detail);
-      setServerAuditLog([]);
       const requestedChannel = destination.channelId && detail.channels.some((channel) => channel.id === destination.channelId) ? destination.channelId : null;
       setActiveChannelId(requestedChannel ?? detail.channels.find((channel) => channel.type === 'text')?.id ?? detail.channels[0]?.id ?? null);
       setMessages([]);
@@ -845,7 +849,6 @@ export default function App(): ReactNode {
     void run(async () => {
       const detail = await apiClient.createServer(serverNameSchema.parse(serverName));
       setServerDetail(detail);
-      setServerAuditLog([]);
       setActiveChannelId(detail.channels.find((channel) => channel.type === 'text')?.id ?? detail.channels[0]?.id ?? null);
       setServerName('');
       setServers(await apiClient.listServers());
@@ -1075,57 +1078,15 @@ export default function App(): ReactNode {
     });
   };
 
-  const createCommunityRole = (name: string, color: string, permissions: ServerPermission[]): void => {
+  const renameCommunityChannel = (channelId: string, name: string): void => {
     void run(async () => {
       if (!serverDetail) return;
-      await apiClient.createServerRole(serverDetail.id, roleNameSchema.parse(name), color, permissions);
+      const normalizedName = channelNameSchema.parse(name);
+      const settings = await apiClient.getServerChannelSettings(serverDetail.id);
+      const channel = settings.channels.find((candidate) => candidate.id === channelId);
+      if (!channel) throw new Error('Канал не найден');
+      await apiClient.updateServerChannelSettings(serverDetail.id, channelId, { name: normalizedName, version: channel.version });
       await refreshServer();
-    });
-  };
-
-  const updateCommunityRole = (roleId: string, values: { name?: string; color?: string; permissions?: ServerPermission[] }): void => {
-    void run(async () => {
-      if (!serverDetail) return;
-      await apiClient.updateServerRole(serverDetail.id, roleId, values);
-      await refreshServer();
-    });
-  };
-
-  const deleteCommunityRole = (roleId: string): void => {
-    void run(async () => {
-      if (!serverDetail) return;
-      await apiClient.deleteServerRole(serverDetail.id, roleId);
-      await refreshServer();
-    });
-  };
-
-  const reorderCommunityRole = (roleId: string, position: number): void => {
-    void run(async () => {
-      if (!serverDetail) return;
-      await apiClient.reorderServerRole(serverDetail.id, roleId, position);
-      await refreshServer();
-    });
-  };
-
-  const assignCommunityRoles = (userId: string, roleIds: string[]): void => {
-    void run(async () => {
-      if (!serverDetail) return;
-      await apiClient.assignServerMemberRoles(serverDetail.id, userId, roleIds);
-      await refreshServer();
-    });
-  };
-
-  const setCommunityChannelOverwrite = (channelId: string, targetType: PermissionOverwriteTargetType, targetId: string, allow: ServerPermission[], deny: ServerPermission[]): void => {
-    void run(async () => {
-      await apiClient.setChannelPermissionOverwrite(channelId, targetType, targetId, allow, deny);
-      await refreshServer();
-    });
-  };
-
-  const loadServerAuditLog = (): void => {
-    void run(async () => {
-      if (!serverDetail) return;
-      setServerAuditLog(await apiClient.listServerAuditLog(serverDetail.id));
     });
   };
 
@@ -1190,7 +1151,6 @@ export default function App(): ReactNode {
             const detail = await apiClient.getServer(voiceConnection.serverId);
             if (!active) return;
             setServerDetail(detail);
-            setServerAuditLog([]);
             setMessages([]);
           }
           if (voiceConnection.seamlesslyMoved === true && mediaSnapshot.connectionState === ConnectionState.Connected) {
@@ -1327,7 +1287,6 @@ export default function App(): ReactNode {
     void navigate('/', { replace: true });
     setScreen('auth');
   };
-  const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityCenter dndActive={presence?.preference === 'do_not_disturb'} open user={user} settings={settings} onSettingsChange={updateNotificationSettings} onClose={() => setSecurityOpen(false)} onUserChange={updateUser} onCurrentSessionRevoked={handleCurrentSessionRevoked} /> : null;
   const openNotification = (notification: InternalNotification): void => {
     if (!notification.conversationId) return;
     setTargetMessageId(notification.messageId);
@@ -1430,7 +1389,6 @@ export default function App(): ReactNode {
     void run(async () => {
       const detail = await apiClient.getServer(connection.serverId);
       setServerDetail(detail);
-      setServerAuditLog([]);
       setActiveChannelId(connection.channelId);
       setMessages([]);
       setScreen('server');
@@ -1438,16 +1396,20 @@ export default function App(): ReactNode {
   };
   const voiceStage = connection ? <RoomView connection={connection} snapshot={mediaSnapshot} participantNames={serverDetail?.id === connection.serverId ? Object.fromEntries(serverDetail.members.map((member) => [member.userId, member.displayName])) : undefined} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} busy={busy} error={error} onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))} onShare={showSourcePicker} onCopy={copyInvite} onLeave={leaveRoom} onKick={(identity) => void run(() => apiClient.kickMediaParticipant(connection, identity))} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onStartAudio={() => void media.startAudio()} onScreenAudioMute={() => media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)} onScreenAudioVolume={setScreenShareVolume} onParticipantMute={(identity, muted) => media.setParticipantMuted(identity, muted)} onParticipantVolume={(identity, volume) => media.setParticipantVolume(identity, volume)} /> : undefined;
   const voiceConnectionPanel = connection ? <VoiceConnectionPanel canShare={connection.canStream !== false && mediaSnapshot.connectionState === ConnectionState.Connected} channelName={connectedVoiceChannelName} snapshot={mediaSnapshot} onLeave={leaveRoom} onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))} onOpen={openConnectedVoice} onShare={showSourcePicker} /> : undefined;
+  const profileAudio = {
+    connected: connection !== null && mediaSnapshot.connectionState === ConnectionState.Connected,
+    microphoneMuted: mediaSnapshot.isMuted,
+    deafened: mediaSnapshot.isDeafened,
+    busy,
+    onMicrophoneToggle: () => { void run(() => media.setMuted(!mediaSnapshot.isMuted)); },
+    onDeafenToggle: () => { void run(() => media.setDeafened(!mediaSnapshot.isDeafened)); },
+  };
   const openUserSettings = (): void => {
-    if (!featureFlags.userSettingsPage) {
-      setSecurityOpen(true);
-      return;
-    }
     settingsReturnScreenRef.current = screen;
     void navigate(userSettingsPath());
   };
   const openServerSettings = (section: ServerSettingsSection = 'overview'): void => {
-    if (!featureFlags.serverSettingsPage || serverDetail === null) return;
+    if (serverDetail === null) return;
     settingsReturnScreenRef.current = 'server';
     // Administrators land on Overview; regular members land on the one settings
     // section they can use for their server name and private aliases.
@@ -1489,9 +1451,9 @@ export default function App(): ReactNode {
   };
 
   if (screen === 'boot') return withUpdateStatus(<main className="bootScreen"><div className="pulseLogo"><span /></div><span>Подключаем «Ватрушку»…</span></main>);
-  if (screen === 'auth') return withUpdateStatus(<AuthPanel mode={authMode} stage={authStage} factor={secondFactor} totpAvailable={totpAvailable} email={email} code={otp} password={password} passwordConfirmation={passwordConfirmation} retrySeconds={retrySeconds} busy={busy} error={error} onMode={(mode) => { setAuthMode(mode); setAuthStage('credentials'); setOtp(''); setError(null); }} onEmailChange={setEmail} onCodeChange={setOtp} onPasswordChange={setPasswordValue} onPasswordConfirmationChange={setPasswordConfirmation} onRequest={requestCode} onVerify={verifyCode} onFactor={switchPasswordFactor} onBack={() => { setAuthStage('credentials'); setOtp(''); setError(null); }} />);
+  if (screen === 'auth') return withUpdateStatus(<AuthPanel mode={authMode} stage={authStage} factor={secondFactor} totpAvailable={totpAvailable} email={email} code={otp} password={password} passwordConfirmation={passwordConfirmation} retrySeconds={retrySeconds} busy={busy} error={error} notice={authNotice} onMode={(mode) => { setAuthMode(mode); setAuthStage('credentials'); setOtp(''); setPasswordValue(''); setPasswordConfirmation(''); setError(null); setAuthNotice(null); }} onReset={() => { setAuthMode('reset'); setAuthStage('credentials'); setOtp(''); setPasswordValue(''); setPasswordConfirmation(''); setError(null); setAuthNotice(null); }} onEmailChange={setEmail} onCodeChange={setOtp} onPasswordChange={setPasswordValue} onPasswordConfirmationChange={setPasswordConfirmation} onRequest={requestCode} onVerify={verifyCode} onFactor={switchPasswordFactor} onBack={() => { setAuthStage('credentials'); setOtp(''); setError(null); }} />);
   if (screen === 'profile') return withUpdateStatus(<ProfilePanel value={displayName} busy={busy} error={error} onChange={setDisplayName} onSave={saveProfile} />);
-  if (settingsRoute !== null && user !== null && (settingsRoute.kind === 'user' ? featureFlags.userSettingsPage : featureFlags.serverSettingsPage)) return withUpdateStatus(
+  if (settingsRoute !== null && user !== null) return withUpdateStatus(
     <Suspense fallback={<main className="bootScreen"><div className="pulseLogo"><span /></div><span>Открываем настройки…</span></main>}>
       <SettingsRoutePage
         busy={busy}
@@ -1526,8 +1488,9 @@ export default function App(): ReactNode {
         onUserChange={updateUser}
         outputId={settings.outputDeviceId}
         presence={presence}
-        presenceEnabled={featureFlags.presenceStatuses}
+        presenceEnabled
         route={settingsRoute}
+        serverSettingsRevision={serverSettingsRevision}
         server={serverDetail?.id === (settingsRoute.kind === 'server' ? settingsRoute.serverId : '') ? serverDetail : null}
         servers={servers}
         settings={settings}
@@ -1536,9 +1499,9 @@ export default function App(): ReactNode {
       />
     </Suspense>,
   );
-  if (screen === 'home' && user) return withUpdateStatus(<><HomePage user={user} version={version} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} inputLevel={localInputLevel} busy={busy} error={error} servers={servers} serverName={serverName} directUnreadCount={directUnreadCount} connection={connection} dashboard={homeDashboardQuery.data} dashboardLoading={homeDashboardQuery.isFetching && homeDashboardQuery.data === undefined} dashboardError={homeDashboardQuery.error ? userMessage(homeDashboardQuery.error) : null} onRetryDashboard={() => void homeDashboardQuery.refetch()} onLogout={logout} onSecurity={openUserSettings} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onTestOutput={() => playVoiceCue('message')} onServerName={setServerName} onCreateServer={createServer} onOpenServer={openServer} onOpenDestination={openDestination} onReturnToCall={openConnectedVoice} onDirectMessages={openDirectMessages} onCopyInvite={(inviteUrl) => window.desktop.copyToClipboard(inviteUrl)} />{renderSecurityPanel()}</>);
-  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} typingText={serverTypingText} firstUnreadMessageId={serverFirstUnreadMessageId} hasOlderMessages={serverMessageHistory.conversationId === activeChannelId && serverMessageHistory.hasMore} loadingOlderMessages={serverMessageHistory.loading} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setServerMessageHistory({ conversationId: null, before: null, hasMore: false, loading: false }); setError(null); void apiClient.recordOpenedChannel(channelId).catch(() => undefined); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onLoadAttachment={loadAttachment} onLoadOlderMessages={loadOlderServerMessages} onRetryMessage={(messageId) => serverMessageRetryRef.current.get(messageId)?.()} onConnectVoice={connectVoiceChannel} onMoveVoiceMember={moveVoiceMember} onCopyInvite={() => window.desktop.copyToClipboard(serverDetail.inviteUrl)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onPresenceChange={setPresence} {...(featureFlags.serverSettingsPage ? { onServerSettings: () => openServerSettings('roles') } : {})} onLogout={logout} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} audioProtectionAvailable={supportsOwnAudioExclusion()} busy={busy} sources={sources} platform={platform} onSelect={selectSource} onCancel={cancelSourcePicker} />}{renderSecurityPanel()}</>);
-  if (screen === 'direct' && user) return withUpdateStatus(<><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} busy={busy} error={error} typingText={directTypingText} blockedParticipantIds={blockedDirectUserIds} firstUnreadMessageId={directFirstUnreadMessageId} hasOlderMessages={directMessageHistory.conversationId === activeDirectConversationId && directMessageHistory.hasMore} loadingOlderMessages={directMessageHistory.loading} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onBlockParticipant={blockDirectParticipant} onUnblockParticipant={unblockDirectParticipant} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onLoadAttachment={loadDirectAttachment} onLoadOlderMessages={loadOlderDirectMessages} onRetryMessage={(messageId) => directMessageRetryRef.current.get(messageId)?.()} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onLogout={logout} />{renderSecurityPanel()}</>);
+  if (screen === 'home' && user) return withUpdateStatus(<HomePage user={user} version={version} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} inputLevel={localInputLevel} busy={busy} error={error} servers={servers} serverName={serverName} directUnreadCount={directUnreadCount} connection={connection} dashboard={homeDashboardQuery.data} dashboardLoading={homeDashboardQuery.isFetching && homeDashboardQuery.data === undefined} dashboardError={homeDashboardQuery.error ? userMessage(homeDashboardQuery.error) : null} onRetryDashboard={() => void homeDashboardQuery.refetch()} onLogout={logout} onSecurity={openUserSettings} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onTestOutput={() => playVoiceCue('message')} onServerName={setServerName} onCreateServer={createServer} onOpenServer={openServer} onOpenDestination={openDestination} onReturnToCall={openConnectedVoice} onDirectMessages={openDirectMessages} onCopyInvite={(inviteUrl) => window.desktop.copyToClipboard(inviteUrl)} profileAudio={profileAudio} />);
+  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} busy={busy} error={error} directUnreadCount={directUnreadCount} typingText={serverTypingText} firstUnreadMessageId={serverFirstUnreadMessageId} hasOlderMessages={serverMessageHistory.conversationId === activeChannelId && serverMessageHistory.hasMore} loadingOlderMessages={serverMessageHistory.loading} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setServerMessageHistory({ conversationId: null, before: null, hasMore: false, loading: false }); setError(null); void apiClient.recordOpenedChannel(channelId).catch(() => undefined); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onLoadAttachment={loadAttachment} onLoadOlderMessages={loadOlderServerMessages} onRetryMessage={(messageId) => serverMessageRetryRef.current.get(messageId)?.()} onConnectVoice={connectVoiceChannel} onMoveVoiceMember={moveVoiceMember} onCopyInvite={() => window.desktop.copyToClipboard(serverDetail.inviteUrl)} onCreateChannel={createCommunityChannel} onRenameChannel={renameCommunityChannel} onDeleteChannel={deleteCommunityChannel} onKickMember={kickCommunityMember} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onPresenceChange={setPresence} onServerSettings={() => openServerSettings('roles')} onLogout={logout} profileAudio={profileAudio} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} audioProtectionAvailable={supportsOwnAudioExclusion()} busy={busy} sources={sources} platform={platform} onSelect={selectSource} onCancel={cancelSourcePicker} />}</>);
+  if (screen === 'direct' && user) return withUpdateStatus(<DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} busy={busy} error={error} typingText={directTypingText} blockedParticipantIds={blockedDirectUserIds} firstUnreadMessageId={directFirstUnreadMessageId} hasOlderMessages={directMessageHistory.conversationId === activeDirectConversationId && directMessageHistory.hasMore} loadingOlderMessages={directMessageHistory.loading} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onBlockParticipant={blockDirectParticipant} onUnblockParticipant={unblockDirectParticipant} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onLoadAttachment={loadDirectAttachment} onLoadOlderMessages={loadOlderDirectMessages} onRetryMessage={(messageId) => directMessageRetryRef.current.get(messageId)?.()} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onLogout={logout} profileAudio={profileAudio} />);
   return withUpdateStatus(<main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>);
 }
 
@@ -1548,6 +1511,7 @@ function supportsOwnAudioExclusion(): boolean {
 }
 
 function userMessage(error: unknown): string {
+  if (error instanceof ClientError && typeof error.details === 'object' && error.details !== null && 'message' in error.details && typeof error.details.message === 'string') return error.details.message;
   if (error instanceof ClientError) return error.message;
   if (error instanceof Error) return error.message;
   return 'Что-то пошло не так. Попробуйте ещё раз.';

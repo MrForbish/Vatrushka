@@ -25,6 +25,7 @@
 | Производительность | [performance.md](performance.md) |
 | Архитектурные решения | [adr/README.md](adr/README.md) |
 | Инвентаризация кода и данных | [code-inventory.md](code-inventory.md) |
+| Git branching и релизы | [release-process.md](release-process.md) |
 | История релизов | [releases](releases) и корневой `CHANGELOG.md` |
 
 ## Иерархия источников

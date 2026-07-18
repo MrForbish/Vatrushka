@@ -1,6 +1,6 @@
 import type { PublicUser, ServerSummary } from '@vatrushka/shared';
 
-import { Badge, Button, Icon, UserProfileDock, WorkspaceCard, type WorkspaceNavigationItem } from '../../../ui';
+import { Badge, Button, Icon, UserProfileDock, WorkspaceCard, type UserProfileDockAudioControls, type WorkspaceNavigationItem } from '../../../ui';
 
 export interface HomeNavigationProps {
   user: PublicUser;
@@ -13,9 +13,10 @@ export interface HomeNavigationProps {
   onLogout: () => void;
   onSpaces: () => void;
   networkAvailable?: boolean;
+  profileAudio?: UserProfileDockAudioControls;
 }
 
-export function HomeNavigation({ directUnreadCount, networkAvailable = true, onCreate, onDirectMessages, onLogout, onOpenServer, onSecurity, onSpaces, servers, user }: HomeNavigationProps): React.JSX.Element {
+export function HomeNavigation({ directUnreadCount, networkAvailable = true, onCreate, onDirectMessages, onLogout, onOpenServer, onSecurity, onSpaces, profileAudio, servers, user }: HomeNavigationProps): React.JSX.Element {
   const name = user.displayName ?? user.email;
   const workspaces: WorkspaceNavigationItem[] = servers.map((server) => {
     const dashboardServer = server as ServerSummary & { unreadCount?: number; activeVoiceCount?: number };
@@ -33,7 +34,7 @@ export function HomeNavigation({ directUnreadCount, networkAvailable = true, onC
       {workspaces.length === 0 ? <div className="home-navigation__empty"><span><Icon name="users" size={22} /></span><strong>У вас пока нет серверов</strong><p>Создайте первый сервер или примите приглашение по ссылке.</p><Button disabled={!networkAvailable} onClick={onCreate} size="sm">Создать сервер</Button></div> : <nav className="home-navigation__servers" aria-label="Серверы">{workspaces.map((workspace) => <WorkspaceCard disabled={!networkAvailable} key={workspace.id} onSelect={onOpenServer} workspace={workspace} />)}</nav>}
       {servers.length === 0 ? <div className="home-navigation__start"><Icon name="sparkles" size={17} /><div><strong>Готовы начать?</strong><small>Создайте своё первое пространство.</small></div></div> : null}
       <div className="home-navigation__create"><button disabled={!networkAvailable} onClick={onCreate} type="button"><Icon name="plus" size={17} />Создать сервер</button></div>
-      <UserProfileDock email={user.email} founder={user.platformRole === 'owner'} name={name} onLogout={onLogout} onSecurity={onSecurity} />
+      <UserProfileDock {...(profileAudio ? { audioControls: profileAudio } : {})} email={user.email} founder={user.platformRole === 'owner'} name={name} onLogout={onLogout} onSecurity={onSecurity} />
     </aside>
   );
 }

@@ -44,6 +44,7 @@ const eventCopy: Record<SecurityEvent['type'], { title: string; description: str
   SESSION_CREATED: { title: 'Вход в аккаунт', description: 'Создана новая сессия', tone: 'success' },
   SESSION_REVOKED: { title: 'Сессия завершена', description: 'Доступ устройства отозван', tone: 'neutral' },
   PASSWORD_CHANGED: { title: 'Пароль изменён', description: 'Учётные данные обновлены', tone: 'success' },
+  PASSWORD_RESET: { title: 'Пароль восстановлен', description: 'Все активные сессии завершены', tone: 'warning' },
   TWO_FACTOR_ENABLED: { title: '2FA включена', description: 'Добавлена защита приложением-аутентификатором', tone: 'success' },
   TWO_FACTOR_DISABLED: { title: '2FA отключена', description: 'Вход снова подтверждается по email', tone: 'warning' },
   RECOVERY_CODES_REGENERATED: { title: 'Резервные коды обновлены', description: 'Предыдущий набор больше не действует', tone: 'warning' },

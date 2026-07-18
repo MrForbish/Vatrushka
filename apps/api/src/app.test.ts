@@ -3,11 +3,12 @@ import { createHash, createHmac } from 'node:crypto';
 import { AccessToken } from 'livekit-server-sdk';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { API_PREFIX } from '@vatrushka/shared';
+import { API_PREFIX, type RealtimeEvent } from '@vatrushka/shared';
 
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { MAX_ATTACHMENT_BYTES, VatrushkaService } from './service.js';
+import type { RedisRealtimeBus } from './services/realtime.js';
 import { FakeMailer, FakeMediaService, FakeObjectStorage } from './testing/fakes.js';
 import { MemoryStore } from './testing/memory-store.js';
 
@@ -19,6 +20,7 @@ interface TestContext {
   objectStorage: FakeObjectStorage | null;
   clock: { now: Date };
   config: ReturnType<typeof loadConfig>;
+  realtimeEvents: RealtimeEvent[];
 }
 
 let context: TestContext;
@@ -44,9 +46,14 @@ async function makeContext(objectStorage: FakeObjectStorage | null = null): Prom
     LIVEKIT_URL: 'ws://livekit.test',
     LIVEKIT_HTTP_URL: 'http://livekit.test',
   });
-  const service = new VatrushkaService({ config, store, mailer, media, objectStorage, clock: () => clock.now });
+  const realtimeEvents: RealtimeEvent[] = [];
+  const realtimeBus = {
+    publish: async (event: RealtimeEvent) => { realtimeEvents.push(event); return true; },
+    publishPresence: async () => true,
+  } as unknown as RedisRealtimeBus;
+  const service = new VatrushkaService({ config, store, mailer, media, objectStorage, realtimeBus, clock: () => clock.now });
   const app = await buildApp({ config, service, logger: false });
-  return { app, store, mailer, media, objectStorage, clock, config };
+  return { app, store, mailer, media, objectStorage, clock, config, realtimeEvents };
 }
 
 async function login(email = 'anna@example.com', displayName = 'Anna'): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
@@ -170,6 +177,77 @@ describe('authentication API', () => {
     expect(context.mailer.messages).toEqual([{ email: 'anna@example.com', code: '123456' }]);
     expect([...context.store.authCodes.values()][0]?.codeHash).not.toContain('123456');
     expect([...context.store.sessions.values()][0]?.tokenHash).not.toBe(response.json<{ refreshToken: string }>().refreshToken);
+  });
+
+  it('resets a password without account enumeration and revokes every active session', async () => {
+    const first = await login('reset@example.com', 'Reset User');
+    const second = await login('reset@example.com', 'Reset User');
+    context.clock.now = new Date(context.clock.now.getTime() + 61_000);
+
+    const requested = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/reset/request-code`,
+      payload: { email: 'reset@example.com' },
+    });
+    const unknownRequested = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/reset/request-code`,
+      payload: { email: 'unknown@example.com' },
+    });
+    expect(requested.statusCode).toBe(200);
+    expect(unknownRequested.statusCode).toBe(200);
+    expect(requested.json()).toEqual(unknownRequested.json());
+
+    const completed = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/reset/complete`,
+      payload: { email: 'reset@example.com', code: '123456', password: 'new-secure-password-73' },
+    });
+    expect(completed.statusCode).toBe(200);
+    expect(completed.json()).toEqual({ status: 'PASSWORD_RESET' });
+    expect([...context.store.sessions.values()].filter((session) => session.userId === first.userId).every((session) => session.revokedAt !== null)).toBe(true);
+    expect(context.mailer.securityNotices.at(-1)?.title).toBe('Пароль восстановлен');
+    expect([...context.store.securityEvents.values()].some((event) => event.userId === first.userId && event.type === 'PASSWORD_RESET')).toBe(true);
+
+    const oldPassword = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/begin`,
+      payload: { email: 'reset@example.com', password: 'secure-vatrushka-42', factor: 'email' },
+    });
+    const newPassword = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/begin`,
+      payload: { email: 'reset@example.com', password: 'new-secure-password-73', factor: 'email' },
+    });
+    expect(oldPassword.statusCode).toBe(401);
+    expect(newPassword.statusCode).toBe(200);
+
+    const firstRefresh = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/refresh`, payload: { refreshToken: first.refreshToken } });
+    const secondRefresh = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/refresh`, payload: { refreshToken: second.refreshToken } });
+    expect(firstRefresh.statusCode).toBe(401);
+    expect(secondRefresh.statusCode).toBe(401);
+
+    const unknownCompleted = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/password/reset/complete`,
+      payload: { email: 'unknown@example.com', code: '123456', password: 'new-secure-password-73' },
+    });
+    expect(unknownCompleted.statusCode).toBe(401);
+    expect(unknownCompleted.json<{ code: string }>().code).toBe('INVALID_OTP');
+  });
+
+  it('rate limits password-reset requests by client address', async () => {
+    const responses = [];
+    for (let index = 0; index < 6; index += 1) {
+      responses.push(await context.app.inject({
+        method: 'POST',
+        url: `${API_PREFIX}/auth/password/reset/request-code`,
+        payload: { email: `reset-rate-${index}@example.com` },
+      }));
+    }
+    expect(responses.slice(0, 5).every((response) => response.statusCode === 200)).toBe(true);
+    expect(responses[5]?.statusCode).toBe(429);
+    expect(responses[5]?.json<{ code: string }>().code).toBe('RATE_LIMITED');
   });
 
   it('rejects an invalid, expired, and exhausted registration code', async () => {
@@ -492,6 +570,7 @@ describe('servers, channels, messages, and roles API', () => {
     });
     expect(created.statusCode).toBe(201);
     const server = created.json<{ id: string; inviteUrl: string; channels: Array<{ name: string; type: string }>; permissions: string[] }>();
+    expect(created.json()).toHaveProperty('description', null);
     expect(server.inviteUrl).toMatch(/^http:\/\/localhost:3000\/i\/[A-Za-z0-9_-]{8,32}$/u);
     expect(created.json()).not.toHaveProperty('inviteCode');
     const inviteToken = inviteTokenFromUrl(server.inviteUrl);
@@ -517,6 +596,13 @@ describe('servers, channels, messages, and roles API', () => {
     const reopened = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteToken}/accept`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(reopened.statusCode).toBe(200);
     expect(reopened.json<{ memberCount: number }>().memberCount).toBe(2);
+    const addedChannel = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/${server.id}/channels`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'релизы', type: 'text' } });
+    expect(addedChannel.statusCode).toBe(201);
+    expect(context.realtimeEvents).toContainEqual(expect.objectContaining({
+      type: 'server.channel.updated',
+      targetUserIds: expect.arrayContaining([owner.userId, member.userId]),
+      payload: expect.objectContaining({ serverId: server.id, channelId: addedChannel.json<{ id: string }>().id, action: 'created' }),
+    }));
     const retiredCodeJoin = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/join`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { inviteCode: inviteToken } });
     expect(retiredCodeJoin.statusCode).toBe(404);
 

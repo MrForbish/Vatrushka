@@ -1,6 +1,6 @@
 import { ConnectionState } from 'livekit-client';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { fn, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, fn, userEvent, within } from 'storybook/test';
 
 import type { RoomConnection, ServerDetail } from '@vatrushka/shared';
 
@@ -32,6 +32,7 @@ const snapshot: MediaSnapshot = {
     { identity: 'max-remote', displayName: 'Максим Орлов', isLocal: false, isOwner: false, isMuted: true, isSpeaking: false, audioLevel: 0, isScreenSharing: false, volume: 0.8, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
   ],
   isMuted: false,
+  isDeafened: false,
   isScreenSharing: false,
   screenTrack: null,
   screenSharerName: null,
@@ -49,6 +50,7 @@ const headset = { deviceId: 'headphones-usb', groupId: 'output-group', kind: 'au
 const server: ServerDetail = {
   id: 'server-1',
   name: 'Команда разработки',
+  description: 'Проектируем, проверяем и выпускаем новые версии Ватрушки.',
   inviteUrl: 'https://myvatrushka.ru/i/ABCD2345test',
   ownerUserId: 'owner',
   memberCount: 3,
@@ -89,9 +91,8 @@ const meta = {
     serverName: '',
     busy: false,
     error: null,
-    auditLog: [],
     directUnreadCount: 3,
-    onBack: fn(), onDirectMessages: fn(), onSwitchServer: fn(), onChannel: fn(), onMessageDraft: fn(), onSendMessage: fn(), onUpdateMessage: fn(), onMessageReaction: fn(), onDeleteMessage: fn(), onDeleteAttachment: fn(), onDownloadAttachment: fn(), onConnectVoice: fn(), onCopyInvite: fn(), onCreateChannel: fn(), onDeleteChannel: fn(), onCreateRole: fn(), onUpdateRole: fn(), onDeleteRole: fn(), onReorderRole: fn(), onAssignRoles: fn(), onSetChannelOverwrite: fn(), onLoadAudit: fn(), onKickMember: fn(), onServerName: fn(), onCreateServer: fn(), onSecurity: fn(), onLogout: fn(),
+    onBack: fn(), onDirectMessages: fn(), onSwitchServer: fn(), onChannel: fn(), onMessageDraft: fn(), onSendMessage: fn(), onUpdateMessage: fn(), onMessageReaction: fn(), onDeleteMessage: fn(), onDeleteAttachment: fn(), onDownloadAttachment: fn(), onConnectVoice: fn(), onCopyInvite: fn(), onCreateChannel: fn(), onRenameChannel: fn(), onDeleteChannel: fn(), onKickMember: fn(), onServerName: fn(), onCreateServer: fn(), onSecurity: fn(), onServerSettings: fn(), onLogout: fn(),
   },
 } satisfies Meta<typeof ServerView>;
 
@@ -110,5 +111,18 @@ export const InviteLink: Story = {
   },
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole('button', { name: 'Пригласить на сервер' }));
+  },
+};
+
+export const RenameChannel: Story = {
+  args: { activeChannelId: 'text-1' },
+  play: async ({ canvasElement, args }) => {
+    await fireEvent.contextMenu(within(canvasElement).getByRole('button', { name: /^общий/u }));
+    await userEvent.click(within(document.body).getByRole('menuitem', { name: 'Переименовать' }));
+    const input = within(document.body).getByLabelText('Название канала');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'релизы');
+    await userEvent.click(within(document.body).getByRole('button', { name: 'Сохранить' }));
+    await expect(args.onRenameChannel).toHaveBeenCalledWith('text-1', 'релизы');
   },
 };

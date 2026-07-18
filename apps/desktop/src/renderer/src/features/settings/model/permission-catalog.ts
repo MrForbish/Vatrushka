@@ -67,22 +67,11 @@ function group(id: string, label: string, permissions: ServerPermission[]): Perm
   return { id, label, permissions: permissions.map((permission) => ({ permission, ...definitions[permission] })) };
 }
 
-export const permissionGroups: PermissionGroup[] = [
-  group('general', 'Сервер', ['ADMINISTRATOR', 'VIEW_SERVER', 'VIEW_SERVER_SETTINGS', 'MANAGE_SERVER', 'MANAGE_APPEARANCE', 'MANAGE_MEMBERS', 'MANAGE_CHANNELS', 'MANAGE_ROLES', 'MANAGE_INVITES', 'MANAGE_INTEGRATIONS', 'VIEW_AUDIT_LOG', 'EXPORT_AUDIT_LOG']),
-  group('moderation', 'Модерация', ['MANAGE_MODERATION', 'KICK_MEMBERS', 'BAN_MEMBERS', 'TIMEOUT_MEMBERS', 'MANAGE_NICKNAMES', 'VIEW_MODERATION_NOTES', 'MANAGE_REPORTS']),
+export const permissionDefinitions = Object.fromEntries(
+  Object.entries(definitions).map(([permission, definition]) => [permission, { permission, ...definition }]),
+) as Record<ServerPermission, PermissionDefinition>;
+
+export const channelPermissionGroups = [
   group('text', 'Текстовые каналы', ['VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'SEND_ATTACHMENTS', 'ADD_REACTIONS', 'EMBED_LINKS', 'MENTION_EVERYONE', 'MANAGE_OWN_MESSAGES', 'MANAGE_MESSAGES', 'PIN_MESSAGES', 'CREATE_THREADS']),
   group('voice', 'Голос и демонстрация', ['CONNECT_VOICE', 'SPEAK', 'STREAM_SCREEN', 'STREAM_APPLICATION_AUDIO', 'USE_PRIORITY_VOICE', 'MUTE_MEMBERS', 'DEAFEN_MEMBERS', 'MOVE_MEMBERS', 'STOP_OTHERS_STREAM', 'CREATE_TEMPORARY_VOICE']),
-  group('security', 'Безопасность и данные', ['MANAGE_SERVER_SECURITY', 'MANAGE_2FA_POLICY', 'MANAGE_SESSIONS', 'VIEW_TECHNICAL_LOGS', 'EXPORT_SERVER_DATA', 'MANAGE_BACKUPS', 'TRANSFER_OWNERSHIP', 'DELETE_SERVER']),
-];
-
-export const channelPermissionGroups = permissionGroups.filter((candidate) => candidate.id === 'text' || candidate.id === 'voice');
-
-export const permissionLabels = Object.fromEntries(
-  Object.entries(definitions).map(([permission, definition]) => [permission, definition.label]),
-) as Record<ServerPermission, string>;
-
-export const rolePresets: Array<{ id: string; label: string; color: string; permissions: ServerPermission[] }> = [
-  { id: 'moderator', label: 'Модератор', color: '#d77b63', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'SEND_ATTACHMENTS', 'ADD_REACTIONS', 'EMBED_LINKS', 'MANAGE_OWN_MESSAGES', 'CONNECT_VOICE', 'SPEAK', 'STREAM_SCREEN', 'STREAM_APPLICATION_AUDIO', 'KICK_MEMBERS', 'TIMEOUT_MEMBERS', 'MANAGE_MESSAGES', 'MUTE_MEMBERS', 'MOVE_MEMBERS', 'VIEW_AUDIT_LOG'] },
-  { id: 'speaker', label: 'Ведущий', color: '#53a6a6', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'SEND_ATTACHMENTS', 'ADD_REACTIONS', 'EMBED_LINKS', 'MANAGE_OWN_MESSAGES', 'CONNECT_VOICE', 'SPEAK', 'STREAM_SCREEN', 'STREAM_APPLICATION_AUDIO', 'USE_PRIORITY_VOICE'] },
-  { id: 'guest', label: 'Гость', color: '#8f91a8', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'ADD_REACTIONS', 'MANAGE_OWN_MESSAGES', 'CONNECT_VOICE', 'SPEAK'] },
 ];

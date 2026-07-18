@@ -22,6 +22,7 @@ const meta = {
         { identity: 'user_max_remote', displayName: 'Максим Орлов', isLocal: false, isOwner: false, isMuted: true, isSpeaking: false, audioLevel: 0, isScreenSharing: false, volume: 0.8, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
       ],
       isMuted: false,
+      isDeafened: false,
       isScreenSharing: false,
       screenTrack: null,
       screenSharerName: null,

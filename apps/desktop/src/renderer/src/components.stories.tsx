@@ -13,5 +13,9 @@ export default meta;
 type Story = StoryObj;
 
 export const PasswordLogin: Story = {
-  render: () => <AuthPanel mode="password" stage="credentials" factor="email" totpAvailable email="owner@myvatrushka.ru" code="" password="secure-vatrushka-42" passwordConfirmation="" retrySeconds={0} busy={false} error={null} onMode={fn()} onEmailChange={fn()} onCodeChange={fn()} onPasswordChange={fn()} onPasswordConfirmationChange={fn()} onRequest={fn()} onVerify={fn()} onFactor={fn()} onBack={fn()} />,
+  render: () => <AuthPanel mode="password" stage="credentials" factor="email" totpAvailable email="owner@myvatrushka.ru" code="" password="secure-vatrushka-42" passwordConfirmation="" retrySeconds={0} busy={false} error={null} notice={null} onMode={fn()} onReset={fn()} onEmailChange={fn()} onCodeChange={fn()} onPasswordChange={fn()} onPasswordConfirmationChange={fn()} onRequest={fn()} onVerify={fn()} onFactor={fn()} onBack={fn()} />,
+};
+
+export const PasswordReset: Story = {
+  render: () => <AuthPanel mode="reset" stage="otp" factor="email" totpAvailable={false} email="owner@myvatrushka.ru" code="123456" password="new-secure-password-42" passwordConfirmation="new-secure-password-42" retrySeconds={0} busy={false} error={null} notice={null} onMode={fn()} onReset={fn()} onEmailChange={fn()} onCodeChange={fn()} onPasswordChange={fn()} onPasswordConfirmationChange={fn()} onRequest={fn()} onVerify={fn()} onFactor={fn()} onBack={fn()} />,
 };

@@ -59,19 +59,9 @@ export class PostgresStore implements DataStore {
       await tx
         .update(schema.authCodes)
         .set({ consumedAt: code.createdAt })
-        .where(and(eq(schema.authCodes.email, code.email), isNull(schema.authCodes.consumedAt)));
+        .where(and(eq(schema.authCodes.email, code.email), eq(schema.authCodes.purpose, code.purpose), isNull(schema.authCodes.consumedAt)));
       await tx.insert(schema.authCodes).values(code);
     });
-  }
-
-  async findLatestAuthCode(email: string): Promise<AuthCodeRecord | null> {
-    const [row] = await this.db
-      .select()
-      .from(schema.authCodes)
-      .where(eq(schema.authCodes.email, email))
-      .orderBy(desc(schema.authCodes.createdAt))
-      .limit(1);
-    return (row as AuthCodeRecord | undefined) ?? null;
   }
 
   async findLatestAuthCodeForPurpose(email: string, purpose: AuthCodeRecord['purpose']): Promise<AuthCodeRecord | null> {
@@ -172,6 +162,23 @@ export class PostgresStore implements DataStore {
       .where(eq(schema.users.id, id))
       .returning();
     return row ?? null;
+  }
+
+  async resetPasswordAndRevokeSessions(id: string, passwordHash: string, now: Date): Promise<{ user: UserRecord; revokedSessionIds: string[] } | null> {
+    return this.db.transaction(async (tx) => {
+      const [user] = await tx
+        .update(schema.users)
+        .set({ passwordHash, emailVerifiedAt: now, updatedAt: now })
+        .where(eq(schema.users.id, id))
+        .returning();
+      if (!user) return null;
+      const revoked = await tx
+        .update(schema.sessions)
+        .set({ revokedAt: now })
+        .where(and(eq(schema.sessions.userId, id), isNull(schema.sessions.revokedAt)))
+        .returning({ id: schema.sessions.id });
+      return { user, revokedSessionIds: revoked.map((session) => session.id) };
+    });
   }
 
   async updateTwoFactor(id: string, secretEncrypted: string | null, enabled: boolean, now: Date): Promise<UserRecord | null> {

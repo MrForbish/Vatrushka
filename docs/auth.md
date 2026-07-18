@@ -18,6 +18,10 @@
 
 SMTP credentials, OTP и пароль не попадают в production logs. Единственные интерактивные входы — регистрация с паролем и password login с обязательным вторым фактором.
 
+## Password reset
+
+`POST /auth/password/reset/request-code` всегда возвращает одинаковый ответ и проходит тот же SMTP-путь как для существующего, так и для неизвестного email, поэтому не раскрывает наличие аккаунта. Reset-код имеет отдельный purpose, HMAC hash, TTL, resend и attempt limits. `POST /auth/password/reset/complete` атомарно обновляет password hash и отзывает все session rows пользователя; активные access/refresh tokens после этого не проходят серверную проверку, presence очищается, а `PASSWORD_RESET` попадает в security feed и email notice. Настроенный TOTP не отключается.
+
 ## Sessions
 
 Access JWT: HS256, issuer/audience, 15 минут, только в renderer memory. Refresh: 48 random bytes/base64url, SHA-256 hash в PostgreSQL, 30 дней. Зашифрованный refresh читает только Electron main process: preload не имеет метода, возвращающего долгоживущий токен renderer-коду. Main самостоятельно выполняет startup refresh, rotation и logout и отдаёт renderer только новый access JWT и пользователя.

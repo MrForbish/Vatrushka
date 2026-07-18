@@ -304,6 +304,23 @@ export class VatrushkaService {
     return { ...tokens, user: publicUser(user), isNewUser: true };
   }
 
+  async requestPasswordReset(email: string): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
+    // The same response and SMTP path are used for registered and unknown
+    // addresses so the endpoint does not disclose whether an account exists.
+    return this.issueEmailCode(email, 'password_reset');
+  }
+
+  async completePasswordReset(email: string, code: string, password: string): Promise<{ status: 'PASSWORD_RESET' }> {
+    await this.consumeEmailCode(email, code, 'password_reset', 'INVALID_OTP');
+    const user = await this.store.findUserByEmail(email);
+    if (!user?.passwordHash) throw new AppError('INVALID_OTP', 401);
+    const result = await this.store.resetPasswordAndRevokeSessions(user.id, await hashPassword(password), this.now());
+    if (!result) throw new AppError('INVALID_OTP', 401);
+    await Promise.allSettled(result.revokedSessionIds.map((sessionId) => this.presenceStore.removeSession(user.id, sessionId)));
+    await this.recordSecurityEvent(result.user, 'PASSWORD_RESET', null, 'Пароль восстановлен', 'Пароль аккаунта был восстановлен по коду из письма. Все активные сессии завершены.');
+    return { status: 'PASSWORD_RESET' };
+  }
+
   async beginPasswordLogin(email: string, password: string, requestedFactor: 'auto' | 'email' | 'totp' | 'recovery'): Promise<PasswordLoginChallenge> {
     const user = await this.requireValidPassword(email, password);
     const factor = requestedFactor === 'auto' ? (user.twoFactorEnabled ? 'totp' : 'email') : requestedFactor;
@@ -720,6 +737,17 @@ export class VatrushkaService {
     await this.realtimeBus.publishPresence(user.id, [...recipients], { effectiveStatus: presence.effectiveStatus, customText: user.presenceVisibility === 'shared_servers' ? presence.customText : null, customTextExpiresAt: user.presenceVisibility === 'shared_servers' ? presence.customTextExpiresAt : null, updatedAt: presence.updatedAt });
   }
 
+  private async broadcastServerUpdate(serverId: string, type: 'server.updated' | 'server.channel.updated', payload: Record<string, unknown>): Promise<void> {
+    if (!this.realtimeBus) return;
+    try {
+      const targetUserIds = (await this.store.listServerMembers(serverId)).map((member) => member.userId);
+      await this.realtimeBus.publish({ id: randomUUID(), type, occurredAt: this.now().toISOString(), conversationId: null, targetUserIds, payload: { serverId, ...payload } });
+    } catch {
+      // Database updates are authoritative. A temporary Redis outage is healed
+      // by the client's periodic refresh and must not roll back user changes.
+    }
+  }
+
   async getPrivacySettings(authorization: string | undefined): Promise<UserPrivacySettings> {
     const user = await this.authenticate(authorization);
     return { directMessages: user.directMessagePrivacy, presenceVisibility: user.presenceVisibility, activityVisible: user.activityVisible, updatedAt: user.updatedAt.toISOString() };
@@ -900,7 +928,7 @@ export class VatrushkaService {
     let server: ServerRecord | null = null;
     let serverTextChannel: ServerChannelRecord | null = null;
     for (let attempt = 0; attempt < 10 && !server; attempt += 1) {
-      const candidate: ServerRecord = { id: randomUUID(), name, inviteToken: randomOpaqueToken(9), ownerUserId: user.id, createdAt: now, updatedAt: now };
+      const candidate: ServerRecord = { id: randomUUID(), name, description: null, inviteToken: randomOpaqueToken(9), ownerUserId: user.id, createdAt: now, updatedAt: now };
       const everyone: ServerRoleRecord = {
         id: randomUUID(), serverId: candidate.id, name: '@everyone', color: '#8d7a72', position: 0, isDefault: true,
         kind: 'EVERYONE',
@@ -970,6 +998,7 @@ export class VatrushkaService {
       await this.canonicalMessagingStore.ensureServerChannelConversation(channel.id, server.id, user.id, now);
     }
     await this.recordServerAudit(server.id, user, 'CHANNEL_CREATED', 'CHANNEL', channel.id, null, { name: channel.name, type: channel.type });
+    await this.broadcastServerUpdate(server.id, 'server.channel.updated', { action: 'created', channelId: channel.id });
     return publicServerChannel(channel);
   }
 
@@ -982,6 +1011,7 @@ export class VatrushkaService {
     if (!(await this.store.deleteServerChannel(channel.id))) throw new AppError('CHANNEL_NOT_FOUND', 404);
     await this.deleteStoredObjects(attachmentStorageKeys);
     await this.recordServerAudit(server.id, user, 'CHANNEL_DELETED', 'CHANNEL', channel.id, { name: channel.name, type: channel.type }, null);
+    await this.broadcastServerUpdate(server.id, 'server.channel.updated', { action: 'deleted', channelId: channel.id });
     if (channel.livekitRoomName) {
       try { await this.media.deleteRoom(channel.livekitRoomName); } catch { /* The database deletion is authoritative. */ }
     }
@@ -1722,7 +1752,7 @@ export class VatrushkaService {
     credentialHash: string | null = null,
   ): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
     const now = this.now();
-    const latest = await this.store.findLatestAuthCode(email);
+    const latest = await this.store.findLatestAuthCodeForPurpose(email, purpose);
     if (latest) {
       const retryAt = latest.createdAt.getTime() + this.config.OTP_RESEND_SECONDS * 1000;
       if (retryAt > now.getTime()) {
@@ -1813,6 +1843,7 @@ export class VatrushkaService {
     const updated = await this.settings().updateOverview(serverId, input, this.now());
     if (!updated) throw new AppError('VALIDATION_ERROR', 409, undefined, { field: 'version', message: 'Настройки изменились в другой сессии' });
     await this.recordServerAudit(serverId, user, 'SERVER_OVERVIEW_UPDATED', 'SERVER', serverId, { name: server.name }, input);
+    await this.broadcastServerUpdate(serverId, 'server.updated', { action: 'overview', version: updated.version });
     return updated;
   }
 
@@ -1925,8 +1956,12 @@ export class VatrushkaService {
     const user = await this.authenticate(authorization);
     const server = await this.requireServer(serverId);
     await this.requireServerPermission(server, user, 'MANAGE_CHANNELS');
+    const before = (await this.settings().listChannels(serverId)).find((channel) => channel.id === channelId);
+    if (!before) throw new AppError('CHANNEL_NOT_FOUND', 404);
     if (!await this.settings().updateChannel(serverId, channelId, input, this.now())) throw new AppError('VALIDATION_ERROR', 409, undefined, { field: 'version', message: 'Канал изменился в другой сессии' });
-    await this.recordServerAudit(serverId, user, 'CHANNEL_SETTINGS_UPDATED', 'CHANNEL', channelId, null, input);
+    const after = (await this.settings().listChannels(serverId)).find((channel) => channel.id === channelId) ?? input;
+    await this.recordServerAudit(serverId, user, input.name === undefined ? 'CHANNEL_SETTINGS_UPDATED' : 'CHANNEL_RENAMED', 'CHANNEL', channelId, before, after);
+    await this.broadcastServerUpdate(serverId, 'server.channel.updated', { action: 'updated', channelId, version: 'version' in after ? after.version : input.version + 1 });
   }
 
   async listServerInvites(authorization: string | undefined, serverId: string): Promise<ServerInviteSettings[]> {
@@ -2574,6 +2609,7 @@ export class VatrushkaService {
     return {
       id: server.id,
       name: server.name,
+      description: server.description ?? null,
       inviteUrl: this.inviteUrl(server.inviteToken),
       ownerUserId: server.ownerUserId,
       memberCount: members.length,

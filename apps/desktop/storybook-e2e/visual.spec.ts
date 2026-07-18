@@ -24,12 +24,28 @@ test.describe('Vatrushka design system visual baseline', () => {
 
   test('confirm dialog', async ({ page }) => {
     await openStory(page, 'overlays-modal-confirmdialog-drawer--confirm-destructive');
+    await page.getByRole('button', { name: 'Удалить канал' }).focus();
     await expect(page).toHaveScreenshot('overlay-confirm-dialog.png', { animations: 'disabled', fullPage: true });
   });
 
   test('app shell desktop', async ({ page }) => {
     await openStory(page, 'layouts-app-shell--full-server');
     await expect(page).toHaveScreenshot('app-shell-desktop.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('app shell at the supported 1280 by 720 boundary', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openStory(page, 'layouts-app-shell--full-server');
+    await expect(page.getByRole('button', { name: 'Открыть участников' })).toBeVisible();
+    await expect(page).toHaveScreenshot('app-shell-1280.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('app shell at the minimum 1024 by 680 boundary', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 680 });
+    await openStory(page, 'layouts-app-shell--full-server');
+    await page.getByRole('button', { name: 'Открыть список серверов' }).click();
+    await expect(page.getByRole('dialog', { name: 'Серверы' })).toBeVisible();
+    await expect(page).toHaveScreenshot('app-shell-minimum.png', { animations: 'disabled', fullPage: true });
   });
 
   test('server settings shell', async ({ page }) => {
@@ -94,6 +110,12 @@ test.describe('Vatrushka design system visual baseline', () => {
     await openStory(page, 'screens-current--password-login');
     await expect(page.getByRole('heading', { name: 'С возвращением' })).toBeVisible();
     await expect(page).toHaveScreenshot('password-login.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('password reset', async ({ page }) => {
+    await openStory(page, 'screens-current--password-reset');
+    await expect(page.getByRole('heading', { name: 'Задайте новый пароль' })).toBeVisible();
+    await expect(page).toHaveScreenshot('password-reset.png', { animations: 'disabled', fullPage: true });
   });
 
   test('app shell compact drawers', async ({ page }) => {
@@ -166,14 +188,14 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('client-update-ready.png', { animations: 'disabled', fullPage: true });
   });
 
-  test('server role editor', async ({ page }) => {
-    await openStory(page, 'features-server-settings--visual-roles');
-    await expect(page.getByRole('dialog', { name: 'Настройки сервера' })).toBeVisible();
+  test('routed server role editor', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--server-roles');
+    await expect(page.getByRole('heading', { name: 'Роли и права' })).toBeVisible();
     await expect(page).toHaveScreenshot('server-settings-roles.png', { animations: 'disabled', fullPage: true });
   });
 
-  test('channel permission overrides', async ({ page }) => {
-    await openStory(page, 'features-server-settings--channel-overrides');
+  test('routed channel permission overrides', async ({ page }) => {
+    await openStory(page, 'features-settings-channel-permissions--role-override');
     await expect(page.getByRole('heading', { name: 'Права конкретного канала' })).toBeVisible();
     await expect(page).toHaveScreenshot('server-settings-overrides.png', { animations: 'disabled', fullPage: true });
   });
@@ -187,6 +209,7 @@ test.describe('Vatrushka design system visual baseline', () => {
   test('security center sessions', async ({ page }) => {
     await openStory(page, 'features-security-center--sessions');
     await expect(page.getByText('Рабочий ноутбук')).toBeVisible();
+    await page.getByRole('button', { name: 'Сессии' }).focus();
     await expect(page).toHaveScreenshot('security-center-sessions.png', { animations: 'disabled', fullPage: true });
   });
 });

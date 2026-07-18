@@ -1,12 +1,13 @@
 # Vatrushka: roadmap
 
-Обновлено для версии 0.6.1. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
+Обновлено для версии 0.6.3. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
 
 ## Состояние продукта
 
 ### Готово и используется
 
 - password + обязательный email/TOTP/recovery второй фактор;
+- безопасный password reset через отдельный email-код с отзывом всех активных сессий;
 - постоянные серверы, текстовые/голосовые каналы, короткие invite links;
 - роли, 40 permissions, channel overrides и audit log;
 - Home dashboard, routed User/Server Settings и presence через Redis;
@@ -26,13 +27,24 @@
 - крупные orchestration-файлы затрудняют безопасные изменения;
 - `/metrics` реализован, но не собирается production Prometheus;
 - installer не подписан code-signing сертификатом;
-- password reset отсутствует;
-- rename канала доступен в Server Settings, но не из обычного списка каналов;
-- описание сервера сохраняется, но не показывается в рабочем server shell.
 
 ## План выполнения
 
+### P0.0 — Git branching и release automation
+
+Статус: выполнено в PR #14–#16. `develop` и `main` введены, production VPS переведен на `main`, policy/version/release workflows работают. GitHub branch protection и обязательный approval остаются внешним ограничением: private repository на текущем плане возвращает `403`; до смены плана направления PR контролирует `pr-policy` workflow.
+
+1. Ввести `develop` как интеграционную ветку и выполнить контролируемый переход production `master → main` без разрыва VPS deployment/updater.
+2. Добавить branch/PR policy tests, PR templates, CODEOWNERS и protection после первого зеленого workflow run.
+3. Разделить ordinary PR checks, release candidate, release PR, tag-only production и sync workflows; production secrets не выдавать PR jobs.
+4. Добавить единый version check, безопасные `release:prepare --dry-run`/`release:validate`, RC/production metadata и checksums.
+5. Следующий релиз собрать через immutable `assemble/<version> → release/<version>`, выпустить annotated tag и вернуть `[SYNC] main → develop`.
+
+Критерий: некорректные направления PR блокируются автоматически, RC не попадает в stable feed, production publish возможен только из тега в `main`, а ручной rollback описан и проверен. Полный процесс — в [release-process.md](release-process.md).
+
 ### P0.1 — документация и доказательная очистка
+
+Статус: канонические бизнес-/техническая спецификации, roadmap и inventory созданы в PR #12; settings fallback удален в PR #13. Текущий cleanup переносит channel overrides в production routed settings и удаляет недостижимый старый modal без потери сценариев. Legacy messaging остается compatibility-кодом и не удаляется до adoption gate.
 
 1. Поддерживать `product-specification.md`, `technical-specification.md` и этот roadmap как канонические документы.
 2. Построить import/runtime/API/schema inventory; разделить `dead`, `compatibility`, `future-approved`.
@@ -54,12 +66,16 @@
 
 ### P0.3 — профильная voice-плашка
 
+Статус: выполнено в `feat/ROADMAP-3-profile-audio-controls`. Кнопки используют фактический media snapshot, deafen fail-safe выключает микрофон и все входящие LiveKit-аудиоисточники, а undeafen не включает микрофон автоматически. Unit, Storybook, Electron E2E и visual regression покрывают поведение и двухстрочную адаптивную компоновку.
+
 1. Добавить рядом с настройками две icon buttons: микрофон и входящий звук.
 2. Синхронизировать их с фактическим LiveKit/media snapshot, а не локальной иллюзией состояния.
 3. Deafen выключает входящий звук и микрофон; undeafen не включает микрофон неожиданно.
 4. Добавить tooltip, aria-label, disabled/reconnecting состояния и unit/Storybook/E2E tests.
 
 ### P0.4 — server shell usability
+
+Статус: выполнено в `feat/ROADMAP-4-server-shell-usability`. `ServerDetail` публикует описание, sidebar показывает empty/overflow состояния, а доступное только с `MANAGE_CHANNELS` контекстное меню использует существующий versioned settings API. Изменения сервера и каналов адресно рассылаются участникам через Redis/WebSocket и инвалидируют server/settings snapshots. Founder-плашки используют компактный `CEO Founder` без жёлтого фона сообщений. API, PostgreSQL conflict, component, Storybook и visual regression сценарии добавлены.
 
 1. Показать описание сервера в server header/about surface с empty и overflow состояниями.
 2. Добавить «Переименовать» в контекстное меню канала с permission check, validation, optimistic conflict и audit.
@@ -68,20 +84,22 @@
 
 ### P0.5 — CI и тестовое покрытие
 
+Статус: выполнено в PR #23 (`chore/ci-quality-gate`). Ordinary/RC/release/tag/sync workflows разделены, PostgreSQL/Redis integration выполняются в изолированных CI services, а desktop suite разделен на параллельные behavior/visual jobs. Visual regression переведён с dev-сервера на заранее собранный статический Storybook, добавлены step budgets/job timeouts и формальная risk/viewport matrix. Число visual scenarios увеличено с 29 до 31 за счёт границ 1280×720 и 1024×680; сценарии не удалялись. На первом GitHub-hosted Windows прогоне visual job сократился с 6:01 до 3:01, а критическое время всего gate — примерно с 6:01 до 3:13 (около 46%).
+
 1. Зафиксировать mapping риска к тестам и удалить только дублирующие/неактуальные сценарии.
-2. Кэшировать Playwright Chromium по версии lockfile/Playwright.
-3. Ускорить visual suite безопасным параллелизмом после проверки детерминизма; не сокращать screenshots.
-4. Исключить повторные холодные сборки Storybook там, где interaction и visual могут использовать один артефакт.
+2. Кэшировать Playwright Chromium по версии lockfile/Playwright. Выполнено.
+3. Ускорить visual suite без сокращения screenshots: внутрипроцессный параллелизм отклонён как нестабильный, выбран статический Storybook. Выполнено.
+4. Исключить холодную dev-компиляцию каждой visual story с помощью одного production-like Storybook build. Выполнено.
 5. Параллелить независимые CI jobs и сохранять traces/screenshots только при ошибке.
-6. Добавить измерение duration по этапам и регрессионный бюджет pipeline.
+6. Добавить измерение duration по этапам и регрессионный бюджет pipeline. Выполнено: Storybook 77,9/180 секунд, Electron E2E 37,0/90 секунд, static visual 90,6/180 секунд на первом CI-прогоне; visual budget скорректирован после cold-runner прогона 166,7 секунды, в котором все 32 сценария прошли.
 
 Цель: сократить `desktop-regression` с наблюдавшихся ~11 минут до 6–7 минут на cold runner без потери сценариев.
 
 ### P0.6 — эксплуатационная готовность
 
-1. Реализовать отдельный rate-limited password reset с отзывом сессий и security event.
+1. Реализовать отдельный rate-limited password reset с отзывом сессий и security event. Реализовано в WEB-24: neutral request response, отдельный hashed OTP purpose, atomic PostgreSQL revoke, presence cleanup, security notice и desktop/visual flow.
 2. Добавить code signing и stable/beta update channels после получения сертификата; updater до этого продолжает работать с явным документированным риском SmartScreen.
-3. Выполнить load tests PostgreSQL/Redis/API/WebSocket/LiveKit/S3 и установить capacity limits.
+3. Выполнить load tests PostgreSQL/Redis/API/WebSocket/LiveKit/S3 и установить capacity limits. Добавлен opt-in safety-guarded harness и начальные p95 budgets; production baseline и media-plane ceiling должны быть зафиксированы release evidence после выпуска кода.
 
 ### P1.1 — Prometheus/Grafana
 
@@ -108,14 +126,14 @@
 
 ## Очередность PR
 
-1. `docs/source-of-truth` — канонические документы и inventory.
-2. `cleanup/safe-runtime` — доказуемо мертвые frontend/backend элементы без schema contract.
-3. `ui/profile-audio-controls` — mute/deafen.
-4. `ui/server-description-channel-rename` — описание, rename и realtime.
-5. `ui/founder-treatment` — `CEO Founder` и сообщения.
-6. `quality/storybook-responsive` — viewport/edge-state fixes.
-7. `ci/desktop-regression-speed` — cache/parallelism/timing.
-8. `migration/canonical-messaging-contract` — только после client adoption gate.
-9. `ops/observability` — Prometheus/Grafana.
+1. `docs/git-branching-release-process` — аудит, целевая модель и безопасный cutover.
+2. `chore/repository-policy` — policy tests, templates, CODEOWNERS и version scripts.
+3. `chore/release-workflows` — ordinary/RC/release/tag/sync GitHub Actions и CI speedup.
+4. `refactor/safe-runtime` — доказуемо мертвые frontend/backend элементы без schema contract.
+5. `feat/ROADMAP-3-profile-audio-controls` — mute/deafen, выполнено.
+6. `feat/ROADMAP-4-server-shell-usability` — описание, rename, realtime и `CEO Founder`, выполнено.
+7. `fix/storybook-responsive` — viewport/edge-state fixes.
+8. `refactor/canonical-messaging-contract` — только после client adoption gate.
+9. `feat/observability` — Prometheus/Grafana.
 
-Каждый PR проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Runtime-PR выкатывается после merge с backup и health checks; Windows update публикуется только когда изменения нужны установленному клиенту.
+Каждый ordinary PR направляется в `develop` и проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Production получает только стабилизированный `release/*` или hotfix; Windows update публикуется tag workflow по правилам [release-process.md](release-process.md).
