@@ -202,6 +202,7 @@ test.describe('Vatrushka design system visual baseline', () => {
   test('security center sessions', async ({ page }) => {
     await openStory(page, 'features-security-center--sessions');
     await expect(page.getByText('Рабочий ноутбук')).toBeVisible();
+    await page.getByRole('button', { name: 'Сессии' }).focus();
     await expect(page).toHaveScreenshot('security-center-sessions.png', { animations: 'disabled', fullPage: true });
   });
 });
