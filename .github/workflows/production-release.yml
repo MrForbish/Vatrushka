@@ -82,6 +82,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
       PRODUCTION_SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
       PRODUCTION_SSH_HOST_KEY: ${{ secrets.PRODUCTION_SSH_HOST_KEY }}
       PRODUCTION_SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
@@ -102,10 +103,12 @@ jobs:
       - name: Create immutable GitHub Release
         shell: bash
         run: |
+          mapfile -d '' assets < <(find release -maxdepth 1 -type f -print0)
+          ((${#assets[@]} > 0)) || { echo 'Release artifact contains no publishable files.' >&2; exit 1; }
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" release/* --clobber
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" release/* --verify-tag --generate-notes --draft --title "Vatrushka ${{ needs.verify-tag.outputs.version }}"
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" --verify-tag --generate-notes --draft --title "Vatrushka ${{ needs.verify-tag.outputs.version }}"
           fi
       - name: Publish stable update feed atomically
         shell: bash
