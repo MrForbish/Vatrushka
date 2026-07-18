@@ -147,9 +147,12 @@ describe('production infrastructure adapters', () => {
     ]));
     expect(await messaging.listNotifications(second.id, null, 10, true)).toHaveLength(0);
     const mentioned = await messaging.createMessage({ conversationId: direct.conversation.id, authorId: first.id, clientMessageId: randomUUID(), content: 'hello @second', replyToMessageId: created.message.id, attachmentIds: [], mentions: [{ type: 'user', userId: second.id, start: 6, length: 7 }], now: new Date(now.getTime() + 1_500) });
+    const reply = await messaging.createMessage({ conversationId: direct.conversation.id, authorId: second.id, clientMessageId: randomUUID(), content: 'reply to first', replyToMessageId: created.message.id, attachmentIds: [], mentions: [], now: new Date(now.getTime() + 1_550) });
     const unread = await messaging.unreadSummary(second.id);
     expect(unread.conversations.find((item) => item.conversationId === direct.conversation.id)?.mentionCount).toBe(1);
-    expect(unread.totalReplyUnread).toBe(1);
+    expect((await messaging.unreadSummary(first.id)).totalReplyUnread).toBe(1);
+    await messaging.updateReadState(direct.conversation.id, first.id, reply.message.id, reply.message.id, new Date(now.getTime() + 1_575));
+    expect((await messaging.unreadSummary(first.id)).totalReplyUnread).toBe(0);
     const preferences = await messaging.updateNotificationPreferences(second.id, { desktopEnabled: false, soundEnabled: true, previewMode: 'sender_only', directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: '22:00', quietHoursEnd: '08:00', quietHoursTimezone: 'Europe/Moscow' }, now);
     expect((await messaging.getNotificationPreferences(second.id, now)).previewMode).toBe('sender_only');
     expect(preferences.desktopEnabled).toBe(false);
@@ -218,7 +221,7 @@ describe('production infrastructure adapters', () => {
     expect(await identitySettings.exportPersonalData(first.id)).toMatchObject({ profile: expect.objectContaining({ email: pendingEmail }) });
 
     expect(await identitySettings.scheduleDeactivation(first.id, now)).toBe(true);
-    await adminPool.query("update users set deactivation_scheduled_at = $2 - interval '15 days' where id = $1", [first.id, now]);
+    await adminPool.query("update users set deactivation_scheduled_at = $2::timestamptz - interval '15 days' where id = $1", [first.id, now]);
     expect(await identitySettings.anonymizeDueAccounts(now)).toBe(1);
     const deleted = await adminPool.query<{ display_name: string; deleted_at: Date | null }>('select display_name, deleted_at from users where id = $1', [first.id]);
     expect(deleted.rows[0]).toMatchObject({ display_name: 'Удалённый пользователь', deleted_at: expect.any(Date) });
