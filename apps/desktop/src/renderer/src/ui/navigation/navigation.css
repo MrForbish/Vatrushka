@@ -64,6 +64,18 @@
 .vui-server-context__connection { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-3) var(--space-4); border-top: 1px solid var(--color-border-subtle); color: var(--color-text-muted); font: var(--text-caption); }
 
 .vui-profile-dock { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-2); padding: var(--space-3); border-top: 1px solid var(--color-border-subtle); background: var(--color-surface-1); }
+.vui-profile-dock[data-audio='true'] {
+  grid-template-areas:
+    'presence copy settings logout'
+    'presence copy audio audio';
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  row-gap: var(--space-1);
+}
+.vui-profile-dock[data-audio='true'] .vui-profile-dock__presence { grid-area: presence; }
+.vui-profile-dock[data-audio='true'] .vui-profile-dock__copy { grid-area: copy; }
+.vui-profile-dock[data-audio='true'] .vui-profile-dock__audio { grid-area: audio; justify-self: end; }
+.vui-profile-dock[data-audio='true'] .vui-profile-dock__settings { grid-area: settings; }
+.vui-profile-dock[data-audio='true'] .vui-profile-dock__logout { grid-area: logout; }
 .vui-profile-dock[data-founder='true'] { background: var(--gradient-founder); }
 .vui-profile-dock__copy { display: grid; min-width: 0; }
 .vui-profile-dock__copy strong,
@@ -71,6 +83,7 @@
 .vui-profile-dock__copy strong { font: var(--text-label-md); }
 .vui-profile-dock__copy small { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-profile-dock[data-founder='true'] .vui-profile-dock__copy small { color: var(--color-founder); }
+.vui-profile-dock__audio { display: flex; gap: var(--space-1); }
 .vui-profile-dock__presence { position: relative; }
 .vui-profile-dock__presence > button { display: grid; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
 .vui-profile-dock__status-menu { position: absolute; z-index: 90; bottom: calc(100% + var(--space-3)); left: 0; display: grid; width: 190px; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-elevated); box-shadow: var(--shadow-float); }

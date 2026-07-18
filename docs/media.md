@@ -12,6 +12,8 @@ LiveKit JS SDK подключается с auto-subscribe, echo cancellation, no
 
 Participant UI показывает имя, владельца/администратора, mute текстом и icon, speaking текстом и visual outline, connection quality и screen badge. Регулировка громкости, локальное отключение звука и разрешённое модератору исключение находятся в контекстном меню участника по правому клику. Гостевых media identities больше нет. Удалённые audio tracks attach/detach явно; autoplay gate вызывает `Room.startAudio` только из user gesture.
 
+Нижняя плашка профиля на Home, сервере и в личных сообщениях использует единый `MediaSnapshot`. Кнопка микрофона управляет реальным local microphone track. Deafen сначала выключает микрофон, затем локально обнуляет громкость `Microphone` и `ScreenShareAudio` всех удалённых участников. При обратном включении входящего звука сохраняются индивидуальные mute/volume-настройки, но микрофон остаётся выключенным до отдельного действия пользователя. Во время отсутствия voice-соединения, reconnect и media-операции кнопки показывают честное disabled-состояние.
+
 ## Screen capture
 
 1. API atomically выдаёт 30-секундную lease.

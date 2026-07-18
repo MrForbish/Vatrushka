@@ -7,6 +7,7 @@ import {
   VideoQuality,
   type LocalTrack,
   type Participant,
+  type RemoteParticipant,
   type RemoteTrack,
   type RoomOptions,
 } from 'livekit-client';
@@ -34,6 +35,7 @@ export interface MediaSnapshot {
   connectionState: ConnectionState;
   participants: ParticipantView[];
   isMuted: boolean;
+  isDeafened: boolean;
   isScreenSharing: boolean;
   screenTrack: RemoteTrack | LocalTrack | null;
   screenSharerName: string | null;
@@ -49,6 +51,7 @@ const initialSnapshot: MediaSnapshot = {
   connectionState: ConnectionState.Disconnected,
   participants: [],
   isMuted: true,
+  isDeafened: false,
   isScreenSharing: false,
   screenTrack: null,
   screenSharerName: null,
@@ -73,6 +76,7 @@ export class MediaSession {
   private snapshot: MediaSnapshot = initialSnapshot;
   private screenShareAudioVolume = 1;
   private screenShareAudioMuted = false;
+  private isDeafened = false;
   private stoppingScreenShare = false;
   private screenShareTransition: Promise<void> = Promise.resolve();
   private readonly participantVolumes = new Map<string, number>();
@@ -97,6 +101,7 @@ export class MediaSession {
   async connect(connection: RoomConnection, settings: LocalSettings): Promise<void> {
     await this.disconnect(false);
     this.connection = connection;
+    this.isDeafened = false;
     this.screenShareAudioVolume = settings.volume;
     this.screenShareAudioMuted = false;
     const options: RoomOptions = {
@@ -146,7 +151,17 @@ export class MediaSession {
 
   async setMuted(muted: boolean): Promise<void> {
     if (!this.room) return;
+    if (this.isDeafened && !muted) return;
     await this.room.localParticipant.setMicrophoneEnabled(!muted);
+    this.refreshSnapshot();
+  }
+
+  async setDeafened(deafened: boolean): Promise<void> {
+    if (!this.room) return;
+    if (deafened) await this.room.localParticipant.setMicrophoneEnabled(false);
+    this.isDeafened = deafened;
+    for (const participant of this.room.remoteParticipants.values()) this.applyParticipantAudioPreferences(participant);
+    this.applyScreenShareAudioPreferences();
     this.refreshSnapshot();
   }
 
@@ -168,7 +183,7 @@ export class MediaSession {
     const normalized = Math.max(0, Math.min(1, volume));
     this.participantVolumes.set(identity, normalized);
     if (normalized > 0) this.locallyMutedParticipants.delete(identity);
-    participant.setVolume(normalized, Track.Source.Microphone);
+    participant.setVolume(this.isDeafened ? 0 : normalized, Track.Source.Microphone);
     this.refreshSnapshot();
   }
 
@@ -177,7 +192,7 @@ export class MediaSession {
     if (!participant) return;
     if (muted) this.locallyMutedParticipants.add(identity);
     else this.locallyMutedParticipants.delete(identity);
-    participant.setVolume(muted ? 0 : this.participantVolumes.get(identity) ?? 1, Track.Source.Microphone);
+    participant.setVolume(this.isDeafened || muted ? 0 : this.participantVolumes.get(identity) ?? 1, Track.Source.Microphone);
     this.refreshSnapshot();
   }
 
@@ -321,6 +336,7 @@ export class MediaSession {
     }
     this.room = null;
     this.connection = null;
+    this.isDeafened = false;
     this.participantVolumes.clear();
     this.locallyMutedParticipants.clear();
     this.snapshot.screenTrack?.detach().forEach((element) => element.remove());
@@ -354,13 +370,14 @@ export class MediaSession {
         }
         refresh();
       })
-      .on(RoomEvent.TrackSubscribed, (track, publication) => {
+      .on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
         if (track.kind === Track.Kind.Audio) {
           const element = track.attach();
           element.dataset.vatrushkaAudio = publication.trackSid;
           element.dataset.vatrushkaAudioSource = publication.source;
           document.body.appendChild(element);
           if (publication.source === Track.Source.ScreenShareAudio) this.applyScreenShareAudioPreferences();
+          if (publication.source === Track.Source.Microphone) this.applyParticipantAudioPreferences(participant);
         }
         if (publication.source === Track.Source.ScreenShare && this.snapshot.screenTrack && this.snapshot.screenTrack !== track) {
           console.error('Multiple active screen-share video tracks detected');
@@ -416,6 +433,7 @@ export class MediaSession {
       connectionState: room.state,
       participants,
       isMuted: !room.localParticipant.isMicrophoneEnabled,
+      isDeafened: this.isDeafened,
       isScreenSharing: room.localParticipant.isScreenShareEnabled,
       screenTrack: firstScreen?.track ?? null,
       screenSharerName: firstScreen?.participant.name || null,
@@ -446,10 +464,15 @@ export class MediaSession {
   }
 
   private applyScreenShareAudioPreferences(): void {
-    const volume = this.screenShareAudioMuted ? 0 : this.screenShareAudioVolume;
+    const volume = this.isDeafened || this.screenShareAudioMuted ? 0 : this.screenShareAudioVolume;
     for (const participant of this.room?.remoteParticipants.values() ?? []) {
       participant.setVolume(volume, Track.Source.ScreenShareAudio);
     }
+  }
+
+  private applyParticipantAudioPreferences(participant: RemoteParticipant): void {
+    const muted = this.isDeafened || this.locallyMutedParticipants.has(participant.identity);
+    participant.setVolume(muted ? 0 : this.participantVolumes.get(participant.identity) ?? 1, Track.Source.Microphone);
   }
 
   private isOwnAudioRestricted(): boolean {
