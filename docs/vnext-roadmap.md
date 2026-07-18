@@ -32,6 +32,16 @@
 
 ## План выполнения
 
+### P0.0 — Git branching и release automation
+
+1. Ввести `develop` как интеграционную ветку и выполнить контролируемый переход production `master → main` без разрыва VPS deployment/updater.
+2. Добавить branch/PR policy tests, PR templates, CODEOWNERS и protection после первого зеленого workflow run.
+3. Разделить ordinary PR checks, release candidate, release PR, tag-only production и sync workflows; production secrets не выдавать PR jobs.
+4. Добавить единый version check, безопасные `release:prepare --dry-run`/`release:validate`, RC/production metadata и checksums.
+5. Следующий релиз собрать через immutable `assemble/<version> → release/<version>`, выпустить annotated tag и вернуть `[SYNC] main → develop`.
+
+Критерий: некорректные направления PR блокируются автоматически, RC не попадает в stable feed, production publish возможен только из тега в `main`, а ручной rollback описан и проверен. Полный процесс — в [release-process.md](release-process.md).
+
 ### P0.1 — документация и доказательная очистка
 
 1. Поддерживать `product-specification.md`, `technical-specification.md` и этот roadmap как канонические документы.
@@ -108,14 +118,15 @@
 
 ## Очередность PR
 
-1. `docs/source-of-truth` — канонические документы и inventory.
-2. `cleanup/safe-runtime` — доказуемо мертвые frontend/backend элементы без schema contract.
-3. `ui/profile-audio-controls` — mute/deafen.
-4. `ui/server-description-channel-rename` — описание, rename и realtime.
-5. `ui/founder-treatment` — `CEO Founder` и сообщения.
-6. `quality/storybook-responsive` — viewport/edge-state fixes.
-7. `ci/desktop-regression-speed` — cache/parallelism/timing.
-8. `migration/canonical-messaging-contract` — только после client adoption gate.
-9. `ops/observability` — Prometheus/Grafana.
+1. `docs/git-branching-release-process` — аудит, целевая модель и безопасный cutover.
+2. `chore/repository-policy` — policy tests, templates, CODEOWNERS и version scripts.
+3. `chore/release-workflows` — ordinary/RC/release/tag/sync GitHub Actions и CI speedup.
+4. `refactor/safe-runtime` — доказуемо мертвые frontend/backend элементы без schema contract.
+5. `feat/profile-audio-controls` — mute/deafen.
+6. `feat/server-description-channel-rename` — описание, rename и realtime.
+7. `feat/founder-treatment` — `CEO Founder` и сообщения.
+8. `fix/storybook-responsive` — viewport/edge-state fixes.
+9. `refactor/canonical-messaging-contract` — только после client adoption gate.
+10. `feat/observability` — Prometheus/Grafana.
 
-Каждый PR проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Runtime-PR выкатывается после merge с backup и health checks; Windows update публикуется только когда изменения нужны установленному клиенту.
+Каждый ordinary PR направляется в `develop` и проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Production получает только стабилизированный `release/*` или hotfix; Windows update публикуется tag workflow по правилам [release-process.md](release-process.md).
