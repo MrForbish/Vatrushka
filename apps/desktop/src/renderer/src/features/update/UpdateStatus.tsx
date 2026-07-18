@@ -7,10 +7,11 @@ import './update-status.css';
 
 export interface UpdateStatusProps {
   state: DesktopUpdateState;
+  installBlocked?: boolean;
   onInstall(): void;
 }
 
-export function UpdateStatus({ state, onInstall }: UpdateStatusProps): React.JSX.Element | null {
+export function UpdateStatus({ installBlocked = false, state, onInstall }: UpdateStatusProps): React.JSX.Element | null {
   const notificationKey = `${state.status}:${state.version ?? ''}`;
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
   useEffect(() => { setDismissedKey(null); }, [notificationKey]);
@@ -35,7 +36,7 @@ export function UpdateStatus({ state, onInstall }: UpdateStatusProps): React.JSX
           : null}
       </div>
       {state.status === 'ready'
-        ? <Button onClick={onInstall} size="sm" type="button">Перезапустить</Button>
+        ? <Button disabled={installBlocked} onClick={onInstall} size="sm" {...(installBlocked ? { title: 'Сначала завершите голосовой звонок' } : {})} type="button">{installBlocked ? 'После звонка' : 'Перезапустить'}</Button>
         : null}
       <IconButton className="updateStatusClose" icon="close" label="Скрыть уведомление об обновлении" onClick={() => setDismissedKey(notificationKey)} size="sm" type="button" />
     </div>
