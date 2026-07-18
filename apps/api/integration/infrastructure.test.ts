@@ -93,8 +93,9 @@ describe('production infrastructure adapters', () => {
     expect(rows.rows.map((row) => row.constraint_name)).toEqual(expect.arrayContaining([
       'conversations_shape_check',
       'conversation_message_mentions_target_check',
-      'messages_author_client_message_unique',
     ]));
+    const indexes = await adminPool.query<{ indexname: string }>("select indexname from pg_indexes where schemaname = 'public' and tablename = 'messages'");
+    expect(indexes.rows.map((row) => row.indexname)).toContain('messages_author_client_message_unique');
   });
 
   it('keeps get-or-create user idempotent under concurrent PostgreSQL writes', async () => {
@@ -135,6 +136,7 @@ describe('production infrastructure adapters', () => {
     expect(created.created).toBe(true);
     expect(retried.created).toBe(false);
     expect(retried.message.id).toBe(created.message.id);
+    expect(await messaging.listNotifications(second.id, null, 10, true)).toHaveLength(1);
 
     const state = await messaging.updateReadState(direct.conversation.id, second.id, created.message.id, created.message.id, now);
     const stale = await messaging.updateReadState(direct.conversation.id, second.id, created.message.id, created.message.id, new Date(now.getTime() + 1_000));
@@ -143,7 +145,7 @@ describe('production infrastructure adapters', () => {
       expect.objectContaining({ userId: first.id, lastReadMessageId: null }),
       expect.objectContaining({ userId: second.id, lastReadMessageId: created.message.id }),
     ]));
-    expect(await messaging.listNotifications(second.id, null, 10, true)).toHaveLength(1);
+    expect(await messaging.listNotifications(second.id, null, 10, true)).toHaveLength(0);
     const mentioned = await messaging.createMessage({ conversationId: direct.conversation.id, authorId: first.id, clientMessageId: randomUUID(), content: 'hello @second', replyToMessageId: created.message.id, attachmentIds: [], mentions: [{ type: 'user', userId: second.id, start: 6, length: 7 }], now: new Date(now.getTime() + 1_500) });
     const unread = await messaging.unreadSummary(second.id);
     expect(unread.conversations.find((item) => item.conversationId === direct.conversation.id)?.mentionCount).toBe(1);
@@ -233,6 +235,7 @@ describe('production infrastructure adapters', () => {
       });
     });
     const worker = new OutboxWorker(messaging, realtime);
+    await adminPool.query('update outbox_events set available_at = now() where processed_at is null and failed_at is null');
     expect(await worker.drainOnce()).toBeGreaterThan(0);
     await expect(received).resolves.toMatch(/^outbox:/u);
     const pending = await adminPool.query<{ count: number }>('select count(*)::int as count from outbox_events where processed_at is null and failed_at is null');

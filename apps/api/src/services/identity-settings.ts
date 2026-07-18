@@ -24,7 +24,7 @@ export class IdentitySettingsStore {
       update users set display_name = $2, bio = $3, username = $4,
         username_changed_at = case when username is distinct from $4 then $5 else username_changed_at end, updated_at = $5
       where id = $1 and deleted_at is null and (
-        username is not distinct from $4 or username_changed_at is null or username_changed_at <= $5 - interval '7 days'
+        username is not distinct from $4 or username_changed_at is null or username_changed_at <= $5::timestamptz - interval '7 days'
       )
     `, [userId, input.displayName, input.bio, input.username, now]);
     return { updated: result.rowCount === 1 };
