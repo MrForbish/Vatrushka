@@ -498,7 +498,7 @@ export class CanonicalMessagingStore {
       }
       for (const mention of input.mentions) {
         if (mention.userId && mention.userId !== input.authorId) {
-          if (!signals.has(mention.userId)) signals.set(mention.userId, 'mention');
+          if (!signals.has(mention.userId) || signals.get(mention.userId) === 'direct_message') signals.set(mention.userId, 'mention');
           mentionKinds.set(mention.userId, new Set([...(mentionKinds.get(mention.userId) ?? []), 'user']));
         }
         if (conversation.rows[0]?.server_id && mention.type === 'everyone') {
@@ -513,7 +513,7 @@ export class CanonicalMessagingStore {
       if (input.replyToMessageId) {
         const reply = await client.query<{ author_id: string }>('select author_id from messages where id = $1::bigint', [input.replyToMessageId]);
         const replyAuthor = reply.rows[0]?.author_id;
-        if (replyAuthor && replyAuthor !== input.authorId && !signals.has(replyAuthor)) signals.set(replyAuthor, 'reply');
+        if (replyAuthor && replyAuthor !== input.authorId && (!signals.has(replyAuthor) || signals.get(replyAuthor) === 'direct_message')) signals.set(replyAuthor, 'reply');
       }
       const notificationTypes = new Map<string, 'message' | 'direct_message' | 'mention' | 'reply'>();
       if (conversation.rows[0]?.type !== 'server_channel') {

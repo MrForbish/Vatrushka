@@ -131,7 +131,7 @@ export class IdentitySettingsStore {
     try {
       await client.query('begin');
       const due = await client.query<{ id: string; avatar_object_key: string | null }>(`
-        select id, avatar_object_key from users where deleted_at is null and deactivation_scheduled_at <= $1 - interval '14 days'
+        select id, avatar_object_key from users where deleted_at is null and deactivation_scheduled_at <= $1::timestamptz - interval '14 days'
           and not exists (select 1 from servers where owner_user_id = users.id) for update skip locked
       `, [now]);
       for (const account of due.rows) {
