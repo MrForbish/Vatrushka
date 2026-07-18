@@ -84,14 +84,14 @@
 
 ### P0.5 — CI и тестовое покрытие
 
-Статус: реализуется в `chore/ROADMAP-5-ci-quality-gate`. Ordinary/RC/release/tag/sync workflows разделены, PostgreSQL/Redis integration выполняются в изолированных CI services, а desktop suite разделен на параллельные behavior/visual jobs. Visual regression переведён с dev-сервера на заранее собранный статический Storybook, добавлены step budgets/job timeouts и формальная risk/viewport matrix. Число visual scenarios увеличено с 29 до 31 за счёт границ 1280×720 и 1024×680; сценарии не удалялись. Финальный выигрыш фиксируется по CI этого PR.
+Статус: выполнено в PR #23 (`chore/ci-quality-gate`). Ordinary/RC/release/tag/sync workflows разделены, PostgreSQL/Redis integration выполняются в изолированных CI services, а desktop suite разделен на параллельные behavior/visual jobs. Visual regression переведён с dev-сервера на заранее собранный статический Storybook, добавлены step budgets/job timeouts и формальная risk/viewport matrix. Число visual scenarios увеличено с 29 до 31 за счёт границ 1280×720 и 1024×680; сценарии не удалялись. На первом GitHub-hosted Windows прогоне visual job сократился с 6:01 до 3:01, а критическое время всего gate — примерно с 6:01 до 3:13 (около 46%).
 
 1. Зафиксировать mapping риска к тестам и удалить только дублирующие/неактуальные сценарии.
 2. Кэшировать Playwright Chromium по версии lockfile/Playwright. Выполнено.
 3. Ускорить visual suite без сокращения screenshots: внутрипроцессный параллелизм отклонён как нестабильный, выбран статический Storybook. Выполнено.
 4. Исключить холодную dev-компиляцию каждой visual story с помощью одного production-like Storybook build. Выполнено.
 5. Параллелить независимые CI jobs и сохранять traces/screenshots только при ошибке.
-6. Добавить измерение duration по этапам и регрессионный бюджет pipeline. Выполнено для Windows regression suites; общий результат подтверждается CI.
+6. Добавить измерение duration по этапам и регрессионный бюджет pipeline. Выполнено: Storybook 77,9/180 секунд, Electron E2E 37,0/90 секунд, static visual 90,6/150 секунд на первом CI-прогоне.
 
 Цель: сократить `desktop-regression` с наблюдавшихся ~11 минут до 6–7 минут на cold runner без потери сценариев.
 
