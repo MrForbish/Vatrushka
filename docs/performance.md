@@ -10,16 +10,16 @@ npm run perf:bundle
 
 ## Release budgets
 
-| Asset | 0.4.0 baseline | Blocking budget |
+| Asset | vNext measured baseline | Blocking budget |
 |---|---:|---:|
-| Renderer JavaScript, raw total | 2,273.8 KiB | 2,350,000 bytes |
-| Largest JavaScript chunk | 2,110.1 KiB | 2,200,000 bytes |
-| Renderer CSS, raw total | 135.9 KiB | 155,000 bytes |
+| Renderer JavaScript, raw total | 2,465.7 KiB | 2,600,000 bytes |
+| Largest JavaScript chunk | 2,212.2 KiB | 2,350,000 bytes |
+| Renderer CSS, raw total | 170.9 KiB | 190,000 bytes |
 | Local fonts, raw total | 431.8 KiB | 500,000 bytes |
 
 The script also prints gzip sizes for comparison. Raw sizes are the blocking metric because Electron loads local assets from the packaged application rather than transferring them over HTTP with content encoding. Budgets intentionally leave a small margin for fixes while still detecting an accidental large dependency, font family or stylesheet.
 
-The settings-routing phase raised the total JavaScript ceiling by 50,000 bytes for the MIT-licensed router. Settings pages and their CSS are emitted as a deferred route chunk, so the largest startup chunk remains under the existing 2,200,000-byte limit. Future settings work must stay inside the new total budget or justify another measured change.
+The vNext baseline includes the canonical messaging client, notification center and complete lazy-loaded settings route. The route emits a separate JavaScript/CSS asset; the budget counts all packaged assets so a deferred feature cannot hide accidental growth. Future work must stay inside these measured ceilings or document another intentional baseline change.
 
 ## Runtime profile before a public release
 

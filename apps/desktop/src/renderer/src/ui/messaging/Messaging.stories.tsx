@@ -74,7 +74,7 @@ export const MentionKeyboardSelection: Story = {
     const canvas = within(canvasElement);
     const editor = canvas.getByRole('textbox', { name: 'Сообщение' });
     await userEvent.type(editor, '@ан');
-    await expect(canvas.getByRole('listbox', { name: 'Упомянуть участника' })).toBeVisible();
+    await expect(canvas.getByRole('listbox', { name: 'Упомянуть участника или роль' })).toBeVisible();
     await userEvent.keyboard('{Enter}');
     await expect(editor).toHaveValue('@Анна Белова');
   },
