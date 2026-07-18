@@ -11,6 +11,7 @@ import { createPresenceStore } from '../src/services/presence-store.js';
 import { createCanonicalMessagingStore } from '../src/services/canonical-messaging.js';
 import { OutboxWorker, RedisRealtimeBus } from '../src/services/realtime.js';
 import { createServerSettingsStore } from '../src/services/server-settings.js';
+import { createIdentitySettingsStore } from '../src/services/identity-settings.js';
 import { loadConfig } from '../src/config.js';
 
 const databaseUrl = process.env.INTEGRATION_DATABASE_URL;
@@ -24,6 +25,7 @@ const adminPool = new pg.Pool({ connectionString: databaseUrl, max: 2 });
 const postgres = createPostgresStore(databaseUrl);
 const messaging = createCanonicalMessagingStore(databaseUrl);
 const serverSettings = createServerSettingsStore(databaseUrl);
+const identitySettings = createIdentitySettingsStore(databaseUrl);
 const presence = await createPresenceStore(loadConfig({
   NODE_ENV: 'test',
   PRESENCE_STORAGE_DRIVER: 'redis',
@@ -46,6 +48,7 @@ afterAll(async () => {
   await postgres.close();
   await messaging.close();
   await serverSettings.close();
+  await identitySettings.close();
   await adminPool.end();
 });
 
@@ -169,6 +172,27 @@ describe('production infrastructure adapters', () => {
     expect(created.destinationChannelId).toBe(channelId);
     await expect(serverSettings.consumeInvite(rawToken, now)).resolves.toMatchObject({ serverId, destinationChannelId: channelId });
     await expect(serverSettings.consumeInvite(rawToken, now)).resolves.toBeNull();
+  });
+
+  it('persists profile, blocking, email change, and delayed anonymization', async () => {
+    const now = new Date('2026-07-18T14:00:00.000Z');
+    const first = (await postgres.store.getOrCreateUser(`${randomUUID()}@identity.integration.test`, now)).user;
+    const second = (await postgres.store.getOrCreateUser(`${randomUUID()}@identity.integration.test`, now)).user;
+    expect((await identitySettings.updateProfile(first.id, { displayName: 'Identity User', username: `user_${first.id.slice(0, 8)}`, bio: 'Bio' }, now)).updated).toBe(true);
+    expect(await identitySettings.getProfile(first.id, async (key) => key)).toMatchObject({ displayName: 'Identity User', bio: 'Bio' });
+    expect(await identitySettings.blockUser(first.id, second.id, now)).toBe(true);
+    expect(await identitySettings.listBlockedUsers(first.id)).toHaveLength(1);
+
+    const pendingEmail = `${randomUUID()}@changed.integration.test`;
+    await identitySettings.createPendingEmailChange({ id: randomUUID(), userId: first.id, newEmail: pendingEmail, codeHash: 'hash', expiresAt: new Date(now.getTime() + 60_000), now });
+    await expect(identitySettings.confirmEmailChange(first.id, 'hash', now)).resolves.toBe(pendingEmail);
+    expect(await identitySettings.exportPersonalData(first.id)).toMatchObject({ profile: expect.objectContaining({ email: pendingEmail }) });
+
+    expect(await identitySettings.scheduleDeactivation(first.id, now)).toBe(true);
+    await adminPool.query("update users set deactivation_scheduled_at = $2 - interval '15 days' where id = $1", [first.id, now]);
+    expect(await identitySettings.anonymizeDueAccounts(now)).toBe(1);
+    const deleted = await adminPool.query<{ display_name: string; deleted_at: Date | null }>('select display_name, deleted_at from users where id = $1', [first.id]);
+    expect(deleted.rows[0]).toMatchObject({ display_name: 'Удалённый пользователь', deleted_at: expect.any(Date) });
   });
 
   it('publishes the transactional outbox through Redis with deduplication', async () => {

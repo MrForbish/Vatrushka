@@ -592,6 +592,33 @@ export interface PublicUser {
   twoFactorEnabled: boolean;
 }
 
+export interface UserProfileSettings {
+  id: string;
+  email: string;
+  displayName: string;
+  username: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  usernameChangedAt: string | null;
+  updatedAt: string;
+}
+
+export interface BlockedUserSettings {
+  userId: string;
+  displayName: string;
+  username: string | null;
+  blockedAt: string;
+}
+
+export interface UserAccountSettings {
+  email: string;
+  emailVerified: boolean;
+  pendingEmail: string | null;
+  deactivationScheduledAt: string | null;
+  deletionAt: string | null;
+  ownsServers: boolean;
+}
+
 export interface PasswordLoginChallenge {
   status: 'SECOND_FACTOR_REQUIRED';
   factor: 'email' | 'totp' | 'recovery';
@@ -625,7 +652,12 @@ export type SecurityEventType =
   | 'TWO_FACTOR_ENABLED'
   | 'TWO_FACTOR_DISABLED'
   | 'RECOVERY_CODES_REGENERATED'
-  | 'REFRESH_TOKEN_REUSE_DETECTED';
+  | 'REFRESH_TOKEN_REUSE_DETECTED'
+  | 'PROFILE_UPDATED'
+  | 'USERNAME_CHANGED'
+  | 'EMAIL_CHANGED'
+  | 'ACCOUNT_DEACTIVATION_SCHEDULED'
+  | 'ACCOUNT_DEACTIVATION_CANCELLED';
 
 export interface SecurityEvent {
   id: string;

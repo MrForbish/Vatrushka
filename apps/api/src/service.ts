@@ -46,6 +46,9 @@ import {
   type InternalNotification,
   type UserUnreadSummary,
   type UserNotificationPreferences,
+  type BlockedUserSettings,
+  type UserAccountSettings,
+  type UserProfileSettings,
   type CreatedServerInvite,
   type ServerAppearanceSettings,
   type ServerAuditLogPage,
@@ -75,6 +78,7 @@ import { MemoryPresenceStore } from './services/presence-store.js';
 import type { CanonicalMentionInput, CanonicalMessagingStore } from './services/canonical-messaging.js';
 import type { RedisRealtimeBus } from './services/realtime.js';
 import type { ServerModerationUpdate, ServerOverviewUpdate, ServerSettingsStore } from './services/server-settings.js';
+import type { IdentitySettingsStore } from './services/identity-settings.js';
 import {
   hashOpaqueToken,
   hashOtp,
@@ -102,6 +106,7 @@ export interface ServiceDependencies {
   canonicalMessagingStore?: CanonicalMessagingStore;
   realtimeBus?: RedisRealtimeBus | null;
   serverSettingsStore?: ServerSettingsStore;
+  identitySettingsStore?: IdentitySettingsStore;
   clock?: () => Date;
 }
 
@@ -226,6 +231,7 @@ export class VatrushkaService {
   readonly canonicalMessagingStore: CanonicalMessagingStore | null;
   readonly realtimeBus: RedisRealtimeBus | null;
   readonly serverSettingsStore: ServerSettingsStore | null;
+  readonly identitySettingsStore: IdentitySettingsStore | null;
   private readonly mailer: Mailer;
   private readonly clock: () => Date;
   private readonly pendingVoiceMoves = new Map<string, { channelId: string; expiresAt: Date; seamlesslyMoved: boolean }>();
@@ -240,6 +246,7 @@ export class VatrushkaService {
     this.canonicalMessagingStore = dependencies.canonicalMessagingStore ?? null;
     this.realtimeBus = dependencies.realtimeBus ?? null;
     this.serverSettingsStore = dependencies.serverSettingsStore ?? null;
+    this.identitySettingsStore = dependencies.identitySettingsStore ?? null;
     this.clock = dependencies.clock ?? (() => new Date());
   }
 
@@ -522,6 +529,128 @@ export class VatrushkaService {
     const updated = await this.store.updateDisplayName(user.id, displayName, this.now());
     if (!updated) throw new AppError('UNAUTHORIZED', 401);
     return publicUser(updated);
+  }
+
+  async getUserProfileSettings(authorization: string | undefined): Promise<UserProfileSettings> {
+    const user = await this.authenticate(authorization);
+    const profile = await this.identity().getProfile(user.id, async (key) => this.objectStorage ? this.objectStorage.createGetUrl(key, 900) : '');
+    if (!profile) throw new AppError('PROFILE_INCOMPLETE', 409);
+    return profile;
+  }
+
+  async updateUserProfileSettings(authorization: string | undefined, input: { displayName: string; username: string | null; bio: string | null }): Promise<UserProfileSettings> {
+    const user = await this.authenticate(authorization);
+    const reserved = new Set(['admin', 'administrator', 'api', 'bot', 'everyone', 'here', 'moderator', 'owner', 'root', 'security', 'support', 'system', 'vatrushka']);
+    if (input.username && reserved.has(input.username)) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'username', message: 'Этот username зарезервирован' });
+    const before = await this.identity().getProfile(user.id, () => Promise.resolve(''));
+    try {
+      const result = await this.identity().updateProfile(user.id, input, this.now());
+      if (!result.updated) throw new AppError('VALIDATION_ERROR', 409, undefined, { field: 'username', message: 'Username можно менять не чаще одного раза в 7 дней' });
+    } catch (error) {
+      if (error instanceof AppError) throw error;
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') throw new AppError('VALIDATION_ERROR', 409, undefined, { field: 'username', message: 'Username уже занят' });
+      throw error;
+    }
+    const current = await this.store.findUserById(user.id);
+    if (current && before?.username !== input.username) await this.recordSecurityEvent(current, 'USERNAME_CHANGED', null, 'Username изменён', `Username аккаунта изменён на ${input.username ? `@${input.username}` : 'пустое значение'}.`);
+    else if (current) await this.store.createSecurityEvent({ id: randomUUID(), userId: current.id, type: 'PROFILE_UPDATED', deviceName: null, createdAt: this.now() });
+    return this.getUserProfileSettings(authorization);
+  }
+
+  async createUserAvatarUploadIntent(authorization: string | undefined, input: { mimeType: string; sizeBytes: number }): Promise<{ objectKey: string; uploadUrl: string; headers: Record<string, string>; expiresAt: string }> {
+    const user = await this.authenticate(authorization);
+    if (!this.objectStorage) throw new AppError('MEDIA_STORAGE_UNAVAILABLE', 503);
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(input.mimeType)) throw new AppError('ATTACHMENT_TYPE_NOT_ALLOWED', 415);
+    if (input.sizeBytes > 5 * 1024 * 1024) throw new AppError('ATTACHMENT_TOO_LARGE', 413);
+    const objectKey = `users/${user.id}/avatar/${randomUUID()}`;
+    return { objectKey, uploadUrl: await this.objectStorage.createPutUrl(objectKey, input.mimeType, input.sizeBytes, 900), headers: { 'Content-Type': input.mimeType }, expiresAt: expiresAt(this.now(), 900).toISOString() };
+  }
+
+  async updateUserAvatar(authorization: string | undefined, objectKey: string | null): Promise<UserProfileSettings> {
+    const user = await this.authenticate(authorization);
+    if (objectKey) {
+      if (!this.objectStorage || !objectKey.startsWith(`users/${user.id}/avatar/`)) throw new AppError('VALIDATION_ERROR', 400);
+      await this.objectStorage.headObject(objectKey).catch(() => { throw new AppError('ATTACHMENT_NOT_FOUND', 404); });
+    }
+    if (!await this.identity().updateAvatar(user.id, objectKey, this.now())) throw new AppError('UNAUTHORIZED', 401);
+    return this.getUserProfileSettings(authorization);
+  }
+
+  async requestEmailChange(authorization: string | undefined, input: { email: string; password: string; totpCode: string | null }): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
+    const user = await this.authenticate(authorization);
+    await this.requireDangerReauthentication(user, input);
+    if (input.email === user.email) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'email', message: 'Это уже текущий email' });
+    if (await this.store.findUserByEmail(input.email)) throw new AppError('ACCOUNT_EXISTS', 409);
+    const code = randomOtp();
+    const now = this.now();
+    try {
+      await this.identity().createPendingEmailChange({ id: randomUUID(), userId: user.id, newEmail: input.email, codeHash: hashOtp(input.email, code, this.config.OTP_PEPPER), expiresAt: expiresAt(now, this.config.OTP_TTL_SECONDS), now });
+      await this.mailer.sendOtp(input.email, code, Math.ceil(this.config.OTP_TTL_SECONDS / 60));
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') throw new AppError('ACCOUNT_EXISTS', 409);
+      await this.identity().discardPendingEmailChange(user.id, input.email).catch(() => undefined);
+      throw new AppError('EMAIL_DELIVERY_FAILED', 502);
+    }
+    return { status: 'CODE_SENT', retryAfterSeconds: 60 };
+  }
+
+  async confirmEmailChange(authorization: string | undefined, code: string): Promise<PublicUser> {
+    const user = await this.authenticate(authorization);
+    const account = await this.identity().getAccount(user.id);
+    if (!account?.pendingEmail) throw new AppError('INVALID_OTP', 401);
+    let email: string | null;
+    try {
+      email = await this.identity().confirmEmailChange(user.id, hashOtp(account.pendingEmail, code, this.config.OTP_PEPPER), this.now());
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') throw new AppError('ACCOUNT_EXISTS', 409);
+      throw error;
+    }
+    if (!email) throw new AppError('INVALID_OTP', 401);
+    const updated = await this.store.findUserById(user.id);
+    if (!updated) throw new AppError('UNAUTHORIZED', 401);
+    await this.recordSecurityEvent(updated, 'EMAIL_CHANGED', null, 'Email изменён', `Email аккаунта изменён на ${email}.`);
+    return publicUser(updated);
+  }
+
+  async listBlockedUsers(authorization: string | undefined): Promise<BlockedUserSettings[]> {
+    return this.identity().listBlockedUsers((await this.authenticate(authorization)).id);
+  }
+
+  async blockUser(authorization: string | undefined, blockedUserId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    if (!await this.identity().blockUser(user.id, blockedUserId, this.now())) throw new AppError('VALIDATION_ERROR', 409);
+  }
+
+  async unblockUser(authorization: string | undefined, blockedUserId: string): Promise<void> {
+    const user = await this.authenticate(authorization);
+    if (!await this.identity().unblockUser(user.id, blockedUserId)) throw new AppError('VALIDATION_ERROR', 404);
+  }
+
+  async getUserAccountSettings(authorization: string | undefined): Promise<UserAccountSettings> {
+    const account = await this.identity().getAccount((await this.authenticate(authorization)).id);
+    if (!account) throw new AppError('UNAUTHORIZED', 401);
+    return account;
+  }
+
+  async scheduleAccountDeactivation(authorization: string | undefined, reauthentication: { password: string; totpCode: string | null }): Promise<UserAccountSettings> {
+    const user = await this.authenticate(authorization);
+    await this.requireDangerReauthentication(user, reauthentication);
+    if (!await this.identity().scheduleDeactivation(user.id, this.now())) throw new AppError('VALIDATION_ERROR', 409, undefined, { field: 'servers', message: 'Сначала передайте владение своими серверами' });
+    await this.recordSecurityEvent(user, 'ACCOUNT_DEACTIVATION_SCHEDULED', null, 'Удаление аккаунта запланировано', 'Аккаунт будет анонимизирован через 14 дней. До этого момента удаление можно отменить.');
+    return this.getUserAccountSettings(authorization);
+  }
+
+  async cancelAccountDeactivation(authorization: string | undefined): Promise<UserAccountSettings> {
+    const user = await this.authenticate(authorization);
+    if (!await this.identity().cancelDeactivation(user.id, this.now())) throw new AppError('VALIDATION_ERROR', 409);
+    await this.recordSecurityEvent(user, 'ACCOUNT_DEACTIVATION_CANCELLED', null, 'Удаление аккаунта отменено', 'Запланированная анонимизация аккаунта отменена.');
+    return this.getUserAccountSettings(authorization);
+  }
+
+  async exportPersonalData(authorization: string | undefined): Promise<Record<string, unknown>> {
+    const data = await this.identity().exportPersonalData((await this.authenticate(authorization)).id);
+    if (!data) throw new AppError('UNAUTHORIZED', 401);
+    return data;
   }
 
   private async currentUserRecord(user: UserRecord): Promise<UserRecord> {
@@ -1227,7 +1356,7 @@ export class VatrushkaService {
       for (const member of await this.store.listServerMembers(server.id)) {
         if (member.userId === user.id || !member.displayName) continue;
         const candidate = await this.store.findUserById(member.userId);
-        if (candidate?.directMessagePrivacy === 'nobody') continue;
+        if (candidate?.directMessagePrivacy === 'nobody' || this.identitySettingsStore && await this.identitySettingsStore.areUsersBlocked(user.id, member.userId)) continue;
         const existing = candidates.get(member.userId);
         if (existing) existing.sharedServerNames.push(server.name);
         else candidates.set(member.userId, { userId: member.userId, displayName: member.displayName, platformRole: member.platformRole, sharedServerNames: [server.name] });
@@ -1246,7 +1375,7 @@ export class VatrushkaService {
     this.requireCompleteProfile(user);
     if (participantUserId === user.id) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 400);
     const participant = await this.store.findUserById(participantUserId);
-    if (!participant?.displayName || participant.directMessagePrivacy === 'nobody') throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
+    if (!participant?.displayName || participant.directMessagePrivacy === 'nobody' || this.identitySettingsStore && await this.identitySettingsStore.areUsersBlocked(user.id, participant.id)) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
     let shareVisibleServer = false;
     for (const server of await this.store.listServersForUser(user.id)) {
       if (!(await this.store.findServerMember(server.id, participant.id))) continue;
@@ -1275,7 +1404,7 @@ export class VatrushkaService {
     const conversation = await this.requireDirectConversation(conversationId, user.id);
     const recipientId = conversation.userAId === user.id ? conversation.userBId : conversation.userAId;
     const recipient = await this.store.findUserById(recipientId);
-    if (!recipient || recipient.directMessagePrivacy === 'nobody') throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
+    if (!recipient || recipient.directMessagePrivacy === 'nobody' || this.identitySettingsStore && await this.identitySettingsStore.areUsersBlocked(user.id, recipient.id)) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
     if (replyToMessageId !== null) {
       const reply = await this.store.findDirectMessage(replyToMessageId);
       if (!reply || reply.conversationId !== conversationId) throw new AppError('DIRECT_MESSAGE_NOT_FOUND', 404);
@@ -1924,6 +2053,7 @@ export class VatrushkaService {
     const user = await this.authenticate(authorization);
     this.requireCompleteProfile(user);
     const access = await this.requireCanonicalConversation(conversationId, user, 'SEND_MESSAGES');
+    if (access.conversation.type !== 'server_channel' && await this.messaging().isDirectConversationBlocked(conversationId, user.id)) throw new AppError('DIRECT_MESSAGE_NOT_ALLOWED', 403);
     if (input.attachmentIds.length > this.config.MEDIA_MAX_ATTACHMENTS_PER_MESSAGE) throw new AppError('VALIDATION_ERROR', 400, undefined, { field: 'attachmentIds' });
     const attachments = await Promise.all(input.attachmentIds.map((id) => this.messaging().findAttachment(id)));
     if (attachments.reduce((total, attachment) => total + Number(attachment?.sizeBytes ?? 0), 0) > this.config.MEDIA_MAX_MESSAGE_TOTAL_BYTES) throw new AppError('ATTACHMENT_TOO_LARGE', 413, undefined, { limit: this.config.MEDIA_MAX_MESSAGE_TOTAL_BYTES });
@@ -2423,6 +2553,11 @@ export class VatrushkaService {
   private settings(): ServerSettingsStore {
     if (!this.serverSettingsStore) throw new AppError('INTERNAL_ERROR', 500);
     return this.serverSettingsStore;
+  }
+
+  private identity(): IdentitySettingsStore {
+    if (!this.identitySettingsStore) throw new AppError('INTERNAL_ERROR', 500);
+    return this.identitySettingsStore;
   }
 
   private async requireDangerReauthentication(user: UserRecord, input: { password: string; totpCode: string | null }): Promise<void> {

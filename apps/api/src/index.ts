@@ -9,6 +9,7 @@ import { createPresenceStore } from './services/presence-store.js';
 import { createCanonicalMessagingStore } from './services/canonical-messaging.js';
 import { createRealtimeBus, OutboxWorker } from './services/realtime.js';
 import { createServerSettingsStore } from './services/server-settings.js';
+import { AccountLifecycleWorker, createIdentitySettingsStore } from './services/identity-settings.js';
 
 const config = loadConfig();
 const database = createPostgresStore(config.DATABASE_URL);
@@ -16,6 +17,9 @@ const objectStorage = createObjectStorage(config);
 const presenceStore = await createPresenceStore(config);
 const canonicalMessagingStore = createCanonicalMessagingStore(config.DATABASE_URL);
 const serverSettingsStore = createServerSettingsStore(config.DATABASE_URL);
+const identitySettingsStore = createIdentitySettingsStore(config.DATABASE_URL);
+const accountLifecycleWorker = new AccountLifecycleWorker(identitySettingsStore, (error) => console.error('Account lifecycle worker failed', error));
+accountLifecycleWorker.start();
 const realtimeBus = await createRealtimeBus(config);
 const outboxWorker = realtimeBus ? new OutboxWorker(canonicalMessagingStore, realtimeBus) : null;
 outboxWorker?.start();
@@ -32,6 +36,7 @@ const service = new VatrushkaService({
   canonicalMessagingStore,
   realtimeBus,
   serverSettingsStore,
+  identitySettingsStore,
 });
 const app = await buildApp({ config, service, ...(realtimeBus ? { realtimeBus } : {}) });
 
@@ -42,6 +47,8 @@ app.addHook('onClose', async () => {
   await presenceStore.close();
   await canonicalMessagingStore.close();
   await serverSettingsStore.close();
+  accountLifecycleWorker.stop();
+  await identitySettingsStore.close();
   await database.close();
 });
 

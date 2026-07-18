@@ -72,6 +72,12 @@ import {
   updateServerMemberSchema,
   updateServerModerationSchema,
   updateServerOverviewSchema,
+  accountReauthenticationSchema,
+  confirmEmailChangeSchema,
+  requestEmailChangeSchema,
+  updateUserAvatarSchema,
+  updateUserProfileSettingsSchema,
+  userAvatarUploadIntentSchema,
   verifyRegistrationSchema,
 } from '@vatrushka/shared';
 
@@ -101,6 +107,7 @@ const notificationIdParams = z.object({ notificationId: z.uuid() });
 const serverCategoryParams = z.object({ serverId: z.uuid(), categoryId: z.uuid() });
 const serverInviteParams = z.object({ serverId: z.uuid(), inviteId: z.uuid() });
 const serverSettingsChannelParams = z.object({ serverId: z.uuid(), channelId: z.uuid() });
+const userIdParams = z.object({ userId: z.uuid() });
 
 const errorResponseSchema = z.object({
   code: z.string(),
@@ -149,7 +156,7 @@ const userSessionResponseSchema = z.object({
 const recoveryCodesResponseSchema = z.object({ recoveryCodes: z.array(z.string()) });
 const securityEventResponseSchema = z.object({
   id: z.string(),
-  type: z.enum(['SESSION_CREATED', 'SESSION_REVOKED', 'PASSWORD_CHANGED', 'TWO_FACTOR_ENABLED', 'TWO_FACTOR_DISABLED', 'RECOVERY_CODES_REGENERATED', 'REFRESH_TOKEN_REUSE_DETECTED']),
+  type: z.enum(['SESSION_CREATED', 'SESSION_REVOKED', 'PASSWORD_CHANGED', 'TWO_FACTOR_ENABLED', 'TWO_FACTOR_DISABLED', 'RECOVERY_CODES_REGENERATED', 'REFRESH_TOKEN_REUSE_DETECTED', 'PROFILE_UPDATED', 'USERNAME_CHANGED', 'EMAIL_CHANGED', 'ACCOUNT_DEACTIVATION_SCHEDULED', 'ACCOUNT_DEACTIVATION_CANCELLED']),
   deviceName: z.string().nullable(),
   createdAt: z.string(),
 });
@@ -205,6 +212,9 @@ const serverChannelSettingsResponseSchema = z.object({ id: z.string(), name: z.s
 const serverInviteSettingsResponseSchema = z.object({ id: z.string(), createdByUserId: z.string().nullable(), createdByDisplayName: z.string(), destinationChannelId: z.string().nullable(), tokenPreview: z.string(), expiresAt: z.string().nullable(), maxUses: z.number().nullable(), useCount: z.number(), revokedAt: z.string().nullable(), createdAt: z.string() });
 const serverModerationSettingsResponseSchema = z.object({ verificationLevel: z.enum(['none', 'email_verified', 'account_age']), newMemberRestrictionMinutes: z.number(), messageRateLimitPerMinute: z.number(), mentionLimitPerMessage: z.number(), rules: z.string().nullable(), version: z.number() });
 const serverBanSettingsResponseSchema = z.object({ userId: z.string(), displayName: z.string(), actorUserId: z.string().nullable(), actorDisplayName: z.string(), reason: z.string(), createdAt: z.string() });
+const userProfileSettingsResponseSchema = z.object({ id: z.string(), email: z.string(), displayName: z.string(), username: z.string().nullable(), bio: z.string().nullable(), avatarUrl: z.string().nullable(), usernameChangedAt: z.string().nullable(), updatedAt: z.string() });
+const blockedUserSettingsResponseSchema = z.object({ userId: z.string(), displayName: z.string(), username: z.string().nullable(), blockedAt: z.string() });
+const userAccountSettingsResponseSchema = z.object({ email: z.string(), emailVerified: z.boolean(), pendingEmail: z.string().nullable(), deactivationScheduledAt: z.string().nullable(), deletionAt: z.string().nullable(), ownsServers: z.boolean() });
 const messageAttachmentResponseSchema = z.object({ id: z.string(), messageId: z.string(), fileName: z.string(), mimeType: z.string(), size: z.number(), createdAt: z.string() });
 const messageNotificationResponseSchema = z.object({ id: z.string(), serverId: z.string(), serverName: z.string(), channelId: z.string(), channelName: z.string(), authorUserId: z.string(), authorDisplayName: z.string(), content: z.string(), mention: z.boolean().optional(), createdAt: z.string() });
 const messageNotificationPageResponseSchema = z.object({ items: z.array(messageNotificationResponseSchema), cursor: z.object({ createdAt: z.string(), id: z.string().nullable() }).nullable() });
@@ -455,6 +465,62 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   api.patch(`${API_PREFIX}/me`, {
     schema: { tags: ['user'], security: [{ bearerAuth: [] }], body: updateProfileSchema, response: { 200: publicUserSchema, ...routeErrors() } },
   }, async (request) => service.updateMe(request.headers.authorization, request.body.displayName));
+
+  api.get(`${API_PREFIX}/users/me/profile`, {
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], response: { 200: userProfileSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getUserProfileSettings(request.headers.authorization));
+
+  api.patch(`${API_PREFIX}/users/me/profile`, {
+    config: { rateLimit: { max: 20, timeWindow: '1 hour' } },
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], body: updateUserProfileSettingsSchema, response: { 200: userProfileSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateUserProfileSettings(request.headers.authorization, request.body));
+
+  api.post(`${API_PREFIX}/users/me/avatar/upload-intent`, {
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], body: userAvatarUploadIntentSchema, response: { 200: z.object({ objectKey: z.string(), uploadUrl: z.url(), headers: z.record(z.string(), z.string()), expiresAt: z.string() }), ...routeErrors() } },
+  }, async (request) => service.createUserAvatarUploadIntent(request.headers.authorization, request.body));
+
+  api.put(`${API_PREFIX}/users/me/avatar`, {
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], body: updateUserAvatarSchema, response: { 200: userProfileSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.updateUserAvatar(request.headers.authorization, request.body.objectKey));
+
+  api.post(`${API_PREFIX}/users/me/email-change/request`, {
+    config: { rateLimit: { max: 5, timeWindow: '1 hour' } },
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], body: requestEmailChangeSchema, response: { 200: z.object({ status: z.literal('CODE_SENT'), retryAfterSeconds: z.number() }), ...routeErrors() } },
+  }, async (request) => service.requestEmailChange(request.headers.authorization, request.body));
+
+  api.post(`${API_PREFIX}/users/me/email-change/confirm`, {
+    config: { rateLimit: { max: 10, timeWindow: '10 minutes' } },
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], body: confirmEmailChangeSchema, response: { 200: publicUserSchema, ...routeErrors() } },
+  }, async (request) => service.confirmEmailChange(request.headers.authorization, request.body.code));
+
+  api.get(`${API_PREFIX}/users/me/blocked-users`, {
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], response: { 200: z.array(blockedUserSettingsResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listBlockedUsers(request.headers.authorization));
+
+  api.put(`${API_PREFIX}/users/me/blocked-users/:userId`, {
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], params: userIdParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.blockUser(request.headers.authorization, request.params.userId); return reply.status(204).send(null); });
+
+  api.delete(`${API_PREFIX}/users/me/blocked-users/:userId`, {
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], params: userIdParams, response: { 204: z.null(), ...routeErrors() } },
+  }, async (request, reply) => { await service.unblockUser(request.headers.authorization, request.params.userId); return reply.status(204).send(null); });
+
+  api.get(`${API_PREFIX}/users/me/account`, {
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], response: { 200: userAccountSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.getUserAccountSettings(request.headers.authorization));
+
+  api.post(`${API_PREFIX}/users/me/deactivation`, {
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], body: accountReauthenticationSchema, response: { 200: userAccountSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.scheduleAccountDeactivation(request.headers.authorization, request.body));
+
+  api.delete(`${API_PREFIX}/users/me/deactivation`, {
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], response: { 200: userAccountSettingsResponseSchema, ...routeErrors() } },
+  }, async (request) => service.cancelAccountDeactivation(request.headers.authorization));
+
+  api.get(`${API_PREFIX}/users/me/export`, {
+    config: { rateLimit: { max: 3, timeWindow: '1 hour' } },
+    schema: { tags: ['user-settings'], security: [{ bearerAuth: [] }], response: { 200: z.record(z.string(), z.unknown()), ...routeErrors() } },
+  }, async (request) => service.exportPersonalData(request.headers.authorization));
 
   api.get(`${API_PREFIX}/me/presence`, {
     schema: { tags: ['user'], security: [{ bearerAuth: [] }], response: { 200: userPresenceResponseSchema, ...routeErrors() } },

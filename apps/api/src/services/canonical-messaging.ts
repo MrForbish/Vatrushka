@@ -172,6 +172,18 @@ export class CanonicalMessagingStore {
     return result.rowCount === 1;
   }
 
+  async isDirectConversationBlocked(conversationId: string, userId: string): Promise<boolean> {
+    const result = await this.pool.query<{ blocked: boolean }>(`
+      select exists(
+        select 1 from conversation_members peer
+        join blocked_users block on (block.blocker_user_id = $2 and block.blocked_user_id = peer.user_id)
+          or (block.blocker_user_id = peer.user_id and block.blocked_user_id = $2)
+        where peer.conversation_id = $1 and peer.user_id <> $2 and peer.left_at is null
+      ) as blocked
+    `, [conversationId, userId]);
+    return result.rows[0]?.blocked ?? false;
+  }
+
   async ensureServerChannelConversation(channelId: string, serverId: string, createdBy: string, now: Date): Promise<string> {
     await this.pool.query(`
       insert into conversations (id, type, server_id, channel_id, created_by, created_at, updated_at)

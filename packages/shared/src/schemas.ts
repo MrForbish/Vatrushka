@@ -47,6 +47,17 @@ export const twoFactorCodeSchema = z.object({ code: otpCodeSchema }).strict();
 export const sessionTrustSchema = z.object({ trusted: z.boolean() }).strict();
 export const refreshSchema = z.object({ refreshToken: z.string().min(32).max(512) }).strict();
 export const updateProfileSchema = z.object({ displayName: displayNameSchema }).strict();
+export const usernameSchema = z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,32}$/u, 'Username: 3–32 символа, латиница, цифры и подчёркивание');
+export const updateUserProfileSettingsSchema = z.object({
+  displayName: displayNameSchema,
+  username: usernameSchema.nullable(),
+  bio: z.string().trim().max(280).nullable(),
+}).strict();
+export const userAvatarUploadIntentSchema = z.object({ mimeType: z.enum(['image/jpeg', 'image/png', 'image/webp']), sizeBytes: z.number().int().positive().max(5 * 1024 * 1024) }).strict();
+export const updateUserAvatarSchema = z.object({ objectKey: z.string().trim().min(1).max(512).nullable() }).strict();
+export const requestEmailChangeSchema = z.object({ email: emailSchema, password: passwordSchema, totpCode: otpCodeSchema.nullable().default(null) }).strict();
+export const confirmEmailChangeSchema = z.object({ code: otpCodeSchema }).strict();
+export const accountReauthenticationSchema = z.object({ password: passwordSchema, totpCode: otpCodeSchema.nullable().default(null) }).strict();
 export const presencePreferenceSchema = z.enum(['online', 'idle', 'do_not_disturb', 'invisible']);
 export const updatePresenceSchema = z.object({
   preference: presencePreferenceSchema,
