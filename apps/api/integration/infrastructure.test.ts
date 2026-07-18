@@ -159,7 +159,7 @@ describe('production infrastructure adapters', () => {
     const channelId = randomUUID();
     const roleId = randomUUID();
     await adminPool.query("insert into server_channels (id, server_id, name, type, position, created_at, updated_at) values ($1, $2, 'mentions', 'text', 0, $3, $3)", [channelId, serverId, now]);
-    await adminPool.query("insert into conversations (id, type, server_id, channel_id, created_by_user_id, created_at, updated_at) values ($1, 'server_channel', $2, $1, $3, $4, $4)", [channelId, serverId, first.id, now]);
+    await adminPool.query("insert into conversations (id, type, server_id, channel_id, created_by, created_at, updated_at) values ($1, 'server_channel', $2, $1, $3, $4, $4)", [channelId, serverId, first.id, now]);
     await adminPool.query("insert into server_roles (id, server_id, name, color, position, is_default, kind, permissions, created_at, updated_at) values ($1, $2, 'Developers', '#5865f2', 10, false, 'CUSTOM', '[]'::jsonb, $3, $3)", [roleId, serverId, now]);
     await adminPool.query('insert into server_member_roles (server_id, user_id, role_id) values ($1, $2, $3)', [serverId, second.id, roleId]);
     expect(await messaging.getServerNotificationPreferences(serverId, second.id, now)).toMatchObject({ level: 'mentions', suppressEveryone: false });
