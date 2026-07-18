@@ -26,6 +26,7 @@ const storyServer: ServerDetail = {
 };
 
 const securityUser: PublicUser = { id: 'user-1', email: 'owner@myvatrushka.ru', displayName: 'Илья Форбиш', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true };
+const profileSettings = { id: securityUser.id, email: securityUser.email, displayName: securityUser.displayName!, username: 'mrforbish', bio: 'Создаю Ватрушку', avatarUrl: null, usernameChangedAt: null, updatedAt: '2026-07-18T10:00:00.000Z' };
 const audioDevices: AudioDevices = {
   inputs: [
     { deviceId: 'studio-mic', groupId: 'desk', kind: 'audioinput', label: 'Shure MV7 — рабочий стол', toJSON: () => ({}) },
@@ -61,7 +62,7 @@ interface SettingsStoryProps {
 function SettingsStory({ onBack, onNavigate, scope }: SettingsStoryProps): React.JSX.Element {
   const workspace = <WorkspaceLibrary {...(scope === 'server' ? { activeWorkspaceId: 'vatrushka' } : {})} onCreate={() => undefined} onDirectMessages={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />;
   if (scope === 'server') return <SettingsShell activeSection="overview" entityLabel="Настройки сервера" entityName="Команда Ватрушки" items={serverSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><ServerSettingsPage onChanged={() => Promise.resolve()} onDeleted={() => undefined} section="overview" server={storyServer} /></SettingsShell>;
-  return <SettingsShell activeSection="profile" entityLabel="Личные настройки" entityName="Илья Форбиш" items={userSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><UserProfileSettingsPage onDirtyChange={() => undefined} onSave={(displayName) => Promise.resolve({ ...securityUser, displayName })} onUserChange={() => undefined} user={securityUser} /></SettingsShell>;
+  return <SettingsShell activeSection="profile" entityLabel="Личные настройки" entityName="Илья Форбиш" items={userSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><UserProfileSettingsPage onAvatar={() => Promise.resolve(profileSettings)} onDirtyChange={() => undefined} onLoad={() => Promise.resolve(profileSettings)} onResetAvatar={() => Promise.resolve(profileSettings)} onSave={(input) => Promise.resolve({ ...profileSettings, ...input })} onUserChange={() => undefined} user={securityUser} /></SettingsShell>;
 }
 
 const meta = {
@@ -97,7 +98,7 @@ export const UserPresenceDnd: Story = {
 
 export const UserPrivacy: Story = {
   args: { scope: 'user' },
-  render: (args) => <SettingsShell activeSection="privacy" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserPrivacySettingsPage onDirtyChange={() => undefined} onLoad={() => Promise.resolve(privacySettings)} onSave={() => Promise.resolve(privacySettings)} /></SettingsShell>,
+  render: (args) => <SettingsShell activeSection="privacy" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserPrivacySettingsPage onDirtyChange={() => undefined} onLoad={() => Promise.resolve(privacySettings)} onLoadBlocked={() => Promise.resolve([])} onSave={() => Promise.resolve(privacySettings)} onUnblock={() => Promise.resolve()} /></SettingsShell>,
 };
 
 export const UserSecurityLiveSection: Story = {

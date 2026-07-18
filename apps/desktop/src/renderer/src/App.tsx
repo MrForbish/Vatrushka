@@ -128,6 +128,7 @@ export default function App(): ReactNode {
   const [messageDraft, setMessageDraft] = useState('');
   const [directConversations, setDirectConversations] = useState<DirectConversationSummary[]>([]);
   const [directCandidates, setDirectCandidates] = useState<DirectMessageCandidate[]>([]);
+  const [blockedDirectUserIds, setBlockedDirectUserIds] = useState<string[]>([]);
   const [activeDirectConversationId, setActiveDirectConversationId] = useState<string | null>(null);
   const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
   const [directMessageDraft, setDirectMessageDraft] = useState('');
@@ -685,10 +686,11 @@ export default function App(): ReactNode {
 
   const openDirectMessages = (): void => {
     void run(async () => {
-      const [legacyConversations, canonicalConversations, candidates] = await Promise.all([apiClient.listDirectConversations(), apiClient.listConversations(), apiClient.listDirectMessageCandidates()]);
+      const [legacyConversations, canonicalConversations, candidates, blockedUsers] = await Promise.all([apiClient.listDirectConversations(), apiClient.listConversations(), apiClient.listDirectMessageCandidates(), apiClient.listBlockedUsers()]);
       const conversations = mergeDirectSummaries(legacyConversations, canonicalConversations);
       setDirectConversations(conversations);
       setDirectCandidates(candidates);
+      setBlockedDirectUserIds(blockedUsers.map((blocked) => blocked.userId));
       setActiveDirectConversationId((current) => current !== null && conversations.some((conversation) => conversation.id === current) ? current : conversations[0]?.id ?? null);
       setDirectMessages([]);
       setDirectMessageDraft('');
@@ -1209,6 +1211,23 @@ export default function App(): ReactNode {
       setScreen('direct');
     }
   };
+
+  const blockDirectParticipant = (participantUserId: string): void => {
+    void run(async () => {
+      await apiClient.blockUser(participantUserId);
+      setBlockedDirectUserIds((current) => current.includes(participantUserId) ? current : [...current, participantUserId]);
+      setDirectMessageDraft('');
+      setDirectCandidates(await apiClient.listDirectMessageCandidates());
+    });
+  };
+
+  const unblockDirectParticipant = (participantUserId: string): void => {
+    void run(async () => {
+      await apiClient.unblockUser(participantUserId);
+      setBlockedDirectUserIds((current) => current.filter((userId) => userId !== participantUserId));
+      setDirectCandidates(await apiClient.listDirectMessageCandidates());
+    });
+  };
   const markNotificationRead = (id: string): void => {
     setNotifications((current) => current.map((item) => item.id === id ? { ...item, readAt: item.readAt ?? new Date().toISOString() } : item));
     void apiClient.markNotificationRead(id).catch((caught) => setError(userMessage(caught)));
@@ -1323,7 +1342,7 @@ export default function App(): ReactNode {
         onUpdatePresence={updatePresenceSettings}
         onUpdatePrivacy={updatePrivacySettings}
         onUpdateNotificationPreferences={updateServerNotificationPreferences}
-        onUpdateProfile={(name) => apiClient.updateProfile(name)}
+        onLogout={() => { void logout(); }}
         onUserChange={updateUser}
         outputId={settings.outputDeviceId}
         presence={presence}
@@ -1339,7 +1358,7 @@ export default function App(): ReactNode {
   );
   if (screen === 'home' && user) return withUpdateStatus(<><HomePage user={user} version={version} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} inputLevel={localInputLevel} busy={busy} error={error} servers={servers} serverName={serverName} directUnreadCount={directUnreadCount} connection={connection} dashboard={homeDashboardQuery.data} dashboardLoading={homeDashboardQuery.isFetching && homeDashboardQuery.data === undefined} dashboardError={homeDashboardQuery.error ? userMessage(homeDashboardQuery.error) : null} onRetryDashboard={() => void homeDashboardQuery.refetch()} onLogout={logout} onSecurity={openUserSettings} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onTestOutput={() => playVoiceCue('message')} onServerName={setServerName} onCreateServer={createServer} onOpenServer={openServer} onOpenDestination={openDestination} onReturnToCall={openConnectedVoice} onDirectMessages={openDirectMessages} onCopyInvite={(inviteUrl) => window.desktop.copyToClipboard(inviteUrl)} />{renderSecurityPanel()}</>);
   if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} typingText={serverTypingText} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); void apiClient.recordOpenedChannel(channelId).catch(() => undefined); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onLoadAttachment={loadAttachment} onConnectVoice={connectVoiceChannel} onMoveVoiceMember={moveVoiceMember} onCopyInvite={() => window.desktop.copyToClipboard(serverDetail.inviteUrl)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} {...(featureFlags.serverSettingsPage ? { onServerSettings: () => openServerSettings('roles') } : {})} onLogout={logout} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} audioProtectionAvailable={supportsOwnAudioExclusion()} busy={busy} sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}{renderSecurityPanel()}</>);
-  if (screen === 'direct' && user) return withUpdateStatus(<><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} busy={busy} error={error} typingText={directTypingText} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onLoadAttachment={loadDirectAttachment} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onLogout={logout} />{renderSecurityPanel()}</>);
+  if (screen === 'direct' && user) return withUpdateStatus(<><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} busy={busy} error={error} typingText={directTypingText} blockedParticipantIds={blockedDirectUserIds} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onBlockParticipant={blockDirectParticipant} onUnblockParticipant={unblockDirectParticipant} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onLoadAttachment={loadDirectAttachment} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onLogout={logout} />{renderSecurityPanel()}</>);
   return withUpdateStatus(<main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>);
 }
 

@@ -4,7 +4,8 @@ import type { LocalSettings, PublicUser, ServerDetail, ServerPermission, ServerS
 
 import type { AudioDevices } from '../../audio-devices';
 import { SecurityCenter, type SecurityTab } from '../../features/security';
-import { ServerSettingsPage, SettingsPageState, SettingsPlaceholderPage, SettingsShell, UserAudioSettingsPage, UserNotificationSettingsPage, UserPresenceSettingsPage, UserPrivacySettingsPage, UserProfileSettingsPage } from '../../features/settings';
+import { ServerSettingsPage, SettingsPageState, SettingsPlaceholderPage, SettingsShell, UserAccountSettingsPage, UserAudioSettingsPage, UserNotificationSettingsPage, UserPresenceSettingsPage, UserPrivacySettingsPage, UserProfileSettingsPage } from '../../features/settings';
+import { apiClient } from '../../api';
 import { ConfirmDialog, WorkspaceLibrary, type WorkspaceNavigationItem } from '../../ui';
 import type { SettingsRoute } from './route-paths';
 import { serverSettingsPath, userSettingsPath } from './route-paths';
@@ -41,7 +42,6 @@ export interface SettingsRoutePageProps {
   onOutput(deviceId: string): void;
   onRefreshDevices(): void;
   onTestOutput(): void;
-  onUpdateProfile(displayName: string): Promise<PublicUser>;
   onLoadPresence(): Promise<UserPresence>;
   onUpdatePresence(input: { preference: UserPresence['preference']; customText: string | null; customTextExpiresAt: string | null }): Promise<UserPresence>;
   onPresenceChange(presence: UserPresence): void;
@@ -50,6 +50,7 @@ export interface SettingsRoutePageProps {
   onUpdateNotificationPreferences(input: Omit<UserNotificationPreferences, 'updatedAt'>): Promise<UserNotificationPreferences>;
   onUpdatePrivacy(input: Pick<UserPrivacySettings, 'directMessages' | 'presenceVisibility' | 'activityVisible'>): Promise<UserPrivacySettings>;
   onCurrentSessionRevoked(): void;
+  onLogout(): void;
   onUserChange(user: PublicUser): void;
 }
 
@@ -114,7 +115,7 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
     const item = userSettingsNavigation.find((candidate) => candidate.section === props.route.section)!;
     const securityTab = props.route.subpage === 'backup-codes' ? 'recovery' : userSecurityTabs[props.route.section as keyof typeof userSecurityTabs];
     const content = props.route.section === 'profile'
-      ? <UserProfileSettingsPage onDirtyChange={setPageDirty} onSave={props.onUpdateProfile} onUserChange={props.onUserChange} user={props.user} />
+      ? <UserProfileSettingsPage onAvatar={(file) => apiClient.uploadUserAvatar(file)} onDirtyChange={setPageDirty} onLoad={() => apiClient.getUserProfileSettings()} onResetAvatar={() => apiClient.resetUserAvatar()} onSave={(input) => apiClient.updateUserProfileSettings(input)} onUserChange={props.onUserChange} user={props.user} />
       : props.route.section === 'status' && props.presenceEnabled
         ? <UserPresenceSettingsPage onDirtyChange={setPageDirty} onLoad={props.onLoadPresence} onPresenceChange={props.onPresenceChange} onSave={props.onUpdatePresence} presence={props.presence} />
       : props.route.section === 'audio'
@@ -122,7 +123,9 @@ export function SettingsRoutePage(props: SettingsRoutePageProps): React.JSX.Elem
       : props.route.section === 'notifications'
         ? <UserNotificationSettingsPage dndActive={props.presence?.preference === 'do_not_disturb'} onDirtyChange={setPageDirty} onLoad={props.onLoadNotificationPreferences} onPreviewSound={props.onTestOutput} onSave={props.onUpdateNotificationPreferences} />
       : props.route.section === 'privacy'
-          ? <UserPrivacySettingsPage onDirtyChange={setPageDirty} onLoad={props.onLoadPrivacy} onSave={props.onUpdatePrivacy} />
+          ? <UserPrivacySettingsPage onDirtyChange={setPageDirty} onLoad={props.onLoadPrivacy} onLoadBlocked={() => apiClient.listBlockedUsers()} onSave={props.onUpdatePrivacy} onUnblock={(userId) => apiClient.unblockUser(userId)} />
+        : props.route.section === 'account'
+          ? <UserAccountSettingsPage onCancelDeactivation={() => apiClient.cancelAccountDeactivation()} onConfirmEmail={(code) => apiClient.confirmEmailChange(code)} onDeactivate={(input) => apiClient.scheduleAccountDeactivation(input)} onExport={() => apiClient.exportPersonalData()} onLoad={() => apiClient.getUserAccountSettings()} onLogout={props.onLogout} onRequestEmail={(input) => apiClient.requestEmailChange(input)} onUserChange={props.onUserChange} user={props.user} />
         : securityTab === undefined
           ? <SettingsPlaceholderPage description={item.description} scope="user" title={item.label} />
           : <SecurityCenter dndActive={props.presence?.preference === 'do_not_disturb'} onClose={props.onBack} onCurrentSessionRevoked={props.onCurrentSessionRevoked} onSectionChange={(tab) => props.onNavigate(securityTabPath(tab))} onSettingsChange={props.onNotificationSettingsChange} onUserChange={props.onUserChange} open presentation="page" section={securityTab} settings={props.settings} user={props.user} />;

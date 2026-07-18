@@ -22,6 +22,8 @@ const meta = {
     onSwitchServer: fn(),
     onConversation: fn(),
     onCreateConversation: fn(),
+    onBlockParticipant: fn(),
+    onUnblockParticipant: fn(),
     onMessageDraft: fn(),
     onSendMessage: fn(),
     onUpdateMessage: fn(),

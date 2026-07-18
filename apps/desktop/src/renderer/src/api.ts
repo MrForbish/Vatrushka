@@ -46,6 +46,9 @@ import {
   type PresencePreference,
   type DirectMessagePrivacy,
   type PresenceVisibility,
+  type BlockedUserSettings,
+  type UserAccountSettings,
+  type UserProfileSettings,
 } from '@vatrushka/shared';
 
 const apiBase = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '')}${API_PREFIX}`;
@@ -226,6 +229,63 @@ export class ApiClient {
 
   getServer(serverId: string): Promise<ServerDetail> {
     return this.request(`/servers/${serverId}`, { auth: true });
+  }
+
+  getUserProfileSettings(): Promise<UserProfileSettings> {
+    return this.request('/users/me/profile', { auth: true });
+  }
+
+  updateUserProfileSettings(input: Pick<UserProfileSettings, 'displayName' | 'username' | 'bio'>): Promise<UserProfileSettings> {
+    return this.request('/users/me/profile', { method: 'PATCH', body: input, auth: true });
+  }
+
+  async uploadUserAvatar(file: File): Promise<UserProfileSettings> {
+    const intent = await this.request<{ objectKey: string; uploadUrl: string; headers: Record<string, string> }>('/users/me/avatar/upload-intent', { method: 'POST', body: { mimeType: file.type, sizeBytes: file.size }, auth: true });
+    const response = await fetch(intent.uploadUrl, { method: 'PUT', headers: intent.headers, body: file });
+    if (!response.ok) throw new ClientError('MEDIA_UPLOAD_FAILED', 'Не удалось загрузить аватар', response.status);
+    return this.request('/users/me/avatar', { method: 'PUT', body: { objectKey: intent.objectKey }, auth: true });
+  }
+
+  resetUserAvatar(): Promise<UserProfileSettings> {
+    return this.request('/users/me/avatar', { method: 'PUT', body: { objectKey: null }, auth: true });
+  }
+
+  requestEmailChange(input: { email: string; password: string; totpCode: string | null }): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
+    return this.request('/users/me/email-change/request', { method: 'POST', body: input, auth: true });
+  }
+
+  async confirmEmailChange(code: string): Promise<PublicUser> {
+    const user = await this.request<PublicUser>('/users/me/email-change/confirm', { method: 'POST', body: { code }, auth: true });
+    this.user = user;
+    return user;
+  }
+
+  listBlockedUsers(): Promise<BlockedUserSettings[]> {
+    return this.request('/users/me/blocked-users', { auth: true });
+  }
+
+  async blockUser(userId: string): Promise<void> {
+    await this.request(`/users/me/blocked-users/${userId}`, { method: 'PUT', auth: true });
+  }
+
+  async unblockUser(userId: string): Promise<void> {
+    await this.request(`/users/me/blocked-users/${userId}`, { method: 'DELETE', auth: true });
+  }
+
+  getUserAccountSettings(): Promise<UserAccountSettings> {
+    return this.request('/users/me/account', { auth: true });
+  }
+
+  scheduleAccountDeactivation(reauthentication: { password: string; totpCode: string | null }): Promise<UserAccountSettings> {
+    return this.request('/users/me/deactivation', { method: 'POST', body: reauthentication, auth: true });
+  }
+
+  cancelAccountDeactivation(): Promise<UserAccountSettings> {
+    return this.request('/users/me/deactivation', { method: 'DELETE', auth: true });
+  }
+
+  exportPersonalData(): Promise<Record<string, unknown>> {
+    return this.request('/users/me/export', { auth: true });
   }
 
   getServerOverviewSettings(serverId: string): Promise<ServerOverviewSettings> {

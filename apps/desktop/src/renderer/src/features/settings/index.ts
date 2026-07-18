@@ -11,3 +11,4 @@ export * from './pages/UserPresenceSettingsPage';
 export * from './pages/UserPrivacySettingsPage';
 export * from './pages/UserNotificationSettingsPage';
 export * from './pages/ServerSettingsPage';
+export * from './pages/UserAccountSettingsPage';
