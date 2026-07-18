@@ -19,8 +19,10 @@ interface ShellScenarioProps {
   onChannel: (id: string) => void;
   onWorkspace: (id: string) => void;
   onCreate: () => void;
+  onDeafenToggle: () => void;
   onSecurity: () => void;
   onLogout: () => void;
+  onMicrophoneToggle: () => void;
 }
 
 const workspaces: WorkspaceNavigationItem[] = [
@@ -55,9 +57,9 @@ function StoryChannel(): React.JSX.Element {
   );
 }
 
-function ShellScenario({ onChannel, onCreate, onLogout, onSecurity, onWorkspace }: ShellScenarioProps): React.JSX.Element {
+function ShellScenario({ onChannel, onCreate, onDeafenToggle, onLogout, onMicrophoneToggle, onSecurity, onWorkspace }: ShellScenarioProps): React.JSX.Element {
   const library = <WorkspaceLibrary activeWorkspaceId="vatrushka" onCreate={onCreate} onHome={() => undefined} onSelect={onWorkspace} workspaces={workspaces} />;
-  const profile = <UserProfileDock email="founder@myvatrushka.ru" founder name="Илья Форбиш" onLogout={onLogout} onSecurity={onSecurity} />;
+  const profile = <UserProfileDock audioControls={{ connected: true, microphoneMuted: false, deafened: false, onMicrophoneToggle, onDeafenToggle }} email="founder@myvatrushka.ru" founder name="Илья Форбиш" onLogout={onLogout} onSecurity={onSecurity} />;
   const context = <ServerContext activeChannelId="general" canManageChannels canManageRoles name="Команда Ватрушки" onChannel={onChannel} onCopyInvite={() => undefined} onCreateChannel={() => undefined} onDeleteChannel={() => undefined} onManageRoles={() => undefined} profile={profile} textChannels={channels.filter((channel) => channel.type === 'text')} voiceChannels={channels.filter((channel) => channel.type === 'voice')} />;
   return <AppShell members={<MemberPanel members={members} />} serverContext={context} topBar={<ServerTopBar channelName="общий" channelType="text" description="Главное пространство команды" memberCount={18} />} workspaceLibrary={library}><StoryChannel /></AppShell>;
 }
@@ -70,8 +72,10 @@ const meta = {
     onChannel: fn(),
     onWorkspace: fn(),
     onCreate: fn(),
+    onDeafenToggle: fn(),
     onSecurity: fn(),
     onLogout: fn(),
+    onMicrophoneToggle: fn(),
   },
 } satisfies Meta<typeof ShellScenario>;
 
@@ -83,6 +87,10 @@ export const FullServer: Story = {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: /планирование/u }));
     await expect(args.onChannel).toHaveBeenCalledWith('planning');
+    await userEvent.click(canvas.getByRole('button', { name: 'Выключить микрофон' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Отключить входящий звук и микрофон' }));
+    await expect(args.onMicrophoneToggle).toHaveBeenCalledOnce();
+    await expect(args.onDeafenToggle).toHaveBeenCalledOnce();
     await expect(canvas.getByText('Основатель сервера')).toBeInTheDocument();
   },
 };

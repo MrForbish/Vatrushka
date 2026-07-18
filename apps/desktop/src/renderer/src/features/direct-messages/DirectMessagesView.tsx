@@ -24,6 +24,7 @@ import {
   UserProfileDock,
   WorkspaceLibrary,
   type MessageViewModel,
+  type UserProfileDockAudioControls,
   type WorkspaceNavigationItem,
 } from '../../ui';
 import './direct-messages.css';
@@ -68,6 +69,7 @@ export interface DirectMessagesViewProps {
   onCreateServer(): void;
   onSecurity(): void;
   onLogout(): void;
+  profileAudio?: UserProfileDockAudioControls;
 }
 
 function userDisplayName(user: PublicUser): string {
@@ -160,7 +162,7 @@ export function DirectMessagesView(props: DirectMessagesViewProps): React.JSX.El
       <div className="vui-direct-context__list">
         {props.conversations.length === 0 ? <div className="vui-direct-context__empty"><Icon name="message" size={28} /><strong>Здесь будут ваши диалоги</strong><span>Начните разговор с участником общего сервера.</span></div> : props.conversations.map((conversation) => <button aria-current={conversation.id === props.activeConversationId ? 'page' : undefined} data-active={conversation.id === props.activeConversationId || undefined} key={conversation.id} onClick={() => props.onConversation(conversation.id)} type="button"><Avatar name={conversation.participant.displayName} size="md" /><span><strong>{conversation.participant.displayName}</strong><small>{conversationPreview(conversation)}</small></span>{conversation.unreadCount === 0 ? null : <Badge tone="danger">{conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}</Badge>}</button>)}
       </div>
-      <UserProfileDock email={props.user.email} founder={props.user.platformRole === 'owner'} name={userDisplayName(props.user)} onLogout={props.onLogout} onSecurity={props.onSecurity} />
+      <UserProfileDock {...(props.profileAudio ? { audioControls: props.profileAudio } : {})} email={props.user.email} founder={props.user.platformRole === 'owner'} name={userDisplayName(props.user)} onLogout={props.onLogout} onSecurity={props.onSecurity} />
     </aside>
   );
   const members = activeConversation === null

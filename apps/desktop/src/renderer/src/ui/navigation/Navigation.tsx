@@ -144,6 +144,16 @@ export interface UserProfileDockProps {
   onStatus?: (status: PresencePreference) => void | Promise<void>;
   onSecurity: () => void;
   onLogout: () => void;
+  audioControls?: UserProfileDockAudioControls;
+}
+
+export interface UserProfileDockAudioControls {
+  connected: boolean;
+  microphoneMuted: boolean;
+  deafened: boolean;
+  busy?: boolean;
+  onMicrophoneToggle: () => void;
+  onDeafenToggle: () => void;
 }
 
 const profileStatusLabels: Record<EffectivePresenceStatus, string> = { online: 'В сети', idle: 'Неактивен', dnd: 'Не беспокоить', offline: 'Невидимый' };
@@ -154,7 +164,7 @@ const profileStatusOptions: Array<{ preference: PresencePreference; status: Effe
   { preference: 'invisible', status: 'offline', label: 'Невидимый' },
 ];
 
-export function UserProfileDock({ email, founder = false, name, onLogout, onSecurity, onStatus, status = 'online' }: UserProfileDockProps): React.JSX.Element {
+export function UserProfileDock({ audioControls, email, founder = false, name, onLogout, onSecurity, onStatus, status = 'online' }: UserProfileDockProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -164,14 +174,18 @@ export function UserProfileDock({ email, founder = false, name, onLogout, onSecu
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
   return (
-    <div className="vui-profile-dock" data-founder={founder || undefined}>
+    <div className="vui-profile-dock" data-audio={audioControls ? 'true' : undefined} data-founder={founder || undefined}>
       <div className="vui-profile-dock__presence" ref={menuRef}>
         <button aria-expanded={open} aria-label="Изменить статус" onClick={() => setOpen((current) => !current)} type="button"><Avatar name={name} size="md" status={status} /></button>
         {open && onStatus ? <div className="vui-profile-dock__status-menu" role="menu">{profileStatusOptions.map((option) => <button key={option.preference} onClick={() => { void onStatus(option.preference); setOpen(false); }} role="menuitem" type="button"><StatusDot label={option.label} status={option.status} /><span>{option.label}</span></button>)}</div> : null}
       </div>
       <span className="vui-profile-dock__copy"><strong>{name}</strong><small>{founder ? `Основатель · ${profileStatusLabels[status]}` : `${email} · ${profileStatusLabels[status]}`}</small></span>
-      <IconButton icon="settings" label="Безопасность и настройки" onClick={onSecurity} size="sm" type="button" />
-      <IconButton icon="logout" label="Выйти из аккаунта" onClick={onLogout} size="sm" type="button" />
+      {audioControls ? <span aria-label="Управление голосовой связью" className="vui-profile-dock__audio" role="group">
+        <IconButton active={audioControls.microphoneMuted} aria-pressed={audioControls.microphoneMuted} disabled={!audioControls.connected || audioControls.busy === true || audioControls.deafened} icon={audioControls.microphoneMuted ? 'micOff' : 'mic'} label={!audioControls.connected ? 'Подключитесь к голосовому каналу, чтобы управлять микрофоном' : audioControls.deafened ? 'Входящий звук отключён — микрофон тоже выключен' : audioControls.microphoneMuted ? 'Включить микрофон' : 'Выключить микрофон'} onClick={audioControls.onMicrophoneToggle} size="sm" type="button" />
+        <IconButton active={audioControls.deafened} aria-pressed={audioControls.deafened} disabled={!audioControls.connected || audioControls.busy === true} icon={audioControls.deafened ? 'volumeOff' : 'volume'} label={!audioControls.connected ? 'Подключитесь к голосовому каналу, чтобы управлять входящим звуком' : audioControls.deafened ? 'Включить входящий звук' : 'Отключить входящий звук и микрофон'} onClick={audioControls.onDeafenToggle} size="sm" type="button" />
+      </span> : null}
+      <IconButton className="vui-profile-dock__settings" icon="settings" label="Безопасность и настройки" onClick={onSecurity} size="sm" type="button" />
+      <IconButton className="vui-profile-dock__logout" icon="logout" label="Выйти из аккаунта" onClick={onLogout} size="sm" type="button" />
     </div>
   );
 }

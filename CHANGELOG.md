@@ -4,6 +4,10 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+### Added
+
+- в нижнюю плашку профиля добавлены синхронизированные с LiveKit кнопки mute/deafen; отключение входящего звука также выключает микрофон, голоса участников и звук демонстрации, не сбрасывая индивидуальные уровни громкости.
+
 ## [0.6.2] - 2026-07-18
 
 ### Fixed

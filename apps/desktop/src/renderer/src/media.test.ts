@@ -36,6 +36,53 @@ describe('MediaSession audio devices', () => {
   });
 });
 
+describe('MediaSession incoming audio', () => {
+  function deafeningSession(): {
+    session: MediaSession;
+    setMicrophoneEnabled: ReturnType<typeof vi.fn>;
+    setVolume: ReturnType<typeof vi.fn>;
+  } {
+    const session = new MediaSession({} as ApiClient);
+    const setMicrophoneEnabled = vi.fn().mockResolvedValue(undefined);
+    const setVolume = vi.fn();
+    const participant = { identity: 'remote-1', setVolume };
+    const internals = session as unknown as {
+      room: {
+        localParticipant: { setMicrophoneEnabled(enabled: boolean): Promise<void> };
+        remoteParticipants: Map<string, typeof participant>;
+      };
+      refreshSnapshot(): void;
+    };
+    internals.room = {
+      localParticipant: { setMicrophoneEnabled },
+      remoteParticipants: new Map([[participant.identity, participant]]),
+    };
+    vi.spyOn(internals, 'refreshSnapshot').mockImplementation(() => undefined);
+    return { session, setMicrophoneEnabled, setVolume };
+  }
+
+  it('mutes the microphone, voices and screen audio while preserving local volume preferences', async () => {
+    const { session, setMicrophoneEnabled, setVolume } = deafeningSession();
+    session.setParticipantVolume('remote-1', 0.4);
+    session.setScreenShareAudioVolume(0.6);
+
+    await session.setDeafened(true);
+    session.setParticipantVolume('remote-1', 0.7);
+    await session.setMuted(false);
+
+    expect(setMicrophoneEnabled).toHaveBeenCalledTimes(1);
+    expect(setMicrophoneEnabled).toHaveBeenCalledWith(false);
+    expect(setVolume).toHaveBeenCalledWith(0, Track.Source.Microphone);
+    expect(setVolume).toHaveBeenCalledWith(0, Track.Source.ScreenShareAudio);
+
+    await session.setDeafened(false);
+
+    expect(setMicrophoneEnabled).toHaveBeenCalledTimes(1);
+    expect(setVolume).toHaveBeenCalledWith(0.7, Track.Source.Microphone);
+    expect(setVolume).toHaveBeenCalledWith(0.6, Track.Source.ScreenShareAudio);
+  });
+});
+
 describe('MediaSession screen share', () => {
   function screenShareSession(setScreenShareEnabled: (...args: unknown[]) => Promise<void>, restrictOwnAudio = true): MediaSession {
     const session = new MediaSession({} as ApiClient);

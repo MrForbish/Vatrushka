@@ -32,6 +32,7 @@ import {
   type ChannelNavigationItem,
   type MemberNavigationItem,
   type MessageViewModel,
+  type UserProfileDockAudioControls,
   type WorkspaceNavigationItem,
 } from '../../ui';
 import { NotificationSettingsDialog } from '../notifications/NotificationSettingsDialog';
@@ -83,6 +84,7 @@ export interface ServerViewProps {
   onServerSettings(): void;
   onLogout(): void;
   onPresenceChange?(presence: UserPresence): void;
+  profileAudio?: UserProfileDockAudioControls;
 }
 
 const allowedAttachmentTypes = new Set(['application/pdf', 'application/zip', 'image/gif', 'image/jpeg', 'image/png', 'image/webp', 'text/plain']);
@@ -238,7 +240,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       onDeleteChannel={props.onDeleteChannel}
       onManageRoles={props.onServerSettings}
       {...(canMoveMembers && props.onMoveVoiceMember !== undefined ? { onMoveMember: props.onMoveVoiceMember } : {})}
-      profile={<UserProfileDock email={props.user.email} founder={props.user.platformRole === 'owner'} name={ownMember?.displayName ?? displayName(props.user)} onLogout={props.onLogout} onSecurity={props.onSecurity} onStatus={updateProfileStatus} status={profileStatus} />}
+      profile={<UserProfileDock {...(props.profileAudio ? { audioControls: props.profileAudio } : {})} email={props.user.email} founder={props.user.platformRole === 'owner'} name={ownMember?.displayName ?? displayName(props.user)} onLogout={props.onLogout} onSecurity={props.onSecurity} onStatus={updateProfileStatus} status={profileStatus} />}
       textChannels={channels.filter((channel) => channel.type === 'text')}
       voiceChannels={channels.filter((channel) => channel.type === 'voice')}
     />

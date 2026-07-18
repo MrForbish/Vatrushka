@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { HomeDashboardResponse, HomeDestination, PublicUser, RoomConnection, ServerSummary } from '@vatrushka/shared';
 
 import type { AudioDevices } from '../../../audio-devices';
-import { AppShell, Avatar, Badge, Button, Icon, Input, Modal, Select } from '../../../ui';
+import { AppShell, Avatar, Badge, Button, Icon, Input, Modal, Select, type UserProfileDockAudioControls } from '../../../ui';
 import { ActiveSpacesSection } from '../components/ActiveSpacesSection';
 import { AudioReadinessCard } from '../components/AudioReadinessCard';
 import { ContinueSection } from '../components/ContinueSection';
@@ -53,6 +53,7 @@ export interface HomePageProps {
   onReturnToCall?: (() => void) | undefined;
   onDirectMessages?: (() => void) | undefined;
   onCopyInvite: (inviteUrl: string) => void | Promise<void>;
+  profileAudio?: UserProfileDockAudioControls;
 }
 
 export function HomePage(props: HomePageProps): React.JSX.Element {
@@ -114,7 +115,7 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
       renderMembersToggle={(open) => <button aria-label="Открыть профиль" className="home-header__profile-trigger" onClick={open} type="button"><Avatar name={name} size="sm" status={presence} /></button>}
       topBar={<div className="home-header"><Icon name="home" size={19} /><span><strong>Главная</strong><small>Ваш персональный центр Vatrushka</small></span><Badge>v{props.version}</Badge></div>}
       variant="home"
-      workspaceLibrary={<HomeNavigation directUnreadCount={props.directUnreadCount ?? 0} networkAvailable={connectionStatus !== 'offline'} onCreate={() => setCreateOpen(true)} onDirectMessages={props.onDirectMessages} onLogout={props.onLogout} onOpenServer={props.onOpenServer} onSecurity={props.onSecurity} onSpaces={scrollToSpaces} servers={effectiveServers} user={props.user} />}
+      workspaceLibrary={<HomeNavigation {...(props.profileAudio ? { profileAudio: props.profileAudio } : {})} directUnreadCount={props.directUnreadCount ?? 0} networkAvailable={connectionStatus !== 'offline'} onCreate={() => setCreateOpen(true)} onDirectMessages={props.onDirectMessages} onLogout={props.onLogout} onOpenServer={props.onOpenServer} onSecurity={props.onSecurity} onSpaces={scrollToSpaces} servers={effectiveServers} user={props.user} />}
     >
       <div className="home-dashboard">
         <div className="home-dashboard__inner">

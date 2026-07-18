@@ -12,7 +12,7 @@ import { HomePage } from './features/home/index.js';
 import { ServerView } from './features/servers/index.js';
 import { RoomView } from './features/voice/index.js';
 import type { MediaSnapshot } from './media.js';
-import { MessageComposer, MessageList } from './ui/index.js';
+import { MessageComposer, MessageList, UserProfileDock } from './ui/index.js';
 
 const noop = (): void => undefined;
 
@@ -68,6 +68,23 @@ describe('main screen', () => {
   });
 });
 
+describe('profile audio controls', () => {
+  it('mutes the microphone and all incoming voice audio from the profile dock', async () => {
+    const onMicrophoneToggle = vi.fn();
+    const onDeafenToggle = vi.fn();
+    const { rerender } = render(<UserProfileDock audioControls={{ connected: true, microphoneMuted: false, deafened: false, onMicrophoneToggle, onDeafenToggle }} email="anna@example.com" name="Anna" onLogout={noop} onSecurity={noop} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Выключить микрофон' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Отключить входящий звук и микрофон' }));
+    expect(onMicrophoneToggle).toHaveBeenCalledOnce();
+    expect(onDeafenToggle).toHaveBeenCalledOnce();
+
+    rerender(<UserProfileDock audioControls={{ connected: true, microphoneMuted: true, deafened: true, onMicrophoneToggle, onDeafenToggle }} email="anna@example.com" name="Anna" onLogout={noop} onSecurity={noop} />);
+    expect(screen.getByRole('button', { name: 'Входящий звук отключён — микрофон тоже выключен' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Включить входящий звук' })).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
 describe('room UI', () => {
   const connection: RoomConnection = {
     roomId: 'room-1',
@@ -89,6 +106,7 @@ describe('room UI', () => {
       { identity: 'user_visitor-1_remote', displayName: 'Visitor', isLocal: false, isOwner: false, isMuted: false, isSpeaking: true, audioLevel: 0.7, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
     ],
     isMuted: true,
+    isDeafened: false,
     isScreenSharing: false,
     screenTrack: null,
     screenSharerName: null,
