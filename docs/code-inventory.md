@@ -1,6 +1,6 @@
 # Инвентаризация кода и данных
 
-Дата аудита: 2026-07-18, commit `5902feb`, release 0.6.1.
+Дата аудита: 2026-07-18, базовый commit `4ceedd5`, release 0.6.1.
 
 Этот документ отделяет действительно мертвый код от временной совместимости и от согласованных будущих функций. Он является safety checklist для cleanup PR, а не разрешением удалить все перечисленное одним изменением.
 
@@ -43,7 +43,7 @@ Contract migration допустима только после canonical-only к�
 
 ### Settings migration
 
-Завершенные build-time feature flags и production fallback branches удалены после подтверждения API parity routed settings. `SecurityCenter` сохранен: его page presentation обслуживает реальные security routes. Старый modal `ServerSettings` больше не входит в production graph, но временно остается Storybook-only визуальным эталоном ролей и channel overrides. Его можно удалить после переноса этих двух visual/interaction scenarios на канонический `ServerSettingsPage`.
+Завершенные build-time feature flags и production fallback branches удалены после подтверждения API parity routed settings. `SecurityCenter` сохранен: его page presentation обслуживает реальные security routes. Старый modal `features/roles/ServerSettings` удален после переноса channel overrides, проверки опасного права `ADMINISTRATOR` и visual/interaction scenarios в канонический routed `ServerSettingsPage`. API-контракт и таблица `channel_permission_overwrites` остаются активными.
 
 ## Согласованный будущий код — сохранить
 

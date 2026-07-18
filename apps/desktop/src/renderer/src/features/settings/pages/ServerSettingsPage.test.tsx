@@ -46,4 +46,21 @@ describe('server settings routes', () => {
     expect(screen.getByText('https://myvatrushka.ru/i/link-token')).toBeInTheDocument();
     expect(screen.queryByLabelText(/код/u)).not.toBeInTheDocument();
   });
+
+  it('confirms and persists administrator access in the active roles page', async () => {
+    const roleServer: ServerDetail = {
+      ...server,
+      permissions: [...server.permissions, 'MANAGE_ROLES'],
+      roles: [{ id: 'role-moderator', serverId: server.id, name: 'Модератор', color: '#d77b63', position: 10, isDefault: false, kind: 'CUSTOM', permissions: ['VIEW_SERVER'] }],
+    };
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const update = vi.spyOn(apiClient, 'updateServerRole').mockResolvedValue(roleServer.roles[0]!);
+    render(<ServerSettingsPage onChanged={vi.fn(async () => undefined)} onDeleted={vi.fn()} section="roles" server={roleServer} />);
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Администратор/u }));
+    expect(window.confirm).toHaveBeenCalledWith(expect.stringContaining('полный доступ'));
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить роль' }));
+
+    await waitFor(() => expect(update).toHaveBeenCalledWith(server.id, 'role-moderator', expect.objectContaining({ permissions: expect.arrayContaining(['ADMINISTRATOR']) })));
+  });
 });

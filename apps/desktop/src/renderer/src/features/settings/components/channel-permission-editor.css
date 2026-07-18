@@ -1,0 +1,21 @@
+.vui-channel-permissions > div:first-child { display: grid; gap: var(--space-1); }
+.vui-channel-permissions > div:first-child p { margin: 0; color: var(--color-text-muted); font: var(--text-body-md); }
+.vui-channel-permissions__toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, .6fr) minmax(0, 1fr); gap: var(--space-3); }
+.vui-channel-permissions__groups { display: grid; gap: var(--space-5); }
+.vui-channel-permissions__groups section { display: grid; gap: 0; }
+.vui-channel-permissions__groups h3 { margin: 0 0 var(--space-2); color: var(--color-text-secondary); font: var(--text-heading-sm); }
+.vui-channel-permissions__row { display: grid; grid-template-columns: minmax(210px, 1fr) auto; align-items: center; gap: var(--space-4); padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border-subtle); }
+.vui-channel-permissions__row > span { display: grid; gap: var(--space-1); min-width: 0; }
+.vui-channel-permissions__row strong { font: var(--text-label-md); }
+.vui-channel-permissions__row small { color: var(--color-text-muted); font: var(--text-caption); }
+.vui-channel-permissions__row > div { display: flex; padding: 3px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); background: var(--color-surface-0); }
+.vui-channel-permissions__state { min-height: 32px; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--color-text-muted); font: var(--text-caption); cursor: pointer; }
+.vui-channel-permissions__state:hover { color: var(--color-text-primary); }
+.vui-channel-permissions__state--inherit[aria-pressed='true'] { background: var(--color-surface-hover); color: var(--color-text-primary); }
+.vui-channel-permissions__state--allow[aria-pressed='true'] { background: var(--color-success-soft); color: var(--color-success); }
+.vui-channel-permissions__state--deny[aria-pressed='true'] { background: var(--color-danger-soft); color: var(--color-danger); }
+
+@media (max-width: 900px) {
+  .vui-channel-permissions__toolbar, .vui-channel-permissions__row { grid-template-columns: 1fr; }
+  .vui-channel-permissions__row > div { width: max-content; max-width: 100%; flex-wrap: wrap; }
+}

@@ -5,7 +5,9 @@ import { serverPermissions, type CreatedServerInvite, type ServerAppearanceSetti
 import { apiClient } from "../../../api";
 import { Button, Checkbox, FilePicker, Input, Select } from "../../../ui";
 import type { ServerSettingsSection } from "../../../app/routes/route-paths";
+import { ChannelPermissionEditor } from "../components/ChannelPermissionEditor";
 import { SettingsPageState } from "../components/SettingsPageState";
+import { permissionDefinitions } from "../model/permission-catalog";
 import "./server-settings-pages.css";
 
 interface Props {
@@ -338,20 +340,6 @@ function Members({ server, currentUserId = server.ownerUserId, onChanged }: Pick
   );
 }
 
-const permissionLabels: Partial<Record<ServerPermission, string>> = {
-  VIEW_SERVER: "Просмотр сервера",
-  VIEW_CHANNEL: "Просмотр каналов",
-  SEND_MESSAGES: "Отправка сообщений",
-  CONNECT_VOICE: "Подключение к voice",
-  SPEAK: "Говорить",
-  STREAM_SCREEN: "Демонстрация экрана",
-  MANAGE_CHANNELS: "Управление каналами",
-  MANAGE_ROLES: "Управление ролями",
-  KICK_MEMBERS: "Исключать участников",
-  BAN_MEMBERS: "Блокировать участников",
-  ADMINISTRATOR: "Администратор",
-};
-
 function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): React.JSX.Element {
   const editable = server.roles.filter((role) => role.kind !== "OWNER").sort((left, right) => right.position - left.position);
   const [selectedId, setSelectedId] = useState(editable[0]?.id ?? "new");
@@ -400,7 +388,16 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
           </div>
           <div className="vui-server-permission-grid">
             {serverPermissions.map((permission) => (
-              <Checkbox checked={permissions.includes(permission)} description={permission} key={permission} label={permissionLabels[permission] ?? permission.replaceAll("_", " ").toLowerCase()} onChange={(event) => setPermissions((current) => (event.target.checked ? [...current, permission] : current.filter((item) => item !== permission)))} />
+              <Checkbox
+                checked={permissions.includes(permission)}
+                description={permissionDefinitions[permission].description}
+                key={permission}
+                label={permissionDefinitions[permission].label}
+                onChange={(event) => {
+                  if (permission === "ADMINISTRATOR" && event.target.checked && !window.confirm("Право администратора даёт полный доступ и обходит ограничения каналов. Продолжить?")) return;
+                  setPermissions((current) => (event.target.checked ? [...current, permission] : current.filter((item) => item !== permission)));
+                }}
+              />
             ))}
           </div>
           <Feedback error={error} />
@@ -622,6 +619,15 @@ function Channels({ server, onChanged }: Pick<Props, "server" | "onChanged">): R
           </article>
         ))}
       </div>
+      {server.permissions.includes("MANAGE_ROLES") ? (
+        <ChannelPermissionEditor
+          server={server}
+          onSave={async (channelId, targetType, targetId, allow, deny) => {
+            await apiClient.setChannelPermissionOverwrite(channelId, targetType, targetId, allow, deny);
+            await onChanged();
+          }}
+        />
+      ) : null}
     </Page>
   );
 }
