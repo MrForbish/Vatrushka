@@ -166,14 +166,14 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('client-update-ready.png', { animations: 'disabled', fullPage: true });
   });
 
-  test('server role editor', async ({ page }) => {
-    await openStory(page, 'features-server-settings--visual-roles');
-    await expect(page.getByRole('dialog', { name: 'Настройки сервера' })).toBeVisible();
+  test('routed server role editor', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--server-roles');
+    await expect(page.getByRole('heading', { name: 'Роли и права' })).toBeVisible();
     await expect(page).toHaveScreenshot('server-settings-roles.png', { animations: 'disabled', fullPage: true });
   });
 
-  test('channel permission overrides', async ({ page }) => {
-    await openStory(page, 'features-server-settings--channel-overrides');
+  test('routed channel permission overrides', async ({ page }) => {
+    await openStory(page, 'features-settings-channel-permissions--role-override');
     await expect(page.getByRole('heading', { name: 'Права конкретного канала' })).toBeVisible();
     await expect(page).toHaveScreenshot('server-settings-overrides.png', { animations: 'disabled', fullPage: true });
   });
