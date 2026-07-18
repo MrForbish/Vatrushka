@@ -89,9 +89,8 @@ const meta = {
     serverName: '',
     busy: false,
     error: null,
-    auditLog: [],
     directUnreadCount: 3,
-    onBack: fn(), onDirectMessages: fn(), onSwitchServer: fn(), onChannel: fn(), onMessageDraft: fn(), onSendMessage: fn(), onUpdateMessage: fn(), onMessageReaction: fn(), onDeleteMessage: fn(), onDeleteAttachment: fn(), onDownloadAttachment: fn(), onConnectVoice: fn(), onCopyInvite: fn(), onCreateChannel: fn(), onDeleteChannel: fn(), onCreateRole: fn(), onUpdateRole: fn(), onDeleteRole: fn(), onReorderRole: fn(), onAssignRoles: fn(), onSetChannelOverwrite: fn(), onLoadAudit: fn(), onKickMember: fn(), onServerName: fn(), onCreateServer: fn(), onSecurity: fn(), onLogout: fn(),
+    onBack: fn(), onDirectMessages: fn(), onSwitchServer: fn(), onChannel: fn(), onMessageDraft: fn(), onSendMessage: fn(), onUpdateMessage: fn(), onMessageReaction: fn(), onDeleteMessage: fn(), onDeleteAttachment: fn(), onDownloadAttachment: fn(), onConnectVoice: fn(), onCopyInvite: fn(), onCreateChannel: fn(), onDeleteChannel: fn(), onKickMember: fn(), onServerName: fn(), onCreateServer: fn(), onSecurity: fn(), onServerSettings: fn(), onLogout: fn(),
   },
 } satisfies Meta<typeof ServerView>;
 

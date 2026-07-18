@@ -3,13 +3,10 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
   materializeConversationMentionLabels,
   type ConversationMentionDraft,
-  type PermissionOverwriteTargetType,
   type PresencePreference,
   type UserPresence,
   type PublicUser,
-  type ServerAuditLogEntry,
   type ServerDetail,
-  type ServerPermission,
   type ServerSummary,
   type TextMessage,
 } from '@vatrushka/shared';
@@ -37,7 +34,6 @@ import {
   type MessageViewModel,
   type WorkspaceNavigationItem,
 } from '../../ui';
-import { ServerSettings } from '../roles';
 import { NotificationSettingsDialog } from '../notifications/NotificationSettingsDialog';
 import './server-view.css';
 
@@ -51,7 +47,6 @@ export interface ServerViewProps {
   serverName: string;
   busy: boolean;
   error: string | null;
-  auditLog: ServerAuditLogEntry[];
   directUnreadCount?: number;
   connectedVoiceChannelId?: string | undefined;
   connectedVoiceServerId?: string | undefined;
@@ -81,18 +76,11 @@ export interface ServerViewProps {
   onCopyInvite(): void | Promise<void>;
   onCreateChannel(name: string, type: 'text' | 'voice'): void;
   onDeleteChannel(channelId: string): void;
-  onCreateRole(name: string, color: string, permissions: ServerPermission[]): void;
-  onUpdateRole(roleId: string, values: { name?: string; color?: string; permissions?: ServerPermission[] }): void;
-  onDeleteRole(roleId: string): void;
-  onReorderRole(roleId: string, position: number): void;
-  onAssignRoles(userId: string, roleIds: string[]): void;
-  onSetChannelOverwrite(channelId: string, targetType: PermissionOverwriteTargetType, targetId: string, allow: ServerPermission[], deny: ServerPermission[]): void;
-  onLoadAudit(): void;
   onKickMember(userId: string): void;
   onServerName(value: string): void;
   onCreateServer(): void;
   onSecurity(): void;
-  onServerSettings?(): void;
+  onServerSettings(): void;
   onLogout(): void;
   onPresenceChange?(presence: UserPresence): void;
 }
@@ -108,7 +96,6 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const [channelFormOpen, setChannelFormOpen] = useState(false);
   const [channelName, setChannelName] = useState('');
   const [channelType, setChannelType] = useState<'text' | 'voice'>('text');
-  const [rolesOpen, setRolesOpen] = useState(false);
   const [serverCreateOpen, setServerCreateOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteCopyState, setInviteCopyState] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle');
@@ -249,7 +236,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       onCopyInvite={() => { setInviteCopyState('idle'); setInviteOpen(true); }}
       onCreateChannel={openChannelForm}
       onDeleteChannel={props.onDeleteChannel}
-      onManageRoles={props.onServerSettings ?? (() => setRolesOpen(true))}
+      onManageRoles={props.onServerSettings}
       {...(canMoveMembers && props.onMoveVoiceMember !== undefined ? { onMoveMember: props.onMoveVoiceMember } : {})}
       profile={<UserProfileDock email={props.user.email} founder={props.user.platformRole === 'owner'} name={ownMember?.displayName ?? displayName(props.user)} onLogout={props.onLogout} onSecurity={props.onSecurity} onStatus={updateProfileStatus} status={profileStatus} />}
       textChannels={channels.filter((channel) => channel.type === 'text')}
@@ -289,7 +276,6 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
         <div className="vui-server-invite"><span>Короткая ссылка</span><code>{props.server.inviteUrl}</code><p>После перехода откроется «Ватрушка» и сервер будет добавлен автоматически.</p>{inviteCopyState === 'copied' ? <strong role="status"><Icon name="check" size={16} />Ссылка скопирована</strong> : inviteCopyState === 'error' ? <strong className="vui-server-invite__error" role="alert"><Icon name="warning" size={16} />Не удалось скопировать ссылку</strong> : null}</div>
       </Modal>
 
-      <ServerSettings auditLog={props.auditLog} busy={props.busy} currentUserId={props.user.id} error={props.error} onAssignRoles={props.onAssignRoles} onClose={() => setRolesOpen(false)} onCreateRole={props.onCreateRole} onDeleteRole={props.onDeleteRole} onLoadAudit={props.onLoadAudit} onReorderRole={props.onReorderRole} onSetChannelOverwrite={props.onSetChannelOverwrite} onUpdateRole={props.onUpdateRole} open={rolesOpen} server={props.server} />
       {activeChannel?.type === 'text' ? <NotificationSettingsDialog conversationId={activeChannel.id} onClose={() => setNotificationSettingsOpen(false)} open={notificationSettingsOpen} serverId={props.server.id} title={`#${activeChannel.name}`} /> : null}
     </>
   );
