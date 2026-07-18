@@ -282,7 +282,7 @@ export class CanonicalMessagingStore {
         where (attachment.message_id is null and attachment.created_at < $1)
            or (message.deleted_at is not null and message.deleted_at < $1)
         order by attachment.created_at
-        for update skip locked
+        for update of attachment skip locked
         limit $2
       `, [cutoff, limit]);
       for (const attachment of stale.rows) {
