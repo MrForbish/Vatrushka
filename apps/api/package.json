@@ -19,6 +19,8 @@
     "media:migrate:s3:prod": "node dist/scripts/migrate-attachments-to-s3.js",
     "media:verify:s3": "tsx src/scripts/verify-object-storage.ts",
     "media:verify:s3:prod": "node dist/scripts/verify-object-storage.js",
+    "capacity:check": "tsx src/scripts/capacity-check.ts",
+    "capacity:check:prod": "node dist/scripts/capacity-check.js",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

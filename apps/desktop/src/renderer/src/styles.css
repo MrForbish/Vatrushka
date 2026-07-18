@@ -74,6 +74,7 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .vui-auth-otp { font: var(--text-heading-lg); letter-spacing: .32em; text-align: center; }
 .vui-auth-submit { width: 100%; margin-top: var(--space-1); }
 .vui-auth-error { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--color-danger), transparent 45%); border-radius: var(--radius-sm); background: var(--color-danger-soft); color: var(--color-danger); font: var(--text-body-md); }
+.vui-auth-notice { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--color-success), transparent 45%); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-success), transparent 88%); color: var(--color-success); font: var(--text-body-md); }
 .vui-auth-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-4); }
 .vui-auth-links button { min-height: 30px; padding: 0 var(--space-2); border: 0; background: transparent; color: var(--color-text-secondary); font: var(--text-caption); }
 .vui-auth-links button:hover:not(:disabled) { color: var(--color-cyan); }

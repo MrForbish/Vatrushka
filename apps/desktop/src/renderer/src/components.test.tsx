@@ -19,7 +19,7 @@ const noop = (): void => undefined;
 describe('authentication screens', () => {
   it('renders an accessible password form', async () => {
     const onRequest = vi.fn();
-    render(<AuthPanel mode="password" stage="credentials" factor="email" totpAvailable={false} email="" code="" password="secure-pass-42" passwordConfirmation="" retrySeconds={0} busy={false} error={null} onMode={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRequest={onRequest} onVerify={noop} onFactor={noop} onBack={noop} />);
+    render(<AuthPanel mode="password" stage="credentials" factor="email" totpAvailable={false} email="" code="" password="secure-pass-42" passwordConfirmation="" retrySeconds={0} busy={false} error={null} notice={null} onMode={noop} onReset={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRequest={onRequest} onVerify={noop} onFactor={noop} onBack={noop} />);
     expect(screen.getByRole('heading', { name: 'С возвращением' })).toBeInTheDocument();
     expect(screen.getByLabelText('Email')).toHaveAttribute('type', 'email');
     expect(screen.getByLabelText('Пароль')).toHaveAttribute('type', 'password');
@@ -28,10 +28,20 @@ describe('authentication screens', () => {
   });
 
   it('renders OTP state, retry countdown, and an error alert', () => {
-    render(<AuthPanel mode="password" stage="otp" factor="email" totpAvailable={false} email="test@example.com" code="123" password="secure-pass-42" passwordConfirmation="" retrySeconds={42} busy={false} error="Неверный код" onMode={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRequest={noop} onVerify={noop} onFactor={noop} onBack={noop} />);
+    render(<AuthPanel mode="password" stage="otp" factor="email" totpAvailable={false} email="test@example.com" code="123" password="secure-pass-42" passwordConfirmation="" retrySeconds={42} busy={false} error="Неверный код" notice={null} onMode={noop} onReset={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRequest={noop} onVerify={noop} onFactor={noop} onBack={noop} />);
     expect(screen.getByLabelText('Код из письма')).toHaveAttribute('inputmode', 'numeric');
     expect(screen.getByRole('button', { name: 'Повторить через 42 с' })).toBeDisabled();
     expect(screen.getByRole('alert')).toHaveTextContent('Неверный код');
+  });
+
+  it('renders password reset without disclosing account existence', async () => {
+    const onVerify = vi.fn();
+    render(<AuthPanel mode="reset" stage="otp" factor="email" totpAvailable={false} email="test@example.com" code="123456" password="new-password-42" passwordConfirmation="new-password-42" retrySeconds={0} busy={false} error={null} notice={null} onMode={noop} onReset={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRequest={noop} onVerify={onVerify} onFactor={noop} onBack={noop} />);
+    expect(screen.getByRole('heading', { name: 'Задайте новый пароль' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Новый пароль', { exact: true })).toHaveAttribute('autocomplete', 'new-password');
+    expect(screen.getByText(/все активные сессии будут завершены/iu)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить новый пароль' }));
+    expect(onVerify).toHaveBeenCalledOnce();
   });
 });
 

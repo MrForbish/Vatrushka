@@ -6,7 +6,7 @@
 
 | Область | Главный риск | Unit/component | API + PostgreSQL/Redis | Storybook/a11y | Electron E2E | Visual | Ручной release gate |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Auth и 2FA | обход второго фактора, утечка refresh token, потеря сессии | да | да | да | да | auth | SMTP/TOTP/recovery на двух установках |
+| Auth, reset и 2FA | обход второго фактора, enumeration, утечка refresh token, неотозванная сессия | да | да, atomic reset | да | да | login/reset | SMTP/TOTP/recovery/reset на двух установках |
 | Серверы, роли и permissions | действие без права, stale update, рассинхронизация клиентов | да | да | да | серверный flow | shell/settings | два клиента и denied/allowed matrix |
 | Presence и уведомления | устаревший статус, нарушение DND/privacy, дубликаты | да | да, настоящий Redis | да | частично | settings/notification | native notifications и reconnect |
 | Messaging | дубликаты, потеря read state, неверные mentions/attachments | да | да, outbox + S3 contracts | да | базовый flow | message states | два клиента, S3 и reconnect |

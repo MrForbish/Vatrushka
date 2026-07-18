@@ -70,15 +70,9 @@ export class MemoryStore implements DataStore {
 
   async replaceAuthCode(code: AuthCodeRecord): Promise<void> {
     for (const current of this.authCodes.values()) {
-      if (current.email === code.email && !current.consumedAt) current.consumedAt = code.createdAt;
+      if (current.email === code.email && current.purpose === code.purpose && !current.consumedAt) current.consumedAt = code.createdAt;
     }
     this.authCodes.set(code.id, structuredClone(code));
-  }
-
-  async findLatestAuthCode(email: string): Promise<AuthCodeRecord | null> {
-    const rows = [...this.authCodes.values()].filter((code) => code.email === email);
-    rows.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    return rows[0] ? structuredClone(rows[0]) : null;
   }
 
   async findLatestAuthCodeForPurpose(email: string, purpose: AuthCodeRecord['purpose']): Promise<AuthCodeRecord | null> {
@@ -175,6 +169,22 @@ export class MemoryStore implements DataStore {
     row.emailVerifiedAt = now;
     row.updatedAt = now;
     return structuredClone(row);
+  }
+
+  async resetPasswordAndRevokeSessions(id: string, passwordHash: string, now: Date): Promise<{ user: UserRecord; revokedSessionIds: string[] } | null> {
+    const row = this.users.get(id);
+    if (!row) return null;
+    row.passwordHash = passwordHash;
+    row.emailVerifiedAt = now;
+    row.updatedAt = now;
+    const revokedSessionIds: string[] = [];
+    for (const session of this.sessions.values()) {
+      if (session.userId === id && !session.revokedAt) {
+        session.revokedAt = now;
+        revokedSessionIds.push(session.id);
+      }
+    }
+    return { user: structuredClone(row), revokedSessionIds };
   }
 
   async updateTwoFactor(id: string, secretEncrypted: string | null, enabled: boolean, now: Date): Promise<UserRecord | null> {

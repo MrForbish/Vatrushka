@@ -106,7 +106,7 @@ jobs:
       - run: npx playwright install chromium
       - run: npm run build -w @vatrushka/shared
       - name: Static Storybook visual budget
-        run: node scripts/ci/run-with-budget.mjs --name "Static Storybook visual" --budget-seconds 150 -- npm run test:visual
+        run: node scripts/ci/run-with-budget.mjs --name "Static Storybook visual" --budget-seconds 180 -- npm run test:visual
       - uses: actions/upload-artifact@v7
         if: failure()
         with:

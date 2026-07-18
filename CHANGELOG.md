@@ -12,6 +12,8 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ### Added
 
+- безопасное восстановление пароля по email-коду с нейтральным ответом, отзывом всех сессий, security event/email notice и отдельным Storybook/visual состоянием;
+- opt-in capacity harness для API, WebSocket, PostgreSQL, Redis, S3 и control plane LiveKit с p95 budgets, JSON evidence и защитой от случайного production-запуска;
 - в нижнюю плашку профиля добавлены синхронизированные с LiveKit кнопки mute/deafen; отключение входящего звука также выключает микрофон, голоса участников и звук демонстрации, не сбрасывая индивидуальные уровни громкости.
 - описание сервера отображается в основном server shell с пустым и ограниченным по высоте состояниями;
 - переименование канала доступно из контекстного меню и синхронизируется между клиентами через адресные WebSocket-события.

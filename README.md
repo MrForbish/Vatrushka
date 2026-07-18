@@ -256,6 +256,7 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 - [Testing](docs/testing.md)
 - [Test coverage and viewport matrix](docs/test-coverage-matrix.md)
 - [Performance](docs/performance.md)
+- [Capacity checks](docs/capacity-testing.md)
 - [Release 0.4.4](docs/releases/0.4.4.md)
 - [Release 0.4.3](docs/releases/0.4.3.md)
 - [Release 0.4.2](docs/releases/0.4.2.md)

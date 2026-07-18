@@ -7,6 +7,7 @@
 ### Готово и используется
 
 - password + обязательный email/TOTP/recovery второй фактор;
+- безопасный password reset через отдельный email-код с отзывом всех активных сессий;
 - постоянные серверы, текстовые/голосовые каналы, короткие invite links;
 - роли, 40 permissions, channel overrides и audit log;
 - Home dashboard, routed User/Server Settings и presence через Redis;
@@ -26,7 +27,6 @@
 - крупные orchestration-файлы затрудняют безопасные изменения;
 - `/metrics` реализован, но не собирается production Prometheus;
 - installer не подписан code-signing сертификатом;
-- password reset отсутствует;
 
 ## План выполнения
 
@@ -91,15 +91,15 @@
 3. Ускорить visual suite без сокращения screenshots: внутрипроцессный параллелизм отклонён как нестабильный, выбран статический Storybook. Выполнено.
 4. Исключить холодную dev-компиляцию каждой visual story с помощью одного production-like Storybook build. Выполнено.
 5. Параллелить независимые CI jobs и сохранять traces/screenshots только при ошибке.
-6. Добавить измерение duration по этапам и регрессионный бюджет pipeline. Выполнено: Storybook 77,9/180 секунд, Electron E2E 37,0/90 секунд, static visual 90,6/150 секунд на первом CI-прогоне.
+6. Добавить измерение duration по этапам и регрессионный бюджет pipeline. Выполнено: Storybook 77,9/180 секунд, Electron E2E 37,0/90 секунд, static visual 90,6/180 секунд на первом CI-прогоне; visual budget скорректирован после cold-runner прогона 166,7 секунды, в котором все 32 сценария прошли.
 
 Цель: сократить `desktop-regression` с наблюдавшихся ~11 минут до 6–7 минут на cold runner без потери сценариев.
 
 ### P0.6 — эксплуатационная готовность
 
-1. Реализовать отдельный rate-limited password reset с отзывом сессий и security event.
+1. Реализовать отдельный rate-limited password reset с отзывом сессий и security event. Реализовано в WEB-24: neutral request response, отдельный hashed OTP purpose, atomic PostgreSQL revoke, presence cleanup, security notice и desktop/visual flow.
 2. Добавить code signing и stable/beta update channels после получения сертификата; updater до этого продолжает работать с явным документированным риском SmartScreen.
-3. Выполнить load tests PostgreSQL/Redis/API/WebSocket/LiveKit/S3 и установить capacity limits.
+3. Выполнить load tests PostgreSQL/Redis/API/WebSocket/LiveKit/S3 и установить capacity limits. Добавлен opt-in safety-guarded harness и начальные p95 budgets; production baseline и media-plane ceiling должны быть зафиксированы release evidence после выпуска кода.
 
 ### P1.1 — Prometheus/Grafana
 

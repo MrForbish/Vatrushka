@@ -102,6 +102,7 @@ Bucket приватный. API создает ограниченный object ke
 - opaque refresh: 30 дней, hash в PostgreSQL, rotation и reuse detection;
 - второй фактор при каждом входе: email/TOTP/recovery;
 - OTP rate limits, TTL и pepper;
+- password reset использует отдельный OTP purpose, neutral request response и атомарный revoke всех PostgreSQL sessions;
 - revoke single/all sessions и security events;
 - legacy passwordless endpoints должны оставаться 404, а legacy refresh sessions — отзываться.
 
@@ -123,6 +124,7 @@ Bucket приватный. API создает ограниченный object ke
 | Electron E2E | preload/main/auth/navigation/media contracts |
 | visual Playwright | эталонные stories в фиксированном viewport |
 | manual two-machine | WebRTC, Windows devices, scaling и native updater |
+| capacity harness | opt-in API/WebSocket/PostgreSQL/Redis/S3/LiveKit-control baseline и JSON evidence |
 
 CI изолированно поднимает PostgreSQL/Redis services. Coverage оценивается по рискам, а не по проценту: auth, permissions, message idempotency, reconnect, media cleanup и migrations являются блокирующими зонами.
 
