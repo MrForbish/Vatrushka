@@ -3,6 +3,7 @@ import test from 'node:test';
 import { buildReleasePlan } from './prepare.mjs';
 import { rcArtifactName } from './release-utils.mjs';
 import { validateRelease } from './validate.mjs';
+import { collectVersionErrors } from './version-check.mjs';
 
 test('builds immutable assemble and release branches from different bases', () => {
   assert.deepEqual(buildReleasePlan('0.7.0', 'main'), {
@@ -24,6 +25,7 @@ test('rejects non-production versions', () => {
 });
 
 test('validates the current release metadata on its release branch', async () => {
-  const result = await validateRelease({ branch: 'release/0.6.1' });
+  const { version } = await collectVersionErrors();
+  const result = await validateRelease({ branch: `release/${version}` });
   assert.deepEqual(result.errors, []);
 });

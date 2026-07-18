@@ -39,6 +39,7 @@ jobs:
     runs-on: windows-latest
     needs: [verify-tag, quality]
     env:
+      VITE_PUBLIC_API_BASE_URL: ${{ vars.PRODUCTION_API_BASE_URL || 'https://api.myvatrushka.ru' }}
       CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
       CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
       CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.WINDOWS_CSC_LINK != '' }}
