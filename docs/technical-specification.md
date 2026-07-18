@@ -91,6 +91,8 @@ Bucket приватный. API создает ограниченный object ke
 
 Запись сообщения, mentions, read state, notification decision и outbox event фиксируются транзакционно. Worker публикует outbox в Redis Pub/Sub; каждый API instance доставляет адресованные события своим authenticated WebSocket sessions. Client сохраняет `eventId`, дедуплицирует события и после reconnect выполняет HTTP reconciliation.
 
+Изменения server overview и каналов публикуются отдельными адресными событиями `server.updated` и `server.channel.updated`. Получатели вычисляются по актуальному членству; renderer инвалидирует server detail и только связанные server-settings snapshots. Ошибка Redis не откатывает уже подтверждённую PostgreSQL-транзакцию: периодическое HTTP reconciliation восстанавливает состояние.
+
 Идемпотентность отправки строится на `(authorId, clientMessageId)`. Cursor истории — стабильный numeric message id. Read/delivered хранятся отдельно по пользователю и conversation. DND/mute/quiet-hours влияют на внешнее уведомление, но не удаляют durable notification.
 
 ## 7. Auth lifecycle

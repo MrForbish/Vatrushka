@@ -167,6 +167,7 @@ export default function App(): ReactNode {
   const [unreadSummary, setUnreadSummary] = useState<UserUnreadSummary | null>(null);
   const [notificationPreferences, setNotificationPreferences] = useState<UserNotificationPreferences | null>(null);
   const [realtimeRevision, setRealtimeRevision] = useState(0);
+  const [serverSettingsRevision, setServerSettingsRevision] = useState(0);
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [serverName, setServerName] = useState('');
   const [pendingInviteToken, setPendingInviteToken] = useState<string | null>(null);
@@ -221,6 +222,7 @@ export default function App(): ReactNode {
     const refresh = (): void => setRealtimeRevision((current) => current + 1);
     const unsubscribeEvent = realtime.onEvent((event) => {
       refresh();
+      if (event.type === 'server.updated' || event.type === 'server.channel.updated') setServerSettingsRevision((current) => current + 1);
       if ((event.type !== 'typing.started' && event.type !== 'typing.stopped') || !event.conversationId || typeof event.payload.userId !== 'string' || event.payload.userId === user.id) return;
       const conversationId = event.conversationId;
       const typingUserId = event.payload.userId;
@@ -1060,6 +1062,18 @@ export default function App(): ReactNode {
     });
   };
 
+  const renameCommunityChannel = (channelId: string, name: string): void => {
+    void run(async () => {
+      if (!serverDetail) return;
+      const normalizedName = channelNameSchema.parse(name);
+      const settings = await apiClient.getServerChannelSettings(serverDetail.id);
+      const channel = settings.channels.find((candidate) => candidate.id === channelId);
+      if (!channel) throw new Error('Канал не найден');
+      await apiClient.updateServerChannelSettings(serverDetail.id, channelId, { name: normalizedName, version: channel.version });
+      await refreshServer();
+    });
+  };
+
   const kickCommunityMember = (userId: string): void => {
     void run(async () => {
       if (!serverDetail) return;
@@ -1460,6 +1474,7 @@ export default function App(): ReactNode {
         presence={presence}
         presenceEnabled
         route={settingsRoute}
+        serverSettingsRevision={serverSettingsRevision}
         server={serverDetail?.id === (settingsRoute.kind === 'server' ? settingsRoute.serverId : '') ? serverDetail : null}
         servers={servers}
         settings={settings}
@@ -1469,7 +1484,7 @@ export default function App(): ReactNode {
     </Suspense>,
   );
   if (screen === 'home' && user) return withUpdateStatus(<HomePage user={user} version={version} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} inputLevel={localInputLevel} busy={busy} error={error} servers={servers} serverName={serverName} directUnreadCount={directUnreadCount} connection={connection} dashboard={homeDashboardQuery.data} dashboardLoading={homeDashboardQuery.isFetching && homeDashboardQuery.data === undefined} dashboardError={homeDashboardQuery.error ? userMessage(homeDashboardQuery.error) : null} onRetryDashboard={() => void homeDashboardQuery.refetch()} onLogout={logout} onSecurity={openUserSettings} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onTestOutput={() => playVoiceCue('message')} onServerName={setServerName} onCreateServer={createServer} onOpenServer={openServer} onOpenDestination={openDestination} onReturnToCall={openConnectedVoice} onDirectMessages={openDirectMessages} onCopyInvite={(inviteUrl) => window.desktop.copyToClipboard(inviteUrl)} profileAudio={profileAudio} />);
-  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} busy={busy} error={error} directUnreadCount={directUnreadCount} typingText={serverTypingText} firstUnreadMessageId={serverFirstUnreadMessageId} hasOlderMessages={serverMessageHistory.conversationId === activeChannelId && serverMessageHistory.hasMore} loadingOlderMessages={serverMessageHistory.loading} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setServerMessageHistory({ conversationId: null, before: null, hasMore: false, loading: false }); setError(null); void apiClient.recordOpenedChannel(channelId).catch(() => undefined); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onLoadAttachment={loadAttachment} onLoadOlderMessages={loadOlderServerMessages} onRetryMessage={(messageId) => serverMessageRetryRef.current.get(messageId)?.()} onConnectVoice={connectVoiceChannel} onMoveVoiceMember={moveVoiceMember} onCopyInvite={() => window.desktop.copyToClipboard(serverDetail.inviteUrl)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onKickMember={kickCommunityMember} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onPresenceChange={setPresence} onServerSettings={() => openServerSettings('roles')} onLogout={logout} profileAudio={profileAudio} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} audioProtectionAvailable={supportsOwnAudioExclusion()} busy={busy} sources={sources} platform={platform} onSelect={selectSource} onCancel={cancelSourcePicker} />}</>);
+  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} busy={busy} error={error} directUnreadCount={directUnreadCount} typingText={serverTypingText} firstUnreadMessageId={serverFirstUnreadMessageId} hasOlderMessages={serverMessageHistory.conversationId === activeChannelId && serverMessageHistory.hasMore} loadingOlderMessages={serverMessageHistory.loading} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setServerMessageHistory({ conversationId: null, before: null, hasMore: false, loading: false }); setError(null); void apiClient.recordOpenedChannel(channelId).catch(() => undefined); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onLoadAttachment={loadAttachment} onLoadOlderMessages={loadOlderServerMessages} onRetryMessage={(messageId) => serverMessageRetryRef.current.get(messageId)?.()} onConnectVoice={connectVoiceChannel} onMoveVoiceMember={moveVoiceMember} onCopyInvite={() => window.desktop.copyToClipboard(serverDetail.inviteUrl)} onCreateChannel={createCommunityChannel} onRenameChannel={renameCommunityChannel} onDeleteChannel={deleteCommunityChannel} onKickMember={kickCommunityMember} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onPresenceChange={setPresence} onServerSettings={() => openServerSettings('roles')} onLogout={logout} profileAudio={profileAudio} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} audioProtectionAvailable={supportsOwnAudioExclusion()} busy={busy} sources={sources} platform={platform} onSelect={selectSource} onCancel={cancelSourcePicker} />}</>);
   if (screen === 'direct' && user) return withUpdateStatus(<DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} busy={busy} error={error} typingText={directTypingText} blockedParticipantIds={blockedDirectUserIds} firstUnreadMessageId={directFirstUnreadMessageId} hasOlderMessages={directMessageHistory.conversationId === activeDirectConversationId && directMessageHistory.hasMore} loadingOlderMessages={directMessageHistory.loading} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onBlockParticipant={blockDirectParticipant} onUnblockParticipant={unblockDirectParticipant} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onLoadAttachment={loadDirectAttachment} onLoadOlderMessages={loadOlderDirectMessages} onRetryMessage={(messageId) => directMessageRetryRef.current.get(messageId)?.()} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onLogout={logout} profileAudio={profileAudio} />);
   return withUpdateStatus(<main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>);
 }
@@ -1480,6 +1495,7 @@ function supportsOwnAudioExclusion(): boolean {
 }
 
 function userMessage(error: unknown): string {
+  if (error instanceof ClientError && typeof error.details === 'object' && error.details !== null && 'message' in error.details && typeof error.details.message === 'string') return error.details.message;
   if (error instanceof ClientError) return error.message;
   if (error instanceof Error) return error.message;
   return 'Что-то пошло не так. Попробуйте ещё раз.';

@@ -24,6 +24,7 @@ Fastify — единственный компонент, имеющий PostgreS
 14. Desktop отправляет presence heartbeat для текущей session каждые 20 секунд и передаёт auto-idle как device signal. Redis объединяет активные сессии с TTL 75 секунд; PostgreSQL хранит выбранный статус, custom status и privacy. API до сериализации преобразует invisible в offline и применяет DND к доставке, не изменяя unread/history.
 15. Composer создаёт structured user/role/everyone mentions вместе с текстом. API проверяет Unicode code-point ranges, membership, `VIEW_CHANNEL`, `MENTION_EVERYONE` и moderation limit; `messages` и `conversation_message_mentions` пишутся одной транзакцией. Renderer получает stable IDs и актуальные safe labels, поэтому rename не меняет адресата.
 16. Direct read state хранится на пользователя и монотонно синхронизируется через outbox между устройствами. Серверные каналы используют cursor только для unread и не создают массовые delivery receipts.
+17. Server overview и channel mutations после optimistic PostgreSQL update публикуют адресные `server.updated`/`server.channel.updated`. Desktop обновляет server shell и соответствующие settings caches; при недоступном Redis подтверждённое изменение остаётся авторитетным и восстанавливается HTTP refresh.
 
 ## Консистентность
 

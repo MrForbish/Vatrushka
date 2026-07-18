@@ -259,6 +259,7 @@ describe('server UI', () => {
   const server: ServerDetail = {
     id: 'server-1',
     name: 'Команда',
+    description: 'Сервер команды разработки',
     inviteUrl: 'https://myvatrushka.ru/i/ABCD2345test',
     ownerUserId: 'user-1',
     memberCount: 1,
@@ -279,9 +280,11 @@ describe('server UI', () => {
     const onConnectVoice = vi.fn();
     const onCopyInvite = vi.fn(async () => undefined);
     const onServerSettings = vi.fn();
-    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', replyTo: null, reactions: [], attachments: [], createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" busy={false} error={null} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={onMessageDraft} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={onConnectVoice} onCopyInvite={onCopyInvite} onCreateChannel={noop} onDeleteChannel={noop} onKickMember={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onServerSettings={onServerSettings} onLogout={noop} />);
+    const onRenameChannel = vi.fn();
+    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', replyTo: null, reactions: [], attachments: [], createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" busy={false} error={null} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={onMessageDraft} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={onConnectVoice} onCopyInvite={onCopyInvite} onCreateChannel={noop} onRenameChannel={onRenameChannel} onDeleteChannel={noop} onKickMember={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onServerSettings={onServerSettings} onLogout={noop} />);
     expect(screen.getByText('Привет, команда!')).toBeInTheDocument();
-    expect(screen.getByText('Владелец сервера')).toBeInTheDocument();
+    expect(screen.getByText('Сервер команды разработки')).toBeInTheDocument();
+    expect(screen.getAllByText('CEO Founder').length).toBeGreaterThan(0);
     expect(document.querySelectorAll('.vui-channel-row__participants > div')).toHaveLength(1);
     const upload = screen.getByLabelText('Выбрать вложения');
     await userEvent.upload(upload, new File(['preview'], 'preview.txt', { type: 'text/plain' }));
@@ -298,6 +301,13 @@ describe('server UI', () => {
     expect(onChannel).toHaveBeenCalledWith('voice-1');
     await userEvent.dblClick(screen.getByRole('button', { name: /^Голосовой/u }));
     expect(onConnectVoice).toHaveBeenCalledWith('voice-1');
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'общий' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Переименовать' }));
+    const renameInput = screen.getByLabelText('Название канала');
+    await userEvent.clear(renameInput);
+    await userEvent.type(renameInput, 'новости');
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(onRenameChannel).toHaveBeenCalledWith('text-1', 'новости');
     await userEvent.click(screen.getByRole('button', { name: 'Пригласить на сервер' }));
     expect(screen.getByRole('dialog', { name: 'Пригласить на сервер' })).toBeInTheDocument();
     expect(screen.getByText(server.inviteUrl)).toBeInTheDocument();
@@ -312,7 +322,7 @@ describe('server UI', () => {
 
   it('keeps the server and channel navigation visible inside a connected voice channel', async () => {
     const onChannel = vi.fn();
-    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="voice-1" connectedVoiceChannelId="voice-1" connectedVoiceServerId="server-1" voiceStage={<div>Активная голосовая сцена</div>} voiceConnectionPanel={<div>Голосовая связь подключена</div>} messages={[]} messageDraft="" serverName="" busy={false} error={null} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={noop} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={noop} onCopyInvite={noop} onCreateChannel={noop} onDeleteChannel={noop} onKickMember={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onServerSettings={noop} onLogout={noop} />);
+    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="voice-1" connectedVoiceChannelId="voice-1" connectedVoiceServerId="server-1" voiceStage={<div>Активная голосовая сцена</div>} voiceConnectionPanel={<div>Голосовая связь подключена</div>} messages={[]} messageDraft="" serverName="" busy={false} error={null} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={noop} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={noop} onCopyInvite={noop} onCreateChannel={noop} onRenameChannel={noop} onDeleteChannel={noop} onKickMember={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onServerSettings={noop} onLogout={noop} />);
 
     expect(screen.getByText('Активная голосовая сцена')).toBeInTheDocument();
     expect(screen.getByText('Голосовая связь подключена')).toBeInTheDocument();

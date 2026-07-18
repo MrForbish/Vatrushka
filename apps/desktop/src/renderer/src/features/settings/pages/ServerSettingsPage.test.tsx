@@ -8,7 +8,7 @@ import { apiClient } from '../../../api';
 import { ServerSettingsPage } from './ServerSettingsPage';
 
 const server: ServerDetail = {
-  id: 'server-1', name: 'Ватрушка', inviteUrl: 'https://myvatrushka.ru/i/legacy', ownerUserId: 'owner-1', memberCount: 1, createdAt: '2026-01-01T00:00:00.000Z',
+  id: 'server-1', name: 'Ватрушка', description: null, inviteUrl: 'https://myvatrushka.ru/i/legacy', ownerUserId: 'owner-1', memberCount: 1, createdAt: '2026-01-01T00:00:00.000Z',
   channels: [{ id: 'channel-1', serverId: 'server-1', name: 'общий', type: 'text', position: 0, unreadCount: 0 }],
   roles: [], members: [{ userId: 'owner-1', displayName: 'Владелец', serverDisplayName: null, privateAlias: null, platformRole: 'owner', joinedAt: '2026-01-01T00:00:00.000Z', roles: [] }],
   permissions: ['VIEW_SERVER', 'MANAGE_SERVER', 'MANAGE_INVITES'],

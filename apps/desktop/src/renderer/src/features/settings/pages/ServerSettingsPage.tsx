@@ -14,6 +14,7 @@ interface Props {
   currentUserId?: string;
   section: ServerSettingsSection;
   server: ServerDetail;
+  refreshRevision?: number;
   onChanged(): Promise<void>;
   onDeleted(): void;
 }
@@ -51,7 +52,7 @@ function Feedback({ error, success }: { error: string | null; success?: string |
   return null;
 }
 
-function Overview({ server, onChanged }: Pick<Props, "server" | "onChanged">): React.JSX.Element {
+function Overview({ refreshRevision = 0, server, onChanged }: Pick<Props, "server" | "onChanged" | "refreshRevision">): React.JSX.Element {
   const [value, setValue] = useState<ServerOverviewSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -61,7 +62,7 @@ function Overview({ server, onChanged }: Pick<Props, "server" | "onChanged">): R
       .getServerOverviewSettings(server.id)
       .then(setValue)
       .catch((caught) => setError(message(caught)));
-  }, [server.id]);
+  }, [refreshRevision, server.id]);
   useEffect(load, [load]);
   if (!value) return error ? <SettingsPageState description={error} kind="error" onAction={load} /> : <SettingsPageState kind="loading" />;
   const textChannels = server.channels.filter((channel) => channel.type === "text").map((channel) => ({ value: channel.id, label: `# ${channel.name}` }));
@@ -441,7 +442,7 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
   );
 }
 
-function Channels({ server, onChanged }: Pick<Props, "server" | "onChanged">): React.JSX.Element {
+function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "server" | "onChanged" | "refreshRevision">): React.JSX.Element {
   const [data, setData] = useState<{
     categories: ServerChannelCategory[];
     channels: ServerChannelSettings[];
@@ -452,7 +453,7 @@ function Channels({ server, onChanged }: Pick<Props, "server" | "onChanged">): R
       .getServerChannelSettings(server.id)
       .then(setData)
       .catch((caught) => setError(message(caught)));
-  }, [server.id]);
+  }, [refreshRevision, server.id]);
   useEffect(load, [load]);
   const run = (action: () => Promise<unknown>): void => {
     void action()
@@ -865,6 +866,7 @@ const auditActionLabels: Record<string, string> = {
   CHANNEL_DELETED: "Канал удалён",
   CHANNEL_OVERWRITE_UPDATED: "Права канала изменены",
   CHANNEL_SETTINGS_UPDATED: "Настройки канала изменены",
+  CHANNEL_RENAMED: "Канал переименован",
   INVITE_CREATED: "Приглашение создано",
   INVITE_REVOKED: "Приглашение отозвано",
   MEMBER_BANNED: "Участник заблокирован",
@@ -1040,16 +1042,17 @@ function Danger({ server, onChanged, onDeleted }: Pick<Props, "server" | "onChan
 }
 
 export function ServerSettingsPage(props: Props): React.JSX.Element {
+  const refreshRevision = props.refreshRevision ?? 0;
   const content = useMemo(() => {
-    if (props.section === "overview") return <Overview server={props.server} onChanged={props.onChanged} />;
+    if (props.section === "overview") return <Overview refreshRevision={refreshRevision} server={props.server} onChanged={props.onChanged} />;
     if (props.section === "appearance") return <Appearance server={props.server} onChanged={props.onChanged} />;
     if (props.section === "members") return <Members currentUserId={props.currentUserId ?? props.server.ownerUserId} server={props.server} onChanged={props.onChanged} />;
     if (props.section === "roles") return <Roles server={props.server} onChanged={props.onChanged} />;
-    if (props.section === "channels") return <Channels server={props.server} onChanged={props.onChanged} />;
+    if (props.section === "channels") return <Channels refreshRevision={refreshRevision} server={props.server} onChanged={props.onChanged} />;
     if (props.section === "invites") return <Invites server={props.server} />;
     if (props.section === "moderation") return <Moderation server={props.server} />;
     if (props.section === "audit-log") return <Audit server={props.server} />;
     return <Danger server={props.server} onChanged={props.onChanged} onDeleted={props.onDeleted} />;
-  }, [props.currentUserId, props.section, props.server, props.onChanged, props.onDeleted]);
+  }, [props.currentUserId, props.section, props.server, refreshRevision, props.onChanged, props.onDeleted]);
   return content;
 }
