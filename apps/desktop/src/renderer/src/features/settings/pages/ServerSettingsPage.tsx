@@ -5,6 +5,7 @@ import { serverPermissions, type CreatedServerInvite, type ServerAppearanceSetti
 import { apiClient } from "../../../api";
 import { Button, Checkbox, FilePicker, Input, Select } from "../../../ui";
 import type { ServerSettingsSection } from "../../../app/routes/route-paths";
+import { ChannelPermissionEditor } from "../components/ChannelPermissionEditor";
 import { SettingsPageState } from "../components/SettingsPageState";
 import "./server-settings-pages.css";
 
@@ -400,7 +401,16 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
           </div>
           <div className="vui-server-permission-grid">
             {serverPermissions.map((permission) => (
-              <Checkbox checked={permissions.includes(permission)} description={permission} key={permission} label={permissionLabels[permission] ?? permission.replaceAll("_", " ").toLowerCase()} onChange={(event) => setPermissions((current) => (event.target.checked ? [...current, permission] : current.filter((item) => item !== permission)))} />
+              <Checkbox
+                checked={permissions.includes(permission)}
+                description={permission}
+                key={permission}
+                label={permissionLabels[permission] ?? permission.replaceAll("_", " ").toLowerCase()}
+                onChange={(event) => {
+                  if (permission === "ADMINISTRATOR" && event.target.checked && !window.confirm("Право администратора даёт полный доступ и обходит ограничения каналов. Продолжить?")) return;
+                  setPermissions((current) => (event.target.checked ? [...current, permission] : current.filter((item) => item !== permission)));
+                }}
+              />
             ))}
           </div>
           <Feedback error={error} />
@@ -622,6 +632,15 @@ function Channels({ server, onChanged }: Pick<Props, "server" | "onChanged">): R
           </article>
         ))}
       </div>
+      {server.permissions.includes("MANAGE_ROLES") ? (
+        <ChannelPermissionEditor
+          server={server}
+          onSave={async (channelId, targetType, targetId, allow, deny) => {
+            await apiClient.setChannelPermissionOverwrite(channelId, targetType, targetId, allow, deny);
+            await onChanged();
+          }}
+        />
+      ) : null}
     </Page>
   );
 }

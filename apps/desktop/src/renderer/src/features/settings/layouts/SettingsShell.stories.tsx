@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, within } from 'storybook/test';
-import type { PublicUser, SecurityEvent, ServerDetail } from '@vatrushka/shared';
+import { serverPermissions, type PublicUser, type SecurityEvent, type ServerDetail } from '@vatrushka/shared';
 
 import { serverSettingsNavigation, userSettingsNavigation } from '../../../app/routes';
 import type { AudioDevices } from '../../../audio-devices';
@@ -21,7 +21,13 @@ const workspaces: WorkspaceNavigationItem[] = [
 ];
 const storyServer: ServerDetail = {
   id: 'vatrushka', name: 'Команда Ватрушки', inviteUrl: 'https://myvatrushka.ru/i/example', ownerUserId: 'owner', memberCount: 18, createdAt: '2026-01-01T00:00:00.000Z',
-  channels: [{ id: 'general', serverId: 'vatrushka', name: 'общий', type: 'text', position: 0, unreadCount: 0 }], roles: [], members: [], permissions: ['VIEW_SERVER', 'MANAGE_SERVER'],
+  channels: [{ id: 'general', serverId: 'vatrushka', name: 'общий', type: 'text', position: 0, unreadCount: 0 }],
+  roles: [
+    { id: 'owner-role', serverId: 'vatrushka', name: 'Владелец', color: '#f0b35b', position: 100, isDefault: true, kind: 'OWNER', permissions: [...serverPermissions] },
+    { id: 'moderator-role', serverId: 'vatrushka', name: 'Модератор', color: '#d77b63', position: 10, isDefault: false, kind: 'CUSTOM', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'SEND_MESSAGES', 'MANAGE_MESSAGES'] },
+    { id: 'everyone-role', serverId: 'vatrushka', name: '@everyone', color: '#8f91a8', position: 0, isDefault: true, kind: 'EVERYONE', permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] },
+  ],
+  members: [], permissions: [...serverPermissions],
 };
 
 const securityUser: PublicUser = { id: 'user-1', email: 'owner@myvatrushka.ru', displayName: 'Илья Форбиш', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true };
@@ -84,6 +90,10 @@ export const ServerOverview: Story = {
 };
 
 export const UserProfile: Story = { args: { scope: 'user' } };
+
+export const ServerRoles: Story = {
+  render: (args) => <SettingsShell activeSection="roles" entityLabel="Настройки сервера" entityName={storyServer.name} items={serverSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary activeWorkspaceId={storyServer.id} onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><ServerSettingsPage onChanged={() => Promise.resolve()} onDeleted={() => undefined} section="roles" server={storyServer} /></SettingsShell>,
+};
 
 export const UserAudioDevices: Story = {
   args: { scope: 'user' },

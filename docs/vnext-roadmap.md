@@ -34,6 +34,8 @@
 
 ### P0.0 — Git branching и release automation
 
+Статус: выполнено в PR #14–#16. `develop` и `main` введены, production VPS переведен на `main`, policy/version/release workflows работают. GitHub branch protection и обязательный approval остаются внешним ограничением: private repository на текущем плане возвращает `403`; до смены плана направления PR контролирует `pr-policy` workflow.
+
 1. Ввести `develop` как интеграционную ветку и выполнить контролируемый переход production `master → main` без разрыва VPS deployment/updater.
 2. Добавить branch/PR policy tests, PR templates, CODEOWNERS и protection после первого зеленого workflow run.
 3. Разделить ordinary PR checks, release candidate, release PR, tag-only production и sync workflows; production secrets не выдавать PR jobs.
@@ -43,6 +45,8 @@
 Критерий: некорректные направления PR блокируются автоматически, RC не попадает в stable feed, production publish возможен только из тега в `main`, а ручной rollback описан и проверен. Полный процесс — в [release-process.md](release-process.md).
 
 ### P0.1 — документация и доказательная очистка
+
+Статус: канонические бизнес-/техническая спецификации, roadmap и inventory созданы в PR #12; settings fallback удален в PR #13. Текущий cleanup переносит channel overrides в production routed settings и удаляет недостижимый старый modal без потери сценариев. Legacy messaging остается compatibility-кодом и не удаляется до adoption gate.
 
 1. Поддерживать `product-specification.md`, `technical-specification.md` и этот roadmap как канонические документы.
 2. Построить import/runtime/API/schema inventory; разделить `dead`, `compatibility`, `future-approved`.
@@ -77,6 +81,8 @@
 4. Привести platform owner UI к лаконичному `CEO Founder`; убрать желтую подложку его сообщений, оставить компактный badge/accent.
 
 ### P0.5 — CI и тестовое покрытие
+
+Статус: ordinary/RC/release/tag/sync workflows разделены, PostgreSQL/Redis integration выполняются в изолированных CI services, а desktop suite разделен на параллельные behavior/visual jobs. Наблюдаемое критическое время сократилось с 9:10 до примерно 5:15 (около 43%) без удаления сценариев. Остаются browser cache, переиспользование Storybook artifact и duration budget.
 
 1. Зафиксировать mapping риска к тестам и удалить только дублирующие/неактуальные сценарии.
 2. Кэшировать Playwright Chromium по версии lockfile/Playwright.
