@@ -12,7 +12,8 @@
 .vui-message[data-grouped='true'] { padding-block: var(--space-1); }
 .vui-message:hover { background: var(--color-surface-2); }
 .vui-message[data-targeted='true'] { border-color: color-mix(in srgb, var(--color-cyan), transparent 35%); background: color-mix(in srgb, var(--color-cyan), transparent 90%); animation: vui-message-target 2.4s ease-out; }
-.vui-message[data-privileged='true'] { border-color: color-mix(in srgb, var(--color-founder), transparent 72%); background: var(--gradient-founder); }
+.vui-message[data-author-badge='founder'] { border-left-color: color-mix(in srgb, var(--color-founder), transparent 48%); }
+.vui-message[data-author-badge='admin'] { border-left-color: color-mix(in srgb, var(--color-primary), transparent 58%); }
 .vui-message__avatar-space { width: 40px; }
 .vui-message__content { min-width: 0; }
 .vui-message__content > header { display: flex; align-items: center; gap: var(--space-2); }

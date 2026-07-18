@@ -17,7 +17,7 @@ export function HomeProfileRail({ onLogout, onSecurity, presence = 'online', use
   return (
     <aside className="home-profile-rail" aria-label="Профиль пользователя">
       <header><span>Профиль</span><StatusDot label={status.label} status={presence} /></header>
-      <div className="home-profile-rail__identity"><Avatar name={name} size="lg" status={presence} /><strong>{name}</strong><small>{user.email}</small>{founder ? <Badge tone="founder">FOUNDER · DEV</Badge> : <Badge tone={presence === 'dnd' ? 'danger' : presence === 'online' ? 'success' : 'neutral'}>{status.label}</Badge>}</div>
+      <div className="home-profile-rail__identity"><Avatar name={name} size="lg" status={presence} /><strong>{name}</strong><small>{user.email}</small>{founder ? <Badge tone="founder">CEO Founder</Badge> : <Badge tone={presence === 'dnd' ? 'danger' : presence === 'online' ? 'success' : 'neutral'}>{status.label}</Badge>}</div>
       <div className="home-profile-rail__status"><StatusDot label={status.label} status={presence} /><div><strong>{status.label}</strong><small>{status.copy}</small></div></div>
       <div className="home-profile-rail__tip"><Icon name="info" size={17} /><p>Выбор аудиоустройств хранится только на этом компьютере.</p></div>
       <footer><span>Vatrushka v{version}</span><div><IconButton icon="settings" label="Безопасность и настройки" onClick={onSecurity} size="sm" type="button" /><IconButton icon="logout" label="Выйти из аккаунта" onClick={onLogout} size="sm" type="button" /></div></footer>

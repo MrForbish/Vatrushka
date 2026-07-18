@@ -51,7 +51,7 @@ function StoryChannel(): React.JSX.Element {
   return (
     <div className="vui-shell-story-stage">
       <div className="vui-shell-story-empty"><span><Icon name="hash" size={28} /></span><Badge tone="primary">Текстовый канал</Badge><h1>Начало канала #общий</h1><p>Обсуждайте проект, делитесь файлами и собирайте решения в одном месте.</p></div>
-      <div className="vui-shell-story-message"><Avatar name="Илья Форбиш" status="online" /><span><strong>Илья Форбиш <Badge tone="founder">DEV</Badge></strong><p>Встречаемся здесь после релиза App Shell.</p></span></div>
+      <div className="vui-shell-story-message"><Avatar name="Илья Форбиш" status="online" /><span><strong>Илья Форбиш <Badge tone="founder">CEO Founder</Badge></strong><p>Встречаемся здесь после релиза App Shell.</p></span></div>
       <div className="vui-shell-story-composer"><span>Написать в #общий</span><Button icon="send" size="sm">Отправить</Button></div>
     </div>
   );
@@ -91,7 +91,7 @@ export const FullServer: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Отключить входящий звук и микрофон' }));
     await expect(args.onMicrophoneToggle).toHaveBeenCalledOnce();
     await expect(args.onDeafenToggle).toHaveBeenCalledOnce();
-    await expect(canvas.getByText('Основатель сервера')).toBeInTheDocument();
+    await expect(canvas.getAllByText('CEO Founder').length).toBeGreaterThan(0);
   },
 };
 

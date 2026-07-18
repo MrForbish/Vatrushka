@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { EffectivePresenceStatus, PresencePreference } from '@vatrushka/shared';
 
@@ -94,12 +95,25 @@ interface ChannelRowProps {
   onSelect: (id: string) => void;
   onConnectVoice?: ((id: string) => void) | undefined;
   onDelete?: ((id: string) => void) | undefined;
+  onRename?: ((channel: ChannelNavigationItem) => void) | undefined;
   onMoveMember?: ((channelId: string, userId: string) => void) | undefined;
 }
 
-export function ChannelRow({ active = false, canDelete = false, channel, onConnectVoice, onDelete, onMoveMember, onSelect }: ChannelRowProps): React.JSX.Element {
+export function ChannelRow({ active = false, canDelete = false, channel, onConnectVoice, onDelete, onMoveMember, onRename, onSelect }: ChannelRowProps): React.JSX.Element {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const hasMenu = canDelete && (onRename !== undefined || onDelete !== undefined);
+  const openMenu = (x: number, y: number): void => setMenu({ x: Math.max(12, Math.min(x, window.innerWidth - 220)), y: Math.max(12, Math.min(y, window.innerHeight - 118)) });
+  useEffect(() => {
+    if (menu === null) return undefined;
+    const close = (event: PointerEvent): void => { if (!menuRef.current?.contains(event.target as Node)) setMenu(null); };
+    const closeOnEscape = (event: KeyboardEvent): void => { if (event.key === 'Escape') setMenu(null); };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', closeOnEscape); };
+  }, [menu]);
   return (
-    <div className="vui-channel-row" data-active={active || undefined} onDragOver={channel.type === 'voice' && onMoveMember !== undefined ? (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; event.currentTarget.dataset.dropTarget = 'true'; } : undefined} onDragLeave={(event) => { delete event.currentTarget.dataset.dropTarget; }} onDrop={channel.type === 'voice' && onMoveMember !== undefined ? (event) => { event.preventDefault(); delete event.currentTarget.dataset.dropTarget; const userId = event.dataTransfer.getData('application/x-vatrushka-user'); if (userId) onMoveMember(channel.id, userId); } : undefined}>
+    <div className="vui-channel-row" data-active={active || undefined} onContextMenu={hasMenu ? (event) => { if ((event.target as Element).closest('.vui-channel-row__participants')) return; event.preventDefault(); openMenu(event.clientX, event.clientY); } : undefined} onDragOver={channel.type === 'voice' && onMoveMember !== undefined ? (event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; event.currentTarget.dataset.dropTarget = 'true'; } : undefined} onDragLeave={(event) => { delete event.currentTarget.dataset.dropTarget; }} onDrop={channel.type === 'voice' && onMoveMember !== undefined ? (event) => { event.preventDefault(); delete event.currentTarget.dataset.dropTarget; const userId = event.dataTransfer.getData('application/x-vatrushka-user'); if (userId) onMoveMember(channel.id, userId); } : undefined}>
       <button aria-current={active ? 'page' : undefined} onClick={() => onSelect(channel.id)} onDoubleClick={channel.type === 'voice' && onConnectVoice !== undefined ? () => onConnectVoice(channel.id) : undefined} title={channel.type === 'voice' && onConnectVoice !== undefined ? 'Двойной щелчок — подключиться' : undefined} type="button">
         <Icon name={channel.type === 'text' ? 'hash' : 'voice'} size={17} />
         <span>{channel.name}</span>
@@ -108,8 +122,9 @@ export function ChannelRow({ active = false, canDelete = false, channel, onConne
         {channel.mentionCount !== undefined || channel.unreadCount === undefined || channel.unreadCount === 0 ? null : <Badge tone="primary">{channel.unreadCount > 99 ? '99+' : channel.unreadCount}</Badge>}
         {channel.unread === true ? <span aria-label="Есть непрочитанные сообщения" className="vui-channel-row__unread" role="img" /> : null}
       </button>
-      {canDelete && onDelete !== undefined ? <IconButton className="vui-channel-row__delete" icon="close" label={`Удалить канал ${channel.name}`} onClick={() => onDelete(channel.id)} size="sm" type="button" /> : null}
-      {channel.type !== 'voice' || channel.participants === undefined || channel.participants.length === 0 ? null : <div className="vui-channel-row__participants">{channel.participants.map((participant) => <div draggable={participant.canDrag === true} key={participant.userId} onDragStart={participant.canDrag === true ? (event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-vatrushka-user', participant.userId); } : undefined}><Avatar name={participant.name} size="sm" /><span>{participant.name}</span>{participant.founder ? <Badge tone="founder">DEV</Badge> : null}</div>)}</div>}
+      {hasMenu ? <button aria-label={`Действия с каналом ${channel.name}`} className="vui-channel-row__menu-trigger" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); openMenu(rect.right, rect.bottom); }} type="button">•••</button> : null}
+      {channel.type !== 'voice' || channel.participants === undefined || channel.participants.length === 0 ? null : <div className="vui-channel-row__participants">{channel.participants.map((participant) => <div draggable={participant.canDrag === true} key={participant.userId} onDragStart={participant.canDrag === true ? (event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-vatrushka-user', participant.userId); } : undefined}><Avatar name={participant.name} size="sm" /><span>{participant.name}</span>{participant.founder ? <Badge tone="founder">CEO Founder</Badge> : null}</div>)}</div>}
+      {menu && hasMenu ? createPortal(<div aria-label={`Действия с каналом ${channel.name}`} className="vui-channel-context-menu" ref={menuRef} role="menu" style={{ left: menu.x, top: menu.y }}><strong>{channel.type === 'text' ? '#' : '◉'} {channel.name}</strong>{onRename === undefined ? null : <button onClick={() => { setMenu(null); onRename(channel); }} role="menuitem" type="button"><Icon name="edit" size={16} />Переименовать</button>}{onDelete === undefined ? null : <button className="vui-channel-context-menu__danger" onClick={() => { setMenu(null); onDelete(channel.id); }} role="menuitem" type="button"><Icon name="close" size={16} />Удалить канал</button>}</div>, document.body) : null}
     </div>
   );
 }
@@ -123,15 +138,16 @@ interface ChannelCategoryProps {
   onConnectVoice?: ((id: string) => void) | undefined;
   onCreate?: ((type: ChannelNavigationItem['type']) => void) | undefined;
   onDelete?: ((id: string) => void) | undefined;
+  onRename?: ((channel: ChannelNavigationItem) => void) | undefined;
   onMoveMember?: ((channelId: string, userId: string) => void) | undefined;
   type: ChannelNavigationItem['type'];
 }
 
-export function ChannelCategory({ activeChannelId, canManage = false, channels, onConnectVoice, onCreate, onDelete, onMoveMember, onSelect, title, type }: ChannelCategoryProps): React.JSX.Element {
+export function ChannelCategory({ activeChannelId, canManage = false, channels, onConnectVoice, onCreate, onDelete, onMoveMember, onRename, onSelect, title, type }: ChannelCategoryProps): React.JSX.Element {
   return (
     <section className="vui-channel-category">
       <header><span>{title}</span>{canManage && onCreate !== undefined ? <IconButton icon="plus" label={`Создать ${type === 'text' ? 'текстовый' : 'голосовой'} канал`} onClick={() => onCreate(type)} size="sm" type="button" /> : null}</header>
-      <div>{channels.map((channel) => <ChannelRow active={channel.id === activeChannelId} canDelete={canManage} channel={channel} key={channel.id} onConnectVoice={onConnectVoice} onDelete={onDelete} onMoveMember={onMoveMember} onSelect={onSelect} />)}</div>
+      <div>{channels.map((channel) => <ChannelRow active={channel.id === activeChannelId} canDelete={canManage} channel={channel} key={channel.id} onConnectVoice={onConnectVoice} onDelete={onDelete} onMoveMember={onMoveMember} onRename={onRename} onSelect={onSelect} />)}</div>
     </section>
   );
 }
@@ -179,7 +195,7 @@ export function UserProfileDock({ audioControls, email, founder = false, name, o
         <button aria-expanded={open} aria-label="Изменить статус" onClick={() => setOpen((current) => !current)} type="button"><Avatar name={name} size="md" status={status} /></button>
         {open && onStatus ? <div className="vui-profile-dock__status-menu" role="menu">{profileStatusOptions.map((option) => <button key={option.preference} onClick={() => { void onStatus(option.preference); setOpen(false); }} role="menuitem" type="button"><StatusDot label={option.label} status={option.status} /><span>{option.label}</span></button>)}</div> : null}
       </div>
-      <span className="vui-profile-dock__copy"><strong>{name}</strong><small>{founder ? `Основатель · ${profileStatusLabels[status]}` : `${email} · ${profileStatusLabels[status]}`}</small></span>
+      <span className="vui-profile-dock__copy"><strong>{name}</strong><small>{founder ? `CEO Founder · ${profileStatusLabels[status]}` : `${email} · ${profileStatusLabels[status]}`}</small></span>
       {audioControls ? <span aria-label="Управление голосовой связью" className="vui-profile-dock__audio" role="group">
         <IconButton active={audioControls.microphoneMuted} aria-pressed={audioControls.microphoneMuted} disabled={!audioControls.connected || audioControls.busy === true || audioControls.deafened} icon={audioControls.microphoneMuted ? 'micOff' : 'mic'} label={!audioControls.connected ? 'Подключитесь к голосовому каналу, чтобы управлять микрофоном' : audioControls.deafened ? 'Входящий звук отключён — микрофон тоже выключен' : audioControls.microphoneMuted ? 'Включить микрофон' : 'Выключить микрофон'} onClick={audioControls.onMicrophoneToggle} size="sm" type="button" />
         <IconButton active={audioControls.deafened} aria-pressed={audioControls.deafened} disabled={!audioControls.connected || audioControls.busy === true} icon={audioControls.deafened ? 'volumeOff' : 'volume'} label={!audioControls.connected ? 'Подключитесь к голосовому каналу, чтобы управлять входящим звуком' : audioControls.deafened ? 'Включить входящий звук' : 'Отключить входящий звук и микрофон'} onClick={audioControls.onDeafenToggle} size="sm" type="button" />
@@ -192,6 +208,7 @@ export function UserProfileDock({ audioControls, email, founder = false, name, o
 
 export interface ServerContextProps {
   name: string;
+  description?: string | null;
   privacyLabel?: string;
   activeChannelId?: string | undefined;
   textChannels: ChannelNavigationItem[];
@@ -205,21 +222,23 @@ export interface ServerContextProps {
   onConnectVoice?: ((id: string) => void) | undefined;
   onCreateChannel?: ((type: ChannelNavigationItem['type']) => void) | undefined;
   onDeleteChannel?: ((id: string) => void) | undefined;
+  onRenameChannel?: ((channel: ChannelNavigationItem) => void) | undefined;
   onCopyInvite: () => void;
   onManageRoles: () => void;
   onMoveMember?: ((channelId: string, userId: string) => void) | undefined;
 }
 
-export function ServerContext({ activeChannelId, canManageChannels = false, canManageRoles = false, connectionLabel = 'Голосовой канал не подключён', connectionPanel, name, onChannel, onConnectVoice, onCopyInvite, onCreateChannel, onDeleteChannel, onManageRoles, onMoveMember, privacyLabel = 'Приватный сервер', profile, textChannels, voiceChannels }: ServerContextProps): React.JSX.Element {
+export function ServerContext({ activeChannelId, canManageChannels = false, canManageRoles = false, connectionLabel = 'Голосовой канал не подключён', connectionPanel, description, name, onChannel, onConnectVoice, onCopyInvite, onCreateChannel, onDeleteChannel, onManageRoles, onMoveMember, onRenameChannel, privacyLabel = 'Приватный сервер', profile, textChannels, voiceChannels }: ServerContextProps): React.JSX.Element {
   return (
     <aside aria-label="Навигация сервера" className="vui-server-context">
       <header className="vui-server-context__header">
         <div><span aria-hidden="true" className="vui-server-context__cover">{name.slice(0, 1).toUpperCase()}</span><span><strong>{name}</strong><small><Icon name="lock" size={12} />{privacyLabel}</small></span></div>
         <span className="vui-server-context__tools"><IconButton icon="invite" label="Пригласить на сервер" onClick={onCopyInvite} size="sm" type="button" />{canManageRoles ? <IconButton icon="settings" label="Роли и права" onClick={onManageRoles} size="sm" type="button" /> : null}</span>
       </header>
+      <div className="vui-server-context__about" data-empty={!description?.trim() || undefined} title={description?.trim() || 'Описание сервера не задано'}><Icon name="info" size={14} /><p>{description?.trim() || 'Описание сервера не задано'}</p></div>
       <div className="vui-server-context__scroll">
-        <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={textChannels} onCreate={onCreateChannel} onDelete={onDeleteChannel} onSelect={onChannel} title="Текстовые каналы" type="text" />
-        <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={voiceChannels} onConnectVoice={onConnectVoice} onCreate={onCreateChannel} onDelete={onDeleteChannel} onMoveMember={onMoveMember} onSelect={onChannel} title="Голосовые каналы" type="voice" />
+        <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={textChannels} onCreate={onCreateChannel} onDelete={onDeleteChannel} onRename={onRenameChannel} onSelect={onChannel} title="Текстовые каналы" type="text" />
+        <ChannelCategory activeChannelId={activeChannelId} canManage={canManageChannels} channels={voiceChannels} onConnectVoice={onConnectVoice} onCreate={onCreateChannel} onDelete={onDeleteChannel} onMoveMember={onMoveMember} onRename={onRenameChannel} onSelect={onChannel} title="Голосовые каналы" type="voice" />
       </div>
       {connectionPanel ?? <div className="vui-server-context__connection"><StatusDot label="Статус голосового подключения" status="offline" /><span>{connectionLabel}</span></div>}
       {profile}
@@ -272,8 +291,8 @@ export function MemberPanel({ members }: MemberPanelProps): React.JSX.Element {
         {members.map((member) => (
           <div className="vui-member-row" data-founder={member.founder || undefined} draggable={member.draggable === true} key={member.id} onDragStart={member.draggable === true ? (event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('application/x-vatrushka-user', member.id); } : undefined} title={member.draggable === true ? 'Перетащите участника в голосовой канал' : undefined}>
             <Avatar name={member.name} size="sm" {...(member.status === undefined ? {} : { status: member.status })} />
-            <span><strong>{member.name}</strong><small>{member.roleLabel ?? (member.founder ? 'Основатель сервера' : 'Участник')}</small></span>
-            {member.founder ? <Badge tone="founder">DEV</Badge> : member.actions}
+            <span><strong>{member.name}</strong><small>{member.roleLabel ?? (member.founder ? 'Владелец сервера' : 'Участник')}</small></span>
+            {member.founder ? <Badge tone="founder">CEO Founder</Badge> : member.actions}
           </div>
         ))}
       </div>

@@ -20,7 +20,7 @@ const workspaces: WorkspaceNavigationItem[] = [
   { id: 'friends', name: 'Друзья и игры', memberCount: 42 },
 ];
 const storyServer: ServerDetail = {
-  id: 'vatrushka', name: 'Команда Ватрушки', inviteUrl: 'https://myvatrushka.ru/i/example', ownerUserId: 'owner', memberCount: 18, createdAt: '2026-01-01T00:00:00.000Z',
+  id: 'vatrushka', name: 'Команда Ватрушки', description: 'Команда продукта и разработки.', inviteUrl: 'https://myvatrushka.ru/i/example', ownerUserId: 'owner', memberCount: 18, createdAt: '2026-01-01T00:00:00.000Z',
   channels: [{ id: 'general', serverId: 'vatrushka', name: 'общий', type: 'text', position: 0, unreadCount: 0 }],
   roles: [
     { id: 'owner-role', serverId: 'vatrushka', name: 'Владелец', color: '#f0b35b', position: 100, isDefault: true, kind: 'OWNER', permissions: [...serverPermissions] },

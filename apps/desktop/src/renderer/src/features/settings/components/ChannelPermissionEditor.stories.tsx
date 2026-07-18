@@ -6,7 +6,7 @@ import type { ServerDetail } from '@vatrushka/shared';
 import { ChannelPermissionEditor } from './ChannelPermissionEditor';
 
 const server: ServerDetail = {
-  id: 'server-1', name: 'Космодром', inviteUrl: 'https://myvatrushka.ru/i/example', ownerUserId: 'user-owner', memberCount: 3, createdAt: '2026-07-01T00:00:00.000Z', permissions: ['MANAGE_ROLES'],
+  id: 'server-1', name: 'Космодром', description: null, inviteUrl: 'https://myvatrushka.ru/i/example', ownerUserId: 'user-owner', memberCount: 3, createdAt: '2026-07-01T00:00:00.000Z', permissions: ['MANAGE_ROLES'],
   roles: [
     { id: 'role-owner', serverId: 'server-1', name: 'Владелец', color: '#f0b35b', position: 100, isDefault: true, kind: 'OWNER', permissions: [] },
     { id: 'role-speaker', serverId: 'server-1', name: 'Ведущий', color: '#53a6a6', position: 10, isDefault: false, kind: 'CUSTOM', permissions: ['VIEW_CHANNEL', 'SEND_MESSAGES'] },

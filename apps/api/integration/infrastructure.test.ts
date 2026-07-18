@@ -202,6 +202,12 @@ describe('production infrastructure adapters', () => {
     expect(updated).toMatchObject({ name: 'Updated settings', version: 2, systemChannelId: channelId });
     await expect(serverSettings.updateOverview(serverId, { name: 'Stale', description: null, language: 'ru', timezone: 'UTC', systemChannelId: null, welcomeChannelId: null, defaultNotificationLevel: 'none', defaultVoiceInactivitySeconds: 0, version: 1 }, now)).resolves.toBeNull();
 
+    const channel = (await serverSettings.listChannels(serverId)).find((candidate) => candidate.id === channelId);
+    expect(channel?.version).toBe(1);
+    await expect(serverSettings.updateChannel(serverId, channelId, { name: 'releases', version: channel!.version }, new Date(now.getTime() + 1_100))).resolves.toBe(true);
+    await expect(serverSettings.updateChannel(serverId, channelId, { name: 'stale-name', version: channel!.version }, new Date(now.getTime() + 1_200))).resolves.toBe(false);
+    expect((await serverSettings.listChannels(serverId)).find((candidate) => candidate.id === channelId)).toMatchObject({ name: 'releases', version: 2 });
+
     await expect(postgres.store.updateOwnServerDisplayName(serverId, member.id, 'Публичное имя')).resolves.toBe(true);
     await expect(postgres.store.setServerMemberAlias(serverId, owner.id, member.id, 'Личный псевдоним', now)).resolves.toBe(true);
     expect((await serverSettings.listMembers(serverId, null, owner.id)).find((candidate) => candidate.userId === member.id)).toMatchObject({ serverDisplayName: 'Публичное имя', privateAlias: 'Личный псевдоним' });

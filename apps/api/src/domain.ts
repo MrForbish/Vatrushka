@@ -75,6 +75,7 @@ export interface UserActivityRecord {
 export interface ServerRecord {
   id: string;
   name: string;
+  description?: string | null;
   inviteToken: string;
   ownerUserId: string;
   createdAt: Date;

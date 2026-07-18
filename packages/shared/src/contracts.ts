@@ -254,6 +254,7 @@ export interface ServerMember {
 }
 
 export interface ServerDetail extends ServerSummary {
+  description: string | null;
   channels: ServerChannel[];
   roles: ServerRole[];
   members: ServerMember[];
@@ -572,6 +573,8 @@ export type RealtimeEventType =
   | 'typing.started'
   | 'typing.stopped'
   | 'presence.updated'
+  | 'server.updated'
+  | 'server.channel.updated'
   | 'session.revoked'
   | 'feature_flags.updated';
 

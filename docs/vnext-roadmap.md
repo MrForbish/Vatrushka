@@ -1,6 +1,6 @@
 # Vatrushka: roadmap
 
-Обновлено для версии 0.6.1. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
+Обновлено для версии 0.6.2. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
 
 ## Состояние продукта
 
@@ -27,8 +27,6 @@
 - `/metrics` реализован, но не собирается production Prometheus;
 - installer не подписан code-signing сертификатом;
 - password reset отсутствует;
-- rename канала доступен в Server Settings, но не из обычного списка каналов;
-- описание сервера сохраняется, но не показывается в рабочем server shell.
 
 ## План выполнения
 
@@ -76,6 +74,8 @@
 4. Добавить tooltip, aria-label, disabled/reconnecting состояния и unit/Storybook/E2E tests.
 
 ### P0.4 — server shell usability
+
+Статус: выполнено в `feat/ROADMAP-4-server-shell-usability`. `ServerDetail` публикует описание, sidebar показывает empty/overflow состояния, а доступное только с `MANAGE_CHANNELS` контекстное меню использует существующий versioned settings API. Изменения сервера и каналов адресно рассылаются участникам через Redis/WebSocket и инвалидируют server/settings snapshots. Founder-плашки используют компактный `CEO Founder` без жёлтого фона сообщений. API, PostgreSQL conflict, component, Storybook и visual regression сценарии добавлены.
 
 1. Показать описание сервера в server header/about surface с empty и overflow состояниями.
 2. Добавить «Переименовать» в контекстное меню канала с permission check, validation, optimistic conflict и audit.
@@ -130,11 +130,10 @@
 2. `chore/repository-policy` — policy tests, templates, CODEOWNERS и version scripts.
 3. `chore/release-workflows` — ordinary/RC/release/tag/sync GitHub Actions и CI speedup.
 4. `refactor/safe-runtime` — доказуемо мертвые frontend/backend элементы без schema contract.
-5. `feat/profile-audio-controls` — mute/deafen.
-6. `feat/server-description-channel-rename` — описание, rename и realtime.
-7. `feat/founder-treatment` — `CEO Founder` и сообщения.
-8. `fix/storybook-responsive` — viewport/edge-state fixes.
-9. `refactor/canonical-messaging-contract` — только после client adoption gate.
-10. `feat/observability` — Prometheus/Grafana.
+5. `feat/ROADMAP-3-profile-audio-controls` — mute/deafen, выполнено.
+6. `feat/ROADMAP-4-server-shell-usability` — описание, rename, realtime и `CEO Founder`, выполнено.
+7. `fix/storybook-responsive` — viewport/edge-state fixes.
+8. `refactor/canonical-messaging-contract` — только после client adoption gate.
+9. `feat/observability` — Prometheus/Grafana.
 
 Каждый ordinary PR направляется в `develop` и проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Production получает только стабилизированный `release/*` или hotfix; Windows update публикуется tag workflow по правилам [release-process.md](release-process.md).

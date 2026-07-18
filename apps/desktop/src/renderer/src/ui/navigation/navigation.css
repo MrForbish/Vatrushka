@@ -32,7 +32,7 @@
 .vui-workspace-card__unread,
 .vui-channel-row__unread { width: 7px; height: 7px; border-radius: var(--radius-round); background: var(--color-cyan); }
 
-.vui-server-context { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; border-right: 1px solid var(--color-border-subtle); background: var(--color-surface-0); }
+.vui-server-context { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto auto; border-right: 1px solid var(--color-border-subtle); background: var(--color-surface-0); }
 .vui-server-context__header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 76px; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-subtle); }
 .vui-server-context__header > div { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
 .vui-server-context__header > div > span:last-child { display: grid; min-width: 0; }
@@ -40,6 +40,9 @@
 .vui-server-context__header small { display: flex; align-items: center; gap: var(--space-1); color: var(--color-text-muted); font: var(--text-caption); }
 .vui-server-context__cover { display: grid; flex: 0 0 42px; width: 42px; height: 42px; place-items: center; border-radius: var(--radius-md); background: var(--gradient-brand); color: var(--color-text-on-accent); font: var(--text-heading-sm); }
 .vui-server-context__tools { display: flex; }
+.vui-server-context__about { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: var(--space-2); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-text-secondary); }
+.vui-server-context__about[data-empty='true'] { color: var(--color-text-muted); }
+.vui-server-context__about p { display: -webkit-box; margin: 0; overflow: hidden; font: var(--text-caption); -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow-wrap: anywhere; }
 .vui-server-context__scroll { overflow-y: auto; padding: var(--space-3); }
 .vui-channel-category { margin-bottom: var(--space-5); }
 .vui-channel-category > header { display: flex; align-items: center; justify-content: space-between; min-height: 30px; padding: 0 var(--space-2); color: var(--color-text-muted); font: var(--text-overline); letter-spacing: .08em; text-transform: uppercase; }
@@ -52,9 +55,15 @@
 .vui-channel-row:hover,
 .vui-channel-row[data-active='true'] { background: var(--color-surface-2); }
 .vui-channel-row[data-active='true'] > button:first-child { color: var(--color-text-primary); }
-.vui-channel-row__delete { visibility: hidden; }
-.vui-channel-row:hover .vui-channel-row__delete,
-.vui-channel-row:focus-within .vui-channel-row__delete { visibility: visible; }
+.vui-channel-row__menu-trigger { align-self: center; min-width: 30px; min-height: 28px; padding: 0 var(--space-1); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-muted); font: var(--text-label-md); letter-spacing: 1px; visibility: hidden; }
+.vui-channel-row:hover .vui-channel-row__menu-trigger,
+.vui-channel-row:focus-within .vui-channel-row__menu-trigger { visibility: visible; }
+.vui-channel-row__menu-trigger:hover { background: var(--color-surface-3); color: var(--color-text-primary); }
+.vui-channel-context-menu { position: fixed; z-index: 190; display: grid; width: 208px; gap: var(--space-1); padding: var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-elevated); box-shadow: var(--shadow-modal); }
+.vui-channel-context-menu > strong { overflow: hidden; padding: var(--space-2); color: var(--color-text-muted); font: var(--text-caption); text-overflow: ellipsis; white-space: nowrap; }
+.vui-channel-context-menu > button { display: flex; align-items: center; gap: var(--space-2); min-height: 34px; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); font: var(--text-label-sm); text-align: left; }
+.vui-channel-context-menu > button:hover { background: var(--color-surface-2); color: var(--color-text-primary); }
+.vui-channel-context-menu > .vui-channel-context-menu__danger { color: var(--color-danger); }
 .vui-channel-row__participants { display: grid; grid-column: 1 / -1; gap: 2px; padding: 0 var(--space-2) var(--space-2) 28px; }
 .vui-channel-row__participants > div { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); min-height: 30px; padding: 2px var(--space-2); border-radius: var(--radius-sm); color: var(--color-text-muted); font: var(--text-caption); }
 .vui-channel-row__participants > div[draggable='true'] { cursor: grab; }
@@ -76,7 +85,7 @@
 .vui-profile-dock[data-audio='true'] .vui-profile-dock__audio { grid-area: audio; justify-self: end; }
 .vui-profile-dock[data-audio='true'] .vui-profile-dock__settings { grid-area: settings; }
 .vui-profile-dock[data-audio='true'] .vui-profile-dock__logout { grid-area: logout; }
-.vui-profile-dock[data-founder='true'] { background: var(--gradient-founder); }
+.vui-profile-dock[data-founder='true'] { background: var(--color-surface-1); box-shadow: inset 3px 0 color-mix(in srgb, var(--color-founder), transparent 28%); }
 .vui-profile-dock__copy { display: grid; min-width: 0; }
 .vui-profile-dock__copy strong,
 .vui-profile-dock__copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -107,7 +116,7 @@
 .vui-member-row:hover { background: var(--color-surface-1); }
 .vui-member-row[draggable='true'] { cursor: grab; }
 .vui-member-row[draggable='true']:active { cursor: grabbing; }
-.vui-member-row[data-founder='true'] { border-color: color-mix(in srgb, var(--color-founder), transparent 55%); background: var(--gradient-founder); }
+.vui-member-row[data-founder='true'] { border-color: color-mix(in srgb, var(--color-founder), transparent 68%); background: transparent; box-shadow: inset 2px 0 color-mix(in srgb, var(--color-founder), transparent 32%); }
 .vui-member-row > span:nth-child(2) { display: grid; min-width: 0; }
 .vui-member-row strong,
 .vui-member-row small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

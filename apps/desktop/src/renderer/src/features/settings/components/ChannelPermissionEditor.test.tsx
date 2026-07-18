@@ -9,6 +9,7 @@ import { ChannelPermissionEditor } from './ChannelPermissionEditor';
 const server: ServerDetail = {
   id: 'server-1',
   name: 'Космодром',
+  description: null,
   inviteUrl: 'https://myvatrushka.ru/i/example',
   ownerUserId: 'user-owner',
   memberCount: 2,

@@ -76,6 +76,7 @@ export interface ServerViewProps {
   onMoveVoiceMember?(channelId: string, userId: string): void;
   onCopyInvite(): void | Promise<void>;
   onCreateChannel(name: string, type: 'text' | 'voice'): void;
+  onRenameChannel(channelId: string, name: string): void;
   onDeleteChannel(channelId: string): void;
   onKickMember(userId: string): void;
   onServerName(value: string): void;
@@ -98,6 +99,8 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const [channelFormOpen, setChannelFormOpen] = useState(false);
   const [channelName, setChannelName] = useState('');
   const [channelType, setChannelType] = useState<'text' | 'voice'>('text');
+  const [renamingChannel, setRenamingChannel] = useState<ChannelNavigationItem | null>(null);
+  const [renamedChannelName, setRenamedChannelName] = useState('');
   const [serverCreateOpen, setServerCreateOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteCopyState, setInviteCopyState] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle');
@@ -193,6 +196,13 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     setChannelName('');
     setChannelFormOpen(false);
   };
+  const submitChannelRename = (event: FormEvent): void => {
+    event.preventDefault();
+    if (renamingChannel === null || renamedChannelName.trim() === renamingChannel.name) return;
+    props.onRenameChannel(renamingChannel.id, renamedChannelName.trim());
+    setRenamingChannel(null);
+    setRenamedChannelName('');
+  };
   const submitServerCreate = (event: FormEvent): void => {
     event.preventDefault();
     props.onCreateServer();
@@ -229,6 +239,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       canManageChannels={canManageChannels}
       canManageRoles={canManageRoles}
       connectionPanel={props.voiceConnectionPanel}
+      description={props.server.description}
       name={props.server.name}
       onChannel={props.onChannel}
       onConnectVoice={(channelId) => {
@@ -237,8 +248,9 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       }}
       onCopyInvite={() => { setInviteCopyState('idle'); setInviteOpen(true); }}
       onCreateChannel={openChannelForm}
-      onDeleteChannel={props.onDeleteChannel}
+      onDeleteChannel={(channelId) => { const channel = props.server.channels.find((candidate) => candidate.id === channelId); if (channel && window.confirm(`Удалить канал «${channel.name}»?`)) props.onDeleteChannel(channelId); }}
       onManageRoles={props.onServerSettings}
+      onRenameChannel={(channel) => { setRenamingChannel(channel); setRenamedChannelName(channel.name); }}
       {...(canMoveMembers && props.onMoveVoiceMember !== undefined ? { onMoveMember: props.onMoveVoiceMember } : {})}
       profile={<UserProfileDock {...(props.profileAudio ? { audioControls: props.profileAudio } : {})} email={props.user.email} founder={props.user.platformRole === 'owner'} name={ownMember?.displayName ?? displayName(props.user)} onLogout={props.onLogout} onSecurity={props.onSecurity} onStatus={updateProfileStatus} status={profileStatus} />}
       textChannels={channels.filter((channel) => channel.type === 'text')}
@@ -264,6 +276,13 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
           <SegmentedControl label="Тип канала" onChange={setChannelType} options={[{ value: 'text', label: 'Текстовый' }, { value: 'voice', label: 'Голосовой' }]} value={channelType} />
           <Input autoFocus label="Название" maxLength={50} minLength={1} onChange={(event) => setChannelName(event.target.value)} placeholder={channelType === 'text' ? 'новости' : 'Переговорная'} value={channelName} />
           <div className="vui-server-form__actions"><Button onClick={() => setChannelFormOpen(false)} type="button" variant="quiet">Отмена</Button><Button disabled={channelName.trim().length === 0} loading={props.busy} type="submit">Создать канал</Button></div>
+        </form>
+      </Modal>
+
+      <Modal description="Новое название сразу увидят все участники сервера." onClose={() => { setRenamingChannel(null); setRenamedChannelName(''); }} open={renamingChannel !== null} size="sm" title="Переименовать канал">
+        <form className="vui-server-form" onSubmit={submitChannelRename}>
+          <Input autoFocus label="Название канала" maxLength={50} minLength={1} onChange={(event) => setRenamedChannelName(event.target.value)} value={renamedChannelName} />
+          <div className="vui-server-form__actions"><Button onClick={() => { setRenamingChannel(null); setRenamedChannelName(''); }} type="button" variant="quiet">Отмена</Button><Button disabled={renamedChannelName.trim().length === 0 || renamedChannelName.trim() === renamingChannel?.name} loading={props.busy} type="submit">Сохранить</Button></div>
         </form>
       </Modal>
 

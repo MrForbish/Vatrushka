@@ -3,11 +3,12 @@ import { createHash, createHmac } from 'node:crypto';
 import { AccessToken } from 'livekit-server-sdk';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { API_PREFIX } from '@vatrushka/shared';
+import { API_PREFIX, type RealtimeEvent } from '@vatrushka/shared';
 
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { MAX_ATTACHMENT_BYTES, VatrushkaService } from './service.js';
+import type { RedisRealtimeBus } from './services/realtime.js';
 import { FakeMailer, FakeMediaService, FakeObjectStorage } from './testing/fakes.js';
 import { MemoryStore } from './testing/memory-store.js';
 
@@ -19,6 +20,7 @@ interface TestContext {
   objectStorage: FakeObjectStorage | null;
   clock: { now: Date };
   config: ReturnType<typeof loadConfig>;
+  realtimeEvents: RealtimeEvent[];
 }
 
 let context: TestContext;
@@ -44,9 +46,14 @@ async function makeContext(objectStorage: FakeObjectStorage | null = null): Prom
     LIVEKIT_URL: 'ws://livekit.test',
     LIVEKIT_HTTP_URL: 'http://livekit.test',
   });
-  const service = new VatrushkaService({ config, store, mailer, media, objectStorage, clock: () => clock.now });
+  const realtimeEvents: RealtimeEvent[] = [];
+  const realtimeBus = {
+    publish: async (event: RealtimeEvent) => { realtimeEvents.push(event); return true; },
+    publishPresence: async () => true,
+  } as unknown as RedisRealtimeBus;
+  const service = new VatrushkaService({ config, store, mailer, media, objectStorage, realtimeBus, clock: () => clock.now });
   const app = await buildApp({ config, service, logger: false });
-  return { app, store, mailer, media, objectStorage, clock, config };
+  return { app, store, mailer, media, objectStorage, clock, config, realtimeEvents };
 }
 
 async function login(email = 'anna@example.com', displayName = 'Anna'): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
@@ -492,6 +499,7 @@ describe('servers, channels, messages, and roles API', () => {
     });
     expect(created.statusCode).toBe(201);
     const server = created.json<{ id: string; inviteUrl: string; channels: Array<{ name: string; type: string }>; permissions: string[] }>();
+    expect(created.json()).toHaveProperty('description', null);
     expect(server.inviteUrl).toMatch(/^http:\/\/localhost:3000\/i\/[A-Za-z0-9_-]{8,32}$/u);
     expect(created.json()).not.toHaveProperty('inviteCode');
     const inviteToken = inviteTokenFromUrl(server.inviteUrl);
@@ -517,6 +525,13 @@ describe('servers, channels, messages, and roles API', () => {
     const reopened = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteToken}/accept`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(reopened.statusCode).toBe(200);
     expect(reopened.json<{ memberCount: number }>().memberCount).toBe(2);
+    const addedChannel = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/${server.id}/channels`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'релизы', type: 'text' } });
+    expect(addedChannel.statusCode).toBe(201);
+    expect(context.realtimeEvents).toContainEqual(expect.objectContaining({
+      type: 'server.channel.updated',
+      targetUserIds: expect.arrayContaining([owner.userId, member.userId]),
+      payload: expect.objectContaining({ serverId: server.id, channelId: addedChannel.json<{ id: string }>().id, action: 'created' }),
+    }));
     const retiredCodeJoin = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/join`, headers: { authorization: `Bearer ${member.accessToken}` }, payload: { inviteCode: inviteToken } });
     expect(retiredCodeJoin.statusCode).toBe(404);
 
