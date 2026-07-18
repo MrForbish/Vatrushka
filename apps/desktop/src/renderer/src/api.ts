@@ -6,6 +6,17 @@ import {
   type DirectConversationSummary,
   type DirectMessage,
   type DirectMessageCandidate,
+  type ConversationMessage,
+  type ConversationMessagePage,
+  type ConversationMentionType,
+  type ConversationReadState,
+  type ConversationMemberReadState,
+  type ConversationSummary,
+  type InternalNotification,
+  type UserUnreadSummary,
+  type UserNotificationPreferences,
+  type ServerNotificationPreferences,
+  type ConversationNotificationPreferences,
   type HomeDashboardResponse,
   type PasswordLoginChallenge,
   type PublicUser,
@@ -16,6 +27,16 @@ import {
   type ServerPermission,
   type ServerRole,
   type ServerSummary,
+  type CreatedServerInvite,
+  type ServerAppearanceSettings,
+  type ServerAuditLogPage,
+  type ServerBanSettings,
+  type ServerChannelCategory,
+  type ServerChannelSettings,
+  type ServerInviteSettings,
+  type ServerModerationSettings,
+  type ServerOverviewSettings,
+  type ServerSettingsMember,
   type TextMessage,
   type MessageNotificationPage,
   type MessageMentionInput,
@@ -28,9 +49,13 @@ import {
   type PresencePreference,
   type DirectMessagePrivacy,
   type PresenceVisibility,
+  type BlockedUserSettings,
+  type UserAccountSettings,
+  type UserProfileSettings,
 } from '@vatrushka/shared';
 
 const apiBase = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '')}${API_PREFIX}`;
+const realtimeUrl = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? 'http://localhost:3000').replace(/\/$/u, '').replace(/^http/u, 'ws')}/ws`;
 
 export class ClientError extends Error {
   constructor(
@@ -59,6 +84,12 @@ export class ApiClient {
 
   currentUser(): PublicUser | null {
     return this.user;
+  }
+
+  async realtimeCredentials(forceRefresh = false): Promise<{ token: string; url: string }> {
+    if (forceRefresh || !this.accessToken) await this.refresh();
+    if (!this.accessToken) throw new ClientError('UNAUTHORIZED', 'Сессия не найдена', 401);
+    return { token: this.accessToken, url: realtimeUrl };
   }
 
   async restoreSession(): Promise<PublicUser | null> {
@@ -203,6 +234,171 @@ export class ApiClient {
     return this.request(`/servers/${serverId}`, { auth: true });
   }
 
+  getUserProfileSettings(): Promise<UserProfileSettings> {
+    return this.request('/users/me/profile', { auth: true });
+  }
+
+  updateUserProfileSettings(input: Pick<UserProfileSettings, 'displayName' | 'username' | 'bio'>): Promise<UserProfileSettings> {
+    return this.request('/users/me/profile', { method: 'PATCH', body: input, auth: true });
+  }
+
+  async uploadUserAvatar(file: File): Promise<UserProfileSettings> {
+    const intent = await this.request<{ objectKey: string; uploadUrl: string; headers: Record<string, string> }>('/users/me/avatar/upload-intent', { method: 'POST', body: { mimeType: file.type, sizeBytes: file.size }, auth: true });
+    const response = await fetch(intent.uploadUrl, { method: 'PUT', headers: intent.headers, body: file });
+    if (!response.ok) throw new ClientError('MEDIA_UPLOAD_FAILED', 'Не удалось загрузить аватар', response.status);
+    return this.request('/users/me/avatar', { method: 'PUT', body: { objectKey: intent.objectKey }, auth: true });
+  }
+
+  resetUserAvatar(): Promise<UserProfileSettings> {
+    return this.request('/users/me/avatar', { method: 'PUT', body: { objectKey: null }, auth: true });
+  }
+
+  requestEmailChange(input: { email: string; password: string; totpCode: string | null }): Promise<{ status: 'CODE_SENT'; retryAfterSeconds: number }> {
+    return this.request('/users/me/email-change/request', { method: 'POST', body: input, auth: true });
+  }
+
+  async confirmEmailChange(code: string): Promise<PublicUser> {
+    const user = await this.request<PublicUser>('/users/me/email-change/confirm', { method: 'POST', body: { code }, auth: true });
+    this.user = user;
+    return user;
+  }
+
+  listBlockedUsers(): Promise<BlockedUserSettings[]> {
+    return this.request('/users/me/blocked-users', { auth: true });
+  }
+
+  async blockUser(userId: string): Promise<void> {
+    await this.request(`/users/me/blocked-users/${userId}`, { method: 'PUT', auth: true });
+  }
+
+  async unblockUser(userId: string): Promise<void> {
+    await this.request(`/users/me/blocked-users/${userId}`, { method: 'DELETE', auth: true });
+  }
+
+  getUserAccountSettings(): Promise<UserAccountSettings> {
+    return this.request('/users/me/account', { auth: true });
+  }
+
+  scheduleAccountDeactivation(reauthentication: { password: string; totpCode: string | null }): Promise<UserAccountSettings> {
+    return this.request('/users/me/deactivation', { method: 'POST', body: reauthentication, auth: true });
+  }
+
+  cancelAccountDeactivation(): Promise<UserAccountSettings> {
+    return this.request('/users/me/deactivation', { method: 'DELETE', auth: true });
+  }
+
+  exportPersonalData(): Promise<Record<string, unknown>> {
+    return this.request('/users/me/export', { auth: true });
+  }
+
+  getServerOverviewSettings(serverId: string): Promise<ServerOverviewSettings> {
+    return this.request(`/servers/${serverId}/settings/overview`, { auth: true });
+  }
+
+  updateServerOverviewSettings(serverId: string, input: Omit<ServerOverviewSettings, 'id' | 'ownerUserId' | 'ownerDisplayName' | 'updatedAt'>): Promise<ServerOverviewSettings> {
+    return this.request(`/servers/${serverId}/settings/overview`, { method: 'PUT', body: input, auth: true });
+  }
+
+  getServerAppearanceSettings(serverId: string): Promise<ServerAppearanceSettings> {
+    return this.request(`/servers/${serverId}/settings/appearance`, { auth: true });
+  }
+
+  async uploadServerAppearance(serverId: string, kind: 'icon' | 'banner', file: File): Promise<string> {
+    const intent = await this.request<{ objectKey: string; uploadUrl: string; headers: Record<string, string> }>(`/servers/${serverId}/settings/appearance/upload-intent`, { method: 'POST', body: { kind, mimeType: file.type, sizeBytes: file.size }, auth: true });
+    const response = await fetch(intent.uploadUrl, { method: 'PUT', headers: intent.headers, body: file });
+    if (!response.ok) throw new ClientError('MEDIA_UPLOAD_FAILED', 'Не удалось загрузить изображение', response.status);
+    return intent.objectKey;
+  }
+
+  updateServerAppearanceSettings(serverId: string, input: { iconObjectKey?: string | null; bannerObjectKey?: string | null; accentColor: string | null; version: number }): Promise<ServerAppearanceSettings> {
+    return this.request(`/servers/${serverId}/settings/appearance`, { method: 'PUT', body: input, auth: true });
+  }
+
+  listServerSettingsMembers(serverId: string, search = ''): Promise<ServerSettingsMember[]> {
+    const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : '';
+    return this.request(`/servers/${serverId}/settings/members${query}`, { auth: true });
+  }
+
+  async updateServerSettingsMember(serverId: string, userId: string, input: { nickname?: string | null; mutedUntil?: string | null; deafened?: boolean }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/members/${userId}`, { method: 'PATCH', body: input, auth: true });
+  }
+
+  getServerChannelSettings(serverId: string): Promise<{ categories: ServerChannelCategory[]; channels: ServerChannelSettings[] }> {
+    return this.request(`/servers/${serverId}/settings/channels`, { auth: true });
+  }
+
+  createServerCategory(serverId: string, name: string, position?: number): Promise<ServerChannelCategory> {
+    return this.request(`/servers/${serverId}/settings/categories`, { method: 'POST', body: { name, ...(position === undefined ? {} : { position }) }, auth: true });
+  }
+
+  async updateServerCategory(serverId: string, categoryId: string, input: { name?: string; position?: number }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/categories/${categoryId}`, { method: 'PATCH', body: input, auth: true });
+  }
+
+  async deleteServerCategory(serverId: string, categoryId: string): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/categories/${categoryId}`, { method: 'DELETE', auth: true });
+  }
+
+  async updateServerChannelSettings(serverId: string, channelId: string, input: Partial<Omit<ServerChannelSettings, 'id' | 'type' | 'archivedAt'>> & { archived?: boolean; version: number }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/channels/${channelId}`, { method: 'PATCH', body: input, auth: true });
+  }
+
+  listServerInvites(serverId: string): Promise<ServerInviteSettings[]> {
+    return this.request(`/servers/${serverId}/settings/invites`, { auth: true });
+  }
+
+  createServerInvite(serverId: string, input: { destinationChannelId: string | null; expiresInSeconds: number | null; maxUses: number | null }): Promise<CreatedServerInvite> {
+    return this.request(`/servers/${serverId}/settings/invites`, { method: 'POST', body: input, auth: true });
+  }
+
+  async revokeServerInvite(serverId: string, inviteId: string): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/invites/${inviteId}`, { method: 'DELETE', auth: true });
+  }
+
+  getServerModerationSettings(serverId: string): Promise<ServerModerationSettings> {
+    return this.request(`/servers/${serverId}/settings/moderation`, { auth: true });
+  }
+
+  updateServerModerationSettings(serverId: string, input: ServerModerationSettings): Promise<ServerModerationSettings> {
+    return this.request(`/servers/${serverId}/settings/moderation`, { method: 'PUT', body: input, auth: true });
+  }
+
+  listServerBans(serverId: string): Promise<ServerBanSettings[]> {
+    return this.request(`/servers/${serverId}/settings/bans`, { auth: true });
+  }
+
+  async banServerMember(serverId: string, userId: string, reason: string): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/bans/${userId}`, { method: 'POST', body: { reason }, auth: true });
+  }
+
+  async unbanServerMember(serverId: string, userId: string): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/bans/${userId}`, { method: 'DELETE', auth: true });
+  }
+
+  listServerSettingsAudit(serverId: string, options: { before?: string; action?: string; actorUserId?: string; limit?: number } = {}): Promise<ServerAuditLogPage> {
+    const query = new URLSearchParams({ limit: String(options.limit ?? 50) });
+    if (options.before) query.set('before', options.before);
+    if (options.action) query.set('action', options.action);
+    if (options.actorUserId) query.set('actorUserId', options.actorUserId);
+    return this.request(`/servers/${serverId}/settings/audit-log?${query.toString()}`, { auth: true });
+  }
+
+  revokeAllServerInvites(serverId: string, reauthentication: { password: string; totpCode: string | null }): Promise<{ revoked: number }> {
+    return this.request(`/servers/${serverId}/settings/revoke-invites`, { method: 'POST', body: reauthentication, auth: true });
+  }
+
+  async archiveServer(serverId: string, archived: boolean, reauthentication: { password: string; totpCode: string | null }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/archive`, { method: 'POST', body: { archived, ...reauthentication }, auth: true });
+  }
+
+  async transferServerOwnership(serverId: string, userId: string, reauthentication: { password: string; totpCode: string | null }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings/transfer-ownership`, { method: 'POST', body: { userId, ...reauthentication }, auth: true });
+  }
+
+  async deleteServerPermanently(serverId: string, confirmation: string, reauthentication: { password: string; totpCode: string | null }): Promise<void> {
+    await this.request(`/servers/${serverId}/settings`, { method: 'DELETE', body: { confirmation, ...reauthentication }, auth: true });
+  }
+
   createServerChannel(serverId: string, name: string, type: 'text' | 'voice'): Promise<ServerChannel> {
     return this.request(`/servers/${serverId}/channels`, { method: 'POST', body: { name, type }, auth: true });
   }
@@ -249,6 +445,113 @@ export class ApiClient {
 
   pollVoiceMoveRequest(): Promise<RoomConnection | null> {
     return this.request('/voice/move-request', { auth: true });
+  }
+
+  listConversations(): Promise<ConversationSummary[]> {
+    return this.request('/conversations', { auth: true });
+  }
+
+  listConversationMessages(conversationId: string, options: { before?: string; after?: string; limit?: number } = {}): Promise<ConversationMessagePage> {
+    const query = new URLSearchParams();
+    if (options.before) query.set('before', options.before);
+    if (options.after) query.set('after', options.after);
+    query.set('limit', String(options.limit ?? 100));
+    return this.request(`/conversations/${conversationId}/messages?${query.toString()}`, { auth: true });
+  }
+
+  createConversationMessage(conversationId: string, input: { clientMessageId: string; content: string; replyToMessageId?: string; attachmentIds?: string[]; mentions?: Array<{ type: ConversationMentionType; userId?: string; roleId?: string; start?: number; length?: number }> }): Promise<ConversationMessage> {
+    return this.request(`/conversations/${conversationId}/messages`, { method: 'POST', body: input, auth: true });
+  }
+
+  updateConversationMessage(conversationId: string, messageId: string, content: string, mentions: Array<{ type: ConversationMentionType; userId?: string; roleId?: string; start?: number; length?: number }> = []): Promise<ConversationMessage> {
+    return this.request(`/conversations/${conversationId}/messages/${messageId}`, { method: 'PATCH', body: { content, mentions }, auth: true });
+  }
+
+  async deleteConversationMessage(conversationId: string, messageId: string): Promise<void> {
+    await this.request(`/conversations/${conversationId}/messages/${messageId}`, { method: 'DELETE', auth: true });
+  }
+
+  setConversationReaction(conversationId: string, messageId: string, emoji: string, active: boolean): Promise<ConversationMessage> {
+    return this.request(`/conversations/${conversationId}/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: active ? 'PUT' : 'DELETE', auth: true });
+  }
+
+  updateConversationReadState(conversationId: string, input: { lastDeliveredMessageId?: string; lastReadMessageId?: string }): Promise<ConversationReadState> {
+    return this.request(`/conversations/${conversationId}/read-state`, { method: 'PUT', body: input, auth: true });
+  }
+
+  listConversationReadStates(conversationId: string): Promise<ConversationMemberReadState[]> {
+    return this.request(`/conversations/${conversationId}/read-states`, { auth: true });
+  }
+
+  getUnreadSummary(): Promise<UserUnreadSummary> {
+    return this.request('/me/unread', { auth: true });
+  }
+
+  getNotificationPreferences(): Promise<UserNotificationPreferences> {
+    return this.request('/me/notification-preferences', { auth: true });
+  }
+
+  updateNotificationPreferences(input: Omit<UserNotificationPreferences, 'updatedAt'>): Promise<UserNotificationPreferences> {
+    return this.request('/me/notification-preferences', { method: 'PUT', body: input, auth: true });
+  }
+
+  getServerNotificationPreferences(serverId: string): Promise<ServerNotificationPreferences> {
+    return this.request(`/servers/${serverId}/notification-preferences`, { auth: true });
+  }
+
+  updateServerNotificationPreferences(serverId: string, input: Omit<ServerNotificationPreferences, 'serverId' | 'updatedAt'>): Promise<ServerNotificationPreferences> {
+    return this.request(`/servers/${serverId}/notification-preferences`, { method: 'PUT', body: input, auth: true });
+  }
+
+  getConversationNotificationPreferences(conversationId: string): Promise<ConversationNotificationPreferences> {
+    return this.request(`/conversations/${conversationId}/notification-preferences`, { auth: true });
+  }
+
+  updateConversationNotificationPreferences(conversationId: string, input: Omit<ConversationNotificationPreferences, 'conversationId' | 'updatedAt'>): Promise<ConversationNotificationPreferences> {
+    return this.request(`/conversations/${conversationId}/notification-preferences`, { method: 'PUT', body: input, auth: true });
+  }
+
+  listNotifications(before?: string, unreadOnly = false): Promise<InternalNotification[]> {
+    const query = new URLSearchParams({ limit: '100', unreadOnly: String(unreadOnly) });
+    if (before) query.set('before', before);
+    return this.request(`/notifications?${query.toString()}`, { auth: true });
+  }
+
+  async markNotificationRead(notificationId: string): Promise<void> {
+    await this.request(`/notifications/${notificationId}/read`, { method: 'PATCH', auth: true });
+  }
+
+  async dismissNotification(notificationId: string): Promise<void> {
+    await this.request(`/notifications/${notificationId}/dismiss`, { method: 'PATCH', auth: true });
+  }
+
+  markAllNotificationsRead(): Promise<{ updated: number }> {
+    return this.request('/notifications/read-all', { method: 'POST', auth: true });
+  }
+
+  async uploadConversationAttachment(file: File): Promise<string> {
+    const intent = await this.request<{ attachmentId: string; uploadUrl: string; headers: Record<string, string>; expiresAt: string }>('/attachments/intents', {
+      method: 'POST',
+      body: { fileName: file.name, mimeType: file.type || 'application/octet-stream', sizeBytes: file.size },
+      auth: true,
+    });
+    const headers = new Headers();
+    for (const [name, value] of Object.entries(intent.headers)) if (name.toLowerCase() !== 'content-length') headers.set(name, value);
+    const uploaded = await fetch(intent.uploadUrl, { method: 'PUT', headers, body: file });
+    if (!uploaded.ok) throw new ClientError('MEDIA_UPLOAD_FAILED', 'Не удалось загрузить вложение', uploaded.status);
+    await this.request(`/attachments/${intent.attachmentId}/finalize`, { method: 'POST', auth: true });
+    return intent.attachmentId;
+  }
+
+  async downloadConversationAttachment(attachmentId: string): Promise<Blob> {
+    const target = await this.request<{ url: string; expiresAt: string }>(`/attachments/${attachmentId}/url`, { auth: true });
+    const response = await fetch(target.url);
+    if (!response.ok) throw new ClientError('MEDIA_DOWNLOAD_FAILED', 'Не удалось скачать вложение', response.status);
+    return response.blob();
+  }
+
+  deleteConversationAttachment(attachmentId: string): Promise<ConversationMessage> {
+    return this.request(`/conversation-attachments/${attachmentId}`, { method: 'DELETE', auth: true });
   }
 
   listMessages(channelId: string): Promise<TextMessage[]> {

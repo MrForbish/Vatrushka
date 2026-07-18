@@ -15,12 +15,20 @@ export interface PermissionGroup {
 const definitions: Record<ServerPermission, Omit<PermissionDefinition, 'permission'>> = {
   ADMINISTRATOR: { label: 'Администратор', description: 'Даёт все права и обходит ограничения каналов.' },
   VIEW_SERVER: { label: 'Видеть сервер', description: 'Открывать сервер и видеть его доступные разделы.' },
+  VIEW_SERVER_SETTINGS: { label: 'Видеть настройки сервера', description: 'Открывать доступные разделы настроек сервера.' },
   MANAGE_SERVER: { label: 'Управлять сервером', description: 'Менять название и основные настройки сервера.' },
+  MANAGE_APPEARANCE: { label: 'Управлять оформлением', description: 'Менять значок, обложку и акцентный цвет сервера.' },
+  MANAGE_MEMBERS: { label: 'Управлять участниками', description: 'Менять роли, имена и состояние участников с учётом иерархии.' },
   MANAGE_CHANNELS: { label: 'Управлять каналами', description: 'Создавать, изменять и удалять каналы.' },
   MANAGE_ROLES: { label: 'Управлять ролями', description: 'Настраивать роли ниже своей и права каналов.' },
   MANAGE_INVITES: { label: 'Управлять приглашениями', description: 'Создавать и отзывать приглашения.' },
   MANAGE_INTEGRATIONS: { label: 'Управлять интеграциями', description: 'Подключать внешние сервисы и автоматизацию.' },
   VIEW_AUDIT_LOG: { label: 'Просматривать аудит', description: 'Видеть журнал административных действий.' },
+  EXPORT_AUDIT_LOG: { label: 'Экспортировать аудит', description: 'Выгружать разрешённые записи журнала аудита.' },
+  MANAGE_MODERATION: { label: 'Управлять модерацией', description: 'Настраивать правила, ограничения и список блокировок.' },
+  MANAGE_BACKUPS: { label: 'Управлять резервными копиями', description: 'Запускать и восстанавливать доступные резервные копии.' },
+  TRANSFER_OWNERSHIP: { label: 'Передавать владение', description: 'Передавать сервер другому участнику после подтверждения.' },
+  DELETE_SERVER: { label: 'Удалять сервер', description: 'Безвозвратно удалять сервер после повторной проверки личности.' },
   MANAGE_SERVER_SECURITY: { label: 'Управлять безопасностью', description: 'Менять требования безопасности сервера.' },
   KICK_MEMBERS: { label: 'Исключать участников', description: 'Удалять участников с сервера.' },
   BAN_MEMBERS: { label: 'Блокировать участников', description: 'Запрещать повторное присоединение.' },
@@ -60,11 +68,11 @@ function group(id: string, label: string, permissions: ServerPermission[]): Perm
 }
 
 export const permissionGroups: PermissionGroup[] = [
-  group('general', 'Сервер', ['ADMINISTRATOR', 'VIEW_SERVER', 'MANAGE_SERVER', 'MANAGE_CHANNELS', 'MANAGE_ROLES', 'MANAGE_INVITES', 'MANAGE_INTEGRATIONS', 'VIEW_AUDIT_LOG', 'MANAGE_SERVER_SECURITY']),
-  group('moderation', 'Модерация', ['KICK_MEMBERS', 'BAN_MEMBERS', 'TIMEOUT_MEMBERS', 'MANAGE_NICKNAMES', 'VIEW_MODERATION_NOTES', 'MANAGE_REPORTS']),
+  group('general', 'Сервер', ['ADMINISTRATOR', 'VIEW_SERVER', 'VIEW_SERVER_SETTINGS', 'MANAGE_SERVER', 'MANAGE_APPEARANCE', 'MANAGE_MEMBERS', 'MANAGE_CHANNELS', 'MANAGE_ROLES', 'MANAGE_INVITES', 'MANAGE_INTEGRATIONS', 'VIEW_AUDIT_LOG', 'EXPORT_AUDIT_LOG']),
+  group('moderation', 'Модерация', ['MANAGE_MODERATION', 'KICK_MEMBERS', 'BAN_MEMBERS', 'TIMEOUT_MEMBERS', 'MANAGE_NICKNAMES', 'VIEW_MODERATION_NOTES', 'MANAGE_REPORTS']),
   group('text', 'Текстовые каналы', ['VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'SEND_ATTACHMENTS', 'ADD_REACTIONS', 'EMBED_LINKS', 'MENTION_EVERYONE', 'MANAGE_OWN_MESSAGES', 'MANAGE_MESSAGES', 'PIN_MESSAGES', 'CREATE_THREADS']),
   group('voice', 'Голос и демонстрация', ['CONNECT_VOICE', 'SPEAK', 'STREAM_SCREEN', 'STREAM_APPLICATION_AUDIO', 'USE_PRIORITY_VOICE', 'MUTE_MEMBERS', 'DEAFEN_MEMBERS', 'MOVE_MEMBERS', 'STOP_OTHERS_STREAM', 'CREATE_TEMPORARY_VOICE']),
-  group('security', 'Безопасность и данные', ['MANAGE_2FA_POLICY', 'MANAGE_SESSIONS', 'VIEW_TECHNICAL_LOGS', 'EXPORT_SERVER_DATA']),
+  group('security', 'Безопасность и данные', ['MANAGE_SERVER_SECURITY', 'MANAGE_2FA_POLICY', 'MANAGE_SESSIONS', 'VIEW_TECHNICAL_LOGS', 'EXPORT_SERVER_DATA', 'MANAGE_BACKUPS', 'TRANSFER_OWNERSHIP', 'DELETE_SERVER']),
 ];
 
 export const channelPermissionGroups = permissionGroups.filter((candidate) => candidate.id === 'text' || candidate.id === 'voice');

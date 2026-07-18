@@ -33,26 +33,26 @@ Phase 1 — repo audit и фиксация контрактов — заверш
 
 Phase 2 — общий `SettingsShell`, типизированные routes, staged feature flags, Storybook и Electron navigation tests — завершена. Старые модалки сохранены как production fallback до полного parity.
 
-Phase 3 выполняется вертикальными срезами без подмены API: существующие уведомления, пароль/2FA, резервные коды, сессии, security activity, редактирование отображаемого имени и реальные локальные аудиоустройства перенесены в routed user settings. Presence и privacy также подключены к реальному API: Redis агрегирует multi-session heartbeat, PostgreSQL хранит пользовательские предпочтения, invisible закрывается в offline, а DND подавляет доставку без потери unread. Аватар/username/bio не имитируются до появления backend-контрактов.
+Phase 3 завершена вертикальными срезами без UI-заглушек. Routed user settings подключены к реальным API для профиля, avatar, уникального username, bio, presence/privacy, уведомлений, пароля/2FA/recovery, сессий, security activity, смены email, блокировок, экспорта и 14-дневной деактивации. Routed server settings функционально покрывают overview, appearance, members, roles/permissions, categories/channels, invites, moderation, audit и danger zone.
 
-Этап mentions завершён как полный polling-compatible срез: `@` autocomplete работает с клавиатурой и мышью, API хранит stable user entities с Unicode code-point offsets, проверяет membership/channel access и ограничивает 10 unique recipients. Rename-safe rendering, repeated mentions, atomic edit replacement, mention activity и отдельные channel counters подключены к PostgreSQL. Authenticated WebSocket остаётся следующим transport-этапом; до него новые messages доставляются существующим polling reconciliation.
+Messaging transport завершён: `@` autocomplete поддерживает пользователей, роли и `@everyone`; API хранит stable Unicode entities, проверяет membership/permissions и server moderation limit. Canonical PostgreSQL messages доставляются через transactional outbox → Redis Pub/Sub → authenticated WebSocket, а HTTP polling остаётся редким reconciliation после reconnect. Реализованы ЛС, read receipts, cursor history, optimistic retry, tombstones, notification center, DND/mute/quiet hours и durable S3 cleanup.
 
 ## Следующие итерации
 
 ### P0 — эксплуатационная готовность
 
 1. Восстановление забытого пароля через отдельный ограниченный email-flow.
-2. Authenticated WebSocket event gateway для `mention.created`/`mention.read` и presence/typing; polling остаётся reconciliation до production stability.
-3. Code signing автообновляемого Windows-клиента и отдельные release channels stable/beta.
-4. Нагрузочные тесты PostgreSQL/LiveKit и метрики Prometheus/Grafana.
+2. Code signing автообновляемого Windows-клиента и отдельные release channels stable/beta.
+3. Подключение `/metrics` к Prometheus/Grafana и production alerts для outbox/Redis/WebSocket.
+4. Нагрузочные тесты PostgreSQL, Redis, LiveKit и S3.
 
 ### P1 — полноценное сообщество
 
 1. Приватные категории и drag-and-drop порядка каналов.
 2. Временные/постоянные invite links, kick/ban list и заявки на вступление.
-3. Поиск, закреплённые сообщения, треды и массовые упоминания.
-4. Presence/typing через WebSocket вместо трёхсекундного polling.
-5. Антивирусная проверка S3-вложений, квоты и lifecycle/garbage collection.
+3. Поиск, закреплённые сообщения и треды.
+4. Group DM UI (schema остаётся выключенной feature flag до отдельного UX-среза).
+5. Антивирусная проверка S3-вложений и per-user/server storage quotas; lifecycle/garbage collection уже автоматизирован.
 
 ### P2 — медиа и платформы
 
@@ -63,6 +63,6 @@ Phase 3 выполняется вертикальными срезами без 
 
 ## Осознанные ограничения текущей версии
 
-- сообщения обновляются polling каждые три секунды;
-- есть kick участника, но ещё нет ban list;
+- WebSocket является основным realtime-транспортом, но клиент намеренно сохраняет 30-секундный HTTP reconciliation;
+- server settings имеют kick и ban list; заявки на вступление ещё не реализованы;
 - installer пока не подписан; auto-update работает только в установленной NSIS-версии, а portable build обновляется вручную.

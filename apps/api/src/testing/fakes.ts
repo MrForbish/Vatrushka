@@ -25,6 +25,20 @@ export class FakeObjectStorage implements ObjectStorage {
     this.objects.delete(key);
   }
 
+  createPutUrl(key: string): Promise<string> {
+    return Promise.resolve(`https://storage.test/put/${encodeURIComponent(key)}`);
+  }
+
+  createGetUrl(key: string): Promise<string> {
+    return Promise.resolve(`https://storage.test/get/${encodeURIComponent(key)}`);
+  }
+
+  headObject(key: string): Promise<{ size: number; mimeType: string | null }> {
+    const object = this.objects.get(key);
+    if (!object) return Promise.reject(new Error('Object not found'));
+    return Promise.resolve({ size: object.content.length, mimeType: object.mimeType });
+  }
+
   close(): void {}
 }
 

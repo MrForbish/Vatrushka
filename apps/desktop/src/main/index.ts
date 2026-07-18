@@ -5,8 +5,11 @@ import {
   app,
   BrowserWindow,
   desktopCapturer,
+  Menu,
+  nativeImage,
   Notification,
   session,
+  Tray,
   type IpcMainInvokeEvent,
 } from 'electron';
 import log from 'electron-log/main';
@@ -28,6 +31,8 @@ let pendingDeepLink = findDeepLink(process.argv, APP_PROTOCOL);
 let selectedSource: { sourceId: string; includeAudio: boolean } | null = null;
 let removeIpcHandlers: (() => void) | null = null;
 let desktopUpdater: DesktopUpdater | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
 const activeNotifications = new Set<Notification>();
 
 function isTrustedUrl(value: string): boolean {
@@ -83,7 +88,11 @@ function showMessageNotification(message: DesktopMessageNotification): void {
     if (mainWindow?.isMinimized()) mainWindow.restore();
     mainWindow?.show();
     mainWindow?.focus();
-    mainWindow?.webContents.send(IPC_CHANNELS.notificationClick, { serverId: message.serverId, channelId: message.channelId });
+    mainWindow?.webContents.send(IPC_CHANNELS.notificationClick, {
+      ...(message.serverId && message.channelId ? { serverId: message.serverId, channelId: message.channelId } : {}),
+      ...(message.conversationId ? { conversationId: message.conversationId } : {}),
+      ...(message.messageId ? { messageId: message.messageId } : {}),
+    });
     release();
   });
   notification.once('close', release);
@@ -97,6 +106,30 @@ function registerProtocol(): void {
   } else {
     app.setAsDefaultProtocolClient(APP_PROTOCOL);
   }
+}
+
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    void createWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function createTray(): void {
+  if (tray) return;
+  const iconPath = app.isPackaged ? join(process.resourcesPath, 'icon.png') : join(app.getAppPath(), 'build', 'icon.png');
+  const icon = nativeImage.createFromPath(iconPath);
+  tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon.resize({ width: 20, height: 20 }));
+  tray.setToolTip(APP_NAME);
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Открыть Ватрушку', click: showMainWindow },
+    { type: 'separator' },
+    { label: 'Выйти', click: () => { isQuitting = true; app.quit(); } },
+  ]));
+  tray.on('click', showMainWindow);
 }
 
 function configureSession(): void {
@@ -210,6 +243,11 @@ async function createWindow(): Promise<void> {
   };
   mainWindow.on('resize', scheduleBoundsSave);
   mainWindow.on('move', scheduleBoundsSave);
+  mainWindow.on('close', (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    mainWindow?.hide();
+  });
   mainWindow.on('closed', () => {
     if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
     mainWindow = null;
@@ -246,6 +284,7 @@ if (!hasLock) {
     await configureLogging();
     log.info('Application started', { version: app.getVersion(), platform: process.platform });
     configureSession();
+    createTray();
     desktopUpdater = new DesktopUpdater((state) => {
       if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isLoading()) return;
       mainWindow.webContents.send(IPC_CHANNELS.updateState, state);
@@ -257,6 +296,10 @@ if (!hasLock) {
         selectedSource = selection;
       },
       showMessageNotification,
+      setBadgeCount(count) {
+        app.setBadgeCount(count);
+        tray?.setToolTip(count > 0 ? `${APP_NAME} · непрочитанных: ${count}` : APP_NAME);
+      },
       updater: desktopUpdater,
     });
     await createWindow();
@@ -264,8 +307,9 @@ if (!hasLock) {
   });
 }
 
-app.on('window-all-closed', () => app.quit());
+app.on('activate', showMainWindow);
 app.on('before-quit', () => {
+  isQuitting = true;
   selectedSource = null;
   for (const notification of activeNotifications) notification.close();
   activeNotifications.clear();
@@ -273,4 +317,6 @@ app.on('before-quit', () => {
   removeIpcHandlers = null;
   desktopUpdater?.dispose();
   desktopUpdater = null;
+  tray?.destroy();
+  tray = null;
 });

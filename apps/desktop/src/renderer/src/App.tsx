@@ -4,7 +4,7 @@ import { ConnectionState } from 'livekit-client';
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { channelNameSchema, codePointLength, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type LocalSettings, type MessageMentionInput, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type UserPresence } from '@vatrushka/shared';
+import { channelNameSchema, codePointLength, displayNameSchema, inviteTokenSchema, messageContentSchema, passwordSchema, roleNameSchema, serverNameSchema, type ConversationMemberReadState, type ConversationMentionDraft, type ConversationMessage, type ConversationSummary, type DesktopSourceInfo, type DesktopUpdateState, type DirectConversationSummary, type DirectMessage, type DirectMessageCandidate, type HomeDestination, type InternalNotification, type LocalSettings, type MessageDeliveryState, type PermissionOverwriteTargetType, type PublicUser, type RoomConnection, type ServerAuditLogEntry, type ServerDetail, type ServerPermission, type ServerSummary, type TextMessage, type UserNotificationPreferences, type UserPresence, type UserUnreadSummary } from '@vatrushka/shared';
 
 import { apiClient, ClientError } from './api.js';
 import { parseSettingsRoute, serverSettingsPath, userSettingsPath, type ServerSettingsSection } from './app/routes';
@@ -13,19 +13,111 @@ import { AuthPanel, ProfilePanel } from './components.js';
 import { featureFlags } from './config/feature-flags';
 import { DirectMessagesView } from './features/direct-messages/index.js';
 import { HomePage, homeDashboardQueryKey, useHomeDashboard } from './features/home/index.js';
+import { NotificationCenter } from './features/notifications/NotificationCenter.js';
 import { SourcePicker } from './features/screen-share/index.js';
 import { SecurityCenter } from './features/security/index.js';
 import { ServerView } from './features/servers/index.js';
 import { UpdateStatus } from './features/update/index.js';
 import { diffRemoteParticipants, RoomView, VoiceConnectionPanel, VoiceCuePlayer, type VoiceCue } from './features/voice/index.js';
 import { MediaSession } from './media.js';
+import { RealtimeClient } from './realtime.js';
 
 type Screen = 'boot' | 'auth' | 'profile' | 'home' | 'server' | 'direct';
 const media = new MediaSession(apiClient);
+const realtime = new RealtimeClient((forceRefresh) => apiClient.realtimeCredentials(forceRefresh));
 const SettingsRoutePage = lazy(async () => {
   const module = await import('./app/routes/SettingsRoutePage');
   return { default: module.SettingsRoutePage };
 });
+
+function toTextMessage(message: ConversationMessage, server: ServerDetail, user: PublicUser): TextMessage {
+  const author = server.members.find((member) => member.userId === message.author.id);
+  return {
+    id: message.id,
+    channelId: message.conversationId,
+    authorUserId: message.author.id,
+    authorDisplayName: message.author.displayName,
+    authorPlatformRole: author?.platformRole ?? (message.author.id === user.id ? user.platformRole : 'member'),
+    content: message.content,
+    mentions: message.mentions.flatMap((mention) => mention.type === 'user' && mention.userId && mention.start !== null && mention.length !== null ? [{ userId: mention.userId, start: mention.start, length: mention.length, displayName: server.members.find((member) => member.userId === mention.userId)?.displayName ?? 'Участник' }] : []),
+    conversationMentions: message.mentions.flatMap((mention): ConversationMentionDraft[] => {
+      if (mention.start === null || mention.length === null) return [];
+      if (mention.type === 'user' && mention.userId) return [{ type: 'user', userId: mention.userId, start: mention.start, length: mention.length, displayName: server.members.find((member) => member.userId === mention.userId)?.displayName ?? 'Участник' }];
+      if (mention.type === 'role' && mention.roleId) return [{ type: 'role', roleId: mention.roleId, start: mention.start, length: mention.length, displayName: server.roles.find((role) => role.id === mention.roleId)?.name.replace(/^@/u, '') ?? 'роль' }];
+      if (mention.type === 'everyone') return [{ type: 'everyone', start: mention.start, length: mention.length, displayName: 'everyone' }];
+      return [];
+    }),
+    replyTo: message.replyTo === null ? null : { messageId: message.replyTo.id, authorUserId: message.replyTo.authorId, authorDisplayName: message.replyTo.authorDisplayName, content: message.replyTo.content },
+    reactions: message.reactions,
+    attachments: message.attachments.map((attachment) => ({ id: attachment.id, messageId: message.id, fileName: attachment.fileName, mimeType: attachment.mimeType, size: Number(attachment.sizeBytes), createdAt: message.createdAt })),
+    createdAt: message.createdAt,
+    editedAt: message.editedAt,
+    deletedAt: message.deletedAt,
+    ...(message.author.id === user.id ? { deliveryState: 'sent' as const } : {}),
+  };
+}
+
+function messageReached(cursor: string | null | undefined, messageId: string): boolean {
+  if (!cursor) return false;
+  try { return BigInt(cursor) >= BigInt(messageId); } catch { return cursor.localeCompare(messageId, undefined, { numeric: true }) >= 0; }
+}
+
+function directDeliveryState(message: ConversationMessage, user: PublicUser, peerReadState: ConversationMemberReadState | null): MessageDeliveryState | undefined {
+  if (message.author.id !== user.id) return undefined;
+  if (messageReached(peerReadState?.lastReadMessageId, message.id)) return 'read';
+  if (messageReached(peerReadState?.lastDeliveredMessageId, message.id)) return 'delivered';
+  return 'sent';
+}
+
+function toDirectMessage(message: ConversationMessage, user: PublicUser, conversations: DirectConversationSummary[], peerReadState: ConversationMemberReadState | null = null): DirectMessage {
+  const peer = conversations.find((conversation) => conversation.id === message.conversationId)?.participant;
+  const deliveryState = directDeliveryState(message, user, peerReadState);
+  return {
+    id: message.id,
+    conversationId: message.conversationId,
+    authorUserId: message.author.id,
+    authorDisplayName: message.author.displayName,
+    authorPlatformRole: message.author.id === user.id ? user.platformRole : peer?.platformRole ?? 'member',
+    content: message.content,
+    replyTo: message.replyTo === null ? null : { messageId: message.replyTo.id, authorUserId: message.replyTo.authorId, authorDisplayName: message.replyTo.authorDisplayName, content: message.replyTo.content },
+    reactions: message.reactions,
+    attachments: message.attachments.map((attachment) => ({ id: attachment.id, messageId: message.id, fileName: attachment.fileName, mimeType: attachment.mimeType, size: Number(attachment.sizeBytes), createdAt: message.createdAt })),
+    createdAt: message.createdAt,
+    editedAt: message.editedAt,
+    deletedAt: message.deletedAt,
+    ...(deliveryState === undefined ? {} : { deliveryState }),
+  };
+}
+
+function mergeDirectSummaries(legacy: DirectConversationSummary[], canonical: ConversationSummary[]): DirectConversationSummary[] {
+  const canonicalById = new Map(canonical.filter((conversation) => conversation.type === 'direct').map((conversation) => [conversation.id, conversation]));
+  return legacy.map((conversation) => {
+    const current = canonicalById.get(conversation.id);
+    if (!current) return conversation;
+    return {
+      ...conversation,
+      lastMessage: current.lastMessage === null ? null : { authorUserId: current.lastMessage.authorId, content: current.lastMessage.content, createdAt: current.lastMessage.createdAt },
+      unreadCount: current.unreadCount,
+      updatedAt: current.updatedAt,
+    };
+  }).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+}
+
+function mergeMessages<T extends { id: string; createdAt: string }>(current: T[], incoming: T[]): T[] {
+  const byId = new Map(current.map((message) => [message.id, message]));
+  for (const message of incoming) byId.set(message.id, message);
+  return [...byId.values()].sort((left, right) => left.createdAt.localeCompare(right.createdAt) || left.id.localeCompare(right.id));
+}
+
+function quietHoursActive(preferences: UserNotificationPreferences | null, now = new Date()): boolean {
+  if (!preferences?.quietHoursStart || !preferences.quietHoursEnd || !preferences.quietHoursTimezone) return false;
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: preferences.quietHoursTimezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
+  const current = Number(parts.find((part) => part.type === 'hour')?.value ?? 0) * 60 + Number(parts.find((part) => part.type === 'minute')?.value ?? 0);
+  const minutes = (value: string): number => Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+  const start = minutes(preferences.quietHoursStart);
+  const end = minutes(preferences.quietHoursEnd);
+  return start <= end ? current >= start && current < end : current >= start || current < end;
+}
 
 export default function App(): ReactNode {
   const location = useLocation();
@@ -66,19 +158,34 @@ export default function App(): ReactNode {
   const [messageDraft, setMessageDraft] = useState('');
   const [directConversations, setDirectConversations] = useState<DirectConversationSummary[]>([]);
   const [directCandidates, setDirectCandidates] = useState<DirectMessageCandidate[]>([]);
+  const [blockedDirectUserIds, setBlockedDirectUserIds] = useState<string[]>([]);
   const [activeDirectConversationId, setActiveDirectConversationId] = useState<string | null>(null);
   const [directMessages, setDirectMessages] = useState<DirectMessage[]>([]);
   const [directMessageDraft, setDirectMessageDraft] = useState('');
+  const [directPeerReadState, setDirectPeerReadState] = useState<ConversationMemberReadState | null>(null);
+  const [serverMessageHistory, setServerMessageHistory] = useState<{ conversationId: string | null; before: string | null; hasMore: boolean; loading: boolean }>({ conversationId: null, before: null, hasMore: false, loading: false });
+  const [directMessageHistory, setDirectMessageHistory] = useState<{ conversationId: string | null; before: string | null; hasMore: boolean; loading: boolean }>({ conversationId: null, before: null, hasMore: false, loading: false });
+  const [notifications, setNotifications] = useState<InternalNotification[]>([]);
+  const [targetMessageId, setTargetMessageId] = useState<string | null>(null);
+  const [notificationHistory, setNotificationHistory] = useState<{ before: string | null; hasMore: boolean; loading: boolean }>({ before: null, hasMore: false, loading: false });
+  const [canonicalConversations, setCanonicalConversations] = useState<ConversationSummary[]>([]);
+  const [unreadSummary, setUnreadSummary] = useState<UserUnreadSummary | null>(null);
+  const [notificationPreferences, setNotificationPreferences] = useState<UserNotificationPreferences | null>(null);
+  const [realtimeRevision, setRealtimeRevision] = useState(0);
+  const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [serverName, setServerName] = useState('');
   const [pendingInviteToken, setPendingInviteToken] = useState<string | null>(null);
-  const notificationCursorRef = useRef<string | null>(null);
-  const notificationCursorIdRef = useRef<string | null>(null);
   const notificationUserRef = useRef<string | null>(null);
+  const notificationInitializedRef = useRef(false);
   const shownNotificationIdsRef = useRef(new Set<string>());
   const voiceCuePlayerRef = useRef<VoiceCuePlayer | null>(null);
   const participantConnectionRef = useRef<RoomConnection | null>(null);
   const previousRemoteParticipantsRef = useRef<Set<string> | null>(null);
   const voiceTransitionRef = useRef(false);
+  const serverMessageRetryRef = useRef(new Map<string, () => void>());
+  const directMessageRetryRef = useRef(new Map<string, () => void>());
+  const typingExpiryTimersRef = useRef(new Map<string, number>());
+  const typingStopTimerRef = useRef<number | null>(null);
   const lastUserActivityRef = useRef(Date.now());
   const settingsReturnScreenRef = useRef<Screen>('home');
   const mediaSnapshot = useSyncExternalStore(media.subscribe, media.getSnapshot, media.getSnapshot);
@@ -91,6 +198,73 @@ export default function App(): ReactNode {
   const invalidSettingsCanonicalPath = settingsRouteResult?.kind === 'invalid' ? settingsRouteResult.canonicalPath : null;
   const settingsRouteKind = settingsRoute?.kind ?? null;
   const settingsServerRouteId = settingsRoute?.kind === 'server' ? settingsRoute.serverId : null;
+  const activeChannelIsText = activeChannelId !== null && Boolean(serverDetail?.channels.some((channel) => channel.id === activeChannelId && channel.type === 'text'));
+
+  useEffect(() => {
+    if (user === null) {
+      realtime.stop();
+      return undefined;
+    }
+    const refresh = (): void => setRealtimeRevision((current) => current + 1);
+    const unsubscribeEvent = realtime.onEvent((event) => {
+      refresh();
+      if ((event.type !== 'typing.started' && event.type !== 'typing.stopped') || !event.conversationId || typeof event.payload.userId !== 'string' || event.payload.userId === user.id) return;
+      const conversationId = event.conversationId;
+      const typingUserId = event.payload.userId;
+      const key = `${conversationId}:${typingUserId}`;
+      const existingTimer = typingExpiryTimersRef.current.get(key);
+      if (existingTimer !== undefined) window.clearTimeout(existingTimer);
+      const remove = (): void => {
+        typingExpiryTimersRef.current.delete(key);
+        setTypingUsers((current) => ({ ...current, [conversationId]: (current[conversationId] ?? []).filter((id) => id !== typingUserId) }));
+      };
+      if (event.type === 'typing.stopped') return remove();
+      setTypingUsers((current) => ({ ...current, [conversationId]: [...new Set([...(current[conversationId] ?? []), typingUserId])] }));
+      typingExpiryTimersRef.current.set(key, window.setTimeout(remove, 9_000));
+    });
+    const unsubscribeStatus = realtime.onStatus((status) => { if (status === 'connected') refresh(); });
+    realtime.start();
+    return () => {
+      unsubscribeEvent();
+      unsubscribeStatus();
+      realtime.stop();
+      for (const timer of typingExpiryTimersRef.current.values()) window.clearTimeout(timer);
+      typingExpiryTimersRef.current.clear();
+      setTypingUsers({});
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    let conversationId: string | null = null;
+    if (screen === 'server' && activeChannelId !== null && activeChannelIsText) conversationId = activeChannelId;
+    if (screen === 'direct') conversationId = activeDirectConversationId;
+    if (conversationId === null) {
+      realtime.setActiveConversation(null);
+      return undefined;
+    }
+    realtime.subscribe(conversationId);
+    realtime.setActiveConversation(conversationId);
+    return () => {
+      realtime.unsubscribe(conversationId);
+      realtime.setActiveConversation(null);
+    };
+  }, [activeChannelId, activeChannelIsText, activeDirectConversationId, screen]);
+
+  useEffect(() => {
+    const conversationId = screen === 'server' && activeChannelIsText ? activeChannelId : screen === 'direct' ? activeDirectConversationId : null;
+    const draft = screen === 'server' ? messageDraft : screen === 'direct' ? directMessageDraft : '';
+    if (typingStopTimerRef.current !== null) window.clearTimeout(typingStopTimerRef.current);
+    typingStopTimerRef.current = null;
+    if (!conversationId || draft.trim().length === 0) {
+      if (conversationId) realtime.sendCommand({ type: 'typing.stop', conversationId });
+      return;
+    }
+    realtime.sendCommand({ type: 'typing.start', conversationId });
+    typingStopTimerRef.current = window.setTimeout(() => {
+      realtime.sendCommand({ type: 'typing.stop', conversationId });
+      typingStopTimerRef.current = null;
+    }, 4_000);
+  }, [activeChannelId, activeChannelIsText, activeDirectConversationId, directMessageDraft, messageDraft, screen]);
 
   useEffect(() => {
     if (invalidSettingsCanonicalPath === null) return;
@@ -136,10 +310,20 @@ export default function App(): ReactNode {
   const updatePresenceSettings = useCallback((input: Parameters<typeof apiClient.updatePresence>[0]) => apiClient.updatePresence(input), []);
   const loadPrivacySettings = useCallback(() => apiClient.getPrivacySettings(), []);
   const updatePrivacySettings = useCallback((input: Parameters<typeof apiClient.updatePrivacySettings>[0]) => apiClient.updatePrivacySettings(input), []);
+  const loadNotificationPreferences = useCallback(() => apiClient.getNotificationPreferences(), []);
+  const updateServerNotificationPreferences = useCallback(async (input: Omit<UserNotificationPreferences, 'updatedAt'>): Promise<UserNotificationPreferences> => {
+    const updated = await apiClient.updateNotificationPreferences(input);
+    setNotificationPreferences(updated);
+    const next = { ...settings, desktopNotificationsEnabled: updated.desktopEnabled, messageSoundsEnabled: updated.soundEnabled };
+    setSettings(next);
+    await window.desktop.updateLocalSettings(next);
+    return updated;
+  }, [settings]);
 
   useEffect(() => {
     if (user === null) {
       setPresence(null);
+      setNotificationPreferences(null);
       return undefined;
     }
     let active = true;
@@ -163,6 +347,13 @@ export default function App(): ReactNode {
       window.removeEventListener('keydown', recordActivity);
       window.removeEventListener('focus', recordActivity);
     };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    void apiClient.getNotificationPreferences().then((value) => { if (active) setNotificationPreferences(value); }).catch(() => undefined);
+    return () => { active = false; };
   }, [user?.id]);
 
   const refreshDevices = useCallback(async (requestPermission = false): Promise<void> => {
@@ -272,9 +463,9 @@ export default function App(): ReactNode {
       void apiClient.listServers().then((items) => { if (active) setServers(items); }).catch((caught) => { if (active) setError(userMessage(caught)); }).finally(() => { inFlight = false; });
     };
     refresh();
-    const timer = window.setInterval(refresh, 3_000);
+    const timer = window.setInterval(refresh, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [screen, user]);
+  }, [realtimeRevision, screen, user]);
 
   useEffect(() => {
     if (!user || screen !== 'server' || serverDetail === null) return;
@@ -290,65 +481,126 @@ export default function App(): ReactNode {
         setActiveChannelId((current) => current !== null && detail.channels.some((channel) => channel.id === current) ? current : detail.channels[0]?.id ?? null);
       }).catch((caught) => { if (active) setError(userMessage(caught)); }).finally(() => { inFlight = false; });
     };
-    const timer = window.setInterval(refresh, 3_000);
+    refresh();
+    const timer = window.setInterval(refresh, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [screen, serverDetail?.id, user]);
+  }, [realtimeRevision, screen, serverDetail?.id, user]);
 
   useEffect(() => {
     if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
     if (notificationUserRef.current !== user.id) {
       notificationUserRef.current = user.id;
-      notificationCursorRef.current = null;
-      notificationCursorIdRef.current = null;
       shownNotificationIdsRef.current.clear();
+      notificationInitializedRef.current = false;
+      setNotifications([]);
+      setNotificationHistory({ before: null, hasMore: false, loading: false });
     }
     let active = true;
     const poll = (): void => {
-      const since = notificationCursorRef.current;
-      void apiClient.listMessageNotifications(since, notificationCursorIdRef.current).then((page) => {
+      void Promise.all([apiClient.listNotifications(undefined, false), apiClient.listConversations()]).then(([items, conversations]) => {
         if (!active) return;
-        const notifications = page.items;
-        const fresh = notifications.filter((notification) => !shownNotificationIdsRef.current.has(notification.id));
+        setNotifications((current) => {
+          const merged = new Map(current.map((item) => [item.id, item]));
+          for (const item of items) merged.set(item.id, item);
+          return [...merged.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+        });
+        setNotificationHistory((current) => current.before === null ? { before: items.at(-1)?.createdAt ?? null, hasMore: items.length === 100, loading: false } : current);
+        setCanonicalConversations(conversations);
+        const firstLoad = !notificationInitializedRef.current;
+        notificationInitializedRef.current = true;
+        const fresh = firstLoad ? [] : items.filter((notification) => !shownNotificationIdsRef.current.has(notification.id));
+        for (const notification of items) shownNotificationIdsRef.current.add(notification.id);
         for (const notification of fresh) {
-          shownNotificationIdsRef.current.add(notification.id);
-          if (settings.messageSoundsEnabled) playVoiceCue('message');
-          if (settings.desktopNotificationsEnabled) {
+          if (Date.now() - new Date(notification.createdAt).getTime() > 5 * 60_000) continue;
+          if (presence?.preference === 'do_not_disturb') continue;
+          if (quietHoursActive(notificationPreferences)) continue;
+          if (notification.type === 'direct_message' && notificationPreferences?.directMessagesEnabled === false) continue;
+          if ((notification.type === 'mention' || notification.type === 'reply') && notificationPreferences?.mentionsEnabled === false) continue;
+          const conversation = notification.conversationId ? conversations.find((item) => item.id === notification.conversationId) : null;
+          const visibleConversationId = screen === 'server' ? activeChannelId : screen === 'direct' ? activeDirectConversationId : null;
+          if (document.hasFocus() && document.visibilityState === 'visible' && notification.conversationId === visibleConversationId) continue;
+          const preview = typeof notification.payload.preview === 'string' ? notification.payload.preview : 'Новое событие';
+          if (notificationPreferences?.soundEnabled ?? settings.messageSoundsEnabled) playVoiceCue('message');
+          if ((notificationPreferences?.desktopEnabled ?? settings.desktopNotificationsEnabled) && (!document.hasFocus() || document.visibilityState !== 'visible') && conversation) {
+            const previewMode = notificationPreferences?.previewMode ?? 'full';
             void window.desktop.showMessageNotification({
               id: notification.id,
-              title: `${notification.mention === true ? 'Вас упомянули · ' : ''}${notification.authorDisplayName} · #${notification.channelName}`,
-              body: `${notification.content.trim().length > 0 ? notification.content.slice(0, 700) : 'Вложение'}\n${notification.serverName}`,
-              serverId: notification.serverId,
-              channelId: notification.channelId,
+              title: previewMode === 'hidden' ? 'Новое сообщение' : notification.actorDisplayName ?? (notification.type === 'mention' ? `Вас упомянули · #${conversation.title}` : notification.type === 'reply' ? `Ответ · #${conversation.title}` : `Новое сообщение · #${conversation.title}`),
+              body: previewMode === 'full' ? preview.slice(0, 700) : previewMode === 'sender_only' ? `#${conversation.title}` : 'Откройте Ватрушку, чтобы прочитать.',
+              ...(conversation.serverId && conversation.channelId ? { serverId: conversation.serverId, channelId: conversation.channelId } : { conversationId: conversation.id }),
+              ...(notification.messageId ? { messageId: notification.messageId } : {}),
               silent: true,
             }).catch(() => undefined);
           }
         }
-        if (page.cursor) {
-          notificationCursorRef.current = page.cursor.createdAt;
-          notificationCursorIdRef.current = page.cursor.id;
-        }
-        if (fresh.length > 0) {
-          const counts = new Map<string, number>();
-          const mentions = new Map<string, number>();
-          for (const notification of fresh) {
-            counts.set(notification.channelId, (counts.get(notification.channelId) ?? 0) + 1);
-            if (notification.mention === true) mentions.set(notification.channelId, (mentions.get(notification.channelId) ?? 0) + 1);
-          }
-          setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((channel) => ({ ...channel, unreadCount: channel.unreadCount + (counts.get(channel.id) ?? 0), mentionCount: (channel.mentionCount ?? 0) + (mentions.get(channel.id) ?? 0) })) });
-        }
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     poll();
-    const timer = window.setInterval(poll, 5_000);
+    const timer = window.setInterval(poll, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [playVoiceCue, screen, settings.desktopNotificationsEnabled, settings.messageSoundsEnabled, user]);
+  }, [activeChannelId, activeDirectConversationId, notificationPreferences, playVoiceCue, presence?.preference, realtimeRevision, screen, settings.desktopNotificationsEnabled, settings.messageSoundsEnabled, user]);
+
+  useEffect(() => {
+    if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
+    let active = true;
+    void apiClient.getUnreadSummary().then((summary) => {
+      if (!active) return;
+      setUnreadSummary(summary);
+      const counts = new Map(summary.conversations.map((item) => [item.conversationId, item]));
+      setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((channel) => {
+        const unread = counts.get(channel.id);
+        return unread ? { ...channel, unreadCount: unread.unreadCount, mentionCount: unread.mentionCount } : channel;
+      }) });
+      setDirectConversations((current) => current.map((conversation) => {
+        const unread = counts.get(conversation.id);
+        return unread ? { ...conversation, unreadCount: unread.unreadCount } : conversation;
+      }));
+    }).catch((caught) => { if (active) setError(userMessage(caught)); });
+    return () => { active = false; };
+  }, [realtimeRevision, screen, user]);
+
+  useEffect(() => {
+    const count = user && unreadSummary ? unreadSummary.totalDirectUnread + unreadSummary.totalMentionUnread + unreadSummary.totalReplyUnread : 0;
+    void window.desktop.setBadgeCount(count).catch(() => undefined);
+  }, [unreadSummary, user]);
+
+  useEffect(() => {
+    if (targetMessageId === null || (screen !== 'server' && screen !== 'direct')) return;
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        const element = document.querySelector<HTMLElement>(`[data-message-id="${targetMessageId}"]`);
+        if (!element) return;
+        element.dataset.targeted = 'true';
+        element.scrollIntoView({ block: 'center' });
+        element.focus({ preventScroll: true });
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+      document.querySelector<HTMLElement>(`[data-message-id="${targetMessageId}"]`)?.removeAttribute('data-targeted');
+    };
+  }, [directMessages, messages, screen, targetMessageId]);
 
   useEffect(() => window.desktop.onMessageNotificationClick((target) => {
     if (!userRef.current) return;
-    void apiClient.getServer(target.serverId).then((detail) => {
-      if (!detail.channels.some((channel) => channel.id === target.channelId && channel.type === 'text')) return;
+    if (target.conversationId) {
+      setTargetMessageId(target.messageId ?? null);
+      setActiveDirectConversationId(target.conversationId);
+      setDirectMessages([]);
+      setDirectMessageDraft('');
+      setScreen('direct');
+      return;
+    }
+    if (!target.serverId || !target.channelId) return;
+    const serverId = target.serverId;
+    const channelId = target.channelId;
+    setTargetMessageId(target.messageId ?? null);
+    void apiClient.getServer(serverId).then((detail) => {
+      if (!detail.channels.some((channel) => channel.id === channelId && channel.type === 'text')) return;
       setServerDetail(detail);
-      setActiveChannelId(target.channelId);
+      setActiveChannelId(channelId);
       setMessages([]);
       setError(null);
       setScreen('server');
@@ -359,16 +611,17 @@ export default function App(): ReactNode {
     if (!user || (screen !== 'home' && screen !== 'server' && screen !== 'direct')) return;
     let active = true;
     const refresh = (): void => {
-      void apiClient.listDirectConversations().then((items) => {
+      void Promise.all([apiClient.listDirectConversations(), apiClient.listConversations()]).then(([legacy, canonical]) => {
         if (!active) return;
+        const items = mergeDirectSummaries(legacy, canonical);
         setDirectConversations(items);
         if (screen === 'direct') setActiveDirectConversationId((current) => current !== null && items.some((conversation) => conversation.id === current) ? current : items[0]?.id ?? null);
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     refresh();
-    const timer = window.setInterval(refresh, 5_000);
+    const timer = window.setInterval(refresh, 30_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [screen, user]);
+  }, [realtimeRevision, screen, user]);
 
   useEffect(() => {
     if (!user || screen !== 'direct') return;
@@ -378,45 +631,66 @@ export default function App(): ReactNode {
   }, [screen, user]);
 
   useEffect(() => {
-    if (screen !== 'direct' || activeDirectConversationId === null) return;
+    if (!user || screen !== 'direct' || activeDirectConversationId === null) return;
     let active = true;
+    let readTimer: number | null = null;
     const conversationId = activeDirectConversationId;
     const refresh = (): void => {
-      void apiClient.listDirectMessages(conversationId).then((items) => {
+      void Promise.all([apiClient.listConversationMessages(conversationId), apiClient.listConversationReadStates(conversationId)]).then(([page, readStates]) => {
         if (!active) return;
-        setDirectMessages((current) => [...items, ...current.filter((message) => message.id.startsWith('optimistic_'))]);
+        const peerReadState = readStates.find((state) => state.userId !== user.id) ?? null;
+        setDirectPeerReadState(peerReadState);
+        const items = page.items.map((message) => toDirectMessage(message, user, directConversations, peerReadState));
+        setDirectMessages((current) => mergeMessages(current, items));
+        setDirectMessageHistory((current) => current.conversationId === conversationId && current.before !== null
+          ? current
+          : { conversationId, before: page.pageInfo.before, hasMore: page.pageInfo.hasMore, loading: false });
         const latest = items.at(-1);
         if (latest) {
-          void apiClient.markDirectConversationRead(conversationId, latest.id).catch((caught) => { if (active) setError(userMessage(caught)); });
-          setDirectConversations((current) => current.map((conversation) => conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation));
+          void apiClient.updateConversationReadState(conversationId, { lastDeliveredMessageId: latest.id }).catch(() => undefined);
+          if (readTimer !== null) window.clearTimeout(readTimer);
+          if (document.visibilityState === 'visible' && document.hasFocus()) readTimer = window.setTimeout(() => {
+            if (!active || document.visibilityState !== 'visible' || !document.hasFocus()) return;
+            void apiClient.updateConversationReadState(conversationId, { lastDeliveredMessageId: latest.id, lastReadMessageId: latest.id }).catch((caught) => { if (active) setError(userMessage(caught)); });
+            setDirectConversations((current) => current.map((conversation) => conversation.id === conversationId ? { ...conversation, unreadCount: 0 } : conversation));
+          }, 500);
         }
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     refresh();
-    const timer = window.setInterval(refresh, 3_000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [screen, activeDirectConversationId]);
+    const timer = window.setInterval(refresh, 30_000);
+    return () => { active = false; window.clearInterval(timer); if (readTimer !== null) window.clearTimeout(readTimer); };
+  }, [realtimeRevision, screen, activeDirectConversationId, user?.id]);
 
   useEffect(() => {
-    if (screen !== 'server' || !serverDetail || !activeChannelId) return;
+    if (!user || screen !== 'server' || !serverDetail || !activeChannelId) return;
     const channel = serverDetail.channels.find((candidate) => candidate.id === activeChannelId);
     if (channel?.type !== 'text') return;
     let active = true;
+    let readTimer: number | null = null;
     const refresh = (): void => {
-      void apiClient.listMessages(channel.id).then((items) => {
+      void apiClient.listConversationMessages(channel.id).then((page) => {
         if (!active) return;
-        setMessages((current) => [...items, ...current.filter((message) => message.id.startsWith('optimistic_'))]);
+        const items = page.items.map((message) => toTextMessage(message, serverDetail, user));
+        setMessages((current) => mergeMessages(current, items));
+        setServerMessageHistory((current) => current.conversationId === channel.id && current.before !== null
+          ? current
+          : { conversationId: channel.id, before: page.pageInfo.before, hasMore: page.pageInfo.hasMore, loading: false });
         const latest = items.at(-1);
-        if (latest) {
-          void apiClient.markChannelRead(channel.id, latest.id).catch((caught) => { if (active) setError(userMessage(caught)); });
-          setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((item) => item.id === channel.id ? { ...item, unreadCount: 0 } : item) });
+        if (latest && document.visibilityState === 'visible' && document.hasFocus()) {
+          if (readTimer !== null) window.clearTimeout(readTimer);
+          readTimer = window.setTimeout(() => {
+            if (!active || document.visibilityState !== 'visible' || !document.hasFocus()) return;
+            void apiClient.updateConversationReadState(channel.id, { lastReadMessageId: latest.id }).catch((caught) => { if (active) setError(userMessage(caught)); });
+            setServerDetail((current) => current === null ? current : { ...current, channels: current.channels.map((item) => item.id === channel.id ? { ...item, unreadCount: 0, mentionCount: 0 } : item) });
+          }, 500);
         }
       }).catch((caught) => { if (active) setError(userMessage(caught)); });
     };
     refresh();
-    const timer = setInterval(refresh, 3_000);
-    return () => { active = false; clearInterval(timer); };
-  }, [screen, serverDetail?.id, activeChannelId]);
+    const timer = setInterval(refresh, 30_000);
+    return () => { active = false; clearInterval(timer); if (readTimer !== null) window.clearTimeout(readTimer); };
+  }, [realtimeRevision, screen, serverDetail?.id, activeChannelId, user?.id]);
 
   const run = useCallback(async (action: () => Promise<void>): Promise<void> => {
     setBusy(true);
@@ -511,9 +785,11 @@ export default function App(): ReactNode {
 
   const openDirectMessages = (): void => {
     void run(async () => {
-      const [conversations, candidates] = await Promise.all([apiClient.listDirectConversations(), apiClient.listDirectMessageCandidates()]);
+      const [legacyConversations, canonicalConversations, candidates, blockedUsers] = await Promise.all([apiClient.listDirectConversations(), apiClient.listConversations(), apiClient.listDirectMessageCandidates(), apiClient.listBlockedUsers()]);
+      const conversations = mergeDirectSummaries(legacyConversations, canonicalConversations);
       setDirectConversations(conversations);
       setDirectCandidates(candidates);
+      setBlockedDirectUserIds(blockedUsers.map((blocked) => blocked.userId));
       setActiveDirectConversationId((current) => current !== null && conversations.some((conversation) => conversation.id === current) ? current : conversations[0]?.id ?? null);
       setDirectMessages([]);
       setDirectMessageDraft('');
@@ -525,6 +801,7 @@ export default function App(): ReactNode {
     setActiveDirectConversationId(conversationId);
     setDirectMessages([]);
     setDirectMessageDraft('');
+    setDirectMessageHistory({ conversationId: null, before: null, hasMore: false, loading: false });
     setError(null);
   };
 
@@ -558,13 +835,14 @@ export default function App(): ReactNode {
     });
   };
 
-  const sendMessage = (replyToMessageId?: string, files: File[] = [], draftMentions: MessageMentionInput[] = []): void => {
+  const sendMessage = (replyToMessageId?: string, files: File[] = [], draftMentions: ConversationMentionDraft[] = []): void => {
     void run(async () => {
-      if (!activeChannelId || !user) return;
+      if (!activeChannelId || !user || !serverDetail) return;
       const content = messageDraft.trim().length > 0 ? messageContentSchema.parse(messageDraft) : files.length > 0 ? '' : messageContentSchema.parse(messageDraft);
       const leadingCodePoints = codePointLength(messageDraft) - codePointLength(messageDraft.trimStart());
       const mentions = draftMentions.map((mention) => ({ ...mention, start: mention.start - leadingCodePoints })).filter((mention) => mention.start >= 0 && mention.start + mention.length <= codePointLength(content));
-      const optimisticId = `optimistic_${crypto.randomUUID()}`;
+      const clientMessageId = crypto.randomUUID();
+      const optimisticId = `optimistic_${clientMessageId}`;
       const replyTarget = replyToMessageId === undefined ? null : messages.find((message) => message.id === replyToMessageId) ?? null;
       const optimistic: TextMessage = {
         id: optimisticId,
@@ -573,52 +851,60 @@ export default function App(): ReactNode {
         authorDisplayName: user.displayName ?? user.email.split('@')[0] ?? 'Пользователь',
         authorPlatformRole: user.platformRole,
         content,
-        mentions: mentions.map((mention) => ({ ...mention, displayName: serverDetail?.members.find((member) => member.userId === mention.userId)?.displayName ?? 'Участник' })),
+        mentions: mentions.flatMap((mention) => mention.type === 'user' && mention.userId ? [{ userId: mention.userId, start: mention.start, length: mention.length, displayName: mention.displayName }] : []),
+        conversationMentions: mentions,
         replyTo: replyTarget === null ? null : { messageId: replyTarget.id, authorUserId: replyTarget.authorUserId, authorDisplayName: replyTarget.authorDisplayName, content: replyTarget.content },
         reactions: [],
         attachments: files.map((file) => ({ id: `optimistic_${crypto.randomUUID()}`, messageId: optimisticId, fileName: file.name, mimeType: file.type, size: file.size, createdAt: new Date().toISOString() })),
         createdAt: new Date().toISOString(),
         editedAt: null,
+        deliveryState: 'sending',
       };
       setMessageDraft('');
       setMessages((current) => [...current, optimistic]);
-      let persisted: TextMessage | null = null;
-      try {
-        persisted = await apiClient.createMessage(activeChannelId, content, mentions, replyToMessageId);
-        const created = persisted;
+      const attempt = async (): Promise<void> => {
+        setMessages((current) => current.map((message) => message.id === optimisticId ? { ...message, deliveryState: 'sending' } : message));
+        try {
+        const attachmentIds = await Promise.all(files.map((file) => apiClient.uploadConversationAttachment(file)));
+        const canonical = await apiClient.createConversationMessage(activeChannelId, {
+          clientMessageId,
+          content,
+          ...(replyToMessageId === undefined ? {} : { replyToMessageId }),
+          attachmentIds,
+          mentions: mentions.map((mention) => ({ type: mention.type, ...(mention.userId ? { userId: mention.userId } : {}), ...(mention.roleId ? { roleId: mention.roleId } : {}), start: mention.start, length: mention.length })),
+        });
+        const created = toTextMessage(canonical, serverDetail, user);
         setMessages((current) => [...current.filter((message) => message.id !== optimisticId && message.id !== created.id), created]);
-        for (const file of files) {
-          persisted = await apiClient.uploadMessageAttachment(persisted.id, file);
-          const updated = persisted;
-          setMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
+        serverMessageRetryRef.current.delete(optimisticId);
+        } catch (caught) {
+          setMessages((current) => current.map((message) => message.id === optimisticId ? { ...message, deliveryState: 'failed' } : message));
+          throw caught;
         }
-      } catch (caught) {
-        if (persisted === null) {
-          setMessages((current) => current.filter((message) => message.id !== optimisticId));
-          setMessageDraft(content);
-        }
-        throw caught;
-      }
+      };
+      serverMessageRetryRef.current.set(optimisticId, () => { void run(attempt); });
+      await attempt();
     });
   };
 
   const deleteMessage = (messageId: string): void => {
     void run(async () => {
-      await apiClient.deleteMessage(messageId);
+      if (!activeChannelId) return;
+      await apiClient.deleteConversationMessage(activeChannelId, messageId);
       setMessages((current) => current.filter((message) => message.id !== messageId));
     });
   };
 
   const deleteAttachment = (attachmentId: string): void => {
     void run(async () => {
-      const updated = await apiClient.deleteMessageAttachment(attachmentId);
+      if (!serverDetail || !user) return;
+      const updated = toTextMessage(await apiClient.deleteConversationAttachment(attachmentId), serverDetail, user);
       setMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
     });
   };
 
   const downloadAttachment = (attachmentId: string, fileName: string): void => {
     void run(async () => {
-      const blob = await apiClient.downloadMessageAttachment(attachmentId);
+      const blob = await apiClient.downloadConversationAttachment(attachmentId);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -628,14 +914,16 @@ export default function App(): ReactNode {
     });
   };
 
-  const loadAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadMessageAttachment(attachmentId), []);
+  const loadAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadConversationAttachment(attachmentId), []);
 
-  const updateMessage = (messageId: string, value: string, draftMentions: MessageMentionInput[] = []): void => {
+  const updateMessage = (messageId: string, value: string, draftMentions: ConversationMentionDraft[] = []): void => {
     void run(async () => {
       const content = messageContentSchema.parse(value);
       const leadingCodePoints = codePointLength(value) - codePointLength(value.trimStart());
       const mentions = draftMentions.map((mention) => ({ ...mention, start: mention.start - leadingCodePoints })).filter((mention) => mention.start >= 0 && mention.start + mention.length <= codePointLength(content));
-      const updated = await apiClient.updateMessage(messageId, content, mentions);
+      if (!activeChannelId || !serverDetail || !user) return;
+      const canonical = await apiClient.updateConversationMessage(activeChannelId, messageId, content, mentions.map((mention) => ({ type: mention.type, ...(mention.userId ? { userId: mention.userId } : {}), ...(mention.roleId ? { roleId: mention.roleId } : {}), start: mention.start, length: mention.length })));
+      const updated = toTextMessage(canonical, serverDetail, user);
       setMessageDraft('');
       setMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
     });
@@ -646,7 +934,9 @@ export default function App(): ReactNode {
       const message = messages.find((candidate) => candidate.id === messageId);
       if (!message) return;
       const active = message.reactions.find((reaction) => reaction.emoji === emoji)?.reactedByCurrentUser !== true;
-      const updated = await apiClient.setMessageReaction(messageId, emoji, active);
+      if (!activeChannelId || !serverDetail || !user) return;
+      const canonical = await apiClient.setConversationReaction(activeChannelId, messageId, emoji, active);
+      const updated = toTextMessage(canonical, serverDetail, user);
       setMessages((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
     });
   };
@@ -656,7 +946,8 @@ export default function App(): ReactNode {
       if (activeDirectConversationId === null || !user) return;
       const content = directMessageDraft.trim().length > 0 ? messageContentSchema.parse(directMessageDraft) : files.length > 0 ? '' : messageContentSchema.parse(directMessageDraft);
       const conversationId = activeDirectConversationId;
-      const optimisticId = `optimistic_${crypto.randomUUID()}`;
+      const clientMessageId = crypto.randomUUID();
+      const optimisticId = `optimistic_${clientMessageId}`;
       const replyTarget = replyToMessageId === undefined ? null : directMessages.find((message) => message.id === replyToMessageId) ?? null;
       const optimistic: DirectMessage = {
         id: optimisticId,
@@ -670,43 +961,48 @@ export default function App(): ReactNode {
         attachments: files.map((file) => ({ id: `optimistic_${crypto.randomUUID()}`, messageId: optimisticId, fileName: file.name, mimeType: file.type, size: file.size, createdAt: new Date().toISOString() })),
         createdAt: new Date().toISOString(),
         editedAt: null,
+        deliveryState: 'sending',
       };
       setDirectMessageDraft('');
       setDirectMessages((current) => [...current, optimistic]);
-      let persisted: DirectMessage | null = null;
-      try {
-        persisted = await apiClient.createDirectMessage(conversationId, content, replyToMessageId);
-        const created = persisted;
+      const attempt = async (): Promise<void> => {
+        setDirectMessages((current) => current.map((message) => message.id === optimisticId ? { ...message, deliveryState: 'sending' } : message));
+        try {
+        const attachmentIds = await Promise.all(files.map((file) => apiClient.uploadConversationAttachment(file)));
+        const canonical = await apiClient.createConversationMessage(conversationId, { clientMessageId, content, ...(replyToMessageId === undefined ? {} : { replyToMessageId }), attachmentIds });
+        const created = toDirectMessage(canonical, user, directConversations);
         setDirectMessages((current) => [...current.filter((message) => message.id !== optimisticId && message.id !== created.id), created]);
-        for (const file of files) {
-          persisted = await apiClient.uploadDirectMessageAttachment(persisted.id, file);
-          const updated = persisted;
-          setDirectMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
+        const [legacy, conversations] = await Promise.all([apiClient.listDirectConversations(), apiClient.listConversations()]);
+        setDirectConversations(mergeDirectSummaries(legacy, conversations));
+        directMessageRetryRef.current.delete(optimisticId);
+        } catch (caught) {
+          setDirectMessages((current) => current.map((message) => message.id === optimisticId ? { ...message, deliveryState: 'failed' } : message));
+          throw caught;
         }
-        setDirectConversations(await apiClient.listDirectConversations());
-      } catch (caught) {
-        if (persisted === null) {
-          setDirectMessages((current) => current.filter((message) => message.id !== optimisticId));
-          setDirectMessageDraft(content);
-        }
-        throw caught;
-      }
+      };
+      directMessageRetryRef.current.set(optimisticId, () => { void run(attempt); });
+      await attempt();
     });
   };
 
   const updateDirectMessage = (messageId: string, value: string): void => {
     void run(async () => {
-      const updated = await apiClient.updateDirectMessage(messageId, messageContentSchema.parse(value));
+      if (!activeDirectConversationId || !user) return;
+      const canonical = await apiClient.updateConversationMessage(activeDirectConversationId, messageId, messageContentSchema.parse(value));
+      const updated = toDirectMessage(canonical, user, directConversations);
       setDirectMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
-      setDirectConversations(await apiClient.listDirectConversations());
+      const [legacy, conversations] = await Promise.all([apiClient.listDirectConversations(), apiClient.listConversations()]);
+      setDirectConversations(mergeDirectSummaries(legacy, conversations));
     });
   };
 
   const deleteDirectMessage = (messageId: string): void => {
     void run(async () => {
-      await apiClient.deleteDirectMessage(messageId);
+      if (!activeDirectConversationId) return;
+      await apiClient.deleteConversationMessage(activeDirectConversationId, messageId);
       setDirectMessages((current) => current.filter((message) => message.id !== messageId));
-      setDirectConversations(await apiClient.listDirectConversations());
+      const [legacy, conversations] = await Promise.all([apiClient.listDirectConversations(), apiClient.listConversations()]);
+      setDirectConversations(mergeDirectSummaries(legacy, conversations));
     });
   };
 
@@ -715,21 +1011,24 @@ export default function App(): ReactNode {
       const message = directMessages.find((candidate) => candidate.id === messageId);
       if (!message) return;
       const active = message.reactions.find((reaction) => reaction.emoji === emoji)?.reactedByCurrentUser !== true;
-      const updated = await apiClient.setDirectMessageReaction(messageId, emoji, active);
+      if (!activeDirectConversationId || !user) return;
+      const canonical = await apiClient.setConversationReaction(activeDirectConversationId, messageId, emoji, active);
+      const updated = toDirectMessage(canonical, user, directConversations);
       setDirectMessages((current) => current.map((candidate) => candidate.id === updated.id ? updated : candidate));
     });
   };
 
   const deleteDirectAttachment = (attachmentId: string): void => {
     void run(async () => {
-      const updated = await apiClient.deleteDirectMessageAttachment(attachmentId);
+      if (!user) return;
+      const updated = toDirectMessage(await apiClient.deleteConversationAttachment(attachmentId), user, directConversations);
       setDirectMessages((current) => current.map((message) => message.id === updated.id ? updated : message));
     });
   };
 
   const downloadDirectAttachment = (attachmentId: string, fileName: string): void => {
     void run(async () => {
-      const blob = await apiClient.downloadDirectMessageAttachment(attachmentId);
+      const blob = await apiClient.downloadConversationAttachment(attachmentId);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -739,7 +1038,7 @@ export default function App(): ReactNode {
     });
   };
 
-  const loadDirectAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadDirectMessageAttachment(attachmentId), []);
+  const loadDirectAttachment = useCallback((attachmentId: string): Promise<Blob> => apiClient.downloadConversationAttachment(attachmentId), []);
 
   const createCommunityChannel = (name: string, type: 'text' | 'voice'): void => {
     void run(async () => {
@@ -1011,8 +1310,97 @@ export default function App(): ReactNode {
     setScreen('auth');
   };
   const renderSecurityPanel = (): ReactNode => user && securityOpen ? <SecurityCenter dndActive={presence?.preference === 'do_not_disturb'} open user={user} settings={settings} onSettingsChange={updateNotificationSettings} onClose={() => setSecurityOpen(false)} onUserChange={updateUser} onCurrentSessionRevoked={handleCurrentSessionRevoked} /> : null;
-  const withUpdateStatus = (content: ReactNode): ReactNode => <>{content}<UpdateStatus state={updateState} onInstall={() => void window.desktop.installUpdate().catch((caught) => setError(userMessage(caught)))} /></>;
-  const directUnreadCount = directConversations.reduce((count, conversation) => count + conversation.unreadCount, 0);
+  const openNotification = (notification: InternalNotification): void => {
+    if (!notification.conversationId) return;
+    setTargetMessageId(notification.messageId);
+    const conversation = canonicalConversations.find((item) => item.id === notification.conversationId);
+    if (conversation?.type === 'server_channel' && conversation.serverId && conversation.channelId) {
+      openDestination({ type: 'text_channel', serverId: conversation.serverId, channelId: conversation.channelId });
+      return;
+    }
+    if (conversation?.type === 'direct') {
+      setActiveDirectConversationId(conversation.id);
+      setDirectMessages([]);
+      setDirectMessageDraft('');
+      setScreen('direct');
+    }
+  };
+
+  const loadOlderDirectMessages = (): void => {
+    const conversationId = activeDirectConversationId;
+    if (conversationId === null || directMessageHistory.conversationId !== conversationId || directMessageHistory.before === null || !directMessageHistory.hasMore || directMessageHistory.loading || !user) return;
+    setDirectMessageHistory((current) => ({ ...current, loading: true }));
+    void apiClient.listConversationMessages(conversationId, { before: directMessageHistory.before, limit: 100 }).then((page) => {
+      const older = page.items.map((message) => toDirectMessage(message, user, directConversations, directPeerReadState));
+      setDirectMessages((current) => mergeMessages(current, older));
+      setDirectMessageHistory({ conversationId, before: page.pageInfo.before, hasMore: page.pageInfo.hasMore, loading: false });
+    }).catch((caught) => {
+      setDirectMessageHistory((current) => ({ ...current, loading: false }));
+      setError(userMessage(caught));
+    });
+  };
+
+  const loadOlderServerMessages = (): void => {
+    const conversationId = activeChannelId;
+    if (conversationId === null || serverMessageHistory.conversationId !== conversationId || serverMessageHistory.before === null || !serverMessageHistory.hasMore || serverMessageHistory.loading || !user || !serverDetail) return;
+    setServerMessageHistory((current) => ({ ...current, loading: true }));
+    void apiClient.listConversationMessages(conversationId, { before: serverMessageHistory.before, limit: 100 }).then((page) => {
+      const older = page.items.map((message) => toTextMessage(message, serverDetail, user));
+      setMessages((current) => mergeMessages(current, older));
+      setServerMessageHistory({ conversationId, before: page.pageInfo.before, hasMore: page.pageInfo.hasMore, loading: false });
+    }).catch((caught) => {
+      setServerMessageHistory((current) => ({ ...current, loading: false }));
+      setError(userMessage(caught));
+    });
+  };
+
+  const blockDirectParticipant = (participantUserId: string): void => {
+    void run(async () => {
+      await apiClient.blockUser(participantUserId);
+      setBlockedDirectUserIds((current) => current.includes(participantUserId) ? current : [...current, participantUserId]);
+      setDirectMessageDraft('');
+      setDirectCandidates(await apiClient.listDirectMessageCandidates());
+    });
+  };
+
+  const unblockDirectParticipant = (participantUserId: string): void => {
+    void run(async () => {
+      await apiClient.unblockUser(participantUserId);
+      setBlockedDirectUserIds((current) => current.filter((userId) => userId !== participantUserId));
+      setDirectCandidates(await apiClient.listDirectMessageCandidates());
+    });
+  };
+  const markNotificationRead = (id: string): void => {
+    setNotifications((current) => current.map((item) => item.id === id ? { ...item, readAt: item.readAt ?? new Date().toISOString() } : item));
+    void apiClient.markNotificationRead(id).catch((caught) => setError(userMessage(caught)));
+  };
+  const dismissNotification = (id: string): void => {
+    setNotifications((current) => current.filter((item) => item.id !== id));
+    void apiClient.dismissNotification(id).catch((caught) => setError(userMessage(caught)));
+  };
+  const markAllNotificationsRead = (): void => {
+    const now = new Date().toISOString();
+    setNotifications((current) => current.map((item) => ({ ...item, readAt: item.readAt ?? now })));
+    void apiClient.markAllNotificationsRead().catch((caught) => setError(userMessage(caught)));
+  };
+  const loadOlderNotifications = (): void => {
+    if (!notificationHistory.before || !notificationHistory.hasMore || notificationHistory.loading) return;
+    setNotificationHistory((current) => ({ ...current, loading: true }));
+    void apiClient.listNotifications(notificationHistory.before, false).then((items) => {
+      setNotifications((current) => {
+        const merged = new Map(current.map((item) => [item.id, item]));
+        for (const item of items) merged.set(item.id, item);
+        return [...merged.values()].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+      });
+      setNotificationHistory({ before: items.at(-1)?.createdAt ?? notificationHistory.before, hasMore: items.length === 100, loading: false });
+    }).catch((caught) => { setNotificationHistory((current) => ({ ...current, loading: false })); setError(userMessage(caught)); });
+  };
+  const withUpdateStatus = (content: ReactNode): ReactNode => <>{content}{user ? <NotificationCenter hasMore={notificationHistory.hasMore} items={notifications} loadingMore={notificationHistory.loading} onDismiss={dismissNotification} onLoadMore={loadOlderNotifications} onMarkAllRead={markAllNotificationsRead} onOpen={openNotification} onRead={markNotificationRead} /> : null}<UpdateStatus installBlocked={connection !== null} state={updateState} onInstall={() => void window.desktop.installUpdate().catch((caught) => setError(userMessage(caught)))} /></>;
+  const directUnreadCount = unreadSummary?.totalDirectUnread ?? directConversations.reduce((count, conversation) => count + conversation.unreadCount, 0);
+  const serverFirstUnreadMessageId = activeChannelId === null ? null : unreadSummary?.conversations.find((item) => item.conversationId === activeChannelId)?.firstUnreadMessageId ?? null;
+  const directFirstUnreadMessageId = activeDirectConversationId === null ? null : unreadSummary?.conversations.find((item) => item.conversationId === activeDirectConversationId)?.firstUnreadMessageId ?? null;
+  const serverTypingText = activeChannelId ? (typingUsers[activeChannelId] ?? []).map((id) => serverDetail?.members.find((member) => member.userId === id)?.displayName).filter((name): name is string => Boolean(name)).slice(0, 3).join(', ') : '';
+  const directTypingText = activeDirectConversationId ? (typingUsers[activeDirectConversationId] ?? []).map((id) => directConversations.find((conversation) => conversation.id === activeDirectConversationId)?.participant.userId === id ? directConversations.find((conversation) => conversation.id === activeDirectConversationId)?.participant.displayName : null).filter((name): name is string => Boolean(name)).join(', ') : '';
   const localInputLevel = connection === null ? undefined : mediaSnapshot.participants.find((participant) => participant.isLocal)?.audioLevel;
   const openConnectedVoice = (): void => {
     if (!connection) return;
@@ -1044,6 +1432,19 @@ export default function App(): ReactNode {
     if (!featureFlags.serverSettingsPage || serverDetail === null) return;
     settingsReturnScreenRef.current = 'server';
     void navigate(serverSettingsPath(serverDetail.id, section));
+  };
+  const refreshSettingsServer = async (): Promise<void> => {
+    if (settingsServerRouteId === null) return;
+    const [detail, summaries] = await Promise.all([apiClient.getServer(settingsServerRouteId), apiClient.listServers()]);
+    setServerDetail(detail);
+    setServers(summaries);
+  };
+  const handleSettingsServerDeleted = (): void => {
+    setServerDetail(null);
+    setActiveChannelId(null);
+    void apiClient.listServers().then(setServers).catch((caught) => setError(userMessage(caught)));
+    void navigate('/', { replace: true });
+    setScreen('home');
   };
   const closeSettings = (): void => {
     const returnScreen = settingsRoute?.kind === 'server' && serverDetail?.id === settingsRoute.serverId ? 'server' : settingsReturnScreenRef.current;
@@ -1085,15 +1486,19 @@ export default function App(): ReactNode {
         onNavigate={(path) => { void navigate(path); }}
         onNotificationSettingsChange={updateNotificationSettings}
         onOpenServer={leaveSettingsForServer}
+        onServerChanged={refreshSettingsServer}
+        onServerDeleted={handleSettingsServerDeleted}
         onOutput={(deviceId) => persistDevice('outputDeviceId', deviceId)}
         onRefreshDevices={() => { void run(() => refreshDevices(true)); }}
         onTestOutput={() => playVoiceCue('message')}
         onLoadPresence={loadPresence}
         onLoadPrivacy={loadPrivacySettings}
+        onLoadNotificationPreferences={loadNotificationPreferences}
         onPresenceChange={setPresence}
         onUpdatePresence={updatePresenceSettings}
         onUpdatePrivacy={updatePrivacySettings}
-        onUpdateProfile={(name) => apiClient.updateProfile(name)}
+        onUpdateNotificationPreferences={updateServerNotificationPreferences}
+        onLogout={() => { void logout(); }}
         onUserChange={updateUser}
         outputId={settings.outputDeviceId}
         presence={presence}
@@ -1108,8 +1513,8 @@ export default function App(): ReactNode {
     </Suspense>,
   );
   if (screen === 'home' && user) return withUpdateStatus(<><HomePage user={user} version={version} devices={devices} microphoneId={settings.microphoneDeviceId} outputId={settings.outputDeviceId} inputLevel={localInputLevel} busy={busy} error={error} servers={servers} serverName={serverName} directUnreadCount={directUnreadCount} connection={connection} dashboard={homeDashboardQuery.data} dashboardLoading={homeDashboardQuery.isFetching && homeDashboardQuery.data === undefined} dashboardError={homeDashboardQuery.error ? userMessage(homeDashboardQuery.error) : null} onRetryDashboard={() => void homeDashboardQuery.refetch()} onLogout={logout} onSecurity={openUserSettings} onMicrophone={(value) => persistDevice('microphoneDeviceId', value)} onOutput={(value) => persistDevice('outputDeviceId', value)} onRefreshDevices={() => void run(() => refreshDevices(true))} onTestOutput={() => playVoiceCue('message')} onServerName={setServerName} onCreateServer={createServer} onOpenServer={openServer} onOpenDestination={openDestination} onReturnToCall={openConnectedVoice} onDirectMessages={openDirectMessages} onCopyInvite={(inviteUrl) => window.desktop.copyToClipboard(inviteUrl)} />{renderSecurityPanel()}</>);
-  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setError(null); void apiClient.recordOpenedChannel(channelId).catch(() => undefined); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onLoadAttachment={loadAttachment} onConnectVoice={connectVoiceChannel} onMoveVoiceMember={moveVoiceMember} onCopyInvite={() => window.desktop.copyToClipboard(serverDetail.inviteUrl)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} {...(featureFlags.serverSettingsPage ? { onServerSettings: () => openServerSettings('roles') } : {})} onLogout={logout} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} audioProtectionAvailable={supportsOwnAudioExclusion()} busy={busy} sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}{renderSecurityPanel()}</>);
-  if (screen === 'direct' && user) return withUpdateStatus(<><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} busy={busy} error={error} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onLoadAttachment={loadDirectAttachment} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onLogout={logout} />{renderSecurityPanel()}</>);
+  if (screen === 'server' && user && serverDetail) return withUpdateStatus(<><ServerView user={user} server={serverDetail} servers={servers} activeChannelId={activeChannelId} messages={messages} messageDraft={messageDraft} serverName={serverName} busy={busy} error={error} auditLog={serverAuditLog} directUnreadCount={directUnreadCount} typingText={serverTypingText} firstUnreadMessageId={serverFirstUnreadMessageId} hasOlderMessages={serverMessageHistory.conversationId === activeChannelId && serverMessageHistory.hasMore} loadingOlderMessages={serverMessageHistory.loading} connectedVoiceChannelId={connection?.serverId === serverDetail.id ? connection.channelId : undefined} connectedVoiceServerId={connection?.serverId} voiceStage={voiceStage} voiceConnectionPanel={voiceConnectionPanel} onBack={() => setScreen('home')} onDirectMessages={openDirectMessages} onSwitchServer={openServer} onChannel={(channelId) => { setActiveChannelId(channelId); setMessages([]); setServerMessageHistory({ conversationId: null, before: null, hasMore: false, loading: false }); setError(null); void apiClient.recordOpenedChannel(channelId).catch(() => undefined); }} onMessageDraft={setMessageDraft} onSendMessage={sendMessage} onUpdateMessage={updateMessage} onMessageReaction={toggleMessageReaction} onDeleteMessage={deleteMessage} onDeleteAttachment={deleteAttachment} onDownloadAttachment={downloadAttachment} onLoadAttachment={loadAttachment} onLoadOlderMessages={loadOlderServerMessages} onRetryMessage={(messageId) => serverMessageRetryRef.current.get(messageId)?.()} onConnectVoice={connectVoiceChannel} onMoveVoiceMember={moveVoiceMember} onCopyInvite={() => window.desktop.copyToClipboard(serverDetail.inviteUrl)} onCreateChannel={createCommunityChannel} onDeleteChannel={deleteCommunityChannel} onCreateRole={createCommunityRole} onUpdateRole={updateCommunityRole} onDeleteRole={deleteCommunityRole} onReorderRole={reorderCommunityRole} onAssignRoles={assignCommunityRoles} onSetChannelOverwrite={setCommunityChannelOverwrite} onLoadAudit={loadServerAuditLog} onKickMember={kickCommunityMember} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} {...(featureFlags.serverSettingsPage ? { onServerSettings: () => openServerSettings('roles') } : {})} onLogout={logout} />{sources && <SourcePicker audioAllowed={connection?.canStreamApplicationAudio !== false} audioProtectionAvailable={supportsOwnAudioExclusion()} busy={busy} sources={sources} includeAudio={includeAudio} platform={platform} onAudio={setIncludeAudio} onSelect={selectSource} onCancel={cancelSourcePicker} />}{renderSecurityPanel()}</>);
+  if (screen === 'direct' && user) return withUpdateStatus(<><DirectMessagesView user={user} servers={servers} conversations={directConversations} candidates={directCandidates} activeConversationId={activeDirectConversationId} messages={directMessages} messageDraft={directMessageDraft} serverName={serverName} busy={busy} error={error} typingText={directTypingText} blockedParticipantIds={blockedDirectUserIds} firstUnreadMessageId={directFirstUnreadMessageId} hasOlderMessages={directMessageHistory.conversationId === activeDirectConversationId && directMessageHistory.hasMore} loadingOlderMessages={directMessageHistory.loading} onHome={() => setScreen('home')} onSwitchServer={openServer} onConversation={selectDirectConversation} onCreateConversation={createDirectConversation} onBlockParticipant={blockDirectParticipant} onUnblockParticipant={unblockDirectParticipant} onMessageDraft={setDirectMessageDraft} onSendMessage={sendDirectMessage} onUpdateMessage={updateDirectMessage} onMessageReaction={toggleDirectMessageReaction} onDeleteMessage={deleteDirectMessage} onDeleteAttachment={deleteDirectAttachment} onDownloadAttachment={downloadDirectAttachment} onLoadAttachment={loadDirectAttachment} onLoadOlderMessages={loadOlderDirectMessages} onRetryMessage={(messageId) => directMessageRetryRef.current.get(messageId)?.()} onServerName={setServerName} onCreateServer={createServer} onSecurity={openUserSettings} onLogout={logout} />{renderSecurityPanel()}</>);
   return withUpdateStatus(<main className="bootScreen"><span>Не удалось открыть экран</span><button className="secondaryButton" onClick={() => setScreen(user ? 'home' : 'auth')}>Вернуться</button></main>);
 }
 

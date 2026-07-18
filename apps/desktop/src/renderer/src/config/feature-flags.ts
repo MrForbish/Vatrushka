@@ -3,13 +3,12 @@ function booleanFlag(value: string | undefined, fallback: boolean): boolean {
   return value.trim().toLowerCase() === 'true';
 }
 
-const e2ePreview = import.meta.env.MODE === 'e2e' && typeof window !== 'undefined' && window.location.hash.includes('settingsPreview=1');
-const developmentDefault = import.meta.env.DEV || e2ePreview;
+const completedFeatureDefault = true;
 
 export const featureFlags = Object.freeze({
-  serverSettingsPage: booleanFlag(import.meta.env.VITE_FEATURE_SERVER_SETTINGS_PAGE, developmentDefault),
-  userSettingsPage: booleanFlag(import.meta.env.VITE_FEATURE_USER_SETTINGS_PAGE, developmentDefault),
-  presenceStatuses: booleanFlag(import.meta.env.VITE_FEATURE_PRESENCE_STATUSES, developmentDefault),
+  serverSettingsPage: booleanFlag(import.meta.env.VITE_FEATURE_SERVER_SETTINGS_PAGE, completedFeatureDefault),
+  userSettingsPage: booleanFlag(import.meta.env.VITE_FEATURE_USER_SETTINGS_PAGE, completedFeatureDefault),
+  presenceStatuses: booleanFlag(import.meta.env.VITE_FEATURE_PRESENCE_STATUSES, completedFeatureDefault),
 });
 
 export type FeatureFlags = typeof featureFlags;

@@ -5,11 +5,13 @@ import { describe, expect, it, vi } from 'vitest';
 import type { PublicUser } from '@vatrushka/shared';
 
 import { UserAudioSettingsPage } from './UserAudioSettingsPage';
+import { UserAccountSettingsPage } from './UserAccountSettingsPage';
 import { UserProfileSettingsPage } from './UserProfileSettingsPage';
 import { UserPresenceSettingsPage } from './UserPresenceSettingsPage';
 import { UserPrivacySettingsPage } from './UserPrivacySettingsPage';
 
 const user: PublicUser = { id: 'user-1', email: 'owner@myvatrushka.ru', displayName: 'Илья', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true };
+const profile = { id: user.id, email: user.email, displayName: user.displayName!, username: 'ilya', bio: null, avatarUrl: null, usernameChangedAt: null, updatedAt: '2026-07-18T10:00:00.000Z' };
 
 function device(kind: MediaDeviceKind, deviceId: string, label: string): MediaDeviceInfo {
   return { deviceId, groupId: 'group-1', kind, label, toJSON: () => ({}) };
@@ -19,26 +21,27 @@ describe('routed user settings pages', () => {
   it('validates and saves the supported display name field', async () => {
     const onDirtyChange = vi.fn();
     const updatedUser = { ...user, displayName: 'Илья Форбиш' };
-    const onSave = vi.fn(async () => updatedUser);
+    const updatedProfile = { ...profile, displayName: updatedUser.displayName };
+    const onSave = vi.fn(async () => updatedProfile);
     const onUserChange = vi.fn();
-    render(<UserProfileSettingsPage onDirtyChange={onDirtyChange} onSave={onSave} onUserChange={onUserChange} user={user} />);
+    render(<UserProfileSettingsPage onAvatar={vi.fn(async () => profile)} onDirtyChange={onDirtyChange} onLoad={vi.fn(async () => profile)} onResetAvatar={vi.fn(async () => profile)} onSave={onSave} onUserChange={onUserChange} user={user} />);
 
-    const input = screen.getByLabelText('Отображаемое имя');
+    const input = await screen.findByLabelText('Отображаемое имя');
     await userEvent.clear(input);
     await userEvent.type(input, 'Илья Форбиш');
     expect(screen.getByText('Есть несохранённые изменения')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
 
-    await waitFor(() => expect(onSave).toHaveBeenCalledWith('Илья Форбиш'));
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ displayName: 'Илья Форбиш', username: 'ilya', bio: null }));
     expect(onUserChange).toHaveBeenCalledWith(updatedUser);
     expect(screen.getByText('Изменения сохранены')).toBeInTheDocument();
   });
 
   it('does not send an invalid display name', async () => {
-    const onSave = vi.fn(async () => user);
-    render(<UserProfileSettingsPage onDirtyChange={vi.fn()} onSave={onSave} onUserChange={vi.fn()} user={user} />);
+    const onSave = vi.fn(async () => profile);
+    render(<UserProfileSettingsPage onAvatar={vi.fn(async () => profile)} onDirtyChange={vi.fn()} onLoad={vi.fn(async () => profile)} onResetAvatar={vi.fn(async () => profile)} onSave={onSave} onUserChange={vi.fn()} user={user} />);
 
-    const input = screen.getByLabelText('Отображаемое имя');
+    const input = await screen.findByLabelText('Отображаемое имя');
     await userEvent.clear(input);
     await userEvent.type(input, 'x');
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
@@ -78,7 +81,7 @@ describe('routed user settings pages', () => {
     const initial = { directMessages: 'shared_servers' as const, presenceVisibility: 'shared_servers' as const, activityVisible: true, updatedAt: '2026-07-17T10:00:00.000Z' };
     const updated = { directMessages: 'nobody' as const, presenceVisibility: 'nobody' as const, activityVisible: false, updatedAt: '2026-07-17T10:01:00.000Z' };
     const onSave = vi.fn(async () => updated);
-    render(<UserPrivacySettingsPage onDirtyChange={vi.fn()} onLoad={vi.fn(async () => initial)} onSave={onSave} />);
+    render(<UserPrivacySettingsPage onDirtyChange={vi.fn()} onLoad={vi.fn(async () => initial)} onLoadBlocked={vi.fn(async () => [])} onSave={onSave} onUnblock={vi.fn(async () => undefined)} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Кто может писать вам' }));
     await userEvent.click(screen.getByRole('option', { name: 'Никто' }));
     await userEvent.click(screen.getByRole('button', { name: 'Кто видит ваш online-статус' }));
@@ -86,5 +89,27 @@ describe('routed user settings pages', () => {
     await userEvent.click(screen.getByRole('switch', { name: /Показывать активность/u }));
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledWith({ directMessages: 'nobody', presenceVisibility: 'nobody', activityVisible: false }));
+  });
+
+  it('renders and removes server-side blocked users', async () => {
+    const initial = { directMessages: 'shared_servers' as const, presenceVisibility: 'shared_servers' as const, activityVisible: true, updatedAt: '2026-07-17T10:00:00.000Z' };
+    const onUnblock = vi.fn(async () => undefined);
+    render(<UserPrivacySettingsPage onDirtyChange={vi.fn()} onLoad={vi.fn(async () => initial)} onLoadBlocked={vi.fn(async () => [{ userId: 'blocked-1', displayName: 'Заблокированный', username: 'blocked', blockedAt: '2026-07-18T10:00:00.000Z' }])} onSave={vi.fn(async () => initial)} onUnblock={onUnblock} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Разблокировать' }));
+    await waitFor(() => expect(onUnblock).toHaveBeenCalledWith('blocked-1'));
+    expect(screen.queryByText('Заблокированный')).not.toBeInTheDocument();
+  });
+
+  it('requires reauthentication before scheduling account deletion', async () => {
+    const account = { email: user.email, emailVerified: true, pendingEmail: null, deactivationScheduledAt: null, deletionAt: null, ownsServers: false };
+    const scheduled = { ...account, deactivationScheduledAt: '2026-07-18T10:00:00.000Z', deletionAt: '2026-08-01T10:00:00.000Z' };
+    const onDeactivate = vi.fn(async () => scheduled);
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    render(<UserAccountSettingsPage onCancelDeactivation={vi.fn(async () => account)} onConfirmEmail={vi.fn(async () => user)} onDeactivate={onDeactivate} onExport={vi.fn(async () => ({}))} onLoad={vi.fn(async () => account)} onLogout={vi.fn()} onRequestEmail={vi.fn(async () => ({ status: 'CODE_SENT' }))} onUserChange={vi.fn()} user={user} />);
+    const password = await screen.findByLabelText('Пароль');
+    await userEvent.type(password, 'correct-password-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Запланировать удаление' }));
+    await waitFor(() => expect(onDeactivate).toHaveBeenCalledWith({ password: 'correct-password-1', totpCode: null }));
+    expect((await screen.findAllByText('Удаление запланировано')).length).toBeGreaterThan(0);
   });
 });

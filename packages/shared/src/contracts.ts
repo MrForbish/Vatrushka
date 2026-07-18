@@ -5,12 +5,20 @@ export type PlatformRole = 'member' | 'admin' | 'owner';
 export const serverPermissions = [
   'ADMINISTRATOR',
   'VIEW_SERVER',
+  'VIEW_SERVER_SETTINGS',
   'MANAGE_SERVER',
+  'MANAGE_APPEARANCE',
+  'MANAGE_MEMBERS',
   'MANAGE_CHANNELS',
   'MANAGE_ROLES',
   'MANAGE_INVITES',
   'MANAGE_INTEGRATIONS',
   'VIEW_AUDIT_LOG',
+  'EXPORT_AUDIT_LOG',
+  'MANAGE_MODERATION',
+  'MANAGE_BACKUPS',
+  'TRANSFER_OWNERSHIP',
+  'DELETE_SERVER',
   'MANAGE_SERVER_SECURITY',
   'KICK_MEMBERS',
   'BAN_MEMBERS',
@@ -250,6 +258,104 @@ export interface ServerDetail extends ServerSummary {
   permissions: ServerPermission[];
 }
 
+export type ServerNotificationLevel = 'all' | 'mentions' | 'none';
+export type ServerVerificationLevel = 'none' | 'email_verified' | 'account_age';
+
+export interface ServerOverviewSettings {
+  id: string;
+  name: string;
+  description: string | null;
+  language: string;
+  timezone: string;
+  systemChannelId: string | null;
+  welcomeChannelId: string | null;
+  defaultNotificationLevel: ServerNotificationLevel;
+  defaultVoiceInactivitySeconds: number;
+  ownerUserId: string;
+  ownerDisplayName: string;
+  version: number;
+  updatedAt: string;
+}
+
+export interface ServerAppearanceSettings {
+  iconUrl: string | null;
+  bannerUrl: string | null;
+  accentColor: string | null;
+  version: number;
+}
+
+export interface ServerSettingsMember {
+  userId: string;
+  displayName: string;
+  username: string | null;
+  nickname: string | null;
+  platformRole: PlatformRole;
+  joinedAt: string;
+  lastActiveAt: string | null;
+  mutedUntil: string | null;
+  deafened: boolean;
+  roleIds: string[];
+}
+
+export interface ServerChannelCategory {
+  id: string;
+  name: string;
+  position: number;
+}
+
+export interface ServerChannelSettings {
+  id: string;
+  name: string;
+  type: ServerChannelType;
+  position: number;
+  categoryId: string | null;
+  slowModeSeconds: number;
+  maxParticipants: number | null;
+  bitrate: number | null;
+  version: number;
+  archivedAt: string | null;
+}
+
+export interface ServerInviteSettings {
+  id: string;
+  createdByUserId: string | null;
+  createdByDisplayName: string;
+  destinationChannelId: string | null;
+  tokenPreview: string;
+  expiresAt: string | null;
+  maxUses: number | null;
+  useCount: number;
+  revokedAt: string | null;
+  createdAt: string;
+}
+
+export interface CreatedServerInvite extends ServerInviteSettings {
+  inviteUrl: string;
+}
+
+export interface ServerModerationSettings {
+  verificationLevel: ServerVerificationLevel;
+  newMemberRestrictionMinutes: number;
+  messageRateLimitPerMinute: number;
+  mentionLimitPerMessage: number;
+  rules: string | null;
+  version: number;
+}
+
+export interface ServerBanSettings {
+  userId: string;
+  displayName: string;
+  actorUserId: string | null;
+  actorDisplayName: string;
+  reason: string;
+  createdAt: string;
+}
+
+export interface ServerAuditLogPage {
+  entries: ServerAuditLogEntry[];
+  nextCursor: string | null;
+}
+
 export interface TextMessage {
   id: string;
   channelId: string;
@@ -258,6 +364,7 @@ export interface TextMessage {
   authorPlatformRole: PlatformRole;
   content: string;
   mentions?: MessageMention[];
+  conversationMentions?: ConversationMentionDraft[];
   replyTo: {
     messageId: string;
     authorUserId: string;
@@ -272,6 +379,8 @@ export interface TextMessage {
   attachments: MessageAttachment[];
   createdAt: string;
   editedAt: string | null;
+  deletedAt?: string | null;
+  deliveryState?: MessageDeliveryState;
 }
 
 export interface MessageAttachment {
@@ -332,16 +441,169 @@ export interface DirectMessage {
   attachments: MessageAttachment[];
   createdAt: string;
   editedAt: string | null;
+  deletedAt?: string | null;
+  deliveryState?: MessageDeliveryState;
 }
+
+export type MessageDeliveryState = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+export type ConversationType = 'server_channel' | 'direct' | 'group_direct';
+export type ConversationMentionType = 'user' | 'role' | 'everyone';
+export interface ConversationMentionDraft {
+  type: ConversationMentionType;
+  userId?: string | undefined;
+  roleId?: string | undefined;
+  start: number;
+  length: number;
+  displayName: string;
+}
+export type ConversationNotificationType = 'message' | 'direct_message' | 'mention' | 'reply' | 'server_invite' | 'moderation' | 'system';
+
+export interface ConversationSummary {
+  id: string;
+  type: ConversationType;
+  serverId: string | null;
+  channelId: string | null;
+  title: string;
+  updatedAt: string;
+  lastMessage: { id: string; authorId: string; content: string; createdAt: string } | null;
+  unreadCount: number;
+  mentionCount: number;
+}
+
+export interface ConversationMessage {
+  id: string;
+  conversationId: string;
+  clientMessageId: string;
+  author: { id: string; displayName: string; username: string | null; avatarUrl: string | null };
+  content: string;
+  replyTo: { id: string; authorId: string; authorDisplayName: string; content: string } | null;
+  attachments: Array<{ id: string; fileName: string; mimeType: string; sizeBytes: string; width: number | null; height: number | null; durationMs: number | null }>;
+  reactions: Array<{ emoji: string; count: number; reactedByCurrentUser: boolean }>;
+  mentions: Array<{ id: string; type: ConversationMentionType; userId: string | null; roleId: string | null; start: number | null; length: number | null }>;
+  createdAt: string;
+  editedAt: string | null;
+  deletedAt: string | null;
+}
+
+export interface ConversationMessagePage {
+  items: ConversationMessage[];
+  pageInfo: { before: string | null; after: string | null; hasMore: boolean };
+}
+
+export interface ConversationReadState {
+  conversationId: string;
+  lastDeliveredMessageId: string | null;
+  lastReadMessageId: string | null;
+  lastDeliveredAt: string | null;
+  lastReadAt: string | null;
+  mentionCount: number;
+}
+
+export interface ConversationMemberReadState extends ConversationReadState {
+  userId: string;
+}
+
+export interface UserUnreadSummary {
+  totalDirectUnread: number;
+  totalMentionUnread: number;
+  totalReplyUnread: number;
+  conversations: Array<{ conversationId: string; unreadCount: number; mentionCount: number; firstUnreadMessageId: string | null }>;
+}
+
+export type NotificationPreviewMode = 'full' | 'sender_only' | 'hidden';
+
+export interface UserNotificationPreferences {
+  desktopEnabled: boolean;
+  soundEnabled: boolean;
+  previewMode: NotificationPreviewMode;
+  directMessagesEnabled: boolean;
+  mentionsEnabled: boolean;
+  quietHoursStart: string | null;
+  quietHoursEnd: string | null;
+  quietHoursTimezone: string | null;
+  updatedAt: string;
+}
+
+export type NotificationPreferenceLevel = 'all' | 'mentions' | 'none';
+
+export interface ServerNotificationPreferences {
+  serverId: string;
+  level: NotificationPreferenceLevel;
+  mutedUntil: string | null;
+  suppressEveryone: boolean;
+  suppressRoles: boolean;
+  updatedAt: string;
+}
+
+export interface ConversationNotificationPreferences {
+  conversationId: string;
+  level: NotificationPreferenceLevel;
+  mutedUntil: string | null;
+  updatedAt: string;
+}
+
+export interface InternalNotification {
+  id: string;
+  type: ConversationNotificationType;
+  actorUserId: string | null;
+  conversationId: string | null;
+  messageId: string | null;
+  payload: Record<string, unknown>;
+  createdAt: string;
+  readAt: string | null;
+  dismissedAt: string | null;
+  actorDisplayName?: string | null;
+  conversationTitle?: string | null;
+  serverId?: string | null;
+  channelId?: string | null;
+}
+
+export type RealtimeEventType =
+  | 'message.created'
+  | 'message.updated'
+  | 'message.deleted'
+  | 'message.reaction.updated'
+  | 'conversation.read_state.updated'
+  | 'conversation.unread.updated'
+  | 'notification.created'
+  | 'typing.started'
+  | 'typing.stopped'
+  | 'presence.updated'
+  | 'session.revoked'
+  | 'feature_flags.updated';
+
+export interface RealtimeEvent {
+  id: string;
+  type: RealtimeEventType;
+  occurredAt: string;
+  conversationId: string | null;
+  targetUserIds: string[];
+  payload: Record<string, unknown>;
+}
+
+export type RealtimeClientCommand =
+  | { type: 'auth'; token: string; deviceId: string }
+  | { type: 'subscribe'; conversationId: string }
+  | { type: 'unsubscribe'; conversationId: string }
+  | { type: 'typing.start'; conversationId: string }
+  | { type: 'typing.stop'; conversationId: string }
+  | { type: 'active_conversation.set'; conversationId: string | null }
+  | { type: 'delivery.ack'; conversationId: string; messageId: string }
+  | { type: 'conversation.read'; conversationId: string; messageId: string }
+  | { type: 'ping' };
 
 export interface DesktopMessageNotification {
   id: string;
   title: string;
   body: string;
-  serverId: string;
-  channelId: string;
+  serverId?: string | undefined;
+  channelId?: string | undefined;
+  conversationId?: string | undefined;
+  messageId?: string | undefined;
   silent?: boolean | undefined;
 }
+
+export type DesktopMessageNotificationTarget = Pick<DesktopMessageNotification, 'serverId' | 'channelId' | 'conversationId' | 'messageId'>;
 
 export type DesktopUpdateStatus =
   | 'idle'
@@ -368,6 +630,33 @@ export interface PublicUser {
   platformRole: PlatformRole;
   hasPassword: boolean;
   twoFactorEnabled: boolean;
+}
+
+export interface UserProfileSettings {
+  id: string;
+  email: string;
+  displayName: string;
+  username: string | null;
+  bio: string | null;
+  avatarUrl: string | null;
+  usernameChangedAt: string | null;
+  updatedAt: string;
+}
+
+export interface BlockedUserSettings {
+  userId: string;
+  displayName: string;
+  username: string | null;
+  blockedAt: string;
+}
+
+export interface UserAccountSettings {
+  email: string;
+  emailVerified: boolean;
+  pendingEmail: string | null;
+  deactivationScheduledAt: string | null;
+  deletionAt: string | null;
+  ownsServers: boolean;
 }
 
 export interface PasswordLoginChallenge {
@@ -403,7 +692,12 @@ export type SecurityEventType =
   | 'TWO_FACTOR_ENABLED'
   | 'TWO_FACTOR_DISABLED'
   | 'RECOVERY_CODES_REGENERATED'
-  | 'REFRESH_TOKEN_REUSE_DETECTED';
+  | 'REFRESH_TOKEN_REUSE_DETECTED'
+  | 'PROFILE_UPDATED'
+  | 'USERNAME_CHANGED'
+  | 'EMAIL_CHANGED'
+  | 'ACCOUNT_DEACTIVATION_SCHEDULED'
+  | 'ACCOUNT_DEACTIVATION_CANCELLED';
 
 export interface SecurityEvent {
   id: string;
@@ -466,8 +760,9 @@ export interface DesktopBridge {
   selectDesktopSource(sourceId: string, includeAudio: boolean): Promise<void>;
   clearSelectedDesktopSource(): Promise<void>;
   copyToClipboard(text: string): Promise<void>;
+  setBadgeCount(count: number): Promise<void>;
   showMessageNotification(notification: DesktopMessageNotification): Promise<void>;
-  onMessageNotificationClick(callback: (target: Pick<DesktopMessageNotification, 'serverId' | 'channelId'>) => void): () => void;
+  onMessageNotificationClick(callback: (target: DesktopMessageNotificationTarget) => void): () => void;
   onDeepLink(callback: (inviteToken: string) => void): () => void;
   getPlatform(): Promise<string>;
   getLocalSettings(): Promise<LocalSettings>;

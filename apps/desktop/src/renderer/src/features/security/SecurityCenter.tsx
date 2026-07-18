@@ -48,6 +48,11 @@ const eventCopy: Record<SecurityEvent['type'], { title: string; description: str
   TWO_FACTOR_DISABLED: { title: '2FA отключена', description: 'Вход снова подтверждается по email', tone: 'warning' },
   RECOVERY_CODES_REGENERATED: { title: 'Резервные коды обновлены', description: 'Предыдущий набор больше не действует', tone: 'warning' },
   REFRESH_TOKEN_REUSE_DETECTED: { title: 'Подозрительная активность', description: 'Старый токен использован повторно; семейство сессии отозвано', tone: 'danger' },
+  PROFILE_UPDATED: { title: 'Профиль изменён', description: 'Обновлены данные профиля', tone: 'neutral' },
+  USERNAME_CHANGED: { title: 'Username изменён', description: 'Обновлён уникальный handle аккаунта', tone: 'warning' },
+  EMAIL_CHANGED: { title: 'Email изменён', description: 'Новый адрес подтверждён', tone: 'warning' },
+  ACCOUNT_DEACTIVATION_SCHEDULED: { title: 'Удаление запланировано', description: 'Начался 14-дневный срок отмены', tone: 'danger' },
+  ACCOUNT_DEACTIVATION_CANCELLED: { title: 'Удаление отменено', description: 'Аккаунт остаётся активным', tone: 'success' },
 };
 
 function formatDate(value: string): string {

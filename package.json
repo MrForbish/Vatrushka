@@ -1,6 +1,6 @@
 {
   "name": "vatrushka",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "«Ватрушка» — настольные серверы, текстовые и голосовые каналы",
   "type": "module",
@@ -25,6 +25,7 @@
     "test": "npm run build -w @vatrushka/shared && npm run test:unit && npm run test:api && npm run test:renderer",
     "test:unit": "npm run test -w @vatrushka/shared",
     "test:api": "npm run test -w @vatrushka/api",
+    "test:integration": "npm run test:integration -w @vatrushka/api",
     "test:renderer": "npm run test -w @vatrushka/desktop",
     "test:e2e": "npm run test:e2e -w @vatrushka/desktop",
     "storybook": "npm run storybook -w @vatrushka/desktop",

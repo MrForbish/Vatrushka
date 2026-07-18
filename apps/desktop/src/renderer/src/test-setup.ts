@@ -16,6 +16,7 @@ const desktop: DesktopBridge = {
   selectDesktopSource: async () => undefined,
   clearSelectedDesktopSource: async () => undefined,
   copyToClipboard: async () => undefined,
+  setBadgeCount: async () => undefined,
   showMessageNotification: async () => undefined,
   onMessageNotificationClick: () => () => undefined,
   onDeepLink: () => () => undefined,

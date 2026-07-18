@@ -4,6 +4,8 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-18
+
 ### Added
 
 - private S3-compatible storage for channel and direct-message attachments, with API-only credentials and authenticated downloads;
@@ -18,6 +20,19 @@ All notable changes to Vatrushka are documented here. The project follows semant
 - DND delivery policy that suppresses message sounds, desktop notifications and future push delivery while preserving unread counters and notification history.
 - structured user mentions with keyboard/mouse autocomplete, Unicode-safe entities, rename-safe rendering, backend membership/permission validation and per-channel unread mention counters;
 - additive `message_mentions` migration with atomic create/edit persistence and repeated-mention deduplication at notification/count level.
+- canonical PostgreSQL conversations for server channels and direct messages, cursor history, idempotent optimistic retry, tombstones and virtualized upward pagination;
+- authenticated WebSocket delivery through Redis Pub/Sub and transactional outbox, including typing, multi-device read synchronization and reconnect reconciliation;
+- direct-message `sent`/`delivered`/`read` states, first-unread navigation and native Electron notifications that open both server channels and private dialogs;
+- notification center plus user/server/conversation delivery levels, mute windows, role/everyone suppression, quiet hours and strict DND;
+- Prometheus-compatible `/metrics` for message latency/errors, WebSocket, outbox, notifications, Redis and unread recalculation;
+- durable S3 object-deletion jobs with retry/backoff for unfinished uploads, deleted-message retention and previews;
+- complete routed server/user settings, profile/avatar/username/bio, privacy/blocking, email change, export and delayed account anonymization.
+
+### Fixed
+
+- updater restart is deferred while a voice call is active, without showing a notification when no update exists;
+- revoked sessions are disconnected from realtime on the next WebSocket heartbeat;
+- role and `@everyone` mentions now use stable entities, backend permissions and rename-safe labels.
 
 ### Operations
 

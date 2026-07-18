@@ -13,7 +13,7 @@ S3_FORCE_PATH_STYLE=true
 S3_KEY_PREFIX=prod
 ```
 
-Ключи S3 и имя бакета являются server-only настройками. Их нельзя добавлять в `apps/desktop/.env*`, renderer или публичные API-контракты. Бакет остаётся приватным: desktop загружает и скачивает вложения через Fastify, поэтому серверные permissions одинаково защищают PostgreSQL и S3. Публичный media-домен и presigned URL на этом этапе не используются.
+Ключи S3 и имя бакета являются server-only настройками. Их нельзя добавлять в `apps/desktop/.env*`, renderer или публичные API-контракты. Бакет остаётся приватным. Canonical messaging получает короткоживущие presigned PUT/GET только после backend auth/permission checks; S3 credentials в desktop не попадают. Legacy attachment endpoint продолжает проксировать байты через Fastify на период совместимости.
 
 ## Раскладка объектов
 
@@ -22,6 +22,7 @@ S3_KEY_PREFIX=prod
 ```text
 prod/attachments/channels/<message-id>/<attachment-id>
 prod/attachments/direct/<message-id>/<attachment-id>
+prod/messages/<uploader-user-id>/<attachment-id>
 prod/health/<random-id>
 ```
 
@@ -64,7 +65,28 @@ curl -fsS https://api.myvatrushka.ru/health/ready
 docker compose --env-file .env -f infra/docker/docker-compose.yml logs --tail=200 api
 ```
 
-Также вручную загрузите, откройте и удалите по одному изображению и обычному файлу в канале и личной переписке. Удаление S3 выполняется best-effort: сетевой сбой может оставить безопасный, но лишний объект. До contract-фазы такие объекты можно выявлять сверкой `storage_key` с бакетом; автоматический garbage collector запланирован отдельно.
+Также вручную загрузите, откройте и удалите по одному изображению и обычному файлу в канале и личной переписке. Canonical upload использует intent → presigned PUT → finalize metadata check → message binding. Незавершённый intent не может быть присоединён к сообщению.
+
+## Lifecycle и garbage collection
+
+Миграция `0022_square_luminals` добавляет durable `object_deletion_jobs`. При удалении canonical-вложения PostgreSQL в одной транзакции удаляет metadata и создаёт job; только после commit worker удаляет объект. Ошибки S3 получают exponential backoff, после восьми попыток job остаётся в `failed_at` для операторского разбора.
+
+Worker также переводит в очередь:
+
+- незавершённые upload intents старше `MEDIA_CLEANUP_UNFINISHED_HOURS`;
+- объекты сообщений, удалённых раньше retention cutoff;
+- временные preview objects.
+
+Период запуска задаёт `MEDIA_CLEANUP_INTERVAL_SECONDS`. Значения по умолчанию — 24 часа и 60 секунд. Для проверки:
+
+```sql
+select attempts, available_at, completed_at, failed_at, reason
+from object_deletion_jobs
+order by created_at desc
+limit 50;
+```
+
+Не удаляйте failed jobs вручную до сверки с бакетом. Повторную попытку можно безопасно инициировать, очистив `failed_at`, обнулив `attempts` и выставив `available_at = now()` в согласованном maintenance window.
 
 ## Откат
 

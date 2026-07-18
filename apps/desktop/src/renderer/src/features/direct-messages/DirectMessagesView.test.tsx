@@ -35,7 +35,7 @@ describe('direct messages UI', () => {
   it('shows unread conversations and starts a conversation with a shared member', async () => {
     const onCreateConversation = vi.fn();
     const onMessageReaction = vi.fn();
-    render(<DirectMessagesView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Анна', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} servers={[{ id: 'server-1', name: 'Команда', inviteUrl: 'https://myvatrushka.ru/i/ABCD2345test', ownerUserId: 'user-1', memberCount: 3, createdAt: '2026-01-01T00:00:00.000Z' }]} conversations={[conversation]} candidates={[{ userId: 'user-3', displayName: 'Максим', platformRole: 'member', sharedServerNames: ['Команда'] }]} activeConversationId={conversation.id} messages={[message]} messageDraft="" serverName="" busy={false} error={null} onHome={noop} onSwitchServer={noop} onConversation={noop} onCreateConversation={onCreateConversation} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onLogout={noop} />);
+    render(<DirectMessagesView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Анна', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} servers={[{ id: 'server-1', name: 'Команда', inviteUrl: 'https://myvatrushka.ru/i/ABCD2345test', ownerUserId: 'user-1', memberCount: 3, createdAt: '2026-01-01T00:00:00.000Z' }]} conversations={[conversation]} candidates={[{ userId: 'user-3', displayName: 'Максим', platformRole: 'member', sharedServerNames: ['Команда'] }]} activeConversationId={conversation.id} messages={[message]} messageDraft="" serverName="" busy={false} error={null} onHome={noop} onSwitchServer={noop} onConversation={noop} onCreateConversation={onCreateConversation} onBlockParticipant={noop} onUnblockParticipant={noop} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onLogout={noop} />);
 
     expect(screen.getAllByText('Привет!').length).toBeGreaterThan(0);
     expect(screen.getAllByText('2').length).toBeGreaterThan(0);
@@ -47,5 +47,18 @@ describe('direct messages UI', () => {
     await userEvent.click(screen.getByRole('option', { name: 'Максим · Команда' }));
     await userEvent.click(screen.getByRole('button', { name: 'Открыть диалог' }));
     expect(onCreateConversation).toHaveBeenCalledWith('user-3');
+  });
+
+  it('confirms blocking and disables the composer for a blocked participant', async () => {
+    const onBlockParticipant = vi.fn();
+    const { rerender } = render(<DirectMessagesView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Анна', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} servers={[]} conversations={[conversation]} candidates={[]} activeConversationId={conversation.id} messages={[message]} messageDraft="" serverName="" busy={false} error={null} onHome={noop} onSwitchServer={noop} onConversation={noop} onCreateConversation={noop} onBlockParticipant={onBlockParticipant} onUnblockParticipant={noop} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={noop} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onLogout={noop} />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Заблокировать' }));
+    await userEvent.click(screen.getAllByRole('button', { name: 'Заблокировать' })[1]!);
+    expect(onBlockParticipant).toHaveBeenCalledWith('user-2');
+
+    rerender(<DirectMessagesView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Анна', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} servers={[]} conversations={[conversation]} candidates={[]} activeConversationId={conversation.id} messages={[message]} messageDraft="" serverName="" busy={false} error={null} blockedParticipantIds={['user-2']} onHome={noop} onSwitchServer={noop} onConversation={noop} onCreateConversation={noop} onBlockParticipant={noop} onUnblockParticipant={noop} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={noop} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onLogout={noop} />);
+    expect(screen.getByText('Новые сообщения недоступны, пока вы его не разблокируете.')).toBeInTheDocument();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
   });
 });

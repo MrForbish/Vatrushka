@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
-import type { MessageMentionInput } from '@vatrushka/shared';
+import type { ConversationMentionDraft } from '@vatrushka/shared';
 
 import { Button } from '../primitives';
 import { MessageComposer, MessageList, SystemMessageCard, UnreadDivider, type MessageViewModel } from './Messaging';
@@ -62,8 +62,8 @@ export const ComposerStates: Story = { render: () => <ComposerScenario /> };
 
 function MentionComposerScenario(): React.JSX.Element {
   const [value, setValue] = useState('');
-  const [mentions, setMentions] = useState<MessageMentionInput[]>([]);
-  return <div style={{ minHeight: 360, padding: '180px 24px 24px' }}><MessageComposer channelName="общий" mentionCandidates={[{ userId: '11111111-1111-4111-8111-111111111111', displayName: 'Анна Белова' }, { userId: '22222222-2222-4222-8222-222222222222', displayName: 'Илья Форбиш' }]} mentions={mentions} onChange={setValue} onMentionsChange={setMentions} onSubmit={() => undefined} value={value} /></div>;
+  const [mentions, setMentions] = useState<ConversationMentionDraft[]>([]);
+  return <div style={{ minHeight: 360, padding: '180px 24px 24px' }}><MessageComposer channelName="общий" mentionCandidates={[{ type: 'user', userId: '11111111-1111-4111-8111-111111111111', displayName: 'Анна Белова' }, { type: 'user', userId: '22222222-2222-4222-8222-222222222222', displayName: 'Илья Форбиш' }, { type: 'role', roleId: '33333333-3333-4333-8333-333333333333', displayName: 'Разработчики' }, { type: 'everyone', displayName: 'everyone' }]} mentions={mentions} onChange={setValue} onMentionsChange={setMentions} onSubmit={() => undefined} value={value} /></div>;
 }
 
 export const MentionAutocomplete: Story = { render: () => <MentionComposerScenario /> };
@@ -74,7 +74,7 @@ export const MentionKeyboardSelection: Story = {
     const canvas = within(canvasElement);
     const editor = canvas.getByRole('textbox', { name: 'Сообщение' });
     await userEvent.type(editor, '@ан');
-    await expect(canvas.getByRole('listbox', { name: 'Упомянуть участника' })).toBeVisible();
+    await expect(canvas.getByRole('listbox', { name: 'Упомянуть участника или роль' })).toBeVisible();
     await userEvent.keyboard('{Enter}');
     await expect(editor).toHaveValue('@Анна Белова');
   },

@@ -17,6 +17,15 @@ describe('UpdateStatus', () => {
     expect(onInstall).toHaveBeenCalledOnce();
   });
 
+  it('does not restart the client while a voice call is active', () => {
+    const onInstall = vi.fn();
+    render(<UpdateStatus installBlocked state={{ status: 'ready', currentVersion: '0.4.0', version: '0.5.0' }} onInstall={onInstall} />);
+    const button = screen.getByRole('button', { name: 'После звонка' });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(onInstall).not.toHaveBeenCalled();
+  });
+
   it.each(['idle', 'checking', 'up-to-date', 'error', 'unsupported'] as const)('stays hidden for %s when no update is available', (status) => {
     const { container } = render(<UpdateStatus state={{ status, currentVersion: '0.4.0' }} onInstall={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();

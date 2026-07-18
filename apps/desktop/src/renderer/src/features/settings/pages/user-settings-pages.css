@@ -27,3 +27,25 @@
 .vui-user-settings-note--dnd { display: grid; gap: var(--space-1); border-color: color-mix(in srgb, var(--color-danger) 45%, var(--color-border-subtle)); }
 @media (max-width: 1180px) { .vui-user-profile-settings__grid { grid-template-columns: 1fr; } }
 @media (max-width: 760px) { .vui-presence-options { grid-template-columns: 1fr; } }
+.vui-user-settings-test { justify-self: start; padding: 8px 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); color: var(--color-text-secondary); background: var(--color-surface-1); font: var(--text-label-sm); cursor: pointer; }
+.vui-user-settings-test:hover:not(:disabled) { color: var(--color-text-primary); border-color: var(--color-border-strong); }
+.vui-user-settings-test:disabled { opacity: .45; cursor: not-allowed; }
+.vui-user-settings-time-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.vui-user-settings-time-grid > :last-child { grid-column: 1 / -1; }
+.vui-user-profile-avatar-editor { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); }
+.vui-user-profile-avatar-editor > img, .vui-user-profile-preview__avatar { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
+.vui-user-profile-avatar-editor label { display: grid; gap: var(--space-1); color: var(--color-text-secondary); font: var(--text-label-sm); }
+.vui-user-profile-avatar-editor input { max-width: 260px; color: var(--color-text-muted); }
+.vui-user-settings-bio { position: relative; display: grid; gap: var(--space-2); color: var(--color-text-secondary); font: var(--text-label-sm); }
+.vui-user-settings-bio textarea { min-height: 112px; resize: vertical; padding: var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-0); color: var(--color-text-primary); font: var(--text-body-md); }
+.vui-user-settings-bio small { justify-self: end; color: var(--color-text-muted); font: var(--text-caption); }
+.vui-user-profile-preview > .vui-user-profile-preview__avatar { margin-top: -52px; margin-left: var(--space-3); box-shadow: 0 0 0 4px var(--color-surface-1); }
+.vui-user-profile-preview > p { margin: 0; color: var(--color-text-secondary); font: var(--text-body-md); white-space: pre-wrap; }
+.vui-user-settings-note--error { border-color: color-mix(in srgb, var(--color-danger) 55%, var(--color-border-subtle)); color: var(--color-danger); }
+.vui-user-blocked-list { display: grid; gap: var(--space-2); }
+.vui-user-blocked-list > div { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); background: var(--color-surface-0); }
+.vui-user-blocked-list span { display: grid; gap: var(--space-1); }
+.vui-user-blocked-list small { color: var(--color-text-muted); font: var(--text-caption); }
+.vui-user-account-danger { border-color: color-mix(in srgb, var(--color-danger) 48%, var(--color-border-subtle)); }
+.vui-user-deactivation-status { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-warning); border-radius: var(--radius-sm); }
+.vui-user-deactivation-status span { flex: 1; min-width: 220px; color: var(--color-text-secondary); font: var(--text-body-md); }

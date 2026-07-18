@@ -120,6 +120,55 @@
       "when": 1784322807058,
       "tag": "0016_nasty_malcolm_colcord",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1784327052530,
+      "tag": "0017_canonical_messaging_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1784327515715,
+      "tag": "0018_identity_server_settings_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1784327549197,
+      "tag": "0019_server_default_channels_expand",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1784330780452,
+      "tag": "0020_notification_preview_mode",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1784335600948,
+      "tag": "0021_majestic_zodiak",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1784336929577,
+      "tag": "0022_square_luminals",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784337738627,
+      "tag": "0023_attachment_cleanup_trigger",
+      "breakpoints": true
     }
   ]
 }

@@ -2,9 +2,11 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadBucketCommand,
+  HeadObjectCommand,
   PutObjectCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 import type { AppConfig } from '../config.js';
 import type { ObjectStorage, ObjectStoragePutInput } from '../ports.js';
@@ -49,6 +51,19 @@ export class S3ObjectStorage implements ObjectStorage {
 
   async deleteObject(key: string): Promise<void> {
     await this.client.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  async createPutUrl(key: string, mimeType: string, size: number, expiresInSeconds: number): Promise<string> {
+    return getSignedUrl(this.client, new PutObjectCommand({ Bucket: this.bucket, Key: key, ContentType: mimeType, ContentLength: size, CacheControl: 'private, max-age=3600' }), { expiresIn: expiresInSeconds });
+  }
+
+  async createGetUrl(key: string, expiresInSeconds: number): Promise<string> {
+    return getSignedUrl(this.client, new GetObjectCommand({ Bucket: this.bucket, Key: key }), { expiresIn: expiresInSeconds });
+  }
+
+  async headObject(key: string): Promise<{ size: number; mimeType: string | null }> {
+    const result = await this.client.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+    return { size: result.ContentLength ?? 0, mimeType: result.ContentType ?? null };
   }
 
   close(): void {

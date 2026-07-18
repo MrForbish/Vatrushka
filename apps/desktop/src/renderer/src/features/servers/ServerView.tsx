@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
 import {
-  materializeMentionLabels,
+  materializeConversationMentionLabels,
+  type ConversationMentionDraft,
   type PermissionOverwriteTargetType,
   type PublicUser,
   type ServerAuditLogEntry,
@@ -9,7 +10,6 @@ import {
   type ServerPermission,
   type ServerSummary,
   type TextMessage,
-  type MessageMentionInput,
 } from '@vatrushka/shared';
 
 import {
@@ -34,6 +34,7 @@ import {
   type WorkspaceNavigationItem,
 } from '../../ui';
 import { ServerSettings } from '../roles';
+import { NotificationSettingsDialog } from '../notifications/NotificationSettingsDialog';
 import './server-view.css';
 
 export interface ServerViewProps {
@@ -52,18 +53,25 @@ export interface ServerViewProps {
   connectedVoiceServerId?: string | undefined;
   voiceStage?: ReactNode | undefined;
   voiceConnectionPanel?: ReactNode | undefined;
+  typingText?: string | undefined;
+  hasOlderMessages?: boolean;
+  loadingOlderMessages?: boolean;
+  firstUnreadMessageId?: string | null;
+  targetMessageId?: string | null;
   onBack(): void;
   onDirectMessages?(): void;
   onSwitchServer(serverId: string): void;
   onChannel(channelId: string): void;
   onMessageDraft(value: string): void;
-  onSendMessage(replyToMessageId?: string, files?: File[], mentions?: MessageMentionInput[]): void;
-  onUpdateMessage(messageId: string, content: string, mentions?: MessageMentionInput[]): void;
+  onSendMessage(replyToMessageId?: string, files?: File[], mentions?: ConversationMentionDraft[]): void;
+  onUpdateMessage(messageId: string, content: string, mentions?: ConversationMentionDraft[]): void;
   onMessageReaction(messageId: string, emoji: string): void;
   onDeleteMessage(messageId: string): void;
   onDeleteAttachment(attachmentId: string): void;
   onDownloadAttachment(attachmentId: string, fileName: string): void;
   onLoadAttachment?(attachmentId: string): Promise<Blob>;
+  onLoadOlderMessages?(): void;
+  onRetryMessage?(messageId: string): void;
   onConnectVoice(channelId: string): void;
   onMoveVoiceMember?(channelId: string, userId: string): void;
   onCopyInvite(): void | Promise<void>;
@@ -103,7 +111,8 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const [replyingMessage, setReplyingMessage] = useState<MessageViewModel | null>(null);
   const [pendingAttachments, setPendingAttachments] = useState<Array<{ id: string; file: File }>>([]);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [draftMentions, setDraftMentions] = useState<MessageMentionInput[]>([]);
+  const [draftMentions, setDraftMentions] = useState<ConversationMentionDraft[]>([]);
+  const [notificationSettingsOpen, setNotificationSettingsOpen] = useState(false);
 
   useEffect(() => {
     setEditingMessage(null);
@@ -240,10 +249,10 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
         serverContext={serverContext}
         topBar={activeChannel === null
           ? <ServerTopBar channelName="Обзор" channelType="text" memberCount={props.server.memberCount} />
-          : <ServerTopBar channelName={activeChannel.name} channelType={activeChannel.type} description={activeChannel.type === 'text' ? 'История сохраняется' : activeChannel.id === props.connectedVoiceChannelId ? 'Вы подключены · навигация остаётся доступной' : 'Голосовая сессия'} memberCount={props.server.memberCount} />}
+          : <ServerTopBar actions={activeChannel.type === 'text' ? <IconButton icon="bell" label="Настроить уведомления канала" onClick={() => setNotificationSettingsOpen(true)} size="sm" type="button" /> : undefined} channelName={activeChannel.name} channelType={activeChannel.type} description={activeChannel.type === 'text' ? 'История сохраняется' : activeChannel.id === props.connectedVoiceChannelId ? 'Вы подключены · навигация остаётся доступной' : 'Голосовая сессия'} memberCount={props.server.memberCount} />}
         workspaceLibrary={workspaceLibrary}
       >
-        <ServerStage {...props} activeChannel={activeChannel} attachmentError={attachmentError} canManageChannels={canManageChannels} canManageMessages={canManageMessages} draftMentions={draftMentions} editingMessage={editingMessage} pendingAttachments={pendingAttachments} replyingMessage={replyingMessage} onAddAttachments={addAttachments} onCancelContext={() => { setEditingMessage(null); setReplyingMessage(null); setDraftMentions([]); props.onMessageDraft(''); }} onEdit={(message) => { const draft = materializeMentionLabels(message.content, message.mentions ?? []); setReplyingMessage(null); setEditingMessage(message); setPendingAttachments([]); setAttachmentError(null); setDraftMentions(draft.mentions); props.onMessageDraft(draft.content); }} onMentionsChange={setDraftMentions} onOpenChannel={() => openChannelForm('text')} onRemoveAttachment={(id) => { setPendingAttachments((current) => current.filter((attachment) => attachment.id !== id)); setAttachmentError(null); }} onReply={(message) => { setEditingMessage(null); setReplyingMessage(message); }} onSentAttachments={() => { setPendingAttachments([]); setAttachmentError(null); }} />
+        <ServerStage {...props} activeChannel={activeChannel} attachmentError={attachmentError} canManageChannels={canManageChannels} canManageMessages={canManageMessages} draftMentions={draftMentions} editingMessage={editingMessage} pendingAttachments={pendingAttachments} replyingMessage={replyingMessage} onAddAttachments={addAttachments} onCancelContext={() => { setEditingMessage(null); setReplyingMessage(null); setDraftMentions([]); props.onMessageDraft(''); }} onEdit={(message) => { const draft = materializeConversationMentionLabels(message.content, (message.mentions ?? []).map((mention) => ({ type: mention.key.startsWith('role:') ? 'role' as const : mention.key === 'everyone' ? 'everyone' as const : 'user' as const, ...(mention.userId ? { userId: mention.userId } : {}), ...(mention.key.startsWith('role:') ? { roleId: mention.key.slice(5) } : {}), displayName: mention.displayName, start: mention.start, length: mention.length }))); setReplyingMessage(null); setEditingMessage(message); setPendingAttachments([]); setAttachmentError(null); setDraftMentions(draft.mentions); props.onMessageDraft(draft.content); }} onMentionsChange={setDraftMentions} onOpenChannel={() => openChannelForm('text')} onRemoveAttachment={(id) => { setPendingAttachments((current) => current.filter((attachment) => attachment.id !== id)); setAttachmentError(null); }} onReply={(message) => { setEditingMessage(null); setReplyingMessage(message); }} onSentAttachments={() => { setPendingAttachments([]); setAttachmentError(null); }} />
       </AppShell>
 
       <Modal onClose={() => setChannelFormOpen(false)} open={channelFormOpen} title="Новый канал">
@@ -266,6 +275,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       </Modal>
 
       <ServerSettings auditLog={props.auditLog} busy={props.busy} currentUserId={props.user.id} error={props.error} onAssignRoles={props.onAssignRoles} onClose={() => setRolesOpen(false)} onCreateRole={props.onCreateRole} onDeleteRole={props.onDeleteRole} onLoadAudit={props.onLoadAudit} onReorderRole={props.onReorderRole} onSetChannelOverwrite={props.onSetChannelOverwrite} onUpdateRole={props.onUpdateRole} open={rolesOpen} server={props.server} />
+      {activeChannel?.type === 'text' ? <NotificationSettingsDialog conversationId={activeChannel.id} onClose={() => setNotificationSettingsOpen(false)} open={notificationSettingsOpen} serverId={props.server.id} title={`#${activeChannel.name}`} /> : null}
     </>
   );
 }
@@ -275,7 +285,7 @@ interface ServerStageProps extends ServerViewProps {
   attachmentError: string | null;
   canManageChannels: boolean;
   canManageMessages: boolean;
-  draftMentions: MessageMentionInput[];
+  draftMentions: ConversationMentionDraft[];
   editingMessage: MessageViewModel | null;
   pendingAttachments: Array<{ id: string; file: File }>;
   replyingMessage: MessageViewModel | null;
@@ -283,13 +293,14 @@ interface ServerStageProps extends ServerViewProps {
   onCancelContext(): void;
   onEdit(message: MessageViewModel): void;
   onOpenChannel(): void;
-  onMentionsChange(mentions: MessageMentionInput[]): void;
+  onMentionsChange(mentions: ConversationMentionDraft[]): void;
   onRemoveAttachment(id: string): void;
   onReply(message: MessageViewModel): void;
   onSentAttachments(): void;
 }
 
 function ServerStage({ activeChannel, attachmentError, canManageChannels, canManageMessages, draftMentions, editingMessage, onAddAttachments, onCancelContext, onEdit, onMentionsChange, onOpenChannel, onRemoveAttachment, onReply, onSentAttachments, pendingAttachments, replyingMessage, ...props }: ServerStageProps): ReactNode {
+  const [selectedMention, setSelectedMention] = useState<NonNullable<MessageViewModel['mentions']>[number] | null>(null);
   if (activeChannel === null) {
     return <div className="vui-voice-lobby"><Icon name="message" size={40} /><h1>На сервере пока нет каналов</h1>{canManageChannels ? <Button onClick={onOpenChannel}>Создать канал</Button> : null}</div>;
   }
@@ -304,15 +315,17 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
     authorId: message.authorUserId,
     authorName: message.authorDisplayName,
     content: message.content,
-    mentions: message.mentions ?? [],
+    mentions: (message.conversationMentions ?? message.mentions?.map((mention) => ({ type: 'user' as const, ...mention })) ?? []).map((mention) => ({ key: mention.type === 'user' ? `user:${mention.userId ?? ''}` : mention.type === 'role' ? `role:${mention.roleId ?? ''}` : 'everyone', ...(mention.userId ? { userId: mention.userId } : {}), ...('roleId' in mention && mention.roleId ? { roleId: mention.roleId } : {}), displayName: mention.displayName, start: mention.start, length: mention.length })),
     createdAt: message.createdAt,
     edited: message.editedAt !== null,
+    deleted: message.deletedAt !== null && message.deletedAt !== undefined,
     own: message.authorUserId === props.user.id,
-    canEdit: (message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages,
-    canDelete: (message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages,
+    canEdit: !message.deletedAt && ((message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages),
+    canDelete: !message.deletedAt && ((message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages),
     attachments: message.attachments.map((attachment) => ({ ...attachment, canDelete: (message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages })),
     ...(message.replyTo === null ? {} : { replyPreview: { authorName: message.replyTo.authorDisplayName, content: message.replyTo.content } }),
     reactions: message.reactions,
+    ...(message.deliveryState === undefined ? {} : { deliveryState: message.deliveryState }),
     ...(message.authorPlatformRole === 'owner' ? { authorBadge: 'founder' as const } : message.authorPlatformRole === 'admin' ? { authorBadge: 'admin' as const } : {}),
   }));
   const submitMessage = (): void => {
@@ -328,10 +341,17 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
   };
   return (
     <section className="vui-message-stage">
-      <MessageList channelName={activeChannel.name} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onLoadAttachment={props.onLoadAttachment} onEdit={onEdit} {...(channelPermissions.includes('ADD_REACTIONS') ? { onReaction: props.onMessageReaction } : {})} {...(channelPermissions.includes('SEND_MESSAGES') ? { onReply } : {})} />
-      <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} canSend={editingMessage === null ? channelPermissions.includes('SEND_MESSAGES') : editingMessage.canEdit === true} channelName={activeChannel.name} mentionCandidates={props.server.members.map((member) => ({ userId: member.userId, displayName: member.displayName }))} mentions={draftMentions} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} {...(editingMessage === null && channelPermissions.includes('SEND_ATTACHMENTS') ? { onFilesSelected: onAddAttachments } : {})} onChange={props.onMessageDraft} onMentionsChange={onMentionsChange} onRemoveAttachment={onRemoveAttachment} onSubmit={submitMessage} value={props.messageDraft} />
+      <MessageList channelName={activeChannel.name} firstUnreadMessageId={props.firstUnreadMessageId} hasOlder={props.hasOlderMessages} loadingOlder={props.loadingOlderMessages} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onLoadAttachment={props.onLoadAttachment} onLoadOlder={props.onLoadOlderMessages} onMention={setSelectedMention} onRetry={props.onRetryMessage} onEdit={onEdit} targetMessageId={props.targetMessageId} {...(channelPermissions.includes('ADD_REACTIONS') ? { onReaction: props.onMessageReaction } : {})} {...(channelPermissions.includes('SEND_MESSAGES') ? { onReply } : {})} />
+      {props.typingText ? <div aria-live="polite" className="vui-message-typing"><span /><strong>{props.typingText}</strong> печатает…</div> : null}
+      <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} canSend={editingMessage === null ? channelPermissions.includes('SEND_MESSAGES') : editingMessage.canEdit === true} channelName={activeChannel.name} mentionCandidates={[...props.server.members.map((member) => ({ type: 'user' as const, userId: member.userId, displayName: member.displayName, detail: member.roles.filter((role) => !role.isDefault).map((role) => role.name).join(' · ') || '@участник' })), ...(channelPermissions.includes('MENTION_EVERYONE') ? [...props.server.roles.filter((role) => role.kind === 'CUSTOM').map((role) => ({ type: 'role' as const, roleId: role.id, displayName: role.name.replace(/^@/u, ''), detail: '@роль' })), { type: 'everyone' as const, displayName: 'everyone', detail: 'Все участники канала' }] : [])]} mentions={draftMentions} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} {...(editingMessage === null && channelPermissions.includes('SEND_ATTACHMENTS') ? { onFilesSelected: onAddAttachments } : {})} onChange={props.onMessageDraft} onMentionsChange={onMentionsChange} onRemoveAttachment={onRemoveAttachment} onSubmit={submitMessage} value={props.messageDraft} />
       {attachmentError === null ? null : <div className="vui-server-error vui-server-error--attachment" role="alert">{attachmentError}</div>}
       {props.error === null ? null : <div className="vui-server-error vui-server-error--floating" role="alert">{props.error}</div>}
+      <Modal onClose={() => setSelectedMention(null)} open={selectedMention !== null} size="sm" title={selectedMention?.userId ? 'Профиль участника' : selectedMention?.roleId ? 'Роль сервера' : 'Упоминание канала'}>
+        <div className="vui-server-mention-profile">
+          <strong>@{selectedMention?.displayName}</strong>
+          {selectedMention?.userId ? <p>{props.server.members.find((member) => member.userId === selectedMention.userId)?.roles.map((role) => role.name).join(' · ') || 'Участник сервера'}</p> : selectedMention?.roleId ? <p>{props.server.roles.find((role) => role.id === selectedMention.roleId)?.name ?? 'Роль больше недоступна'}</p> : <p>Сообщение адресовано всем участникам, которые видят этот канал.</p>}
+        </div>
+      </Modal>
     </section>
   );
 }

@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-import type { DesktopBridge, DesktopUpdateState, LocalSettings } from '@vatrushka/shared';
+import type { DesktopBridge, DesktopMessageNotificationTarget, DesktopUpdateState, LocalSettings } from '@vatrushka/shared';
 
 const channels = {
   appVersion: 'app:get-version',
@@ -16,6 +16,7 @@ const channels = {
   sourceSelect: 'desktop:select-source',
   sourceClear: 'desktop:clear-source',
   clipboardCopy: 'clipboard:copy',
+  badgeCountSet: 'app:set-badge-count',
   platform: 'app:get-platform',
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
@@ -25,7 +26,7 @@ const channels = {
 } as const;
 
 const deepLinkCallbacks = new Set<(inviteToken: string) => void>();
-const notificationClickCallbacks = new Set<(target: { serverId: string; channelId: string }) => void>();
+const notificationClickCallbacks = new Set<(target: DesktopMessageNotificationTarget) => void>();
 const updateStateCallbacks = new Set<(state: DesktopUpdateState) => void>();
 let pendingDeepLink: string | null = null;
 
@@ -39,8 +40,17 @@ ipcRenderer.on(channels.deepLink, (_event, inviteToken: unknown) => {
 });
 
 ipcRenderer.on(channels.notificationClick, (_event, target: unknown) => {
-  if (!target || typeof target !== 'object' || !('serverId' in target) || !('channelId' in target) || typeof target.serverId !== 'string' || typeof target.channelId !== 'string') return;
-  for (const callback of notificationClickCallbacks) callback({ serverId: target.serverId, channelId: target.channelId });
+  if (!target || typeof target !== 'object') return;
+  const value = target as Record<string, unknown>;
+  const serverTarget = typeof value.serverId === 'string' && typeof value.channelId === 'string';
+  const conversationTarget = typeof value.conversationId === 'string';
+  if (!serverTarget && !conversationTarget) return;
+  const parsed: DesktopMessageNotificationTarget = {
+    ...(serverTarget ? { serverId: value.serverId as string, channelId: value.channelId as string } : {}),
+    ...(conversationTarget ? { conversationId: value.conversationId as string } : {}),
+    ...(typeof value.messageId === 'string' ? { messageId: value.messageId } : {}),
+  };
+  for (const callback of notificationClickCallbacks) callback(parsed);
 });
 
 ipcRenderer.on(channels.updateState, (_event, state: unknown) => {
@@ -72,6 +82,7 @@ const bridge: DesktopBridge = {
     ipcRenderer.invoke(channels.sourceSelect, { sourceId, includeAudio }) as Promise<void>,
   clearSelectedDesktopSource: () => ipcRenderer.invoke(channels.sourceClear) as Promise<void>,
   copyToClipboard: (text) => ipcRenderer.invoke(channels.clipboardCopy, text) as Promise<void>,
+  setBadgeCount: (count) => ipcRenderer.invoke(channels.badgeCountSet, count) as Promise<void>,
   showMessageNotification: (notification) => ipcRenderer.invoke(channels.notificationShow, notification) as Promise<void>,
   onMessageNotificationClick: (callback) => {
     notificationClickCallbacks.add(callback);

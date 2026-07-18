@@ -1,0 +1,7 @@
+.vui-notification-scope-settings { display: grid; gap: var(--space-4); }
+.vui-notification-scope-settings section { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-surface-1); }
+.vui-notification-scope-settings h3,
+.vui-notification-scope-settings p { margin: 0; }
+.vui-notification-scope-settings h3 { color: var(--color-text-primary); font: var(--text-heading-sm); }
+.vui-notification-scope-settings p { color: var(--color-text-muted); font: var(--text-body-sm); }
+.vui-notification-scope-settings__error { padding: var(--space-3); border: 1px solid var(--color-danger); border-radius: var(--radius-sm); color: var(--color-danger); font: var(--text-body-sm); }
