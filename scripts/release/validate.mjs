@@ -6,7 +6,7 @@ import { git, productionBranch } from './release-utils.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('../../', import.meta.url)));
 
-export async function validateRelease({ branch = git(['branch', '--show-current']) } = {}) {
+export async function validateRelease({ branch = process.env.RELEASE_BRANCH ?? git(['branch', '--show-current']) } = {}) {
   const versionResult = await collectVersionErrors();
   const errors = [...versionResult.errors];
   const version = versionResult.version;

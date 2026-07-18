@@ -2,9 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './storybook-e2e',
-  fullyParallel: true,
   timeout: 120_000,
-  workers: 2,
+  workers: 1,
   reporter: 'list',
   use: {
     baseURL: 'http://127.0.0.1:6006',
