@@ -72,6 +72,11 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - name: Cache Playwright Chromium
+        uses: actions/cache@v4
+        with:
+          path: ~/AppData/Local/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
       - run: npx playwright install chromium
       - run: npm run build -w @vatrushka/shared
       - run: npm run test:storybook
