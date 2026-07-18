@@ -64,10 +64,12 @@ const desktopMessageNotificationSchema = z.object({
   id: z.uuid(),
   title: z.string().trim().min(1).max(200),
   body: z.string().trim().min(1).max(1_000),
-  serverId: z.uuid(),
-  channelId: z.uuid(),
+  serverId: z.uuid().optional(),
+  channelId: z.uuid().optional(),
+  conversationId: z.uuid().optional(),
+  messageId: z.string().regex(/^\d+$/u).optional(),
   silent: z.boolean().optional(),
-}).strict();
+}).strict().refine((value) => Boolean(value.conversationId || value.serverId && value.channelId), 'A notification target is required');
 
 const apiBaseUrlSchema = z.url().refine((value) => {
   const url = new URL(value);

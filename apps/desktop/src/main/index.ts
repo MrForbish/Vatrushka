@@ -88,7 +88,11 @@ function showMessageNotification(message: DesktopMessageNotification): void {
     if (mainWindow?.isMinimized()) mainWindow.restore();
     mainWindow?.show();
     mainWindow?.focus();
-    mainWindow?.webContents.send(IPC_CHANNELS.notificationClick, { serverId: message.serverId, channelId: message.channelId });
+    mainWindow?.webContents.send(IPC_CHANNELS.notificationClick, {
+      ...(message.serverId && message.channelId ? { serverId: message.serverId, channelId: message.channelId } : {}),
+      ...(message.conversationId ? { conversationId: message.conversationId } : {}),
+      ...(message.messageId ? { messageId: message.messageId } : {}),
+    });
     release();
   });
   notification.once('close', release);

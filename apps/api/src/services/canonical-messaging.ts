@@ -5,6 +5,7 @@ import pg from 'pg';
 import type {
   ConversationMessage,
   ConversationMessagePage,
+  ConversationMemberReadState,
   ConversationReadState,
   ConversationSummary,
   ConversationNotificationPreferences,
@@ -568,7 +569,17 @@ export class CanonicalMessagingStore {
       ), queued_event as (
         insert into outbox_events (event_type, aggregate_type, aggregate_id, payload, created_at, available_at)
         select 'conversation.read_state.updated', 'conversation', $1,
-          jsonb_build_object('conversationId', $1, 'userId', $2, 'lastDeliveredMessageId', updated_state.last_delivered_message_id::text, 'lastReadMessageId', updated_state.last_read_message_id::text), $5, $5
+          jsonb_build_object(
+            'conversationId', $1,
+            'userId', $2,
+            'lastDeliveredMessageId', updated_state.last_delivered_message_id::text,
+            'lastReadMessageId', updated_state.last_read_message_id::text,
+            'recipientIds', case
+              when (select type from conversations where id = $1) in ('direct', 'group_direct')
+                then coalesce((select jsonb_agg(member.user_id) from conversation_members member where member.conversation_id = $1 and member.left_at is null), '[]'::jsonb)
+              else jsonb_build_array($2)
+            end
+          ), $5, $5
         from updated_state
       )
       select conversation_id, last_delivered_message_id::text, last_read_message_id::text, last_delivered_at, last_read_at, mention_count from updated_state
@@ -576,6 +587,28 @@ export class CanonicalMessagingStore {
     const row = result.rows[0];
     if (!row) return null;
     return { conversationId: row.conversation_id, lastDeliveredMessageId: row.last_delivered_message_id, lastReadMessageId: row.last_read_message_id, lastDeliveredAt: row.last_delivered_at?.toISOString() ?? null, lastReadAt: row.last_read_at?.toISOString() ?? null, mentionCount: row.mention_count };
+  }
+
+  async listReadStates(conversationId: string): Promise<ConversationMemberReadState[]> {
+    const result = await this.pool.query<{
+      user_id: string; last_delivered_message_id: string | null; last_read_message_id: string | null; last_delivered_at: Date | null; last_read_at: Date | null; mention_count: number;
+    }>(`
+      select member.user_id, state.last_delivered_message_id::text, state.last_read_message_id::text,
+        state.last_delivered_at, state.last_read_at, coalesce(state.mention_count, 0)::int as mention_count
+      from conversation_members member
+      left join conversation_read_states state on state.conversation_id = member.conversation_id and state.user_id = member.user_id
+      where member.conversation_id = $1 and member.left_at is null
+      order by member.joined_at, member.user_id
+    `, [conversationId]);
+    return result.rows.map((row) => ({
+      userId: row.user_id,
+      conversationId,
+      lastDeliveredMessageId: row.last_delivered_message_id,
+      lastReadMessageId: row.last_read_message_id,
+      lastDeliveredAt: row.last_delivered_at?.toISOString() ?? null,
+      lastReadAt: row.last_read_at?.toISOString() ?? null,
+      mentionCount: row.mention_count,
+    }));
   }
 
   async unreadSummary(userId: string): Promise<UserUnreadSummary> {

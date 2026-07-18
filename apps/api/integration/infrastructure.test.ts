@@ -139,6 +139,10 @@ describe('production infrastructure adapters', () => {
     const state = await messaging.updateReadState(direct.conversation.id, second.id, created.message.id, created.message.id, now);
     const stale = await messaging.updateReadState(direct.conversation.id, second.id, created.message.id, created.message.id, new Date(now.getTime() + 1_000));
     expect(stale?.lastReadMessageId).toBe(state?.lastReadMessageId);
+    expect(await messaging.listReadStates(direct.conversation.id)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userId: first.id, lastReadMessageId: null }),
+      expect.objectContaining({ userId: second.id, lastReadMessageId: created.message.id }),
+    ]));
     expect(await messaging.listNotifications(second.id, null, 10, true)).toHaveLength(1);
     const mentioned = await messaging.createMessage({ conversationId: direct.conversation.id, authorId: first.id, clientMessageId: randomUUID(), content: 'hello @second', replyToMessageId: created.message.id, attachmentIds: [], mentions: [{ type: 'user', userId: second.id, start: 6, length: 7 }], now: new Date(now.getTime() + 1_500) });
     const unread = await messaging.unreadSummary(second.id);

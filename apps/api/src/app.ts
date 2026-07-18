@@ -240,6 +240,7 @@ const canonicalMessageResponseSchema = z.object({
 });
 const canonicalMessagePageResponseSchema = z.object({ items: z.array(canonicalMessageResponseSchema), pageInfo: z.object({ before: z.string().nullable(), after: z.string().nullable(), hasMore: z.boolean() }) });
 const canonicalReadStateResponseSchema = z.object({ conversationId: z.string(), lastDeliveredMessageId: z.string().nullable(), lastReadMessageId: z.string().nullable(), lastDeliveredAt: z.string().nullable(), lastReadAt: z.string().nullable(), mentionCount: z.number() });
+const canonicalMemberReadStateResponseSchema = canonicalReadStateResponseSchema.extend({ userId: z.string() });
 const unreadSummaryResponseSchema = z.object({ totalDirectUnread: z.number(), totalMentionUnread: z.number(), totalReplyUnread: z.number(), conversations: z.array(z.object({ conversationId: z.string(), unreadCount: z.number(), mentionCount: z.number(), firstUnreadMessageId: z.string().nullable() })) });
 const userNotificationPreferencesResponseSchema = updateUserNotificationPreferencesSchema.extend({ updatedAt: z.string() });
 const serverNotificationPreferencesResponseSchema = updateServerNotificationPreferencesSchema.extend({ serverId: z.uuid(), updatedAt: z.string() });
@@ -828,6 +829,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   api.put(`${API_PREFIX}/conversations/:conversationId/read-state`, {
     schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: conversationIdParams, body: updateConversationReadStateSchema, response: { 200: canonicalReadStateResponseSchema, ...routeErrors() } },
   }, async (request) => service.updateCanonicalReadState(request.headers.authorization, request.params.conversationId, request.body.lastDeliveredMessageId, request.body.lastReadMessageId));
+
+  api.get(`${API_PREFIX}/conversations/:conversationId/read-states`, {
+    schema: { tags: ['conversations'], security: [{ bearerAuth: [] }], params: conversationIdParams, response: { 200: z.array(canonicalMemberReadStateResponseSchema), ...routeErrors() } },
+  }, async (request) => service.listCanonicalReadStates(request.headers.authorization, request.params.conversationId));
 
   api.get(`${API_PREFIX}/me/unread`, {
     schema: { tags: ['notifications'], security: [{ bearerAuth: [] }], response: { 200: unreadSummaryResponseSchema, ...routeErrors() } },

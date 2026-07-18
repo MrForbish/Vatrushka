@@ -379,7 +379,8 @@ export interface TextMessage {
   attachments: MessageAttachment[];
   createdAt: string;
   editedAt: string | null;
-  deliveryState?: 'sending' | 'failed';
+  deletedAt?: string | null;
+  deliveryState?: MessageDeliveryState;
 }
 
 export interface MessageAttachment {
@@ -440,9 +441,11 @@ export interface DirectMessage {
   attachments: MessageAttachment[];
   createdAt: string;
   editedAt: string | null;
-  deliveryState?: 'sending' | 'failed';
+  deletedAt?: string | null;
+  deliveryState?: MessageDeliveryState;
 }
 
+export type MessageDeliveryState = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
 export type ConversationType = 'server_channel' | 'direct' | 'group_direct';
 export type ConversationMentionType = 'user' | 'role' | 'everyone';
 export interface ConversationMentionDraft {
@@ -494,6 +497,10 @@ export interface ConversationReadState {
   lastDeliveredAt: string | null;
   lastReadAt: string | null;
   mentionCount: number;
+}
+
+export interface ConversationMemberReadState extends ConversationReadState {
+  userId: string;
 }
 
 export interface UserUnreadSummary {
@@ -589,10 +596,14 @@ export interface DesktopMessageNotification {
   id: string;
   title: string;
   body: string;
-  serverId: string;
-  channelId: string;
+  serverId?: string | undefined;
+  channelId?: string | undefined;
+  conversationId?: string | undefined;
+  messageId?: string | undefined;
   silent?: boolean | undefined;
 }
+
+export type DesktopMessageNotificationTarget = Pick<DesktopMessageNotification, 'serverId' | 'channelId' | 'conversationId' | 'messageId'>;
 
 export type DesktopUpdateStatus =
   | 'idle'
@@ -750,7 +761,7 @@ export interface DesktopBridge {
   clearSelectedDesktopSource(): Promise<void>;
   copyToClipboard(text: string): Promise<void>;
   showMessageNotification(notification: DesktopMessageNotification): Promise<void>;
-  onMessageNotificationClick(callback: (target: Pick<DesktopMessageNotification, 'serverId' | 'channelId'>) => void): () => void;
+  onMessageNotificationClick(callback: (target: DesktopMessageNotificationTarget) => void): () => void;
   onDeepLink(callback: (inviteToken: string) => void): () => void;
   getPlatform(): Promise<string>;
   getLocalSettings(): Promise<LocalSettings>;

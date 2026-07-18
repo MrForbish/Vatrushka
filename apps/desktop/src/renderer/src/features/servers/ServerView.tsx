@@ -56,6 +56,7 @@ export interface ServerViewProps {
   typingText?: string | undefined;
   hasOlderMessages?: boolean;
   loadingOlderMessages?: boolean;
+  firstUnreadMessageId?: string | null;
   onBack(): void;
   onDirectMessages?(): void;
   onSwitchServer(serverId: string): void;
@@ -315,9 +316,10 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
     mentions: (message.conversationMentions ?? message.mentions?.map((mention) => ({ type: 'user' as const, ...mention })) ?? []).map((mention) => ({ key: mention.type === 'user' ? `user:${mention.userId ?? ''}` : mention.type === 'role' ? `role:${mention.roleId ?? ''}` : 'everyone', ...(mention.userId ? { userId: mention.userId } : {}), displayName: mention.displayName, start: mention.start, length: mention.length })),
     createdAt: message.createdAt,
     edited: message.editedAt !== null,
+    deleted: message.deletedAt !== null && message.deletedAt !== undefined,
     own: message.authorUserId === props.user.id,
-    canEdit: (message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages,
-    canDelete: (message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages,
+    canEdit: !message.deletedAt && ((message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages),
+    canDelete: !message.deletedAt && ((message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages),
     attachments: message.attachments.map((attachment) => ({ ...attachment, canDelete: (message.authorUserId === props.user.id && canManageOwnMessages) || canManageMessages })),
     ...(message.replyTo === null ? {} : { replyPreview: { authorName: message.replyTo.authorDisplayName, content: message.replyTo.content } }),
     reactions: message.reactions,
@@ -337,7 +339,7 @@ function ServerStage({ activeChannel, attachmentError, canManageChannels, canMan
   };
   return (
     <section className="vui-message-stage">
-      <MessageList channelName={activeChannel.name} hasOlder={props.hasOlderMessages} loadingOlder={props.loadingOlderMessages} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onLoadAttachment={props.onLoadAttachment} onLoadOlder={props.onLoadOlderMessages} onRetry={props.onRetryMessage} onEdit={onEdit} {...(channelPermissions.includes('ADD_REACTIONS') ? { onReaction: props.onMessageReaction } : {})} {...(channelPermissions.includes('SEND_MESSAGES') ? { onReply } : {})} />
+      <MessageList channelName={activeChannel.name} firstUnreadMessageId={props.firstUnreadMessageId} hasOlder={props.hasOlderMessages} loadingOlder={props.loadingOlderMessages} messages={messageModels} onDelete={props.onDeleteMessage} onDeleteAttachment={props.onDeleteAttachment} onDownloadAttachment={props.onDownloadAttachment} onLoadAttachment={props.onLoadAttachment} onLoadOlder={props.onLoadOlderMessages} onRetry={props.onRetryMessage} onEdit={onEdit} {...(channelPermissions.includes('ADD_REACTIONS') ? { onReaction: props.onMessageReaction } : {})} {...(channelPermissions.includes('SEND_MESSAGES') ? { onReply } : {})} />
       {props.typingText ? <div aria-live="polite" className="vui-message-typing"><span /><strong>{props.typingText}</strong> печатает…</div> : null}
       <MessageComposer attachments={pendingAttachments.map(({ id, file }) => ({ id, name: file.name, size: file.size, mimeType: file.type }))} busy={props.busy} canSend={editingMessage === null ? channelPermissions.includes('SEND_MESSAGES') : editingMessage.canEdit === true} channelName={activeChannel.name} mentionCandidates={[...props.server.members.map((member) => ({ type: 'user' as const, userId: member.userId, displayName: member.displayName, detail: member.roles.filter((role) => !role.isDefault).map((role) => role.name).join(' · ') || '@участник' })), ...(channelPermissions.includes('MENTION_EVERYONE') ? [...props.server.roles.filter((role) => role.kind === 'CUSTOM').map((role) => ({ type: 'role' as const, roleId: role.id, displayName: role.name.replace(/^@/u, ''), detail: '@роль' })), { type: 'everyone' as const, displayName: 'everyone', detail: 'Все участники канала' }] : [])]} mentions={draftMentions} {...(editingMessage !== null ? { context: { mode: 'edit' as const, label: editingMessage.content }, onCancelContext } : replyingMessage !== null ? { context: { mode: 'reply' as const, label: `${replyingMessage.authorName}: ${replyingMessage.content}` }, onCancelContext } : {})} {...(editingMessage === null && channelPermissions.includes('SEND_ATTACHMENTS') ? { onFilesSelected: onAddAttachments } : {})} onChange={props.onMessageDraft} onMentionsChange={onMentionsChange} onRemoveAttachment={onRemoveAttachment} onSubmit={submitMessage} value={props.messageDraft} />
       {attachmentError === null ? null : <div className="vui-server-error vui-server-error--attachment" role="alert">{attachmentError}</div>}

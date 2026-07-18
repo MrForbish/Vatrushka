@@ -42,6 +42,7 @@ import {
   type ConversationMessage,
   type ConversationMessagePage,
   type ConversationReadState,
+  type ConversationMemberReadState,
   type ConversationSummary,
   type InternalNotification,
   type UserUnreadSummary,
@@ -2106,6 +2107,13 @@ export class VatrushkaService {
     const state = await this.messaging().updateReadState(conversationId, user.id, deliveredId ?? null, readId ?? null, this.now());
     if (!state) throw new AppError('VALIDATION_ERROR', 400);
     return state;
+  }
+
+  async listCanonicalReadStates(authorization: string | undefined, conversationId: string): Promise<ConversationMemberReadState[]> {
+    const user = await this.authenticate(authorization);
+    const access = await this.requireCanonicalConversation(conversationId, user, 'READ_MESSAGE_HISTORY');
+    if (access.conversation.type === 'server_channel') throw new AppError('DIRECT_CONVERSATION_NOT_FOUND', 404);
+    return this.messaging().listReadStates(conversationId);
   }
 
   async getCanonicalUnreadSummary(authorization: string | undefined): Promise<UserUnreadSummary> {

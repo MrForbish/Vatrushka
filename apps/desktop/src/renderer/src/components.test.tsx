@@ -219,6 +219,17 @@ describe('message composer', () => {
     expect(onLoadOlder).toHaveBeenCalledOnce();
     expect(onRetry).toHaveBeenCalledWith('failed');
   });
+
+  it('shows persisted direct-message delivery states', () => {
+    render(<MessageList channelName="Анна" messages={[
+      { id: 'sent', authorId: 'me', authorName: 'Я', content: 'Первое', createdAt: '2026-01-01T10:00:00.000Z', deliveryState: 'sent' },
+      { id: 'delivered', authorId: 'me', authorName: 'Я', content: 'Второе', createdAt: '2026-01-01T10:01:00.000Z', deliveryState: 'delivered' },
+      { id: 'read', authorId: 'me', authorName: 'Я', content: 'Третье', createdAt: '2026-01-01T10:02:00.000Z', deliveryState: 'read' },
+    ]} />);
+    expect(screen.getByText('Отправлено')).toBeInTheDocument();
+    expect(screen.getByText('Доставлено')).toBeInTheDocument();
+    expect(screen.getByText('Прочитано')).toBeInTheDocument();
+  });
 });
 
 describe('server UI', () => {

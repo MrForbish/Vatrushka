@@ -10,6 +10,7 @@ import {
   type ConversationMessagePage,
   type ConversationMentionType,
   type ConversationReadState,
+  type ConversationMemberReadState,
   type ConversationSummary,
   type InternalNotification,
   type UserUnreadSummary,
@@ -476,6 +477,10 @@ export class ApiClient {
 
   updateConversationReadState(conversationId: string, input: { lastDeliveredMessageId?: string; lastReadMessageId?: string }): Promise<ConversationReadState> {
     return this.request(`/conversations/${conversationId}/read-state`, { method: 'PUT', body: input, auth: true });
+  }
+
+  listConversationReadStates(conversationId: string): Promise<ConversationMemberReadState[]> {
+    return this.request(`/conversations/${conversationId}/read-states`, { auth: true });
   }
 
   getUnreadSummary(): Promise<UserUnreadSummary> {
