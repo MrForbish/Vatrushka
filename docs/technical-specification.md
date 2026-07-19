@@ -68,7 +68,7 @@ API построен на Fastify 5. `app.ts` регистрирует transport
 - screen-share lease heartbeat;
 - updater feed обслуживается Caddy из versioned artifacts.
 
-Health endpoints различают liveness и readiness. `/metrics` отдает технические метрики API/messaging; production observability stack пока не подключен.
+Health endpoints различают liveness и readiness. `/metrics` отдает технические метрики API/messaging/media. Production Prometheus, Grafana, Loki/S3, Alertmanager, Blackbox и private Alloy agents подключены; ошибки API имеют bounded labels `code`, `route`, `status_class`, а heartbeat демонстрации — `result` без пользовательских данных.
 
 ## 5. Данные
 

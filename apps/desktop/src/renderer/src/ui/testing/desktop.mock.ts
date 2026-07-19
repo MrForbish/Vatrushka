@@ -16,6 +16,7 @@ export const desktopMock: DesktopBridge = {
   listDesktopSources: async () => [],
   selectDesktopSource: async () => undefined,
   clearSelectedDesktopSource: async () => undefined,
+  logMediaDiagnostic: async () => undefined,
   copyToClipboard: async () => undefined,
   openExternal: async () => undefined,
   setBadgeCount: async () => undefined,

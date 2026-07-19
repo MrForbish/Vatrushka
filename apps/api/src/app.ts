@@ -1000,6 +1000,17 @@ export async function buildApp(
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
+      if (error.statusCode >= 500) {
+        technicalMetrics.increment("api_errors_total", 1, {
+          code: error.code,
+          route: request.routeOptions.url || "unmatched",
+          status_class: `${Math.floor(error.statusCode / 100)}xx`,
+        });
+        request.log.error(
+          { err: error.cause ?? error, code: error.code },
+          "API dependency error",
+        );
+      }
       void reply
         .status(error.statusCode)
         .send(
@@ -1065,6 +1076,11 @@ export async function buildApp(
       return;
     }
     request.log.error({ err: error }, "Unhandled API error");
+    technicalMetrics.increment("api_errors_total", 1, {
+      code: "INTERNAL_ERROR",
+      route: request.routeOptions.url || "unmatched",
+      status_class: "5xx",
+    });
     void reply.status(500).send(createApiError("INTERNAL_ERROR", request.id));
   });
 

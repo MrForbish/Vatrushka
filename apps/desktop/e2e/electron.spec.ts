@@ -89,6 +89,7 @@ test("launches the secure auth shell with an allowlisted preload API", async () 
       "getLocalSettings",
       "getPlatform",
       "listDesktopSources",
+      "logMediaDiagnostic",
       "onDeepLink",
       "onMessageNotificationClick",
       "selectDesktopSource",

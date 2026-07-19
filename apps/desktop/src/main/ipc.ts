@@ -40,6 +40,7 @@ export const IPC_CHANNELS = {
   sourcesList: "desktop:list-sources",
   sourceSelect: "desktop:select-source",
   sourceClear: "desktop:clear-source",
+  mediaDiagnostic: "media:diagnostic",
   clipboardCopy: "clipboard:copy",
   externalOpen: "external:open-allowlisted",
   badgeCountSet: "app:set-badge-count",
@@ -83,6 +84,27 @@ const desktopMessageNotificationSchema = z
       Boolean(value.conversationId || (value.serverId && value.channelId)),
     "A notification target is required",
   );
+
+const desktopMediaDiagnosticSchema = z
+  .object({
+    event: z.enum([
+      "voice_reconnecting",
+      "voice_reconnected",
+      "voice_audio_restored",
+      "voice_audio_restore_failed",
+      "voice_track_subscription_failed",
+      "screen_share_heartbeat_failed",
+      "screen_share_heartbeat_recovered",
+      "screen_share_lease_lost",
+    ]),
+    occurredAt: z.iso.datetime(),
+    serverId: z.uuid(),
+    channelId: z.uuid(),
+    voiceSessionId: z.string().min(1).max(200).optional(),
+    reason: z.string().min(1).max(100).optional(),
+    attempt: z.number().int().min(1).max(100).optional(),
+  })
+  .strict();
 
 const apiBaseUrlSchema = z.url().refine((value) => {
   const url = new URL(value);
@@ -311,6 +333,10 @@ export function registerIpc(options: IpcOptions): () => void {
     options.setSelectedSource(selection);
   });
   handle(IPC_CHANNELS.sourceClear, () => options.setSelectedSource(null));
+  handle(IPC_CHANNELS.mediaDiagnostic, (_event, value: unknown) => {
+    const diagnostic = desktopMediaDiagnosticSchema.parse(value);
+    log.info("Media diagnostic", { media: diagnostic });
+  });
   handle(IPC_CHANNELS.clipboardCopy, (_event, value: unknown) =>
     clipboard.writeText(z.string().max(20_000).parse(value)),
   );

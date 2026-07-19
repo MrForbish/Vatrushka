@@ -67,8 +67,13 @@ export class ClientError extends Error {
     message: string,
     readonly status: number,
     readonly details: unknown = null,
+    readonly requestId: string | null = null,
   ) {
-    super(message);
+    super(
+      status >= 500 && requestId
+        ? `${message} · код поддержки ${requestId}`
+        : message,
+    );
     this.name = "ClientError";
   }
 }
@@ -1574,6 +1579,7 @@ export class ApiClient {
         error?.message ?? "Неизвестная ошибка сервера",
         response.status,
         error?.details,
+        error?.requestId ?? response.headers.get("x-request-id"),
       );
     }
     if (response.status === 204) return undefined as T;

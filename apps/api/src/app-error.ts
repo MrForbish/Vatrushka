@@ -5,8 +5,14 @@ export class AppError extends Error {
   readonly statusCode: number;
   readonly details: Record<string, unknown> | null;
 
-  constructor(code: ApiErrorCode, statusCode: number, message?: string, details: Record<string, unknown> | null = null) {
-    super(message);
+  constructor(
+    code: ApiErrorCode,
+    statusCode: number,
+    message?: string,
+    details: Record<string, unknown> | null = null,
+    cause?: unknown,
+  ) {
+    super(message, cause === undefined ? undefined : { cause });
     this.name = 'AppError';
     this.code = code;
     this.statusCode = statusCode;

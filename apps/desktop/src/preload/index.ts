@@ -20,6 +20,7 @@ const channels = {
   sourcesList: "desktop:list-sources",
   sourceSelect: "desktop:select-source",
   sourceClear: "desktop:clear-source",
+  mediaDiagnostic: "media:diagnostic",
   clipboardCopy: "clipboard:copy",
   externalOpen: "external:open-allowlisted",
   badgeCountSet: "app:set-badge-count",
@@ -129,6 +130,8 @@ const bridge: DesktopBridge = {
     }) as Promise<void>,
   clearSelectedDesktopSource: () =>
     ipcRenderer.invoke(channels.sourceClear) as Promise<void>,
+  logMediaDiagnostic: (event) =>
+    ipcRenderer.invoke(channels.mediaDiagnostic, event) as Promise<void>,
   copyToClipboard: (text) =>
     ipcRenderer.invoke(channels.clipboardCopy, text) as Promise<void>,
   openExternal: (url) =>

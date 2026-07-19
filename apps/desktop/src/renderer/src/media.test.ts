@@ -3,7 +3,7 @@ import { ConnectionState, Track } from "livekit-client";
 
 import type { RoomConnection } from "@vatrushka/shared";
 
-import type { ApiClient } from "./api";
+import { ClientError, type ApiClient } from "./api";
 import { MediaSession } from "./media";
 
 interface DeviceSwitchRoom {
@@ -103,14 +103,84 @@ describe("MediaSession incoming audio", () => {
     expect(setVolume).toHaveBeenCalledWith(0.7, Track.Source.Microphone);
     expect(setVolume).toHaveBeenCalledWith(0.6, Track.Source.ScreenShareAudio);
   });
+
+  it("reattaches existing remote audio tracks after LiveKit reconnect", async () => {
+    const session = new MediaSession({} as ApiClient);
+    const audio = document.createElement("audio");
+    const attach = vi.fn(() => audio);
+    const detach = vi.fn(() => []);
+    const setVolume = vi.fn();
+    const track = { kind: Track.Kind.Audio, attach, detach };
+    const publication = {
+      trackSid: "TR_audio",
+      source: Track.Source.Microphone,
+      track,
+    };
+    const participant = {
+      identity: "remote-1",
+      setVolume,
+      trackPublications: new Map([[publication.trackSid, publication]]),
+    };
+    const startAudio = vi.fn().mockResolvedValue(undefined);
+    const internals = session as unknown as {
+      room: {
+        remoteParticipants: Map<string, typeof participant>;
+        startAudio(): Promise<void>;
+      };
+      connection: RoomConnection;
+      restoreIncomingAudio(reason: string): Promise<void>;
+      refreshSnapshot(): void;
+    };
+    internals.room = {
+      remoteParticipants: new Map([[participant.identity, participant]]),
+      startAudio,
+    };
+    internals.connection = {
+      roomId: "channel-1",
+      ownerUserId: "owner-1",
+      livekitUrl: "ws://test",
+      livekitToken: "token",
+      participantIdentity: "local",
+      participantDisplayName: "Local",
+      isOwner: true,
+      contextType: "channel",
+      serverId: "11111111-1111-4111-8111-111111111111",
+      channelId: "22222222-2222-4222-8222-222222222222",
+      voiceSessionId: "voice-session-1",
+    };
+    vi.spyOn(internals, "refreshSnapshot").mockImplementation(() => undefined);
+
+    await internals.restoreIncomingAudio("reconnected");
+
+    expect(detach).toHaveBeenCalledTimes(1);
+    expect(attach).toHaveBeenCalledTimes(1);
+    expect(startAudio).toHaveBeenCalledTimes(1);
+    expect(audio.dataset.vatrushkaParticipant).toBe(participant.identity);
+    expect(setVolume).toHaveBeenCalledWith(1, Track.Source.Microphone);
+    audio.remove();
+  });
+});
+
+describe("ClientError support identifiers", () => {
+  it("shows a request ID only for server failures", () => {
+    expect(
+      new ClientError("INTERNAL_ERROR", "Внутренняя ошибка сервера", 500, null, "req-500")
+        .message,
+    ).toContain("код поддержки req-500");
+    expect(
+      new ClientError("SCREEN_SHARE_BUSY", "Занято", 409, null, "req-409")
+        .message,
+    ).toBe("Занято");
+  });
 });
 
 describe("MediaSession screen share", () => {
   function screenShareSession(
     setScreenShareEnabled: (...args: unknown[]) => Promise<void>,
     restrictOwnAudio = true,
+    api: ApiClient = {} as ApiClient,
   ): MediaSession {
-    const session = new MediaSession({} as ApiClient);
+    const session = new MediaSession(api);
     const internals = session as unknown as {
       room: {
         state: ConnectionState;
@@ -183,7 +253,7 @@ describe("MediaSession screen share", () => {
     expect(setScreenShareEnabled).toHaveBeenCalledWith(
       true,
       expect.objectContaining({
-        audio: expect.objectContaining({ restrictOwnAudio: { exact: true } }),
+        audio: expect.objectContaining({ restrictOwnAudio: true }),
         resolution: { width: 1920, height: 1080, frameRate: 60 },
         systemAudio: "include",
       }),
@@ -255,5 +325,92 @@ describe("MediaSession screen share", () => {
         }),
       }),
     );
+  });
+
+  it("keeps sharing after a transient heartbeat failure", async () => {
+    vi.useFakeTimers();
+    const heartbeatScreenShare = vi
+      .fn()
+      .mockRejectedValue(
+        new ClientError("LIVEKIT_UNAVAILABLE", "temporary", 503),
+      );
+    const session = screenShareSession(
+      vi.fn().mockResolvedValue(undefined),
+      true,
+      { heartbeatScreenShare } as unknown as ApiClient,
+    );
+    await session.startScreenShare();
+    const stop = vi.spyOn(session, "stopScreenShare").mockResolvedValue();
+    const internals = session as unknown as {
+      runHeartbeat(): Promise<void>;
+      stopHeartbeat(): void;
+      heartbeatLastSuccessAt: number;
+    };
+    internals.heartbeatLastSuccessAt = Date.now();
+
+    await internals.runHeartbeat();
+
+    expect(heartbeatScreenShare).toHaveBeenCalledTimes(1);
+    expect(stop).not.toHaveBeenCalled();
+    internals.stopHeartbeat();
+    vi.useRealTimers();
+  });
+
+  it("stops sharing when the server confirms that ownership was lost", async () => {
+    vi.useFakeTimers();
+    const heartbeatScreenShare = vi
+      .fn()
+      .mockRejectedValue(
+        new ClientError("SCREEN_SHARE_BUSY", "ownership lost", 409),
+      );
+    const session = screenShareSession(
+      vi.fn().mockResolvedValue(undefined),
+      true,
+      { heartbeatScreenShare } as unknown as ApiClient,
+    );
+    await session.startScreenShare();
+    const stop = vi.spyOn(session, "stopScreenShare").mockResolvedValue();
+    const internals = session as unknown as {
+      runHeartbeat(): Promise<void>;
+      stopHeartbeat(): void;
+      heartbeatLastSuccessAt: number;
+    };
+    internals.heartbeatLastSuccessAt = Date.now();
+
+    await internals.runHeartbeat();
+
+    expect(stop).toHaveBeenCalledWith(false);
+    internals.stopHeartbeat();
+    vi.useRealTimers();
+  });
+
+  it("ignores a late heartbeat failure from a stopped share", async () => {
+    vi.useFakeTimers();
+    let rejectHeartbeat: ((reason: unknown) => void) | undefined;
+    const heartbeatScreenShare = vi.fn(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectHeartbeat = reject;
+        }),
+    );
+    const session = screenShareSession(
+      vi.fn().mockResolvedValue(undefined),
+      true,
+      { heartbeatScreenShare } as unknown as ApiClient,
+    );
+    await session.startScreenShare();
+    const stop = vi.spyOn(session, "stopScreenShare").mockResolvedValue();
+    const internals = session as unknown as {
+      runHeartbeat(): Promise<void>;
+      stopHeartbeat(): void;
+    };
+
+    const heartbeat = internals.runHeartbeat();
+    internals.stopHeartbeat();
+    rejectHeartbeat?.(new ClientError("LIVEKIT_UNAVAILABLE", "late", 503));
+    await heartbeat;
+
+    expect(stop).not.toHaveBeenCalled();
+    vi.useRealTimers();
   });
 });

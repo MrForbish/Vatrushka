@@ -70,7 +70,7 @@ scrape_configs:
     metrics_path: /probe
     scrape_interval: 60s
     params:
-      module: [tcp_connect]
+      module: [tcp_tls]
     static_configs:
       - targets: [turn.myvatrushka.ru:5349]
     relabel_configs:
