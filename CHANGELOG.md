@@ -6,6 +6,7 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ### Added
 
+- Russian Grafana dashboards for the application and detailed HTTP diagnostics now separate 2xx/3xx/4xx/5xx traffic, latency quantiles and bounded route/error breakdowns, with matching Prometheus recording rules and SLO alerts.
 - автор демонстрации может рисовать синхронные аннотации поверх видео, выбирать цвет и толщину, отменять последний штрих и очищать слой; координаты одинаково масштабируются у всех зрителей и сбрасываются вместе с media-сессией;
 
 ### Fixed
