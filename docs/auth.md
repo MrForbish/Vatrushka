@@ -28,6 +28,10 @@ OTP и security notices сохраняются в PostgreSQL outbox до отп�
 
 Access JWT: HS256, issuer/audience, 15 минут, только в renderer memory. Refresh: 48 random bytes/base64url, SHA-256 hash в PostgreSQL, 30 дней. Зашифрованный refresh читает только Electron main process: preload не имеет метода, возвращающего долгоживущий токен renderer-коду. Main самостоятельно выполняет startup refresh, rotation и logout и отдаёт renderer только новый access JWT и пользователя.
 
+Флаг «Запомнить меня» управляет только долговечностью refresh-сессии. При включённом флаге Electron main хранит refresh token в DPAPI-encrypted `session.bin`; при выключенном — только в памяти текущего main process. Rotation сохраняет выбранную политику, а пароль никогда не записывается. После закрытия приложения незапомненная сессия не восстанавливается.
+
+Auth UI использует gaming-композицию с фирменным знаком, но не меняет auth-контракты: password, registration, reset, email/TOTP/recovery и сообщения об ошибках остаются едиными. Минимальный поддерживаемый viewport — 1100×680; все действия доступны с клавиатуры.
+
 Каждый refresh создаёт новую session row и отзывает старую. Повторное использование заменённого или уже отозванного token отзывает всю `token_family_id`. Desktop `ApiClient` имеет один shared refresh promise, поэтому конкурентные 401 не запускают несколько rotations.
 
 API `GET /auth/sessions` группирует строки ротации по `token_family_id`, поэтому одно реальное устройство показано одной сессией. Сессию можно пометить доверенной (пользователь подтверждает, что узнаёт устройство; это намеренно не отключает 2FA), отозвать отдельно или завершить все остальные. После отзыва все access/refresh-токены семьи перестают проходить проверку. Критичные действия сохраняются в `security_events` и дублируются email-уведомлением. Logout отзывает текущий hash и очищает DPAPI-encrypted файл.

@@ -113,8 +113,16 @@ test.describe('Vatrushka design system visual baseline', () => {
 
   test('password login', async ({ page }) => {
     await openStory(page, 'screens-current--password-login');
-    await expect(page.getByRole('heading', { name: 'С возвращением' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Добро пожаловать' })).toBeVisible();
     await expect(page).toHaveScreenshot('password-login.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('password login at the minimum desktop viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 680 });
+    await openStory(page, 'screens-current--password-login');
+    await expect(page.getByRole('heading', { name: 'Добро пожаловать' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Продолжить' })).toBeVisible();
+    await expect(page).toHaveScreenshot('password-login-minimum.png', { animations: 'disabled', fullPage: true });
   });
 
   test('password reset', async ({ page }) => {

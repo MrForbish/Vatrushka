@@ -18,6 +18,7 @@
 - self-hosted LiveKit/TURN;
 - NSIS auto-update с self-hosted feed;
 - unit, integration PostgreSQL/Redis, Storybook interaction, Electron и visual regression CI.
+- gaming auth shell с фирменным логотипом, адаптивом 1100×680 и реальной session-only политикой «Запомнить меня».
 
 ### Работает, но требует укрепления
 

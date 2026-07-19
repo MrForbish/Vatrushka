@@ -104,6 +104,7 @@ Bucket приватный. API создает ограниченный object ke
 - password: scrypt с уникальной солью;
 - access JWT: 15 минут;
 - opaque refresh: 30 дней, hash в PostgreSQL, rotation и reuse detection;
+- Electron main хранит refresh только в DPAPI-encrypted file при включённом `rememberSession`; для session-only входа token rotation остаётся в памяти main process;
 - второй фактор при каждом входе: email/TOTP/recovery;
 - OTP rate limits, TTL и pepper;
 - password reset использует отдельный OTP purpose, neutral request response и атомарный revoke всех PostgreSQL sessions;

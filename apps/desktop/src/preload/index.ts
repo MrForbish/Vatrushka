@@ -114,8 +114,8 @@ const bridge: DesktopBridge = {
     updateStateCallbacks.add(callback);
     return () => updateStateCallbacks.delete(callback);
   },
-  completeAuthSession: (path, body, apiBaseUrl) =>
-    ipcRenderer.invoke(channels.authComplete, path, body, apiBaseUrl),
+  completeAuthSession: (path, body, apiBaseUrl, rememberSession = true) =>
+    ipcRenderer.invoke(channels.authComplete, path, body, apiBaseUrl, rememberSession),
   refreshAuthSession: () => ipcRenderer.invoke(channels.authRefresh),
   logoutAuthSession: () =>
     ipcRenderer.invoke(channels.authLogout) as Promise<void>,

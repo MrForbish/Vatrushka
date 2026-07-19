@@ -392,6 +392,7 @@ export default function App(): ReactNode {
   const [otp, setOtp] = useState("");
   const [password, setPasswordValue] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
+  const [rememberSession, setRememberSession] = useState(true);
   const [secondFactor, setSecondFactor] = useState<
     "email" | "totp" | "recovery"
   >("email");
@@ -1698,6 +1699,7 @@ export default function App(): ReactNode {
               password,
               otp,
               secondFactor,
+              rememberSession,
             );
       updateUser(response.user);
       if (!response.user.displayName) setScreen("profile");
@@ -3061,6 +3063,7 @@ export default function App(): ReactNode {
         code={otp}
         password={password}
         passwordConfirmation={passwordConfirmation}
+        rememberSession={rememberSession}
         retrySeconds={retrySeconds}
         busy={busy}
         error={error}
@@ -3087,6 +3090,7 @@ export default function App(): ReactNode {
         onCodeChange={setOtp}
         onPasswordChange={setPasswordValue}
         onPasswordConfirmationChange={setPasswordConfirmation}
+        onRememberSessionChange={setRememberSession}
         onRequest={requestCode}
         onVerify={verifyCode}
         onFactor={switchPasswordFactor}
