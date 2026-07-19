@@ -6,6 +6,8 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ### Added
 
+- a provisioned `Service Health & SLO` dashboard now tracks public API/update/TURN availability, 30-day success and latency objectives, error budgets, dependencies, alerts and deployed build metadata.
+- Prometheus health now exposes down targets, scrape and rule budgets, series churn, TSDB/WAL, Alertmanager delivery and remote-write state.
 - structured Loki dashboards now use normalized bounded log levels, query-time correlation fields and an end-to-end Loki canary instead of text-only error matching.
 - Russian infrastructure and container dashboards now cover host freshness, CPU/iowait, normalized load, swap, disks/inodes, I/O, network errors, clock skew, container limits, throttling, restarts and OOM events.
 - Russian Grafana dashboards for the application and detailed HTTP diagnostics now separate 2xx/3xx/4xx/5xx traffic, latency quantiles and bounded route/error breakdowns, with matching Prometheus recording rules and SLO alerts.

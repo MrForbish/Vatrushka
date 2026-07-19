@@ -909,6 +909,14 @@ export async function buildApp(
   options: BuildAppOptions,
 ): Promise<FastifyInstance> {
   const { config, service } = options;
+  technicalMetrics.set("vatrushka_build_info", 1, {
+    version: config.APP_VERSION,
+    commit: config.BUILD_COMMIT,
+  });
+  technicalMetrics.set(
+    "vatrushka_deployment_timestamp_seconds",
+    Math.floor(Date.now() / 1_000),
+  );
   const requestStartedAt = new WeakMap<object, number>();
   const app = Fastify({
     logger:

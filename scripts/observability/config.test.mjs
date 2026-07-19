@@ -42,7 +42,9 @@ test('prometheus has remote write, alertmanager, external labels and separated r
   assert.match(prometheus, /\/etc\/prometheus\/rules\/\*\.yml/u);
   assert.match(prometheus, /job_name: blackbox-turn[\s\S]+module: \[tcp_tls\]/u);
 
-  const rules = await Promise.all(['infrastructure', 'applications', 'observability'].map((name) => read(`infra/observability/platform/prometheus/rules/${name}.yml`)));
+  const rulesDirectory = new URL('../../infra/observability/platform/prometheus/rules/', import.meta.url);
+  const ruleFiles = (await readdir(rulesDirectory)).filter((file) => file.endsWith('.yml'));
+  const rules = await Promise.all(ruleFiles.map((file) => read(`infra/observability/platform/prometheus/rules/${file}`)));
   const merged = rules.join('\n');
   for (const alert of ['HostCpuHigh', 'HostMemoryCritical', 'HostDiskCritical', 'VatrushkaPublicReadinessDown', 'VatrushkaApiUnhandledErrors', 'VatrushkaScreenShareHeartbeatFailures', 'VatrushkaOutboxFailed', 'PrometheusTargetDown', 'LokiDiscardedLogs', 'AlertmanagerNotificationsFailing']) {
     assert.match(merged, new RegExp(`alert: ${alert}`, 'u'));
@@ -84,7 +86,7 @@ test('grafana provisions valid, linked and extensible dashboards', async () => {
   assert.ok(files.length >= 7, `expected at least 7 dashboards, got ${files.length}`);
   const dashboards = await Promise.all(files.map(async (file) => JSON.parse(await read(`infra/observability/platform/grafana/dashboards/${file}`))));
   const titles = new Set(dashboards.map((dashboard) => dashboard.title));
-  for (const title of ['Инфраструктура: обзор', 'Контейнеры: обзор', 'Приложение: обзор', 'API: детали HTTP', 'Prometheus Health', 'Loki: состояние', 'Логи: обзор']) assert.ok(titles.has(title), title);
+  for (const title of ['Инфраструктура: обзор', 'Контейнеры: обзор', 'Приложение: обзор', 'API: детали HTTP', 'Prometheus: состояние', 'Loki: состояние', 'Логи: обзор', 'Service Health & SLO']) assert.ok(titles.has(title), title);
   assert.ok(dashboards.every((dashboard) => dashboard.uid && dashboard.panels.length >= 3));
 
   const uids = dashboards.map((dashboard) => dashboard.uid);
@@ -218,6 +220,30 @@ test('logs and Loki dashboards use structured levels and TSDB-compatible diagnos
   const rules = await read('infra/observability/platform/prometheus/rules/observability.yml');
   assert.doesNotMatch(rules, /loki_boltdb/iu);
   assert.match(rules, /alert: LokiCanaryMissingEntries/u);
+});
+
+test('Prometheus and Service Health dashboards expose operational and SLO diagnostics', async () => {
+  const prometheus = JSON.parse(await read('infra/observability/platform/grafana/dashboards/prometheus-health.json'));
+  const service = JSON.parse(await read('infra/observability/platform/grafana/dashboards/service-health-slo.json'));
+  for (const dashboard of [prometheus, service]) {
+    assert.ok(dashboard.description, `${dashboard.uid}: missing description`);
+    assert.ok(dashboard.panels.every((panel) => panel.description), `${dashboard.uid}: every panel needs a description`);
+    assert.doesNotMatch(JSON.stringify(dashboard), /\[5m\]/u);
+    const ids = dashboard.panels.map((panel) => panel.id);
+    assert.equal(new Set(ids).size, ids.length, `${dashboard.uid}: panel IDs must be unique`);
+  }
+
+  const prometheusTitles = new Set(prometheus.panels.map((panel) => panel.title));
+  for (const title of ['Targets up / total', 'Down targets: job / instance / host / role', 'Scrape duration / timeout', 'Scrape samples', 'Series churn', 'TSDB blocks и WAL', 'Rule duration / interval', 'Rule evaluation failures', 'Alertmanager delivery failures', 'Remote write agents']) assert.ok(prometheusTitles.has(title), title);
+  const serviceText = JSON.stringify(service);
+  for (const metric of ['vatrushka:slo_public_api_availability:ratio30d', 'vatrushka:slo_api_success:ratio30d', 'vatrushka:slo_api_under_500ms:ratio30d', 'vatrushka_build_info']) assert.match(serviceText, new RegExp(metric, 'u'));
+
+  const rules = await read('infra/observability/platform/prometheus/rules/service-slo.yml');
+  assert.match(rules, /0\.999/u);
+  assert.match(rules, /api_http_request_duration_seconds_bucket\{le="0\.5"/u);
+  assert.match(rules, /alert: VatrushkaPublicApiSloAtRisk/u);
+  assert.match(rules, /alert: VatrushkaApiSuccessSloAtRisk/u);
+  assert.match(rules, /alert: VatrushkaApiLatencyObjectiveAtRisk/u);
 });
 
 test('migration and recovery scripts preserve old metrics and secrets', async () => {

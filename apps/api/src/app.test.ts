@@ -155,6 +155,8 @@ describe('health and metrics API', () => {
     expect(metrics.body).toContain('api_http_requests_total{method="GET",route="unmatched",status_class="4xx"}');
     expect(metrics.body).toContain('api_http_request_duration_seconds_bucket');
     expect(metrics.body).toContain('nodejs_event_loop_lag_seconds');
+    expect(metrics.body).toContain('vatrushka_build_info{commit="unknown",version="');
+    expect(metrics.body).toContain('vatrushka_deployment_timestamp_seconds ');
   });
 });
 
