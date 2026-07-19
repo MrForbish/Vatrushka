@@ -1,6 +1,6 @@
 {
   "name": "@vatrushka/desktop",
-  "version": "0.6.4",
+  "version": "0.6.8",
   "private": true,
   "description": "Клиент серверов и каналов «Ватрушка» для Windows",
   "author": "Ватрушка",
@@ -14,7 +14,7 @@
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "test": "vitest run --project=renderer",
     "test:e2e": "electron-vite build --mode e2e && playwright test",
-    "package:win": "npm run build:production && electron-builder --win nsis portable --x64",
+    "package:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../infra/scripts/package-win.ps1",
     "storybook": "storybook dev -p 6006 --no-open",
     "build-storybook": "storybook build",
     "test:storybook": "vitest run --project=storybook",
@@ -30,7 +30,7 @@
     "@fontsource/ibm-plex-mono": "5.2.7",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-virtual": "^3.14.6",
-    "@vatrushka/shared": "0.6.4",
+    "@vatrushka/shared": "0.6.8",
     "electron-log": "5.4.4",
     "electron-updater": "6.8.9",
     "livekit-client": "2.20.1",
@@ -77,13 +77,26 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "build/icon.png", "to": "icon.png" }
+      {
+        "from": "build/icon.png",
+        "to": "icon.png"
+      }
     ],
     "asar": true,
     "win": {
       "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ],
       "icon": "build/icon.ico"
     },
@@ -101,7 +114,9 @@
     "protocols": [
       {
         "name": "Приглашение в Ватрушку",
-        "schemes": ["vatrushka"]
+        "schemes": [
+          "vatrushka"
+        ]
       }
     ],
     "publish": {

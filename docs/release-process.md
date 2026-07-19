@@ -77,7 +77,7 @@ git tag -a vX.Y.Z -m "Vatrushka vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-Только защищённый SemVer tag запускает production pipeline. Pipeline повторяет quality gate, проверяет принадлежность commit ветке `main`, собирает Windows artifacts, атомарно обновляет VPS feed (`setup`/`blockmap` раньше `latest.yml`) и создаёт GitLab Release с immutable assets в Generic Package Registry. После успешного выпуска выполняется `[SYNC] main → develop` merge commit без squash.
+Только защищённый SemVer tag запускает production pipeline. Pipeline повторяет quality gate, проверяет принадлежность commit ветке `main`, собирает Windows artifacts, атомарно обновляет VPS feed (`setup`/`blockmap` раньше `latest.yml`) и создаёт GitLab Release с immutable assets в Generic Package Registry. До слияния любого MR в `main` job `release-auth-smoke` проверяет доступ к Releases API встроенным CI job token, чтобы ошибка авторизации не обнаруживалась только после создания тега. После успешного выпуска выполняется `[SYNC] main → develop` merge commit без squash.
 
 ## Hotfix
 
@@ -124,9 +124,11 @@ Protected variables только для production tags:
 
 Fork/MR pipeline не получает protected variables. Значения secrets запрещено печатать в logs и artifacts.
 
+Для команд `glab` внутри CI используется только штатный режим `GLAB_ENABLE_CI_AUTOLOGIN=true`: он передаёт короткоживущий `CI_JOB_TOKEN` через поддерживаемый заголовок `JOB-TOKEN`. Запрещено назначать `GITLAB_TOKEN=$CI_JOB_TOKEN`, потому что тогда `glab` отправляет значение как `PRIVATE-TOKEN`, и Releases API отклоняет запрос. Постоянный PAT/project/group token допускается только для документированного endpoint, который не поддерживает job token, после отдельного согласования области доступа.
+
 ## Rollback
 
-- Неуспешный task MR исправляется в той же ветке.
+- Неуспешный task, release или hotfix MR исправляется в той же source-ветке без создания следующего MR и версии. Новый patch создаётся только если предыдущий immutable tag уже отправлен.
 - Неуспешный RC не публикуется; исправление идёт через `release-fix/*`.
 - Существующие tags и GitLab Releases не перезаписываются для исправления продукта — выпускается новый patch.
 - Stable feed переключается только на полностью загруженный набор; при аварии возвращается предыдущий проверенный `latest.yml`.

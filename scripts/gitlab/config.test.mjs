@@ -19,21 +19,51 @@ test('GitLab pipeline preserves Linux, integration and Windows quality gates', a
   assert.match(pipeline, /tags: \[vatrushka-linux\]/u);
   assert.match(pipeline, /tags: \[vatrushka-windows\]/u);
   assert.match(pipeline, /CI_PIPELINE_SOURCE == "merge_request_event"/u);
+  assert.match(pipeline, /ELECTRON_BUILDER_CACHE: '\$CI_PROJECT_DIR\/\.cache\/electron-builder'/u);
+  assert.match(pipeline, /\.cache\/electron-dist\//u);
+});
+
+test('Windows packaging uses verified local Electron and builder archives', async () => {
+  const desktopPackage = JSON.parse(await read('apps/desktop/package.json'));
+  const packaging = await read('infra/scripts/package-win.ps1');
+  assert.match(desktopPackage.scripts['package:win'], /infra\/scripts\/package-win\.ps1/u);
+  assert.match(packaging, /curl\.exe --fail --location --retry 5 --retry-all-errors/u);
+  assert.match(packaging, /Get-FileHash -Algorithm SHA256/u);
+  assert.match(packaging, /--config\.electronDist=\$electronZip/u);
+  for (const artifact of ['winCodeSign-2.6.0.7z', 'nsis-3.0.4.1.7z', 'nsis-resources-3.4.1.7z']) {
+    assert.match(packaging, new RegExp(artifact.replaceAll('.', '\\.')));
+  }
 });
 
 test('production publication is tag-only and uses protected file variables', async () => {
   const pipeline = await read('.gitlab-ci.yml');
   const publish = pipeline.slice(pipeline.indexOf('publish-production:'));
+  const authSmoke = pipeline.slice(pipeline.indexOf('release-auth-smoke:'), pipeline.indexOf('windows-rc:'));
+  assert.match(authSmoke, /CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"/u);
+  assert.match(authSmoke, /GLAB_ENABLE_CI_AUTOLOGIN: 'true'/u);
+  assert.match(authSmoke, /glab release view v0\.6\.6/u);
   assert.match(publish, /CI_COMMIT_TAG =~ \/\^v\[0-9\]/u);
   assert.match(publish, /PRODUCTION_SSH_PRIVATE_KEY/u);
   assert.match(publish, /PRODUCTION_SSH_HOST_KEY/u);
+  assert.match(publish, /GLAB_ENABLE_CI_AUTOLOGIN: 'true'/u);
+  assert.doesNotMatch(publish, /GITLAB_TOKEN:/u);
+  assert.doesNotMatch(publish, /GITLAB_RELEASE_TOKEN/u);
   assert.match(publish, /resource_group: 'production-\$CI_COMMIT_TAG'/u);
+  assert.doesNotMatch(publish, /mapfile|<\s*<\s*\(/u);
+  assert.match(publish, /find apps\/desktop\/release[\s\S]+-exec glab release upload/u);
   assert.doesNotMatch(pipeline.slice(0, pipeline.indexOf('publish-production:')), /PRODUCTION_SSH_PRIVATE_KEY/u);
 });
 
 test('GitLab repository metadata replaces GitHub automation', async () => {
   const codeowners = await read('.gitlab/CODEOWNERS');
+  const agentRules = await read('AGENTS.md');
+  const releaseProcess = await read('docs/release-process.md');
   assert.match(codeowners, /@MrForbish/u);
+  assert.match(agentRules, /GLAB_ENABLE_CI_AUTOLOGIN=true/u);
+  assert.match(agentRules, /Do not create a new branch\/MR for a failed pre-merge pipeline/u);
+  assert.match(agentRules, /Immediately set and read back `squash=false`/u);
+  assert.match(releaseProcess, /release-auth-smoke/u);
+  assert.match(releaseProcess, /GITLAB_TOKEN=\$CI_JOB_TOKEN/u);
   for (const template of ['feature', 'release-assemble', 'release', 'hotfix', 'sync']) await access(rootFile(`.gitlab/merge_request_templates/${template}.md`));
   await assert.rejects(access(rootFile('.github/workflows/pr-checks.yml')));
   await assert.rejects(access(rootFile('.github/scripts/pr-policy.mjs')));

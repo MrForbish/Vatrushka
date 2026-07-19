@@ -4,6 +4,35 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-07-19
+
+### Fixed
+
+- `glab` production publication now enables GitLab CI auto-login, which sends `CI_JOB_TOKEN` through the supported `JOB-TOKEN` header;
+- removed the unnecessary long-lived release-token variable and added a policy guard against configuring `GITLAB_TOKEN` in the production job.
+
+## [0.6.7] - 2026-07-19
+
+### Fixed
+
+- production release publication now authenticates to the GitLab Releases and Generic Packages APIs with a dedicated protected and masked CI variable instead of the insufficient `CI_JOB_TOKEN`;
+- repository policy tests prevent the release job from silently returning to `CI_JOB_TOKEN`.
+
+## [0.6.6] - 2026-07-19
+
+### Fixed
+
+- Windows packaging now prefetches Electron and electron-builder toolsets with retrying `curl` downloads and verifies every archive by SHA-256 before use;
+- the verified local Electron archive is passed directly to `electron-builder`, removing its unreliable runtime request for GitHub `SHASUMS256.txt`;
+- GitLab caches the verified Windows packaging toolsets between jobs.
+
+## [0.6.5] - 2026-07-19
+
+### Fixed
+
+- production GitLab Release publication now uses POSIX-compatible commands instead of Bash-only `mapfile` in the Alpine `glab` image;
+- the production SSH file variable preserves the final OpenSSH newline required by Alpine `libcrypto`.
+
 ## [0.6.4] - 2026-07-19
 
 ### Operations
