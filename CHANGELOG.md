@@ -4,6 +4,14 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-07-19
+
+### Fixed
+
+- Windows packaging now prefetches Electron and electron-builder toolsets with retrying `curl` downloads and verifies every archive by SHA-256 before use;
+- the verified local Electron archive is passed directly to `electron-builder`, removing its unreliable runtime request for GitHub `SHASUMS256.txt`;
+- GitLab caches the verified Windows packaging toolsets between jobs.
+
 ## [0.6.5] - 2026-07-19
 
 ### Fixed

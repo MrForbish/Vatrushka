@@ -19,6 +19,20 @@ test('GitLab pipeline preserves Linux, integration and Windows quality gates', a
   assert.match(pipeline, /tags: \[vatrushka-linux\]/u);
   assert.match(pipeline, /tags: \[vatrushka-windows\]/u);
   assert.match(pipeline, /CI_PIPELINE_SOURCE == "merge_request_event"/u);
+  assert.match(pipeline, /ELECTRON_BUILDER_CACHE: '\$CI_PROJECT_DIR\/\.cache\/electron-builder'/u);
+  assert.match(pipeline, /\.cache\/electron-dist\//u);
+});
+
+test('Windows packaging uses verified local Electron and builder archives', async () => {
+  const desktopPackage = JSON.parse(await read('apps/desktop/package.json'));
+  const packaging = await read('infra/scripts/package-win.ps1');
+  assert.match(desktopPackage.scripts['package:win'], /infra\/scripts\/package-win\.ps1/u);
+  assert.match(packaging, /curl\.exe --fail --location --retry 5 --retry-all-errors/u);
+  assert.match(packaging, /Get-FileHash -Algorithm SHA256/u);
+  assert.match(packaging, /--config\.electronDist=\$electronZip/u);
+  for (const artifact of ['winCodeSign-2.6.0.7z', 'nsis-3.0.4.1.7z', 'nsis-resources-3.4.1.7z']) {
+    assert.match(packaging, new RegExp(artifact.replaceAll('.', '\\.')));
+  }
 });
 
 test('production publication is tag-only and uses protected file variables', async () => {
