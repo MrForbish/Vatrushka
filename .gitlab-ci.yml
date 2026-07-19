@@ -23,6 +23,7 @@ variables:
   PRODUCTION_BRANCH: "main"
   PRODUCTION_API_BASE_URL: "https://api.myvatrushka.ru"
   PRODUCTION_UPDATE_FEED: "https://api.myvatrushka.ru/updates"
+  WINDOWS_TOOLCHAIN_MIRROR: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/windows-toolchain/43.1.1"
   WINDOWS_CSC_ENABLED: "false"
 
 .node-linux:
@@ -52,8 +53,6 @@ variables:
     paths:
       - .npm/
       - .cache/ms-playwright/
-      - .cache/electron-builder/
-      - .cache/electron-dist/
     policy: pull-push
   before_script:
     - $env:Path = "$env:NODE_HOME;$env:Path"
@@ -61,6 +60,21 @@ variables:
     - npm --version
     - npm ci --cache .npm --prefer-offline --no-audit --no-fund
   interruptible: true
+
+.node-windows-package:
+  extends: .node-windows
+  cache:
+    - key:
+        files: [package-lock.json]
+        prefix: windows-node-playwright
+      paths:
+        - .npm/
+      policy: pull-push
+    - key: windows-toolchain-43-1-1
+      paths:
+        - .cache/electron-builder/
+        - .cache/electron-dist/
+      policy: pull-push
 
 .quality-rules:
   rules:
@@ -272,7 +286,7 @@ release-auth-smoke:
 
 windows-rc:
   extends:
-    - .node-windows
+    - .node-windows-package
     - .release-candidate-rules
   stage: package
   timeout: 25m
@@ -341,7 +355,7 @@ windows-rc:
     paths: [apps/desktop/release/]
 
 windows-production-package:
-  extends: .node-windows
+  extends: .node-windows-package
   stage: package
   timeout: 25m
   interruptible: false

@@ -26,12 +26,20 @@ test('GitLab pipeline preserves Linux, integration and Windows quality gates', a
 test('Windows packaging uses verified local Electron and builder archives', async () => {
   const desktopPackage = JSON.parse(await read('apps/desktop/package.json'));
   const packaging = await read('infra/scripts/package-win.ps1');
+  const pipeline = await read('.gitlab-ci.yml');
+  const toolchain = JSON.parse(await read('infra/windows-toolchain-lock.json'));
   assert.match(desktopPackage.scripts['package:win'], /infra\/scripts\/package-win\.ps1/u);
-  assert.match(packaging, /curl\.exe --fail --location --retry 5 --retry-all-errors/u);
+  assert.match(packaging, /'--fail', '--location', '--retry', '5', '--retry-all-errors'/u);
+  assert.match(packaging, /& curl\.exe @curlArguments/u);
   assert.match(packaging, /Get-FileHash -Algorithm SHA256/u);
   assert.match(packaging, /--config\.electronDist=\$electronZip/u);
+  assert.match(packaging, /JOB-TOKEN: \$env:CI_JOB_TOKEN/u);
+  assert.match(packaging, /windows-toolchain-lock\.json/u);
+  assert.match(pipeline, /WINDOWS_TOOLCHAIN_MIRROR:/u);
+  assert.match(pipeline, /key: windows-toolchain-43-1-1/u);
+  assert.equal(toolchain.electron.version, desktopPackage.devDependencies.electron);
   for (const artifact of ['winCodeSign-2.6.0.7z', 'nsis-3.0.4.1.7z', 'nsis-resources-3.4.1.7z']) {
-    assert.match(packaging, new RegExp(artifact.replaceAll('.', '\\.')));
+    assert.ok(toolchain.builderArtifacts.some((item) => item.file === artifact), artifact);
   }
 });
 

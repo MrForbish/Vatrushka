@@ -51,6 +51,8 @@ Quality gate выполняет параллельно:
 
 Linux jobs используют project runner с тегом `vatrushka-linux` и Node 24 container. Docker Hub images загружаются через GitLab Dependency Proxy, чтобы не зависеть от публичных rate limits. Windows jobs используют project runner `vatrushka-windows`; Playwright хранится в project-relative cache. Оба runner принадлежат инфраструктуре Vatrushka, поэтому не расходуют квоту GitLab-hosted compute. Диагностические artifacts сохраняются только при падении, release artifacts имеют отдельный retention.
 
+Windows packaging toolchain хранится в private Generic Package Registry `windows-toolchain/43.1.1`, фиксируется SHA-256 manifest в `infra/windows-toolchain-lock.json` и скачивается встроенным `CI_JOB_TOKEN`. Cache Electron/NSIS отделён от npm/Playwright cache: E2E и visual jobs не могут перезаписать packaging toolchain. GitHub используется package script только как локальный fallback вне CI.
+
 ## Release candidate
 
 Для версии `X.Y.Z`:
