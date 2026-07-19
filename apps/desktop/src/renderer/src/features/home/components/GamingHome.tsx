@@ -107,6 +107,7 @@ function capacityLabel(space: GamingHomeVoiceSpace): string {
 function ctaLabel(space: GamingHomeVoiceSpace, returnReason?: GamingHomeQuickReturnItem["returnReason"]): string {
   if (!space.hasFreeSlots) return "Канал заполнен";
   if (!space.canJoin) return "Нет доступа";
+  if (returnReason === "current_voice") return "Открыть";
   if (returnReason === "recently_left") return "Вернуться";
   return "Присоединиться";
 }

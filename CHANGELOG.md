@@ -6,6 +6,9 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ### Fixed
 
+- the shared desktop shell now provides synchronized F11/UI fullscreen controls, a confirmation before logout, the canonical Vatrushka brand mark and a responsive Home support rail;
+- Gaming Home keeps the current confirmed voice session at the top of Quick Return, and the retired Spaces navigation action is removed;
+- Windows packaging deterministically generates a multi-resolution 32-bit application icon from the tracked brand asset;
 - voice mute/deafen/speaking state now propagates through the authenticated API, Redis projection and realtime server UI; undeafen restores the microphone only when it was enabled before deafen;
 - Gaming Home shows measured WebRTC RTT, and an active voice connection prevents false automatic idle presence;
 - voice-channel invites provide visible clipboard feedback, member moderation is hidden behind a context menu, and device selects flip/fit inside the current viewport;

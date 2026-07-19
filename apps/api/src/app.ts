@@ -460,6 +460,7 @@ const homeDashboardResponseSchema = z.object({
     quickReturn: z.array(
       gamingHomeVoiceSpaceResponseSchema.extend({
         returnReason: z.enum([
+          "current_voice",
           "recently_left",
           "friends_inside",
           "screen_share",

@@ -21,15 +21,23 @@
   padding: 0 var(--space-2) var(--space-3);
   font: var(--text-heading-sm);
 }
-.vui-workspace-library__brand > span {
-  display: grid;
+.vui-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.vui-brand-lockup > img {
+  display: block;
   width: 32px;
   height: 32px;
-  place-items: center;
-  border-radius: var(--radius-sm);
-  background: var(--gradient-brand);
-  color: var(--color-text-on-accent);
-  font-family: var(--font-display);
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.vui-brand-lockup > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .vui-workspace-library__home,
 .vui-workspace-library__actions button {

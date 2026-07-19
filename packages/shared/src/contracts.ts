@@ -199,6 +199,7 @@ export interface GamingHomeVoiceSpace {
 
 export interface GamingHomeQuickReturnItem extends GamingHomeVoiceSpace {
   returnReason:
+    | "current_voice"
     | "recently_left"
     | "friends_inside"
     | "screen_share"
@@ -1002,6 +1003,9 @@ export interface DesktopMediaDiagnostic {
 
 export interface DesktopBridge {
   getAppVersion(): Promise<string>;
+  getFullscreen(): Promise<boolean>;
+  toggleFullscreen(): Promise<boolean>;
+  onFullscreenChange(callback: (fullscreen: boolean) => void): () => void;
   getUpdateState(): Promise<DesktopUpdateState>;
   checkForUpdates(): Promise<void>;
   installUpdate(): Promise<void>;

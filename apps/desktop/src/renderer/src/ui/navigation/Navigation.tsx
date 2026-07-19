@@ -6,9 +6,19 @@ import type {
   PresencePreference,
 } from "@vatrushka/shared";
 
+import brandMarkUrl from "../../assets/brand-mark.png";
 import { Avatar, Badge, Icon, IconButton, StatusDot } from "../primitives";
 import type { IconName } from "../primitives";
 import "./navigation.css";
+
+export function BrandLockup(): React.JSX.Element {
+  return (
+    <div className="vui-brand-lockup" aria-label="Vatrushka">
+      <img alt="" aria-hidden="true" src={brandMarkUrl} />
+      <strong>Ватрушка</strong>
+    </div>
+  );
+}
 
 export interface WorkspaceNavigationItem {
   id: string;
@@ -123,8 +133,7 @@ export function WorkspaceLibrary({
   return (
     <aside aria-label="Библиотека серверов" className="vui-workspace-library">
       <div className="vui-workspace-library__brand">
-        <span aria-hidden="true">В</span>
-        <strong>Ватрушка</strong>
+        <BrandLockup />
       </div>
       <button
         className="vui-workspace-library__home"

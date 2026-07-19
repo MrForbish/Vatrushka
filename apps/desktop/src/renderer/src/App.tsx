@@ -80,6 +80,7 @@ import {
 } from "./features/voice/store/voice-state.js";
 import { MediaSession } from "./media.js";
 import { RealtimeClient } from "./realtime.js";
+import { ConfirmDialog } from "./ui";
 
 type Screen = "boot" | "auth" | "profile" | "home" | "server" | "direct";
 const media = new MediaSession(apiClient);
@@ -425,6 +426,7 @@ export default function App(): ReactNode {
   const [platform, setPlatform] = useState("win32");
   const [retrySeconds, setRetrySeconds] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [sources, setSources] = useState<DesktopSourceInfo[] | null>(null);
@@ -2564,7 +2566,7 @@ export default function App(): ReactNode {
     });
   };
 
-  const logout = (): void => {
+  const performLogout = (): void => {
     void run(async () => {
       if (connection !== null) playVoiceCue("leave");
       participantConnectionRef.current = null;
@@ -2586,6 +2588,7 @@ export default function App(): ReactNode {
       setScreen("auth");
     });
   };
+  const requestLogout = (): void => setLogoutConfirmOpen(true);
 
   const persistDevice = (
     key: "microphoneDeviceId" | "outputDeviceId",
@@ -2903,6 +2906,19 @@ export default function App(): ReactNode {
             .installUpdate()
             .catch((caught) => setError(userMessage(caught)))
         }
+      />
+      <ConfirmDialog
+        confirmLabel="Выйти"
+        danger
+        description="Текущая сессия будет завершена. Для следующего входа снова понадобятся пароль и второй фактор."
+        loading={busy}
+        onClose={() => setLogoutConfirmOpen(false)}
+        onConfirm={() => {
+          setLogoutConfirmOpen(false);
+          performLogout();
+        }}
+        open={logoutConfirmOpen}
+        title="Выйти из аккаунта?"
       />
     </>
   );
@@ -3240,9 +3256,7 @@ export default function App(): ReactNode {
           onUpdatePresence={updatePresenceSettings}
           onUpdatePrivacy={updatePrivacySettings}
           onUpdateNotificationPreferences={updateServerNotificationPreferences}
-          onLogout={() => {
-            void logout();
-          }}
+          onLogout={requestLogout}
           onUserChange={updateUser}
           outputId={settings.outputDeviceId}
           presence={presence}
@@ -3297,7 +3311,7 @@ export default function App(): ReactNode {
             : null
         }
         onRetryDashboard={() => void homeDashboardQuery.refetch()}
-        onLogout={logout}
+        onLogout={requestLogout}
         onSecurity={openUserSettings}
         onAudioSettings={openAudioSettings}
         onServerName={setServerName}
@@ -3384,7 +3398,7 @@ export default function App(): ReactNode {
           onSecurity={openUserSettings}
           onPresenceChange={setPresence}
           onServerSettings={() => openServerSettings("overview")}
-          onLogout={logout}
+          onLogout={requestLogout}
         />
         {sources && (
           <SourcePicker
@@ -3441,7 +3455,7 @@ export default function App(): ReactNode {
         onServerName={setServerName}
         onCreateServer={createServer}
         onSecurity={openUserSettings}
-        onLogout={logout}
+        onLogout={requestLogout}
       />,
     );
   return withUpdateStatus(
