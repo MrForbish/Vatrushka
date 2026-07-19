@@ -10,11 +10,16 @@ import {
   type RemoteParticipant,
   type RemoteTrack,
   type RoomOptions,
-} from 'livekit-client';
+} from "livekit-client";
 
-import type { DesktopSourceInfo, LocalSettings, PlatformRole, RoomConnection } from '@vatrushka/shared';
+import type {
+  DesktopSourceInfo,
+  LocalSettings,
+  PlatformRole,
+  RoomConnection,
+} from "@vatrushka/shared";
 
-import type { ApiClient } from './api.js';
+import type { ApiClient } from "./api.js";
 
 export interface ParticipantView {
   identity: string;
@@ -63,8 +68,12 @@ const initialSnapshot: MediaSnapshot = {
   error: null,
 };
 
-export type ScreenShareQuality = '1080p60' | '1440p60';
-const defaultScreenShareEncoding = { maxBitrate: 10_000_000, maxFramerate: 60, priority: 'high' as const };
+export type ScreenShareQuality = "1080p60" | "1440p60";
+const defaultScreenShareEncoding = {
+  maxBitrate: 10_000_000,
+  maxFramerate: 60,
+  priority: "high" as const,
+};
 const publishingReadyTimeoutMs = 20_000;
 
 class UserFacingMediaError extends Error {}
@@ -98,7 +107,10 @@ export class MediaSession {
     return () => this.terminationListeners.delete(listener);
   };
 
-  async connect(connection: RoomConnection, settings: LocalSettings): Promise<void> {
+  async connect(
+    connection: RoomConnection,
+    settings: LocalSettings,
+  ): Promise<void> {
     await this.disconnect(false);
     this.connection = connection;
     this.isDeafened = false;
@@ -113,9 +125,13 @@ export class MediaSession {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
-        ...(settings.microphoneDeviceId ? { deviceId: settings.microphoneDeviceId } : {}),
+        ...(settings.microphoneDeviceId
+          ? { deviceId: settings.microphoneDeviceId }
+          : {}),
       },
-      ...(settings.outputDeviceId ? { audioOutput: { deviceId: settings.outputDeviceId } } : {}),
+      ...(settings.outputDeviceId
+        ? { audioOutput: { deviceId: settings.outputDeviceId } }
+        : {}),
       publishDefaults: {
         screenShareEncoding: defaultScreenShareEncoding,
         simulcast: false,
@@ -126,7 +142,9 @@ export class MediaSession {
     this.registerEvents(room);
     this.patch({ connectionState: ConnectionState.Connecting, error: null });
     try {
-      await room.connect(connection.livekitUrl, connection.livekitToken, { autoSubscribe: true });
+      await room.connect(connection.livekitUrl, connection.livekitToken, {
+        autoSubscribe: true,
+      });
       this.refreshSnapshot();
       try {
         if (connection.canSpeak === false) {
@@ -137,7 +155,9 @@ export class MediaSession {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          ...(settings.microphoneDeviceId ? { deviceId: settings.microphoneDeviceId } : {}),
+          ...(settings.microphoneDeviceId
+            ? { deviceId: settings.microphoneDeviceId }
+            : {}),
         });
       } catch (error) {
         this.patch({ error: deviceErrorMessage(error), isMuted: true });
@@ -145,7 +165,12 @@ export class MediaSession {
       this.refreshSnapshot();
     } catch (error) {
       await this.disconnect(false);
-      throw new Error(error instanceof Error ? error.message : 'Не удалось подключиться к LiveKit', { cause: error });
+      throw new Error(
+        error instanceof Error
+          ? error.message
+          : "Не удалось подключиться к LiveKit",
+        { cause: error },
+      );
     }
   }
 
@@ -160,21 +185,30 @@ export class MediaSession {
     if (!this.room) return;
     if (deafened) await this.room.localParticipant.setMicrophoneEnabled(false);
     this.isDeafened = deafened;
-    for (const participant of this.room.remoteParticipants.values()) this.applyParticipantAudioPreferences(participant);
+    for (const participant of this.room.remoteParticipants.values())
+      this.applyParticipantAudioPreferences(participant);
     this.applyScreenShareAudioPreferences();
     this.refreshSnapshot();
   }
 
   async switchMicrophone(deviceId: string): Promise<void> {
     if (!this.room) return;
-    const switched = await this.room.switchActiveDevice('audioinput', deviceId, true);
-    if (!switched) throw new Error('Не удалось выбрать микрофон');
+    const switched = await this.room.switchActiveDevice(
+      "audioinput",
+      deviceId,
+      true,
+    );
+    if (!switched) throw new Error("Не удалось выбрать микрофон");
   }
 
   async switchOutput(deviceId: string): Promise<void> {
     if (!this.room) return;
-    const switched = await this.room.switchActiveDevice('audiooutput', deviceId, true);
-    if (!switched) throw new Error('Не удалось выбрать устройство вывода');
+    const switched = await this.room.switchActiveDevice(
+      "audiooutput",
+      deviceId,
+      true,
+    );
+    if (!switched) throw new Error("Не удалось выбрать устройство вывода");
   }
 
   setParticipantVolume(identity: string, volume: number): void {
@@ -183,7 +217,10 @@ export class MediaSession {
     const normalized = Math.max(0, Math.min(1, volume));
     this.participantVolumes.set(identity, normalized);
     if (normalized > 0) this.locallyMutedParticipants.delete(identity);
-    participant.setVolume(this.isDeafened ? 0 : normalized, Track.Source.Microphone);
+    participant.setVolume(
+      this.isDeafened ? 0 : normalized,
+      Track.Source.Microphone,
+    );
     this.refreshSnapshot();
   }
 
@@ -192,7 +229,12 @@ export class MediaSession {
     if (!participant) return;
     if (muted) this.locallyMutedParticipants.add(identity);
     else this.locallyMutedParticipants.delete(identity);
-    participant.setVolume(this.isDeafened || muted ? 0 : this.participantVolumes.get(identity) ?? 1, Track.Source.Microphone);
+    participant.setVolume(
+      this.isDeafened || muted
+        ? 0
+        : (this.participantVolumes.get(identity) ?? 1),
+      Track.Source.Microphone,
+    );
     this.refreshSnapshot();
   }
 
@@ -212,12 +254,17 @@ export class MediaSession {
     this.patch({ screenShareAudioMuted: muted });
   }
 
-  async waitForPublishingReady(timeoutMs = publishingReadyTimeoutMs): Promise<void> {
+  async waitForPublishingReady(
+    timeoutMs = publishingReadyTimeoutMs,
+  ): Promise<void> {
     const room = this.room;
-    if (!room || !this.connection) throw new UserFacingMediaError('Голосовой канал не подключён');
+    if (!room || !this.connection)
+      throw new UserFacingMediaError("Голосовой канал не подключён");
     if (room.state === ConnectionState.Connected) return;
     if (room.state === ConnectionState.Disconnected) {
-      throw new UserFacingMediaError('Соединение с голосовым сервером потеряно. Переподключитесь к каналу и повторите попытку.');
+      throw new UserFacingMediaError(
+        "Соединение с голосовым сервером потеряно. Переподключитесь к каналу и повторите попытку.",
+      );
     }
 
     await new Promise<void>((resolve, reject) => {
@@ -232,7 +279,11 @@ export class MediaSession {
       };
       const fail = (): void => {
         cleanup();
-        reject(new UserFacingMediaError('Связь с голосовым сервером ещё восстанавливается. Дождитесь статуса «Голосовая связь активна» и повторите показ.'));
+        reject(
+          new UserFacingMediaError(
+            "Связь с голосовым сервером ещё восстанавливается. Дождитесь статуса «Голосовая связь активна» и повторите показ.",
+          ),
+        );
       };
       const onStateChanged = (state: ConnectionState): void => {
         if (state === ConnectionState.Connected) finish();
@@ -246,41 +297,66 @@ export class MediaSession {
     });
   }
 
-  async startScreenShare(source: Pick<DesktopSourceInfo, 'width' | 'height'> = {}, quality: ScreenShareQuality = '1080p60'): Promise<void> {
-    const operation = this.screenShareTransition.then(() => this.startScreenShareInternal(source, quality));
+  async startScreenShare(
+    source: Pick<DesktopSourceInfo, "width" | "height"> = {},
+    quality: ScreenShareQuality = "1080p60",
+    includeAudio = false,
+  ): Promise<void> {
+    const operation = this.screenShareTransition.then(() =>
+      this.startScreenShareInternal(source, quality, includeAudio),
+    );
     this.screenShareTransition = operation.catch(() => undefined);
     return operation;
   }
 
-  private async startScreenShareInternal(source: Pick<DesktopSourceInfo, 'width' | 'height'>, quality: ScreenShareQuality): Promise<void> {
-    if (!this.room || !this.connection) throw new Error('Комната не подключена');
+  private async startScreenShareInternal(
+    source: Pick<DesktopSourceInfo, "width" | "height">,
+    quality: ScreenShareQuality,
+    includeAudio: boolean,
+  ): Promise<void> {
+    if (!this.room || !this.connection)
+      throw new Error("Комната не подключена");
     await this.waitForPublishingReady();
-    if (this.room.localParticipant.isScreenShareEnabled) await this.stopScreenShareInternal(true);
+    if (this.room.localParticipant.isScreenShareEnabled)
+      await this.stopScreenShareInternal(true);
     this.stoppingScreenShare = false;
     const resolution = screenShareResolution(source, quality);
-    const encoding = quality === '1440p60'
-      ? { maxBitrate: 18_000_000, maxFramerate: 60, priority: 'high' as const }
-      : defaultScreenShareEncoding;
+    const encoding =
+      quality === "1440p60"
+        ? {
+            maxBitrate: 18_000_000,
+            maxFramerate: 60,
+            priority: "high" as const,
+          }
+        : defaultScreenShareEncoding;
     try {
       await this.room.localParticipant.setScreenShareEnabled(
         true,
         {
-          audio: {
-            restrictOwnAudio: { exact: true },
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-          },
+          audio: includeAudio
+            ? {
+                restrictOwnAudio: { exact: true },
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+              }
+            : false,
           video: true,
           resolution,
-          contentHint: 'detail',
-          systemAudio: 'include',
+          contentHint: "detail",
+          systemAudio: includeAudio ? "include" : "exclude",
         },
-        { degradationPreference: 'maintain-resolution', screenShareEncoding: encoding, simulcast: false },
+        {
+          degradationPreference: "maintain-resolution",
+          screenShareEncoding: encoding,
+          simulcast: false,
+        },
       );
-      if (!this.isOwnAudioRestricted()) {
+      if (includeAudio && !this.isOwnAudioRestricted()) {
         await this.stopScreenShareInternal(false);
-        throw new UserFacingMediaError('Windows не смогла безопасно исключить голоса участников из звука демонстрации. Показ остановлен, чтобы не создавать эхо.');
+        throw new UserFacingMediaError(
+          "Windows не смогла безопасно исключить голоса участников из звука демонстрации. Показ остановлен, чтобы не создавать эхо.",
+        );
       }
     } catch (error) {
       throw new Error(screenShareErrorMessage(error), { cause: error });
@@ -290,7 +366,9 @@ export class MediaSession {
   }
 
   async stopScreenShare(release = true): Promise<void> {
-    const operation = this.screenShareTransition.then(() => this.stopScreenShareInternal(release));
+    const operation = this.screenShareTransition.then(() =>
+      this.stopScreenShareInternal(release),
+    );
     this.screenShareTransition = operation.catch(() => undefined);
     return operation;
   }
@@ -325,7 +403,8 @@ export class MediaSession {
   async disconnect(release = true): Promise<void> {
     this.stopHeartbeat();
     if (this.room) {
-      if (this.room.localParticipant.isScreenShareEnabled) await this.stopScreenShare(release);
+      if (this.room.localParticipant.isScreenShareEnabled)
+        await this.stopScreenShare(release);
       try {
         await this.room.localParticipant.setMicrophoneEnabled(false);
       } catch {
@@ -364,7 +443,9 @@ export class MediaSession {
         if (publication.source === Track.Source.ScreenShare) {
           if (this.stoppingScreenShare) this.stoppingScreenShare = false;
           else {
-            this.patch({ error: 'Источник демонстрации закрыт — показ экрана остановлен' });
+            this.patch({
+              error: "Источник демонстрации закрыт — показ экрана остановлен",
+            });
             void this.stopScreenShare();
           }
         }
@@ -376,11 +457,17 @@ export class MediaSession {
           element.dataset.vatrushkaAudio = publication.trackSid;
           element.dataset.vatrushkaAudioSource = publication.source;
           document.body.appendChild(element);
-          if (publication.source === Track.Source.ScreenShareAudio) this.applyScreenShareAudioPreferences();
-          if (publication.source === Track.Source.Microphone) this.applyParticipantAudioPreferences(participant);
+          if (publication.source === Track.Source.ScreenShareAudio)
+            this.applyScreenShareAudioPreferences();
+          if (publication.source === Track.Source.Microphone)
+            this.applyParticipantAudioPreferences(participant);
         }
-        if (publication.source === Track.Source.ScreenShare && this.snapshot.screenTrack && this.snapshot.screenTrack !== track) {
-          console.error('Multiple active screen-share video tracks detected');
+        if (
+          publication.source === Track.Source.ScreenShare &&
+          this.snapshot.screenTrack &&
+          this.snapshot.screenTrack !== track
+        ) {
+          console.error("Multiple active screen-share video tracks detected");
         }
         if (publication.source === Track.Source.ScreenShare) {
           publication.setVideoQuality(VideoQuality.HIGH);
@@ -393,7 +480,9 @@ export class MediaSession {
         refresh();
       })
       .on(RoomEvent.AudioPlaybackStatusChanged, refresh)
-      .on(RoomEvent.MediaDevicesError, (error) => this.patch({ error: deviceErrorMessage(error) }))
+      .on(RoomEvent.MediaDevicesError, (error) =>
+        this.patch({ error: deviceErrorMessage(error) }),
+      )
       .on(RoomEvent.Disconnected, (reason) => {
         this.patch({ connectionState: ConnectionState.Disconnected });
         for (const listener of this.terminationListeners) listener(reason);
@@ -403,31 +492,55 @@ export class MediaSession {
   private refreshSnapshot(): void {
     const room = this.room;
     if (!room) return;
-    const allParticipants: Participant[] = [room.localParticipant, ...room.remoteParticipants.values()];
+    const allParticipants: Participant[] = [
+      room.localParticipant,
+      ...room.remoteParticipants.values(),
+    ];
     const participants = allParticipants.map((participant) => ({
       identity: participant.identity,
-      displayName: participant.name || 'Участник',
+      displayName: participant.name || "Участник",
       isLocal: participant === room.localParticipant,
-      isOwner: Boolean(this.connection && participant.identity.startsWith(`user_${this.connection.ownerUserId}_`)),
+      isOwner: Boolean(
+        this.connection &&
+        participant.identity.startsWith(`user_${this.connection.ownerUserId}_`),
+      ),
       isMuted: !participant.isMicrophoneEnabled,
       isSpeaking: participant.isSpeaking,
       audioLevel: participant.audioLevel,
       isScreenSharing: participant.isScreenShareEnabled,
-      volume: participant === room.localParticipant ? 1 : this.participantVolumes.get(participant.identity) ?? 1,
-      locallyMuted: participant !== room.localParticipant && this.locallyMutedParticipants.has(participant.identity),
+      volume:
+        participant === room.localParticipant
+          ? 1
+          : (this.participantVolumes.get(participant.identity) ?? 1),
+      locallyMuted:
+        participant !== room.localParticipant &&
+        this.locallyMutedParticipants.has(participant.identity),
       platformRole: participantPlatformRole(participant),
       connectionQuality: connectionQualityLabel(participant.connectionQuality),
     }));
 
     const screenCandidates = allParticipants.flatMap((participant) =>
       [...participant.trackPublications.values()]
-        .filter((publication) => publication.source === Track.Source.ScreenShare && publication.track)
-        .map((publication) => ({ participant, track: publication.track as RemoteTrack | LocalTrack })),
+        .filter(
+          (publication) =>
+            publication.source === Track.Source.ScreenShare &&
+            publication.track,
+        )
+        .map((publication) => ({
+          participant,
+          track: publication.track as RemoteTrack | LocalTrack,
+        })),
     );
-    if (screenCandidates.length > 1) console.error('Multiple active screen-share tracks detected; displaying the first');
+    if (screenCandidates.length > 1)
+      console.error(
+        "Multiple active screen-share tracks detected; displaying the first",
+      );
     const firstScreen = screenCandidates[0];
-    const screenAudioPublication = firstScreen?.participant.getTrackPublication(Track.Source.ScreenShareAudio);
-    const screenShareIsLocal = firstScreen?.participant === room.localParticipant;
+    const screenAudioPublication = firstScreen?.participant.getTrackPublication(
+      Track.Source.ScreenShareAudio,
+    );
+    const screenShareIsLocal =
+      firstScreen?.participant === room.localParticipant;
     this.snapshot = {
       ...this.snapshot,
       connectionState: room.state,
@@ -438,7 +551,9 @@ export class MediaSession {
       screenTrack: firstScreen?.track ?? null,
       screenSharerName: firstScreen?.participant.name || null,
       screenShareIsLocal,
-      hasScreenShareAudio: Boolean(!screenShareIsLocal && screenAudioPublication?.track),
+      hasScreenShareAudio: Boolean(
+        !screenShareIsLocal && screenAudioPublication?.track,
+      ),
       screenShareAudioMuted: this.screenShareAudioMuted,
       screenShareAudioVolume: this.screenShareAudioVolume,
       canPlayAudio: room.canPlaybackAudio,
@@ -452,7 +567,9 @@ export class MediaSession {
       const connection = this.connection;
       if (!connection) return;
       void this.api.heartbeatScreenShare(connection).catch(() => {
-        this.patch({ error: 'Право на демонстрацию потеряно — показ экрана остановлен' });
+        this.patch({
+          error: "Право на демонстрацию потеряно — показ экрана остановлен",
+        });
         void this.stopScreenShare(false);
       });
     }, 10_000);
@@ -464,20 +581,33 @@ export class MediaSession {
   }
 
   private applyScreenShareAudioPreferences(): void {
-    const volume = this.isDeafened || this.screenShareAudioMuted ? 0 : this.screenShareAudioVolume;
+    const volume =
+      this.isDeafened || this.screenShareAudioMuted
+        ? 0
+        : this.screenShareAudioVolume;
     for (const participant of this.room?.remoteParticipants.values() ?? []) {
       participant.setVolume(volume, Track.Source.ScreenShareAudio);
     }
   }
 
-  private applyParticipantAudioPreferences(participant: RemoteParticipant): void {
-    const muted = this.isDeafened || this.locallyMutedParticipants.has(participant.identity);
-    participant.setVolume(muted ? 0 : this.participantVolumes.get(participant.identity) ?? 1, Track.Source.Microphone);
+  private applyParticipantAudioPreferences(
+    participant: RemoteParticipant,
+  ): void {
+    const muted =
+      this.isDeafened ||
+      this.locallyMutedParticipants.has(participant.identity);
+    participant.setVolume(
+      muted ? 0 : (this.participantVolumes.get(participant.identity) ?? 1),
+      Track.Source.Microphone,
+    );
   }
 
   private isOwnAudioRestricted(): boolean {
-    const publication = this.room?.localParticipant.getTrackPublication(Track.Source.ScreenShareAudio);
-    const settings = publication?.track?.mediaStreamTrack.getSettings() as (MediaTrackSettings & { restrictOwnAudio?: boolean }) | undefined;
+    const publication = this.room?.localParticipant.getTrackPublication(
+      Track.Source.ScreenShareAudio,
+    );
+    const settings = publication?.track?.mediaStreamTrack.getSettings() as
+      (MediaTrackSettings & { restrictOwnAudio?: boolean }) | undefined;
     return settings?.restrictOwnAudio === true;
   }
 
@@ -492,47 +622,66 @@ export class MediaSession {
 }
 
 function connectionQualityLabel(quality: ConnectionQuality): string {
-  if (quality === ConnectionQuality.Excellent) return 'Отличное';
-  if (quality === ConnectionQuality.Good) return 'Хорошее';
-  if (quality === ConnectionQuality.Poor) return 'Слабое';
-  return 'Определяется';
+  if (quality === ConnectionQuality.Excellent) return "Отличное";
+  if (quality === ConnectionQuality.Good) return "Хорошее";
+  if (quality === ConnectionQuality.Poor) return "Слабое";
+  return "Определяется";
 }
 
 function participantPlatformRole(participant: Participant): PlatformRole {
   try {
-    const value = JSON.parse(participant.metadata || '{}') as { platformRole?: unknown };
-    if (value.platformRole === 'owner' || value.platformRole === 'admin') return value.platformRole;
+    const value = JSON.parse(participant.metadata || "{}") as {
+      platformRole?: unknown;
+    };
+    if (value.platformRole === "owner" || value.platformRole === "admin")
+      return value.platformRole;
   } catch {
     // LiveKit metadata is untrusted and an invalid value has no visual privileges.
   }
-  return 'member';
+  return "member";
 }
 
 function deviceErrorMessage(error: unknown): string {
-  if (error instanceof DOMException && error.name === 'NotAllowedError') return 'Доступ к микрофону запрещён. Разрешите его в настройках Windows.';
-  if (error instanceof DOMException && error.name === 'NotFoundError') return 'Микрофон не найден';
-  if (error instanceof DOMException && error.name === 'NotReadableError') return 'Микрофон используется другим приложением';
-  return 'Не удалось включить микрофон';
+  if (error instanceof DOMException && error.name === "NotAllowedError")
+    return "Доступ к микрофону запрещён. Разрешите его в настройках Windows.";
+  if (error instanceof DOMException && error.name === "NotFoundError")
+    return "Микрофон не найден";
+  if (error instanceof DOMException && error.name === "NotReadableError")
+    return "Микрофон используется другим приложением";
+  return "Не удалось включить микрофон";
 }
 
 function screenShareErrorMessage(error: unknown): string {
   if (error instanceof UserFacingMediaError) return error.message;
-  if (error instanceof Error && /publishing rejected as engine not connected within timeout/iu.test(error.message)) {
-    return 'Связь с голосовым сервером прервалась во время запуска демонстрации. Дождитесь переподключения и повторите попытку.';
+  if (
+    error instanceof Error &&
+    /publishing rejected as engine not connected within timeout/iu.test(
+      error.message,
+    )
+  ) {
+    return "Связь с голосовым сервером прервалась во время запуска демонстрации. Дождитесь переподключения и повторите попытку.";
   }
-  if (error instanceof DOMException && error.name === 'NotAllowedError') return 'Доступ к записи экрана запрещён. Разрешите его в настройках Windows.';
-  if (error instanceof DOMException && error.name === 'OverconstrainedError') return 'Windows не смогла безопасно захватить звук без голосов участников. Демонстрация не запущена.';
-  if (error instanceof DOMException && error.name === 'NotFoundError') return 'Выбранный экран или окно больше недоступны';
-  if (error instanceof DOMException && error.name === 'NotReadableError') return 'Не удалось прочитать выбранный экран или окно';
-  if (error instanceof DOMException && error.name === 'AbortError') return 'Запуск демонстрации был отменён';
-  return 'Не удалось запустить демонстрацию экрана';
+  if (error instanceof DOMException && error.name === "NotAllowedError")
+    return "Доступ к записи экрана запрещён. Разрешите его в настройках Windows.";
+  if (error instanceof DOMException && error.name === "OverconstrainedError")
+    return "Windows не смогла безопасно захватить звук без голосов участников. Демонстрация не запущена.";
+  if (error instanceof DOMException && error.name === "NotFoundError")
+    return "Выбранный экран или окно больше недоступны";
+  if (error instanceof DOMException && error.name === "NotReadableError")
+    return "Не удалось прочитать выбранный экран или окно";
+  if (error instanceof DOMException && error.name === "AbortError")
+    return "Запуск демонстрации был отменён";
+  return "Не удалось запустить демонстрацию экрана";
 }
 
-function screenShareResolution(source: Pick<DesktopSourceInfo, 'width' | 'height'>, quality: ScreenShareQuality): { width: number; height: number; frameRate: number } {
+function screenShareResolution(
+  source: Pick<DesktopSourceInfo, "width" | "height">,
+  quality: ScreenShareQuality,
+): { width: number; height: number; frameRate: number } {
   const sourceWidth = source.width ?? 2560;
   const sourceHeight = source.height ?? 1440;
-  const maxWidth = quality === '1440p60' ? 2560 : 1920;
-  const maxHeight = quality === '1440p60' ? 1440 : 1080;
+  const maxWidth = quality === "1440p60" ? 2560 : 1920;
+  const maxHeight = quality === "1440p60" ? 1440 : 1080;
   const scale = Math.min(1, maxWidth / sourceWidth, maxHeight / sourceHeight);
   return {
     width: Math.max(2, Math.round((sourceWidth * scale) / 2) * 2),

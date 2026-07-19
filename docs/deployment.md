@@ -8,7 +8,7 @@ Production Compose запускается из `/opt/vatrushka`: именно э
 
 1. Ubuntu 22.04/24.04, Docker Engine, Compose v2, public IPv4.
 2. DNS A/AAAA для `DOMAIN` и `INVITE_DOMAIN`; 80/443 разрешены в provider firewall и UFW.
-3. Скопировать `.env.example` в `.env`, установить `NODE_ENV=production`, `PUBLIC_API_URL`, `PUBLIC_INVITE_URL`, `PRESENCE_STORAGE_DRIVER=redis`, случайный `REDIS_PASSWORD` и остальные secrets (минимум 32 bytes).
+3. Скопировать `.env.example` в `.env`, установить `NODE_ENV=production`, `PUBLIC_API_URL`, `PUBLIC_INVITE_URL`, `PRESENCE_STORAGE_DRIVER=redis`, случайный `REDIS_PASSWORD` и остальные secrets (минимум 32 bytes). Для официального публичного сервера укажите его UUID в `FEATURED_SERVER_ID`; это server-only значение не попадает в desktop.
 4. Создать `updates/` рядом с `.env`, затем выполнить `docker compose --env-file .env -f infra/docker/docker-compose.yml config`.
 5. `docker compose ... build --pull api`.
 6. `docker compose ... up -d postgres redis api caddy`.
@@ -78,7 +78,7 @@ mkdir -p /opt/vatrushka/updates
 curl -fsS https://api.myvatrushka.ru/updates/latest.yml
 ```
 
-Клиент проверяет обновления сразу после запуска, затем каждые 15 минут, при возврате фокуса в приложение и после выхода Windows из сна. Проверки по активности ограничены одной попыткой в пять минут. UI ничего не показывает во время проверки, при актуальной версии, ошибке feed или unsupported-режиме. Уведомление появляется только после `update-available`, во время загрузки или после `update-downloaded`; пользователь может его скрыть. Скачанное обновление устанавливается только после нажатия «Перезапустить» либо при штатном выходе. Во время активного голосового соединения restart заблокирован до выхода из звонка. Автообновление работает для установленного NSIS-варианта. Переход с 0.3.0 на 0.4.0 требует одной ручной установки, поскольку в 0.3.0 updater ещё отсутствовал.
+Клиент проверяет обновления сразу после запуска, затем каждые 15 минут, при возврате фокуса в приложение и после выхода Windows из сна. Проверка ограничена 30-секундным timeout; после ошибки выполняется фоновая повторная попытка через минуту, поэтому недоступный feed не блокирует запуск. Доступное обновление загружается автоматически, обязательную плашку нельзя закрыть, а установка запускается единственной кнопкой «Перезапустить и обновить». Во время активного голосового соединения restart заблокирован до выхода из звонка. NSIS собирается в `oneClick`-режиме, main вызывает `quitAndInstall(true, true)`, поэтому штатный upgrade не показывает мастер с кнопкой «Далее». Portable-вариант явно помечается как не поддерживающий автоустановку.
 
 ## Metrics
 

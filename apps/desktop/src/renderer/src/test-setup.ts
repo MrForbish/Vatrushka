@@ -1,10 +1,13 @@
-import '@testing-library/jest-dom/vitest';
+import "@testing-library/jest-dom/vitest";
 
-import type { DesktopBridge } from '@vatrushka/shared';
+import type { DesktopBridge } from "@vatrushka/shared";
 
 const desktop: DesktopBridge = {
-  getAppVersion: async () => '0.1.0-test',
-  getUpdateState: async () => ({ status: 'unsupported', currentVersion: '0.1.0-test' }),
+  getAppVersion: async () => "0.1.0-test",
+  getUpdateState: async () => ({
+    status: "unsupported",
+    currentVersion: "0.1.0-test",
+  }),
   checkForUpdates: async () => undefined,
   installUpdate: async () => undefined,
   onUpdateState: () => () => undefined,
@@ -16,18 +19,26 @@ const desktop: DesktopBridge = {
   selectDesktopSource: async () => undefined,
   clearSelectedDesktopSource: async () => undefined,
   copyToClipboard: async () => undefined,
+  openExternal: async () => undefined,
   setBadgeCount: async () => undefined,
   showMessageNotification: async () => undefined,
   onMessageNotificationClick: () => () => undefined,
   onDeepLink: () => () => undefined,
-  getPlatform: async () => 'win32',
-  getLocalSettings: async () => ({ volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }),
+  getPlatform: async () => "win32",
+  getLocalSettings: async () => ({
+    volume: 1,
+    desktopNotificationsEnabled: true,
+    messageSoundsEnabled: true,
+  }),
   updateLocalSettings: async () => undefined,
 };
 
-Object.defineProperty(window, 'desktop', { configurable: true, value: desktop });
+Object.defineProperty(window, "desktop", {
+  configurable: true,
+  value: desktop,
+});
 
-Object.defineProperty(navigator, 'mediaDevices', {
+Object.defineProperty(navigator, "mediaDevices", {
   configurable: true,
   value: {
     enumerateDevices: async () => [],

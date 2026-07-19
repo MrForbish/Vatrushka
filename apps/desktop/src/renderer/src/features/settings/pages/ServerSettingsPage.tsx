@@ -1,6 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { serverPermissions, type CreatedServerInvite, type ServerAppearanceSettings, type ServerAuditLogEntry, type ServerBanSettings, type ServerChannelCategory, type ServerChannelSettings, type ServerDetail, type ServerInviteSettings, type ServerModerationSettings, type ServerOverviewSettings, type ServerPermission, type ServerSettingsMember } from "@vatrushka/shared";
+import {
+  serverPermissions,
+  type CreatedServerInvite,
+  type ServerAppearanceSettings,
+  type ServerAuditLogEntry,
+  type ServerBanSettings,
+  type ServerChannelCategory,
+  type ServerChannelSettings,
+  type ServerDetail,
+  type ServerInviteSettings,
+  type ServerModerationSettings,
+  type ServerOverviewSettings,
+  type ServerPermission,
+  type ServerSettingsMember,
+} from "@vatrushka/shared";
 
 import { apiClient } from "../../../api";
 import { Button, Checkbox, FilePicker, Input, Select } from "../../../ui";
@@ -23,7 +37,17 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : "Не удалось выполнить запрос";
 }
 
-function Page({ eyebrow, title, description, children }: { eyebrow: string; title: string; description: string; children: React.ReactNode }): React.JSX.Element {
+function Page({
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
   return (
     <section className="vui-server-settings-page">
       <header className="vui-server-settings-page__heading">
@@ -36,7 +60,13 @@ function Page({ eyebrow, title, description, children }: { eyebrow: string; titl
   );
 }
 
-function Feedback({ error, success }: { error: string | null; success?: string | null }): React.JSX.Element | null {
+function Feedback({
+  error,
+  success,
+}: {
+  error: string | null;
+  success?: string | null;
+}): React.JSX.Element | null {
   if (error)
     return (
       <div className="vui-server-settings-feedback" data-tone="danger">
@@ -52,7 +82,11 @@ function Feedback({ error, success }: { error: string | null; success?: string |
   return null;
 }
 
-function Overview({ refreshRevision = 0, server, onChanged }: Pick<Props, "server" | "onChanged" | "refreshRevision">): React.JSX.Element {
+function Overview({
+  refreshRevision = 0,
+  server,
+  onChanged,
+}: Pick<Props, "server" | "onChanged" | "refreshRevision">): React.JSX.Element {
   const [value, setValue] = useState<ServerOverviewSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,8 +98,15 @@ function Overview({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
       .catch((caught) => setError(message(caught)));
   }, [refreshRevision, server.id]);
   useEffect(load, [load]);
-  if (!value) return error ? <SettingsPageState description={error} kind="error" onAction={load} /> : <SettingsPageState kind="loading" />;
-  const textChannels = server.channels.filter((channel) => channel.type === "text").map((channel) => ({ value: channel.id, label: `# ${channel.name}` }));
+  if (!value)
+    return error ? (
+      <SettingsPageState description={error} kind="error" onAction={load} />
+    ) : (
+      <SettingsPageState kind="loading" />
+    );
+  const textChannels = server.channels
+    .filter((channel) => channel.type === "text")
+    .map((channel) => ({ value: channel.id, label: `# ${channel.name}` }));
   const save = (): void => {
     setBusy(true);
     setError(null);
@@ -79,6 +120,7 @@ function Overview({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
         welcomeChannelId: value.welcomeChannelId,
         defaultNotificationLevel: value.defaultNotificationLevel,
         defaultVoiceInactivitySeconds: value.defaultVoiceInactivitySeconds,
+        visibility: value.visibility,
         version: value.version,
       })
       .then(async (next) => {
@@ -89,16 +131,47 @@ function Overview({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
       .finally(() => setBusy(false));
   };
   return (
-    <Page eyebrow="Основное" title="Обзор сервера" description="Название, системные каналы и поведение по умолчанию.">
+    <Page
+      eyebrow="Основное"
+      title="Настройки сервера"
+      description="Название, доступ, системные каналы и поведение по умолчанию."
+    >
       <div className="vui-server-settings-grid">
         <article className="vui-server-settings-card">
-          <Input label="Название" maxLength={60} value={value.name} onChange={(event) => setValue({ ...value, name: event.target.value })} />
+          <Input
+            label="Название"
+            maxLength={60}
+            value={value.name}
+            onChange={(event) =>
+              setValue({ ...value, name: event.target.value })
+            }
+          />
           <label className="vui-server-settings-field">
             <span>Описание</span>
-            <textarea maxLength={1000} value={value.description ?? ""} onChange={(event) => setValue({ ...value, description: event.target.value || null })} />
+            <textarea
+              maxLength={1000}
+              value={value.description ?? ""}
+              onChange={(event) =>
+                setValue({ ...value, description: event.target.value || null })
+              }
+            />
           </label>
-          <Select label="Системный канал" options={[{ value: "", label: "Не выбран" }, ...textChannels]} value={value.systemChannelId ?? ""} onValueChange={(next) => setValue({ ...value, systemChannelId: next || null })} />
-          <Select label="Канал приветствий" options={[{ value: "", label: "Не выбран" }, ...textChannels]} value={value.welcomeChannelId ?? ""} onValueChange={(next) => setValue({ ...value, welcomeChannelId: next || null })} />
+          <Select
+            label="Системный канал"
+            options={[{ value: "", label: "Не выбран" }, ...textChannels]}
+            value={value.systemChannelId ?? ""}
+            onValueChange={(next) =>
+              setValue({ ...value, systemChannelId: next || null })
+            }
+          />
+          <Select
+            label="Канал приветствий"
+            options={[{ value: "", label: "Не выбран" }, ...textChannels]}
+            value={value.welcomeChannelId ?? ""}
+            onValueChange={(next) =>
+              setValue({ ...value, welcomeChannelId: next || null })
+            }
+          />
         </article>
         <article className="vui-server-settings-card">
           <Select
@@ -112,7 +185,8 @@ function Overview({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
             onValueChange={(next) =>
               setValue({
                 ...value,
-                defaultNotificationLevel: next as ServerOverviewSettings["defaultNotificationLevel"],
+                defaultNotificationLevel:
+                  next as ServerOverviewSettings["defaultNotificationLevel"],
               })
             }
           />
@@ -129,13 +203,37 @@ function Overview({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
               })
             }
           />
+          <Select
+            label="Доступ к серверу"
+            options={[
+              { value: "private", label: "Приватный — только по приглашению" },
+              { value: "public", label: "Публичный — виден в каталоге" },
+            ]}
+            value={value.visibility}
+            onValueChange={(next) =>
+              setValue({
+                ...value,
+                visibility: next as ServerOverviewSettings["visibility"],
+              })
+            }
+          />
+          {value.visibility === "public" ? (
+            <small>
+              Любой авторизованный пользователь сможет найти сервер и
+              присоединиться без приглашения.
+            </small>
+          ) : null}
           <div className="vui-server-settings-readonly">
             <span>Владелец</span>
             <strong>{value.ownerDisplayName}</strong>
             <small>Передача владения находится в опасной зоне.</small>
           </div>
           <Feedback error={error} />
-          <Button disabled={busy || value.name.trim().length < 2} loading={busy} onClick={save}>
+          <Button
+            disabled={busy || value.name.trim().length < 2}
+            loading={busy}
+            onClick={save}
+          >
             Сохранить
           </Button>
         </article>
@@ -144,7 +242,10 @@ function Overview({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
   );
 }
 
-function Appearance({ server, onChanged }: Pick<Props, "server" | "onChanged">): React.JSX.Element {
+function Appearance({
+  server,
+  onChanged,
+}: Pick<Props, "server" | "onChanged">): React.JSX.Element {
   const [value, setValue] = useState<ServerAppearanceSettings | null>(null);
   const [objects, setObjects] = useState<{
     iconObjectKey?: string | null;
@@ -163,7 +264,12 @@ function Appearance({ server, onChanged }: Pick<Props, "server" | "onChanged">):
       .catch((caught) => setError(message(caught)));
   }, [server.id]);
   useEffect(load, [load]);
-  if (!value) return error ? <SettingsPageState description={error} kind="error" onAction={load} /> : <SettingsPageState kind="loading" />;
+  if (!value)
+    return error ? (
+      <SettingsPageState description={error} kind="error" onAction={load} />
+    ) : (
+      <SettingsPageState kind="loading" />
+    );
   const upload = (kind: "icon" | "banner", file: File): void => {
     setBusy(true);
     setError(null);
@@ -197,21 +303,53 @@ function Appearance({ server, onChanged }: Pick<Props, "server" | "onChanged">):
       .finally(() => setBusy(false));
   };
   return (
-    <Page eyebrow="Брендинг" title="Оформление" description="Приватные изображения хранятся в S3 и выдаются через временные ссылки.">
+    <Page
+      eyebrow="Брендинг"
+      title="Оформление"
+      description="Приватные изображения хранятся в S3 и выдаются через временные ссылки."
+    >
       <div className="vui-server-settings-grid">
         <article className="vui-server-settings-card">
-          <div className="vui-server-appearance-preview" style={{ backgroundColor: value.accentColor ?? "#635bff" }}>
-            {value.bannerUrl ? <img alt="Обложка сервера" src={value.bannerUrl} /> : null}
+          <div
+            className="vui-server-appearance-preview"
+            style={{ backgroundColor: value.accentColor ?? "#635bff" }}
+          >
+            {value.bannerUrl ? (
+              <img alt="Обложка сервера" src={value.bannerUrl} />
+            ) : null}
             <div>
-              {value.iconUrl ? <img alt="Иконка сервера" src={value.iconUrl} /> : server.name.slice(0, 2).toUpperCase()}
+              {value.iconUrl ? (
+                <img alt="Иконка сервера" src={value.iconUrl} />
+              ) : (
+                server.name.slice(0, 2).toUpperCase()
+              )}
               <strong>{server.name}</strong>
             </div>
           </div>
-          <Input label="Акцент" type="color" value={value.accentColor ?? "#635bff"} onChange={(event) => setValue({ ...value, accentColor: event.target.value })} />
+          <Input
+            label="Акцент"
+            type="color"
+            value={value.accentColor ?? "#635bff"}
+            onChange={(event) =>
+              setValue({ ...value, accentColor: event.target.value })
+            }
+          />
         </article>
         <article className="vui-server-settings-card">
-          <FilePicker accept="image/png,image/jpeg,image/webp" disabled={busy} label="Иконка (PNG, JPEG, WebP до 5 МБ)" onFile={(file) => upload("icon", file)} selectedName={fileNames.icon} />
-          <FilePicker accept="image/png,image/jpeg,image/webp" disabled={busy} label="Обложка (до 12 МБ)" onFile={(file) => upload("banner", file)} selectedName={fileNames.banner} />
+          <FilePicker
+            accept="image/png,image/jpeg,image/webp"
+            disabled={busy}
+            label="Иконка (PNG, JPEG, WebP до 5 МБ)"
+            onFile={(file) => upload("icon", file)}
+            selectedName={fileNames.icon}
+          />
+          <FilePicker
+            accept="image/png,image/jpeg,image/webp"
+            disabled={busy}
+            label="Обложка (до 12 МБ)"
+            onFile={(file) => upload("banner", file)}
+            selectedName={fileNames.banner}
+          />
           <div className="vui-server-settings-row">
             <Button
               variant="secondary"
@@ -235,7 +373,14 @@ function Appearance({ server, onChanged }: Pick<Props, "server" | "onChanged">):
               Сбросить обложку
             </Button>
           </div>
-          <Feedback error={error} success={Object.keys(objects).length ? "Файл загружен. Сохраните изменения." : null} />
+          <Feedback
+            error={error}
+            success={
+              Object.keys(objects).length
+                ? "Файл загружен. Сохраните изменения."
+                : null
+            }
+          />
           <Button loading={busy} onClick={save}>
             Применить
           </Button>
@@ -245,7 +390,11 @@ function Appearance({ server, onChanged }: Pick<Props, "server" | "onChanged">):
   );
 }
 
-function Members({ server, currentUserId = server.ownerUserId, onChanged }: Pick<Props, "currentUserId" | "server" | "onChanged">): React.JSX.Element {
+function Members({
+  server,
+  currentUserId = server.ownerUserId,
+  onChanged,
+}: Pick<Props, "currentUserId" | "server" | "onChanged">): React.JSX.Element {
   const [items, setItems] = useState<ServerSettingsMember[] | null>(null);
   const [search, setSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -271,65 +420,135 @@ function Members({ server, currentUserId = server.ownerUserId, onChanged }: Pick
       })
       .catch((caught) => setError(message(caught)));
   };
-  if (!items) return error ? <SettingsPageState description={error} kind="error" onAction={load} /> : <SettingsPageState kind="loading" />;
+  if (!items)
+    return error ? (
+      <SettingsPageState description={error} kind="error" onAction={load} />
+    ) : (
+      <SettingsPageState kind="loading" />
+    );
   return (
-    <Page eyebrow="Команда" title="Участники" description="Роли, личные псевдонимы и модерирование участников сервера.">
-      <Input label="Поиск" placeholder="Имя или username" value={search} onChange={(event) => setSearch(event.target.value)} />
+    <Page
+      eyebrow="Команда"
+      title="Участники"
+      description="Роли, личные псевдонимы и модерирование участников сервера."
+    >
+      <Input
+        label="Поиск"
+        placeholder="Имя или username"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+      />
       <Feedback error={error} />
       <div className="vui-server-settings-list">
         {items.map((member) => {
           const isCurrentUser = member.userId === currentUserId;
-          const visibleName = member.privateAlias ?? member.serverDisplayName ?? member.displayName;
-          const savedAlias = isCurrentUser ? member.serverDisplayName : member.privateAlias;
+          const visibleName =
+            member.privateAlias ??
+            member.serverDisplayName ??
+            member.displayName;
+          const savedAlias = isCurrentUser
+            ? member.serverDisplayName
+            : member.privateAlias;
           return (
             <article className="vui-server-member-row" key={member.userId}>
               <div className="vui-server-member-row__identity">
                 <strong>{visibleName}</strong>
                 <small>
-                  {member.username ? `@${member.username}` : member.displayName} · с {new Date(member.joinedAt).toLocaleDateString("ru-RU")}
+                  {member.username ? `@${member.username}` : member.displayName}{" "}
+                  · с {new Date(member.joinedAt).toLocaleDateString("ru-RU")}
                 </small>
               </div>
               <Input
-                aria-label={isCurrentUser ? "Моё имя на этом сервере" : `Личный псевдоним для ${member.displayName}`}
+                aria-label={
+                  isCurrentUser
+                    ? "Моё имя на этом сервере"
+                    : `Личный псевдоним для ${member.displayName}`
+                }
                 defaultValue={savedAlias ?? ""}
-                hint={isCurrentUser ? "Это имя увидят все участники сервера." : "Этот псевдоним виден только вам."}
+                hint={
+                  isCurrentUser
+                    ? "Это имя увидят все участники сервера."
+                    : "Этот псевдоним виден только вам."
+                }
                 label={isCurrentUser ? "Имя на этом сервере" : "Мой псевдоним"}
                 placeholder={member.displayName}
                 onBlur={(event) => {
                   const next = event.target.value.trim() || null;
                   if (next === savedAlias) return;
-                  mutate(() => (isCurrentUser ? apiClient.updateOwnServerDisplayName(server.id, next) : apiClient.updatePrivateServerMemberAlias(server.id, member.userId, next)));
+                  mutate(() =>
+                    isCurrentUser
+                      ? apiClient.updateOwnServerDisplayName(server.id, next)
+                      : apiClient.updatePrivateServerMemberAlias(
+                          server.id,
+                          member.userId,
+                          next,
+                        ),
+                  );
                 }}
               />
-              {canManageRoles ? <div className="vui-server-member-roles">
-                {server.roles
-                  .filter((role) => role.kind === "CUSTOM")
-                  .map((role) => (
-                    <Checkbox checked={member.roleIds.includes(role.id)} key={role.id} label={role.name} onChange={(event) => mutate(() => apiClient.assignServerMemberRoles(server.id, member.userId, event.target.checked ? [...member.roleIds, role.id] : member.roleIds.filter((id) => id !== role.id)))} />
-                  ))}
-              </div> : null}
+              {canManageRoles ? (
+                <div className="vui-server-member-roles">
+                  {server.roles
+                    .filter((role) => role.kind === "CUSTOM")
+                    .map((role) => (
+                      <Checkbox
+                        checked={member.roleIds.includes(role.id)}
+                        key={role.id}
+                        label={role.name}
+                        onChange={(event) =>
+                          mutate(() =>
+                            apiClient.assignServerMemberRoles(
+                              server.id,
+                              member.userId,
+                              event.target.checked
+                                ? [...member.roleIds, role.id]
+                                : member.roleIds.filter((id) => id !== role.id),
+                            ),
+                          )
+                        }
+                      />
+                    ))}
+                </div>
+              ) : null}
               <div className="vui-server-settings-actions">
                 {member.userId !== server.ownerUserId && !isCurrentUser ? (
                   <>
-                    {canKickMembers ? <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => {
-                        if (window.confirm(`Исключить ${visibleName}?`)) mutate(() => apiClient.kickServerMember(server.id, member.userId));
-                      }}
-                    >
-                      Исключить
-                    </Button> : null}
-                    {canBanMembers ? <Button
-                      size="sm"
-                      variant="danger"
-                      onClick={() => {
-                        const reason = window.prompt("Причина блокировки");
-                        if (reason?.trim()) mutate(() => apiClient.banServerMember(server.id, member.userId, reason.trim()));
-                      }}
-                    >
-                      Заблокировать
-                    </Button> : null}
+                    {canKickMembers ? (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => {
+                          if (window.confirm(`Исключить ${visibleName}?`))
+                            mutate(() =>
+                              apiClient.kickServerMember(
+                                server.id,
+                                member.userId,
+                              ),
+                            );
+                        }}
+                      >
+                        Исключить
+                      </Button>
+                    ) : null}
+                    {canBanMembers ? (
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => {
+                          const reason = window.prompt("Причина блокировки");
+                          if (reason?.trim())
+                            mutate(() =>
+                              apiClient.banServerMember(
+                                server.id,
+                                member.userId,
+                                reason.trim(),
+                              ),
+                            );
+                        }}
+                      >
+                        Заблокировать
+                      </Button>
+                    ) : null}
                   </>
                 ) : null}
               </div>
@@ -341,13 +560,26 @@ function Members({ server, currentUserId = server.ownerUserId, onChanged }: Pick
   );
 }
 
-function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): React.JSX.Element {
-  const editable = server.roles.filter((role) => role.kind !== "OWNER").sort((left, right) => right.position - left.position);
+function Roles({
+  server,
+  onChanged,
+}: Pick<Props, "server" | "onChanged">): React.JSX.Element {
+  const editable = server.roles
+    .filter((role) => role.kind !== "OWNER")
+    .sort((left, right) => right.position - left.position);
   const [selectedId, setSelectedId] = useState(editable[0]?.id ?? "new");
   const selected = server.roles.find((role) => role.id === selectedId) ?? null;
   const [name, setName] = useState(selected?.name ?? "Новая роль");
   const [color, setColor] = useState(selected?.color ?? "#635bff");
-  const [permissions, setPermissions] = useState<ServerPermission[]>(selected?.permissions ?? ["VIEW_SERVER", "VIEW_CHANNEL", "SEND_MESSAGES", "CONNECT_VOICE", "SPEAK"]);
+  const [permissions, setPermissions] = useState<ServerPermission[]>(
+    selected?.permissions ?? [
+      "VIEW_SERVER",
+      "VIEW_CHANNEL",
+      "SEND_MESSAGES",
+      "CONNECT_VOICE",
+      "SPEAK",
+    ],
+  );
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!selected) return;
@@ -361,7 +593,11 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
       .catch((caught) => setError(message(caught)));
   };
   return (
-    <Page eyebrow="Доступ" title="Роли и права" description="Иерархия ролей и серверные разрешения.">
+    <Page
+      eyebrow="Доступ"
+      title="Роли и права"
+      description="Иерархия ролей и серверные разрешения."
+    >
       <div className="vui-server-role-layout">
         <aside className="vui-server-settings-card">
           <Button
@@ -370,13 +606,25 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
               setSelectedId("new");
               setName("Новая роль");
               setColor("#635bff");
-              setPermissions(["VIEW_SERVER", "VIEW_CHANNEL", "SEND_MESSAGES", "CONNECT_VOICE", "SPEAK"]);
+              setPermissions([
+                "VIEW_SERVER",
+                "VIEW_CHANNEL",
+                "SEND_MESSAGES",
+                "CONNECT_VOICE",
+                "SPEAK",
+              ]);
             }}
           >
             + Новая роль
           </Button>
           {editable.map((role) => (
-            <button className="vui-server-role-item" data-active={role.id === selectedId || undefined} key={role.id} onClick={() => setSelectedId(role.id)} type="button">
+            <button
+              className="vui-server-role-item"
+              data-active={role.id === selectedId || undefined}
+              key={role.id}
+              onClick={() => setSelectedId(role.id)}
+              type="button"
+            >
               <i style={{ background: role.color }} />
               {role.name}
             </button>
@@ -384,8 +632,18 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
         </aside>
         <article className="vui-server-settings-card">
           <div className="vui-server-settings-row">
-            <Input disabled={selected?.kind === "EVERYONE"} label="Название" value={name} onChange={(event) => setName(event.target.value)} />
-            <Input label="Цвет" type="color" value={color} onChange={(event) => setColor(event.target.value)} />
+            <Input
+              disabled={selected?.kind === "EVERYONE"}
+              label="Название"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
+            <Input
+              label="Цвет"
+              type="color"
+              value={color}
+              onChange={(event) => setColor(event.target.value)}
+            />
           </div>
           <div className="vui-server-permission-grid">
             {serverPermissions.map((permission) => (
@@ -395,8 +653,19 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
                 key={permission}
                 label={permissionDefinitions[permission].label}
                 onChange={(event) => {
-                  if (permission === "ADMINISTRATOR" && event.target.checked && !window.confirm("Право администратора даёт полный доступ и обходит ограничения каналов. Продолжить?")) return;
-                  setPermissions((current) => (event.target.checked ? [...current, permission] : current.filter((item) => item !== permission)));
+                  if (
+                    permission === "ADMINISTRATOR" &&
+                    event.target.checked &&
+                    !window.confirm(
+                      "Право администратора даёт полный доступ и обходит ограничения каналов. Продолжить?",
+                    )
+                  )
+                    return;
+                  setPermissions((current) =>
+                    event.target.checked
+                      ? [...current, permission]
+                      : current.filter((item) => item !== permission),
+                  );
                 }}
               />
             ))}
@@ -408,10 +677,17 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
                 run(() =>
                   selected
                     ? apiClient.updateServerRole(server.id, selected.id, {
-                        ...(selected.kind === "EVERYONE" ? {} : { name, color }),
+                        ...(selected.kind === "EVERYONE"
+                          ? {}
+                          : { name, color }),
                         permissions,
                       })
-                    : apiClient.createServerRole(server.id, name, color, permissions),
+                    : apiClient.createServerRole(
+                        server.id,
+                        name,
+                        color,
+                        permissions,
+                      ),
                 )
               }
             >
@@ -419,16 +695,41 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
             </Button>
             {selected && selected.kind === "CUSTOM" ? (
               <>
-                <Button variant="secondary" onClick={() => run(() => apiClient.reorderServerRole(server.id, selected.id, selected.position + 1))}>
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    run(() =>
+                      apiClient.reorderServerRole(
+                        server.id,
+                        selected.id,
+                        selected.position + 1,
+                      ),
+                    )
+                  }
+                >
                   Выше
                 </Button>
-                <Button variant="secondary" onClick={() => run(() => apiClient.reorderServerRole(server.id, selected.id, Math.max(1, selected.position - 1)))}>
+                <Button
+                  variant="secondary"
+                  onClick={() =>
+                    run(() =>
+                      apiClient.reorderServerRole(
+                        server.id,
+                        selected.id,
+                        Math.max(1, selected.position - 1),
+                      ),
+                    )
+                  }
+                >
                   Ниже
                 </Button>
                 <Button
                   variant="danger"
                   onClick={() => {
-                    if (window.confirm(`Удалить роль «${selected.name}»?`)) run(() => apiClient.deleteServerRole(server.id, selected.id));
+                    if (window.confirm(`Удалить роль «${selected.name}»?`))
+                      run(() =>
+                        apiClient.deleteServerRole(server.id, selected.id),
+                      );
                   }}
                 >
                   Удалить
@@ -442,7 +743,11 @@ function Roles({ server, onChanged }: Pick<Props, "server" | "onChanged">): Reac
   );
 }
 
-function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "server" | "onChanged" | "refreshRevision">): React.JSX.Element {
+function Channels({
+  refreshRevision = 0,
+  server,
+  onChanged,
+}: Pick<Props, "server" | "onChanged" | "refreshRevision">): React.JSX.Element {
   const [data, setData] = useState<{
     categories: ServerChannelCategory[];
     channels: ServerChannelSettings[];
@@ -463,16 +768,28 @@ function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
       })
       .catch((caught) => setError(message(caught)));
   };
-  if (!data) return error ? <SettingsPageState description={error} kind="error" onAction={load} /> : <SettingsPageState kind="loading" />;
+  if (!data)
+    return error ? (
+      <SettingsPageState description={error} kind="error" onAction={load} />
+    ) : (
+      <SettingsPageState kind="loading" />
+    );
   return (
-    <Page eyebrow="Структура" title="Каналы и категории" description="Создание, группировка, ограничения и архивирование каналов.">
+    <Page
+      eyebrow="Структура"
+      title="Каналы и категории"
+      description="Создание, группировка, ограничения и архивирование каналов."
+    >
       <Feedback error={error} />
       <article className="vui-server-settings-card">
         <div className="vui-server-settings-actions">
           <Button
             onClick={() => {
               const name = window.prompt("Название категории");
-              if (name?.trim()) run(() => apiClient.createServerCategory(server.id, name.trim()));
+              if (name?.trim())
+                run(() =>
+                  apiClient.createServerCategory(server.id, name.trim()),
+                );
             }}
           >
             Создать категорию
@@ -481,7 +798,10 @@ function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
             variant="secondary"
             onClick={() => {
               const name = window.prompt("Название текстового канала");
-              if (name?.trim()) run(() => apiClient.createServerChannel(server.id, name.trim(), "text"));
+              if (name?.trim())
+                run(() =>
+                  apiClient.createServerChannel(server.id, name.trim(), "text"),
+                );
             }}
           >
             + Текстовый
@@ -490,7 +810,14 @@ function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
             variant="secondary"
             onClick={() => {
               const name = window.prompt("Название голосового канала");
-              if (name?.trim()) run(() => apiClient.createServerChannel(server.id, name.trim(), "voice"));
+              if (name?.trim())
+                run(() =>
+                  apiClient.createServerChannel(
+                    server.id,
+                    name.trim(),
+                    "voice",
+                  ),
+                );
             }}
           >
             + Голосовой
@@ -510,7 +837,15 @@ function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
                     );
                 }}
               />
-              <Button size="sm" variant="danger" onClick={() => run(() => apiClient.deleteServerCategory(server.id, category.id))}>
+              <Button
+                size="sm"
+                variant="danger"
+                onClick={() =>
+                  run(() =>
+                    apiClient.deleteServerCategory(server.id, category.id),
+                  )
+                }
+              >
                 Удалить
               </Button>
             </div>
@@ -524,14 +859,25 @@ function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
               <strong>
                 {channel.type === "text" ? "#" : "◉"} {channel.name}
               </strong>
-              <small>{channel.archivedAt ? "Архивирован" : `Позиция ${channel.position}`}</small>
+              <small>
+                {channel.archivedAt
+                  ? "Архивирован"
+                  : `Позиция ${channel.position}`}
+              </small>
             </div>
             <Input
               aria-label="Название канала"
               defaultValue={channel.name}
               onBlur={(event) => {
                 const name = event.target.value.trim();
-                if (name !== channel.name) run(() => apiClient.updateServerChannelSettings(server.id, channel.id, { name, version: channel.version }));
+                if (name !== channel.name)
+                  run(() =>
+                    apiClient.updateServerChannelSettings(
+                      server.id,
+                      channel.id,
+                      { name, version: channel.version },
+                    ),
+                  );
               }}
             />
             <Select
@@ -562,10 +908,14 @@ function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
                 defaultValue={channel.slowModeSeconds}
                 onBlur={(event) =>
                   run(() =>
-                    apiClient.updateServerChannelSettings(server.id, channel.id, {
-                      slowModeSeconds: Number(event.target.value),
-                      version: channel.version,
-                    }),
+                    apiClient.updateServerChannelSettings(
+                      server.id,
+                      channel.id,
+                      {
+                        slowModeSeconds: Number(event.target.value),
+                        version: channel.version,
+                      },
+                    ),
                   )
                 }
               />
@@ -579,10 +929,16 @@ function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
                   defaultValue={channel.maxParticipants ?? ""}
                   onBlur={(event) =>
                     run(() =>
-                      apiClient.updateServerChannelSettings(server.id, channel.id, {
-                        maxParticipants: event.target.value ? Number(event.target.value) : null,
-                        version: channel.version,
-                      }),
+                      apiClient.updateServerChannelSettings(
+                        server.id,
+                        channel.id,
+                        {
+                          maxParticipants: event.target.value
+                            ? Number(event.target.value)
+                            : null,
+                          version: channel.version,
+                        },
+                      ),
                     )
                   }
                 />
@@ -594,10 +950,16 @@ function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
                   defaultValue={channel.bitrate ?? ""}
                   onBlur={(event) =>
                     run(() =>
-                      apiClient.updateServerChannelSettings(server.id, channel.id, {
-                        bitrate: event.target.value ? Number(event.target.value) : null,
-                        version: channel.version,
-                      }),
+                      apiClient.updateServerChannelSettings(
+                        server.id,
+                        channel.id,
+                        {
+                          bitrate: event.target.value
+                            ? Number(event.target.value)
+                            : null,
+                          version: channel.version,
+                        },
+                      ),
                     )
                   }
                 />
@@ -624,7 +986,13 @@ function Channels({ refreshRevision = 0, server, onChanged }: Pick<Props, "serve
         <ChannelPermissionEditor
           server={server}
           onSave={async (channelId, targetType, targetId, allow, deny) => {
-            await apiClient.setChannelPermissionOverwrite(channelId, targetType, targetId, allow, deny);
+            await apiClient.setChannelPermissionOverwrite(
+              channelId,
+              targetType,
+              targetId,
+              allow,
+              deny,
+            );
             await onChanged();
           }}
         />
@@ -647,7 +1015,12 @@ function Invites({ server }: Pick<Props, "server">): React.JSX.Element {
       .catch((caught) => setError(message(caught)));
   }, [server.id]);
   useEffect(load, [load]);
-  if (!items) return error ? <SettingsPageState description={error} kind="error" onAction={load} /> : <SettingsPageState kind="loading" />;
+  if (!items)
+    return error ? (
+      <SettingsPageState description={error} kind="error" onAction={load} />
+    ) : (
+      <SettingsPageState kind="loading" />
+    );
   const create = (): void => {
     setCreated(null);
     void apiClient
@@ -663,7 +1036,11 @@ function Invites({ server }: Pick<Props, "server">): React.JSX.Element {
       .catch((caught) => setError(message(caught)));
   };
   return (
-    <Page eyebrow="Доступ" title="Приглашения" description="Только короткие ссылки. Ручных кодов и поля ввода кода в приложении нет.">
+    <Page
+      eyebrow="Доступ"
+      title="Приглашения"
+      description="Только короткие ссылки. Ручных кодов и поля ввода кода в приложении нет."
+    >
       <div className="vui-server-settings-grid">
         <article className="vui-server-settings-card">
           <Select
@@ -689,13 +1066,27 @@ function Invites({ server }: Pick<Props, "server">): React.JSX.Element {
             value={expires}
             onValueChange={setExpires}
           />
-          <Input label="Максимум использований" min={1} max={10000} placeholder="Без ограничения" type="number" value={maxUses} onChange={(event) => setMaxUses(event.target.value)} />
+          <Input
+            label="Максимум использований"
+            min={1}
+            max={10000}
+            placeholder="Без ограничения"
+            type="number"
+            value={maxUses}
+            onChange={(event) => setMaxUses(event.target.value)}
+          />
           <Button onClick={create}>Создать ссылку</Button>
           {created ? (
             <div className="vui-server-invite-created">
               <strong>Скопируйте сейчас</strong>
               <code>{created.inviteUrl}</code>
-              <Button size="sm" variant="secondary" onClick={() => window.desktop.copyToClipboard(created.inviteUrl)}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() =>
+                  window.desktop.copyToClipboard(created.inviteUrl)
+                }
+              >
                 Копировать
               </Button>
             </div>
@@ -711,7 +1102,13 @@ function Invites({ server }: Pick<Props, "server">): React.JSX.Element {
                   {invite.createdByDisplayName} · {invite.useCount}
                   {invite.maxUses ? `/${invite.maxUses}` : ""} использований
                 </small>
-                <small>{invite.revokedAt ? "Отозвано" : invite.expiresAt ? `До ${new Date(invite.expiresAt).toLocaleString("ru-RU")}` : "Без срока"}</small>
+                <small>
+                  {invite.revokedAt
+                    ? "Отозвано"
+                    : invite.expiresAt
+                      ? `До ${new Date(invite.expiresAt).toLocaleString("ru-RU")}`
+                      : "Без срока"}
+                </small>
               </div>
               {!invite.revokedAt ? (
                 <Button
@@ -740,7 +1137,10 @@ function Moderation({ server }: Pick<Props, "server">): React.JSX.Element {
   const [bans, setBans] = useState<ServerBanSettings[]>([]);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
-    void Promise.all([apiClient.getServerModerationSettings(server.id), apiClient.listServerBans(server.id)])
+    void Promise.all([
+      apiClient.getServerModerationSettings(server.id),
+      apiClient.listServerBans(server.id),
+    ])
       .then(([next, nextBans]) => {
         setValue(next);
         setBans(nextBans);
@@ -748,9 +1148,18 @@ function Moderation({ server }: Pick<Props, "server">): React.JSX.Element {
       .catch((caught) => setError(message(caught)));
   }, [server.id]);
   useEffect(load, [load]);
-  if (!value) return error ? <SettingsPageState description={error} kind="error" onAction={load} /> : <SettingsPageState kind="loading" />;
+  if (!value)
+    return error ? (
+      <SettingsPageState description={error} kind="error" onAction={load} />
+    ) : (
+      <SettingsPageState kind="loading" />
+    );
   return (
-    <Page eyebrow="Безопасность" title="Модерация" description="Проверка новых участников, лимиты сообщений, правила и список блокировок.">
+    <Page
+      eyebrow="Безопасность"
+      title="Модерация"
+      description="Проверка новых участников, лимиты сообщений, правила и список блокировок."
+    >
       <div className="vui-server-settings-grid">
         <article className="vui-server-settings-card">
           <Select
@@ -764,7 +1173,8 @@ function Moderation({ server }: Pick<Props, "server">): React.JSX.Element {
             onValueChange={(next) =>
               setValue({
                 ...value,
-                verificationLevel: next as ServerModerationSettings["verificationLevel"],
+                verificationLevel:
+                  next as ServerModerationSettings["verificationLevel"],
               })
             }
           />
@@ -811,7 +1221,13 @@ function Moderation({ server }: Pick<Props, "server">): React.JSX.Element {
           />
           <label className="vui-server-settings-field">
             <span>Правила</span>
-            <textarea maxLength={10000} value={value.rules ?? ""} onChange={(event) => setValue({ ...value, rules: event.target.value || null })} />
+            <textarea
+              maxLength={10000}
+              value={value.rules ?? ""}
+              onChange={(event) =>
+                setValue({ ...value, rules: event.target.value || null })
+              }
+            />
           </label>
           <Feedback error={error} />
           <Button
@@ -828,7 +1244,9 @@ function Moderation({ server }: Pick<Props, "server">): React.JSX.Element {
         <article className="vui-server-settings-card">
           <h2>Заблокированные</h2>
           {bans.length === 0 ? (
-            <p className="vui-server-settings-empty">Нет активных блокировок.</p>
+            <p className="vui-server-settings-empty">
+              Нет активных блокировок.
+            </p>
           ) : (
             bans.map((ban) => (
               <div className="vui-server-ban-row" key={ban.userId}>
@@ -883,7 +1301,7 @@ const auditActionLabels: Record<string, string> = {
   ROLE_UPDATED: "Роль изменена",
   SERVER_APPEARANCE_UPDATED: "Оформление сервера изменено",
   SERVER_ARCHIVED: "Сервер архивирован",
-  SERVER_OVERVIEW_UPDATED: "Обзор сервера изменён",
+  SERVER_OVERVIEW_UPDATED: "Настройки сервера изменены",
   SERVER_RESTORED: "Сервер восстановлен",
 };
 const auditTargetLabels: Record<string, string> = {
@@ -909,7 +1327,9 @@ function Audit({ server }: Pick<Props, "server">): React.JSX.Element {
           ...(action ? { action } : {}),
         })
         .then((page) => {
-          setEntries((current) => (append ? [...(current ?? []), ...page.entries] : page.entries));
+          setEntries((current) =>
+            append ? [...(current ?? []), ...page.entries] : page.entries,
+          );
           setCursor(page.nextCursor);
         })
         .catch((caught) => setError(message(caught)));
@@ -919,9 +1339,22 @@ function Audit({ server }: Pick<Props, "server">): React.JSX.Element {
   useEffect(() => {
     load(false);
   }, [action, server.id]);
-  if (!entries) return error ? <SettingsPageState description={error} kind="error" onAction={() => load(false)} /> : <SettingsPageState kind="loading" />;
+  if (!entries)
+    return error ? (
+      <SettingsPageState
+        description={error}
+        kind="error"
+        onAction={() => load(false)}
+      />
+    ) : (
+      <SettingsPageState kind="loading" />
+    );
   return (
-    <Page eyebrow="История" title="Журнал аудита" description="Фильтруемый журнал административных действий.">
+    <Page
+      eyebrow="История"
+      title="Журнал аудита"
+      description="Фильтруемый журнал административных действий."
+    >
       <Select
         label="Действие"
         options={[
@@ -939,9 +1372,12 @@ function Audit({ server }: Pick<Props, "server">): React.JSX.Element {
         {entries.map((entry) => (
           <article className="vui-server-audit-row" key={entry.id}>
             <div>
-              <strong>{auditActionLabels[entry.action] ?? "Административное действие"}</strong>
+              <strong>
+                {auditActionLabels[entry.action] ?? "Административное действие"}
+              </strong>
               <small>
-                {entry.actorDisplayName} · {new Date(entry.createdAt).toLocaleString("ru-RU")}
+                {entry.actorDisplayName} ·{" "}
+                {new Date(entry.createdAt).toLocaleString("ru-RU")}
               </small>
             </div>
             <span>
@@ -960,7 +1396,11 @@ function Audit({ server }: Pick<Props, "server">): React.JSX.Element {
   );
 }
 
-function Danger({ server, onChanged, onDeleted }: Pick<Props, "server" | "onChanged" | "onDeleted">): React.JSX.Element {
+function Danger({
+  server,
+  onChanged,
+  onDeleted,
+}: Pick<Props, "server" | "onChanged" | "onDeleted">): React.JSX.Element {
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -979,11 +1419,31 @@ function Danger({ server, onChanged, onDeleted }: Pick<Props, "server" | "onChan
       .catch((caught) => setError(message(caught)));
   };
   return (
-    <Page eyebrow="Необратимые действия" title="Опасная зона" description="Каждое действие требует повторного ввода пароля и TOTP, если 2FA включена.">
+    <Page
+      eyebrow="Необратимые действия"
+      title="Опасная зона"
+      description="Каждое действие требует повторного ввода пароля и TOTP, если 2FA включена."
+    >
       <article className="vui-server-settings-card vui-server-settings-card--danger">
         <div className="vui-server-settings-row">
-          <Input autoComplete="current-password" label="Пароль" type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
-          <Input autoComplete="one-time-code" label="Код 2FA" inputMode="numeric" maxLength={6} placeholder="Если включена" value={totpCode} onChange={(event) => setTotpCode(event.target.value.replace(/\D/gu, "").slice(0, 6))} />
+          <Input
+            autoComplete="current-password"
+            label="Пароль"
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <Input
+            autoComplete="one-time-code"
+            label="Код 2FA"
+            inputMode="numeric"
+            maxLength={6}
+            placeholder="Если включена"
+            value={totpCode}
+            onChange={(event) =>
+              setTotpCode(event.target.value.replace(/\D/gu, "").slice(0, 6))
+            }
+          />
         </div>
         <Feedback error={error} />
         <div className="vui-server-danger-action">
@@ -991,7 +1451,12 @@ function Danger({ server, onChanged, onDeleted }: Pick<Props, "server" | "onChan
             <strong>Отозвать все приглашения</strong>
             <small>Все активные короткие ссылки перестанут работать.</small>
           </div>
-          <Button variant="danger" onClick={() => run(() => apiClient.revokeAllServerInvites(server.id, reauth))}>
+          <Button
+            variant="danger"
+            onClick={() =>
+              run(() => apiClient.revokeAllServerInvites(server.id, reauth))
+            }
+          >
             Отозвать
           </Button>
         </div>
@@ -1000,14 +1465,21 @@ function Danger({ server, onChanged, onDeleted }: Pick<Props, "server" | "onChan
             <strong>Архивировать сервер</strong>
             <small>Сервер останется в базе, но будет помечен архивным.</small>
           </div>
-          <Button variant="danger" onClick={() => run(() => apiClient.archiveServer(server.id, true, reauth))}>
+          <Button
+            variant="danger"
+            onClick={() =>
+              run(() => apiClient.archiveServer(server.id, true, reauth))
+            }
+          >
             Архивировать
           </Button>
         </div>
         <div className="vui-server-danger-action">
           <div>
             <strong>Передать владение</strong>
-            <small>Выберите участника. Действие меняет владельца немедленно.</small>
+            <small>
+              Выберите участника. Действие меняет владельца немедленно.
+            </small>
           </div>
           <Select
             options={[
@@ -1022,7 +1494,19 @@ function Danger({ server, onChanged, onDeleted }: Pick<Props, "server" | "onChan
             value={targetOwner}
             onValueChange={setTargetOwner}
           />
-          <Button disabled={!targetOwner} variant="danger" onClick={() => run(() => apiClient.transferServerOwnership(server.id, targetOwner, reauth))}>
+          <Button
+            disabled={!targetOwner}
+            variant="danger"
+            onClick={() =>
+              run(() =>
+                apiClient.transferServerOwnership(
+                  server.id,
+                  targetOwner,
+                  reauth,
+                ),
+              )
+            }
+          >
             Передать
           </Button>
         </div>
@@ -1031,8 +1515,26 @@ function Danger({ server, onChanged, onDeleted }: Pick<Props, "server" | "onChan
             <strong>Удалить сервер навсегда</strong>
             <small>Введите точное название: {server.name}</small>
           </div>
-          <Input aria-label="Подтверждение названия сервера" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} />
-          <Button disabled={confirmation !== server.name} variant="danger" onClick={() => run(() => apiClient.deleteServerPermanently(server.id, confirmation, reauth), onDeleted)}>
+          <Input
+            aria-label="Подтверждение названия сервера"
+            value={confirmation}
+            onChange={(event) => setConfirmation(event.target.value)}
+          />
+          <Button
+            disabled={confirmation !== server.name}
+            variant="danger"
+            onClick={() =>
+              run(
+                () =>
+                  apiClient.deleteServerPermanently(
+                    server.id,
+                    confirmation,
+                    reauth,
+                  ),
+                onDeleted,
+              )
+            }
+          >
             Удалить
           </Button>
         </div>
@@ -1044,15 +1546,52 @@ function Danger({ server, onChanged, onDeleted }: Pick<Props, "server" | "onChan
 export function ServerSettingsPage(props: Props): React.JSX.Element {
   const refreshRevision = props.refreshRevision ?? 0;
   const content = useMemo(() => {
-    if (props.section === "overview") return <Overview refreshRevision={refreshRevision} server={props.server} onChanged={props.onChanged} />;
-    if (props.section === "appearance") return <Appearance server={props.server} onChanged={props.onChanged} />;
-    if (props.section === "members") return <Members currentUserId={props.currentUserId ?? props.server.ownerUserId} server={props.server} onChanged={props.onChanged} />;
-    if (props.section === "roles") return <Roles server={props.server} onChanged={props.onChanged} />;
-    if (props.section === "channels") return <Channels refreshRevision={refreshRevision} server={props.server} onChanged={props.onChanged} />;
+    if (props.section === "overview")
+      return (
+        <Overview
+          refreshRevision={refreshRevision}
+          server={props.server}
+          onChanged={props.onChanged}
+        />
+      );
+    if (props.section === "appearance")
+      return <Appearance server={props.server} onChanged={props.onChanged} />;
+    if (props.section === "members")
+      return (
+        <Members
+          currentUserId={props.currentUserId ?? props.server.ownerUserId}
+          server={props.server}
+          onChanged={props.onChanged}
+        />
+      );
+    if (props.section === "roles")
+      return <Roles server={props.server} onChanged={props.onChanged} />;
+    if (props.section === "channels")
+      return (
+        <Channels
+          refreshRevision={refreshRevision}
+          server={props.server}
+          onChanged={props.onChanged}
+        />
+      );
     if (props.section === "invites") return <Invites server={props.server} />;
-    if (props.section === "moderation") return <Moderation server={props.server} />;
+    if (props.section === "moderation")
+      return <Moderation server={props.server} />;
     if (props.section === "audit-log") return <Audit server={props.server} />;
-    return <Danger server={props.server} onChanged={props.onChanged} onDeleted={props.onDeleted} />;
-  }, [props.currentUserId, props.section, props.server, refreshRevision, props.onChanged, props.onDeleted]);
+    return (
+      <Danger
+        server={props.server}
+        onChanged={props.onChanged}
+        onDeleted={props.onDeleted}
+      />
+    );
+  }, [
+    props.currentUserId,
+    props.section,
+    props.server,
+    refreshRevision,
+    props.onChanged,
+    props.onDeleted,
+  ]);
   return content;
 }

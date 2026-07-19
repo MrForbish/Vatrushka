@@ -20,7 +20,7 @@ function device(kind: MediaDeviceKind, deviceId: string, label: string): MediaDe
 describe('routed user settings pages', () => {
   it('validates and saves the supported display name field', async () => {
     const onDirtyChange = vi.fn();
-    const updatedUser = { ...user, displayName: 'Илья Форбиш' };
+    const updatedUser = { ...user, displayName: 'Илья Форбиш', avatarUrl: null };
     const updatedProfile = { ...profile, displayName: updatedUser.displayName };
     const onSave = vi.fn(async () => updatedProfile);
     const onUserChange = vi.fn();

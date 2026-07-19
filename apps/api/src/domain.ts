@@ -1,9 +1,21 @@
-import type { DirectMessagePrivacy, HomeActivityType, PermissionOverwriteTargetType, PlatformRole, PresencePreference, PresenceVisibility, SecurityEventType, ServerChannelType, ServerPermission, ServerRoleKind } from '@vatrushka/shared';
+import type {
+  DirectMessagePrivacy,
+  HomeActivityType,
+  PermissionOverwriteTargetType,
+  PlatformRole,
+  PresencePreference,
+  PresenceVisibility,
+  SecurityEventType,
+  ServerChannelType,
+  ServerPermission,
+  ServerRoleKind,
+} from "@vatrushka/shared";
 
 export interface UserRecord {
   id: string;
   email: string;
   displayName: string | null;
+  avatarObjectKey?: string | null;
   platformRole: PlatformRole;
   passwordHash: string | null;
   emailVerifiedAt: Date | null;
@@ -23,7 +35,12 @@ export interface AuthCodeRecord {
   id: string;
   email: string;
   codeHash: string;
-  purpose: 'login' | 'registration' | 'password_login' | 'password_setup' | 'password_reset';
+  purpose:
+    | "login"
+    | "registration"
+    | "password_login"
+    | "password_setup"
+    | "password_reset";
   credentialHash: string | null;
   attempts: number;
   expiresAt: Date;
@@ -76,6 +93,10 @@ export interface ServerRecord {
   id: string;
   name: string;
   description?: string | null;
+  iconObjectKey?: string | null;
+  bannerObjectKey?: string | null;
+  accentColor?: string | null;
+  visibility?: "private" | "public";
   inviteToken: string;
   ownerUserId: string;
   createdAt: Date;
@@ -198,7 +219,10 @@ export interface MessageAttachmentRecord {
   createdAt: Date;
 }
 
-export type MessageAttachmentMetadata = Omit<MessageAttachmentRecord, 'content'>;
+export type MessageAttachmentMetadata = Omit<
+  MessageAttachmentRecord,
+  "content"
+>;
 
 export interface MessageNotificationRecord {
   id: string;
@@ -235,12 +259,16 @@ export interface DirectMessageRecord {
   editedAt: Date | null;
 }
 
-export type DirectMessageWithAuthor = DirectMessageRecord & Pick<UserRecord, 'displayName' | 'platformRole'>;
+export type DirectMessageWithAuthor = DirectMessageRecord &
+  Pick<UserRecord, "displayName" | "platformRole">;
 
 export interface DirectConversationOverviewRecord {
   conversation: DirectConversationRecord;
-  participant: Pick<UserRecord, 'id' | 'displayName' | 'platformRole'>;
-  lastMessage: Pick<DirectMessageRecord, 'authorUserId' | 'content' | 'createdAt'> | null;
+  participant: Pick<UserRecord, "id" | "displayName" | "platformRole">;
+  lastMessage: Pick<
+    DirectMessageRecord,
+    "authorUserId" | "content" | "createdAt"
+  > | null;
   unreadCount: number;
 }
 
@@ -256,7 +284,10 @@ export interface DirectMessageAttachmentRecord {
   createdAt: Date;
 }
 
-export type DirectMessageAttachmentMetadata = Omit<DirectMessageAttachmentRecord, 'content'>;
+export type DirectMessageAttachmentMetadata = Omit<
+  DirectMessageAttachmentRecord,
+  "content"
+>;
 
 export interface ChannelLeaseRecord {
   channelId: string;
@@ -275,11 +306,23 @@ export interface ServerGraph {
 }
 
 export type ServerWithMemberCount = ServerRecord & { memberCount: number };
-export type ServerMemberProfile = ServerMemberRecord & Pick<UserRecord, 'displayName' | 'platformRole' | 'presencePreference' | 'customStatusText' | 'customStatusExpiresAt' | 'presenceVisibility' | 'updatedAt'>;
-export type TextMessageWithAuthor = TextMessageRecord & Pick<UserRecord, 'displayName' | 'platformRole'>;
+export type ServerMemberProfile = ServerMemberRecord &
+  Pick<
+    UserRecord,
+    | "displayName"
+    | "avatarObjectKey"
+    | "platformRole"
+    | "presencePreference"
+    | "customStatusText"
+    | "customStatusExpiresAt"
+    | "presenceVisibility"
+    | "updatedAt"
+  >;
+export type TextMessageWithAuthor = TextMessageRecord &
+  Pick<UserRecord, "displayName" | "platformRole">;
 
 export type RefreshRotation =
-  | { status: 'ok'; oldSession: SessionRecord; newSession: SessionRecord }
-  | { status: 'not_found' }
-  | { status: 'expired'; session: SessionRecord }
-  | { status: 'reused'; session: SessionRecord };
+  | { status: "ok"; oldSession: SessionRecord; newSession: SessionRecord }
+  | { status: "not_found" }
+  | { status: "expired"; session: SessionRecord }
+  | { status: "reused"; session: SessionRecord };
