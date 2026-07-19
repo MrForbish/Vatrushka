@@ -257,6 +257,19 @@ release-evidence:
     - printf '%s' "$CI_MERGE_REQUEST_DESCRIPTION" | grep -qi 'rollback' || { echo 'MR description must contain a rollback plan.' >&2; exit 1; }
     - printf '%s' "$CI_MERGE_REQUEST_DESCRIPTION" | grep -Eqi 'release (notes|evidence)|release notes|release evidence' || { echo 'MR description must reference release notes/evidence.' >&2; exit 1; }
 
+release-auth-smoke:
+  image: registry.gitlab.com/gitlab-org/cli:v1.108.0
+  tags: [vatrushka-linux]
+  stage: release
+  timeout: 2m
+  interruptible: true
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+  variables:
+    GLAB_ENABLE_CI_AUTOLOGIN: 'true'
+  script:
+    - glab release view v0.6.6 >/dev/null
+
 windows-rc:
   extends:
     - .node-windows
