@@ -19,6 +19,7 @@ These rules apply to every change in this repository.
 - Sync: `main` → `develop` and active `release/*`, merge commit.
 - Never create an unticketed `feat/*` or `fix/*`. Never merge a task branch directly to `main`.
 - Do not create a new branch/MR for a failed pre-merge pipeline; fix the existing source branch. Increment the patch version only after an immutable tag has already been pushed.
+- Immediately set and read back `squash=false` through the GitLab API for assembly, release, hotfix, and sync MRs. Never rely on the UI default. Merge with the full source SHA and verify `squash_commit_sha` is absent.
 
 ## GitLab delivery safety
 

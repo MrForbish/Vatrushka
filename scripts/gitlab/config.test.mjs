@@ -61,6 +61,7 @@ test('GitLab repository metadata replaces GitHub automation', async () => {
   assert.match(codeowners, /@MrForbish/u);
   assert.match(agentRules, /GLAB_ENABLE_CI_AUTOLOGIN=true/u);
   assert.match(agentRules, /Do not create a new branch\/MR for a failed pre-merge pipeline/u);
+  assert.match(agentRules, /Immediately set and read back `squash=false`/u);
   assert.match(releaseProcess, /release-auth-smoke/u);
   assert.match(releaseProcess, /GITLAB_TOKEN=\$CI_JOB_TOKEN/u);
   for (const template of ['feature', 'release-assemble', 'release', 'hotfix', 'sync']) await access(rootFile(`.gitlab/merge_request_templates/${template}.md`));
