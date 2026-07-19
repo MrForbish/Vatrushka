@@ -40,6 +40,7 @@ export interface ParticipantView {
 
 export interface MediaSnapshot {
   connectionState: ConnectionState;
+  pingMs: number | null;
   participants: ParticipantView[];
   isMuted: boolean;
   isDeafened: boolean;
@@ -56,6 +57,7 @@ export interface MediaSnapshot {
 
 const initialSnapshot: MediaSnapshot = {
   connectionState: ConnectionState.Disconnected,
+  pingMs: null,
   participants: [],
   isMuted: true,
   isDeafened: false,
@@ -80,6 +82,7 @@ const publishingReadyTimeoutMs = 20_000;
 const screenShareHeartbeatIntervalMs = SCREEN_SHARE_HEARTBEAT_SECONDS * 1_000;
 const screenShareHeartbeatRetryMs = 2_500;
 const screenShareHeartbeatGraceMs = 25_000;
+const latencySampleIntervalMs = 3_000;
 
 class UserFacingMediaError extends Error {}
 
@@ -91,10 +94,14 @@ export class MediaSession {
   private heartbeatFailureCount = 0;
   private heartbeatGeneration = 0;
   private heartbeatInFlightGeneration: number | null = null;
+  private latencyTimer: ReturnType<typeof setInterval> | null = null;
+  private voiceStateSyncTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastSyncedVoiceState: string | null = null;
   private snapshot: MediaSnapshot = initialSnapshot;
   private screenShareAudioVolume = 1;
   private screenShareAudioMuted = false;
   private isDeafened = false;
+  private microphoneEnabledBeforeDeafen = false;
   private stoppingScreenShare = false;
   private screenShareTransition: Promise<void> = Promise.resolve();
   private readonly participantVolumes = new Map<string, number>();
@@ -155,7 +162,9 @@ export class MediaSession {
       await room.connect(connection.livekitUrl, connection.livekitToken, {
         autoSubscribe: true,
       });
+      this.startLatencySampling();
       this.refreshSnapshot();
+      this.scheduleOwnVoiceStateSync();
       try {
         if (connection.canSpeak === false) {
           this.refreshSnapshot();
@@ -188,17 +197,30 @@ export class MediaSession {
     if (!this.room) return;
     if (this.isDeafened && !muted) return;
     await this.room.localParticipant.setMicrophoneEnabled(!muted);
+    this.microphoneEnabledBeforeDeafen = !muted;
     this.refreshSnapshot();
+    await this.syncOwnVoiceState();
   }
 
   async setDeafened(deafened: boolean): Promise<void> {
     if (!this.room) return;
-    if (deafened) await this.room.localParticipant.setMicrophoneEnabled(false);
+    if (deafened === this.isDeafened) return;
+    if (deafened) {
+      this.microphoneEnabledBeforeDeafen =
+        this.room.localParticipant.isMicrophoneEnabled;
+      await this.room.localParticipant.setMicrophoneEnabled(false);
+    } else if (
+      this.microphoneEnabledBeforeDeafen &&
+      this.connection?.canSpeak !== false
+    ) {
+      await this.room.localParticipant.setMicrophoneEnabled(true);
+    }
     this.isDeafened = deafened;
     for (const participant of this.room.remoteParticipants.values())
       this.applyParticipantAudioPreferences(participant);
     this.applyScreenShareAudioPreferences();
     this.refreshSnapshot();
+    await this.syncOwnVoiceState();
   }
 
   async switchMicrophone(deviceId: string): Promise<void> {
@@ -415,6 +437,8 @@ export class MediaSession {
 
   async disconnect(release = true): Promise<void> {
     this.stopHeartbeat();
+    this.stopLatencySampling();
+    this.stopOwnVoiceStateSync();
     if (this.room) {
       if (this.room.localParticipant.isScreenShareEnabled)
         await this.stopScreenShare(release);
@@ -429,6 +453,7 @@ export class MediaSession {
     this.room = null;
     this.connection = null;
     this.isDeafened = false;
+    this.microphoneEnabledBeforeDeafen = false;
     this.participantVolumes.clear();
     this.locallyMutedParticipants.clear();
     this.removeRemoteAudioElements();
@@ -448,6 +473,7 @@ export class MediaSession {
       .on(RoomEvent.Reconnected, () => {
         this.reportDiagnostic("voice_reconnected");
         void this.restoreIncomingAudio("reconnected");
+        void this.sampleLatency();
         refresh();
       })
       .on(RoomEvent.Moved, refresh)
@@ -463,7 +489,15 @@ export class MediaSession {
         }
         refresh();
       })
-      .on(RoomEvent.ActiveSpeakersChanged, refresh)
+      .on(RoomEvent.ActiveSpeakersChanged, () => {
+        refresh();
+        this.scheduleOwnVoiceStateSync();
+      })
+      .on(RoomEvent.ConnectionQualityChanged, (_quality, participant) => {
+        refresh();
+        if (participant === room.localParticipant)
+          this.scheduleOwnVoiceStateSync();
+      })
       .on(RoomEvent.TrackMuted, refresh)
       .on(RoomEvent.TrackUnmuted, refresh)
       .on(RoomEvent.TrackPublished, refresh)
@@ -588,6 +622,63 @@ export class MediaSession {
       canPlayAudio: room.canPlaybackAudio,
     };
     this.emit();
+  }
+
+  private async syncOwnVoiceState(): Promise<void> {
+    const connection = this.connection;
+    const room = this.room;
+    if (!connection?.voiceSessionId || !room) return;
+    const state = {
+      sessionId: connection.voiceSessionId,
+      muted: !room.localParticipant.isMicrophoneEnabled,
+      deafened: this.isDeafened,
+      speaking: room.localParticipant.isSpeaking,
+      connectionQuality: connectionQualityValue(
+        room.localParticipant.connectionQuality,
+      ),
+    } as const;
+    const serialized = JSON.stringify(state);
+    if (serialized === this.lastSyncedVoiceState) return;
+    await this.api.updateOwnVoiceState(connection.channelId, state);
+    this.lastSyncedVoiceState = serialized;
+  }
+
+  private scheduleOwnVoiceStateSync(): void {
+    if (this.voiceStateSyncTimer) return;
+    this.voiceStateSyncTimer = setTimeout(() => {
+      this.voiceStateSyncTimer = null;
+      void this.syncOwnVoiceState().catch(() => undefined);
+    }, 300);
+  }
+
+  private stopOwnVoiceStateSync(): void {
+    if (this.voiceStateSyncTimer) clearTimeout(this.voiceStateSyncTimer);
+    this.voiceStateSyncTimer = null;
+    this.lastSyncedVoiceState = null;
+  }
+
+  private startLatencySampling(): void {
+    this.stopLatencySampling();
+    void this.sampleLatency();
+    this.latencyTimer = setInterval(
+      () => void this.sampleLatency(),
+      latencySampleIntervalMs,
+    );
+  }
+
+  private stopLatencySampling(): void {
+    if (this.latencyTimer) clearInterval(this.latencyTimer);
+    this.latencyTimer = null;
+  }
+
+  private sampleLatency(): void {
+    const room = this.room;
+    const measured =
+      room?.state === ConnectionState.Connected ? room.engine.client.rtt : NaN;
+    this.patch({
+      pingMs:
+        Number.isFinite(measured) && measured >= 0 ? Math.round(measured) : null,
+    });
   }
 
   private startHeartbeat(): void {
@@ -790,6 +881,15 @@ function connectionQualityLabel(quality: ConnectionQuality): string {
   if (quality === ConnectionQuality.Good) return "Хорошее";
   if (quality === ConnectionQuality.Poor) return "Слабое";
   return "Определяется";
+}
+
+function connectionQualityValue(
+  quality: ConnectionQuality,
+): "excellent" | "good" | "poor" | "unknown" {
+  if (quality === ConnectionQuality.Excellent) return "excellent";
+  if (quality === ConnectionQuality.Good) return "good";
+  if (quality === ConnectionQuality.Poor) return "poor";
+  return "unknown";
 }
 
 function participantPlatformRole(participant: Participant): PlatformRole {

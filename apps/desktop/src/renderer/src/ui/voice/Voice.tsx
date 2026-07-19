@@ -22,6 +22,7 @@ export interface VoiceParticipantViewModel {
   name: string;
   isLocal?: boolean;
   isMuted?: boolean;
+  isDeafened?: boolean;
   isSpeaking?: boolean;
   isScreenSharing?: boolean;
   locallyMuted?: boolean;
@@ -129,14 +130,22 @@ export function VoiceParticipantTile({
         ) : null}
         <span
           aria-label={
-            participant.isMuted === true
+            participant.isDeafened === true
+              ? "Входящий звук отключён"
+              : participant.isMuted === true
               ? "Микрофон выключен"
               : "Микрофон включён"
           }
           role="img"
         >
           <Icon
-            name={participant.isMuted === true ? "micOff" : "mic"}
+            name={
+              participant.isDeafened === true
+                ? "volumeOff"
+                : participant.isMuted === true
+                  ? "micOff"
+                  : "mic"
+            }
             size={17}
           />
         </span>

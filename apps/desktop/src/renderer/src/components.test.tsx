@@ -12,9 +12,48 @@ import { HomePage } from './features/home/index.js';
 import { ServerView } from './features/servers/index.js';
 import { RoomView } from './features/voice/index.js';
 import type { MediaSnapshot } from './media.js';
-import { MessageComposer, MessageList, UserProfileDock } from './ui/index.js';
+import { MessageComposer, MessageList, Select, UserProfileDock } from './ui/index.js';
 
 const noop = (): void => undefined;
+
+describe('form controls', () => {
+  it('ports a select menu to the viewport and flips it above the trigger', async () => {
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({
+        x: 40,
+        y: 700,
+        top: 700,
+        right: 260,
+        bottom: 742,
+        left: 40,
+        width: 220,
+        height: 42,
+        toJSON: () => ({}),
+      });
+    const onValueChange = vi.fn();
+    render(
+      <Select
+        label="Аудиоустройство"
+        onValueChange={onValueChange}
+        options={[
+          { value: 'default', label: 'Системное устройство' },
+          { value: 'usb', label: 'USB Headset' },
+        ]}
+        value="default"
+      />,
+    );
+
+    await userEvent.click(screen.getByLabelText('Аудиоустройство'));
+    const listbox = screen.getByRole('listbox', { name: 'Аудиоустройство' });
+    expect(listbox.parentElement).toBe(document.body);
+    expect(Number.parseFloat(listbox.style.top)).toBeLessThan(700);
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    expect(onValueChange).toHaveBeenCalledWith('usb');
+    rect.mockRestore();
+  });
+});
 
 describe('authentication screens', () => {
   it('renders an accessible password form', async () => {
@@ -106,6 +145,7 @@ describe('room UI', () => {
 
   const baseSnapshot: MediaSnapshot = {
     connectionState: ConnectionState.Connected,
+    pingMs: 32,
     participants: [
       { identity: 'user_owner-1_local', displayName: 'Owner', isLocal: true, isOwner: true, isMuted: true, isSpeaking: false, audioLevel: 0, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'owner', connectionQuality: 'Отличное' },
       { identity: 'user_visitor-1_remote', displayName: 'Visitor', isLocal: false, isOwner: false, isMuted: false, isSpeaking: true, audioLevel: 0.7, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
@@ -153,6 +193,10 @@ describe('room UI', () => {
     expect(onOutput).toHaveBeenCalledWith('headphones-usb');
     await userEvent.click(screen.getByRole('button', { name: 'Обновить список аудиоустройств' }));
     expect(onRefreshDevices).toHaveBeenCalledOnce();
+    await userEvent.click(screen.getByTestId('copy-invite-control'));
+    expect(
+      await screen.findByText('Ссылка на сервер скопирована'),
+    ).toBeInTheDocument();
   });
 
   it('keeps the participant volume control mounted when the active speaker changes', () => {
@@ -272,7 +316,7 @@ describe('server UI', () => {
     permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'SEND_ATTACHMENTS', 'ADD_REACTIONS', 'MANAGE_OWN_MESSAGES', 'CONNECT_VOICE', 'MANAGE_CHANNELS', 'MANAGE_ROLES', 'MANAGE_MESSAGES'],
     channels: [
       { id: 'text-1', serverId: 'server-1', name: 'общий', type: 'text', position: 0, unreadCount: 0 },
-      { id: 'voice-1', serverId: 'server-1', name: 'Голосовой', type: 'voice', position: 1, unreadCount: 0, voiceParticipants: [{ identity: 'user_user-1_desktop', userId: 'user-1', displayName: 'Anna', platformRole: 'owner' }] },
+      { id: 'voice-1', serverId: 'server-1', name: 'Голосовой', type: 'voice', position: 1, unreadCount: 0, voiceParticipants: [{ identity: 'user_user-1_desktop', userId: 'user-1', displayName: 'Anna', platformRole: 'owner', muted: true, deafened: true, speaking: false, screenSharing: true, connectionQuality: 'good' }] },
       { id: 'voice-2', serverId: 'server-1', name: 'Лобби', type: 'voice', position: 2, unreadCount: 0, voiceParticipants: [] },
     ],
     roles: [{ id: 'role-1', serverId: 'server-1', name: '@everyone', color: '#8d7a72', position: 0, isDefault: true, permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] }],
@@ -293,6 +337,8 @@ describe('server UI', () => {
     expect(screen.getByText('Сервер команды разработки')).toBeInTheDocument();
     expect(screen.getAllByText('CEO Founder').length).toBeGreaterThan(0);
     expect(document.querySelectorAll('.vui-channel-row__participants > div')).toHaveLength(1);
+    expect(screen.getByRole('img', { name: 'Демонстрирует экран' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Входящий звук отключён' })).toBeInTheDocument();
     const upload = screen.getByLabelText('Выбрать вложения');
     await userEvent.upload(upload, new File(['preview'], 'preview.txt', { type: 'text/plain' }));
     expect(screen.getByText('preview.txt')).toBeInTheDocument();
@@ -308,6 +354,7 @@ describe('server UI', () => {
     expect(onChannel).toHaveBeenCalledWith('voice-1');
     await userEvent.dblClick(screen.getByRole('button', { name: /^Голосовой/u }));
     expect(onConnectVoice).toHaveBeenCalledWith('voice-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Действия с участником Anna' }));
     await userEvent.click(screen.getByRole('button', { name: 'Переместить Anna в другой голосовой канал' }));
     await userEvent.click(within(screen.getByRole('dialog', { name: 'Переместить в…' })).getByRole('button', { name: 'Лобби' }));
     expect(onMoveVoiceMember).toHaveBeenCalledWith('voice-2', 'user-1');

@@ -28,6 +28,7 @@ export interface HomePageProps {
   microphoneId: string | undefined;
   outputId: string | undefined;
   microphoneMuted?: boolean;
+  voicePingMs?: number | null;
   voiceConnectionQuality?: GamingHomeConnectionQuality | undefined;
   busy: boolean;
   error: string | null;
@@ -70,7 +71,7 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
       available: output !== undefined,
       label: output?.label || null,
     },
-    pingMs: gaming?.voiceStatus.pingMs ?? null,
+    pingMs: props.voicePingMs ?? gaming?.voiceStatus.pingMs ?? null,
     connectionQuality,
   } as const;
   const openDestination = (serverId: string, channelId: string): void => {

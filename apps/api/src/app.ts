@@ -45,6 +45,7 @@ import {
   updateProfileSchema,
   updatePresenceSchema,
   presenceHeartbeatSchema,
+  updateOwnVoiceStateSchema,
   updatePrivacySettingsSchema,
   updateMessageSchema,
   updateRoleSchema,
@@ -287,6 +288,13 @@ const voiceChannelParticipantResponseSchema = z.object({
   displayName: z.string(),
   platformRole: z.enum(["member", "admin", "owner"]),
   avatarUrl: z.string().nullable().optional(),
+  muted: z.boolean().optional(),
+  deafened: z.boolean().optional(),
+  speaking: z.boolean().optional(),
+  screenSharing: z.boolean().optional(),
+  connectionQuality: z
+    .enum(["excellent", "good", "poor", "unknown"])
+    .optional(),
 });
 const serverChannelResponseSchema = z.object({
   id: z.string(),
@@ -3964,6 +3972,27 @@ export async function buildApp(
         request.headers.authorization,
         request.params.serverId,
       ),
+  );
+
+  api.patch(
+    `${API_PREFIX}/channels/:channelId/voice-state`,
+    {
+      schema: {
+        tags: ["voice"],
+        security: [{ bearerAuth: [] }],
+        params: channelIdParams,
+        body: updateOwnVoiceStateSchema,
+        response: { 204: z.null(), ...routeErrors() },
+      },
+    },
+    async (request, reply) => {
+      await service.updateOwnVoiceState(
+        request.headers.authorization,
+        request.params.channelId,
+        request.body,
+      );
+      return reply.status(204).send(null);
+    },
   );
 
   api.post(

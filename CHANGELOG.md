@@ -6,6 +6,9 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ### Fixed
 
+- voice mute/deafen/speaking state now propagates through the authenticated API, Redis projection and realtime server UI; undeafen restores the microphone only when it was enabled before deafen;
+- Gaming Home shows measured WebRTC RTT, and an active voice connection prevents false automatic idle presence;
+- voice-channel invites provide visible clipboard feedback, member moderation is hidden behind a context menu, and device selects flip/fit inside the current viewport;
 - screen sharing now tolerates transient heartbeat/network failures, keeps authoritative lease conflicts deterministic and records bounded heartbeat diagnostics;
 - remote audio tracks are reattached after a LiveKit reconnect and desktop media diagnostics include safe session/correlation context;
 - voice-state reads no longer synchronously poll LiveKit, preventing a transient RoomService failure from becoming an API 500;

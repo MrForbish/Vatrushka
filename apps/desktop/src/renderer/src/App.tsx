@@ -226,6 +226,13 @@ function projectServerVoiceState(
                   displayName: member.displayName,
                   platformRole: member.platformRole,
                   avatarUrl: member.avatarUrl ?? null,
+                  muted: session.muted,
+                  deafened: session.deafened,
+                  speaking: session.speaking,
+                  screenSharing: session.screenSharing,
+                  ...(session.connectionQuality
+                    ? { connectionQuality: session.connectionQuality }
+                    : {}),
                 };
               })
               .filter((participant): participant is NonNullable<typeof participant> => participant !== null),
@@ -498,12 +505,18 @@ export default function App(): ReactNode {
   const typingExpiryTimersRef = useRef(new Map<string, number>());
   const typingStopTimerRef = useRef<number | null>(null);
   const lastUserActivityRef = useRef(Date.now());
+  const activeVoiceRef = useRef(false);
   const settingsReturnScreenRef = useRef<Screen>("home");
   const mediaSnapshot = useSyncExternalStore(
     media.subscribe,
     media.getSnapshot,
     media.getSnapshot,
   );
+
+  useEffect(() => {
+    activeVoiceRef.current = connection !== null;
+    if (connection !== null) lastUserActivityRef.current = Date.now();
+  }, [connection]);
 
   useEffect(() => {
     if (!presence || !user) return;
@@ -888,7 +901,9 @@ export default function App(): ReactNode {
     const heartbeat = (): void => {
       if (inFlight) return;
       inFlight = true;
-      const idle = Date.now() - lastUserActivityRef.current >= 5 * 60 * 1_000;
+      const idle =
+        !activeVoiceRef.current &&
+        Date.now() - lastUserActivityRef.current >= 5 * 60 * 1_000;
       void apiClient
         .heartbeatPresence(idle)
         .then((next) => {
@@ -2657,10 +2672,15 @@ export default function App(): ReactNode {
     });
   };
 
-  const copyInvite = (): void => {
-    if (!connection || !serverDetail) return;
-    const text = `Присоединяйтесь к серверу «${serverDetail.name}»\n${serverDetail.inviteUrl}`;
-    void window.desktop.copyToClipboard(text);
+  const copyInvite = async (): Promise<void> => {
+    if (!connection)
+      throw new Error("Сервер голосового канала недоступен");
+    const inviteServer =
+      serverDetail?.id === connection.serverId
+        ? serverDetail
+        : await apiClient.getServer(connection.serverId);
+    const text = `Присоединяйтесь к серверу «${inviteServer.name}»\n${inviteServer.inviteUrl}`;
+    await window.desktop.copyToClipboard(text);
   };
 
   const updateNotificationSettings = (
@@ -2974,6 +2994,13 @@ export default function App(): ReactNode {
             )
           : undefined
       }
+      voiceParticipants={
+        serverDetail?.id === connection.serverId
+          ? serverDetail.channels.find(
+              (channel) => channel.id === connection.channelId,
+            )?.voiceParticipants
+          : undefined
+      }
       devices={devices}
       microphoneId={settings.microphoneDeviceId}
       outputId={settings.outputDeviceId}
@@ -3244,6 +3271,7 @@ export default function App(): ReactNode {
         microphoneId={settings.microphoneDeviceId}
         outputId={settings.outputDeviceId}
         microphoneMuted={mediaSnapshot.isMuted}
+        voicePingMs={mediaSnapshot.pingMs}
         voiceConnectionQuality={
           mediaSnapshot.connectionState === ConnectionState.Connected
             ? localParticipant?.connectionQuality === "Отличное"

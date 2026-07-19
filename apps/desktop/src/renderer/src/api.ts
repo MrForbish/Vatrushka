@@ -56,6 +56,7 @@ import {
   type ServerVoiceStateDto,
   type MoveVoiceMemberAccepted,
   type MoveVoiceMemberRequest,
+  type UpdateOwnVoiceStateRequest,
 } from "@vatrushka/shared";
 
 const apiBase = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? "http://localhost:3000").replace(/\/$/u, "")}${API_PREFIX}`;
@@ -949,6 +950,17 @@ export class ApiClient {
 
   getServerVoiceState(serverId: string): Promise<ServerVoiceStateDto> {
     return this.request(`/servers/${serverId}/voice-state`, { auth: true });
+  }
+
+  async updateOwnVoiceState(
+    channelId: string,
+    input: UpdateOwnVoiceStateRequest,
+  ): Promise<void> {
+    await this.request(`/channels/${channelId}/voice-state`, {
+      method: "PATCH",
+      body: input,
+      auth: true,
+    });
   }
 
   moveVoiceMember(

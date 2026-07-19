@@ -560,10 +560,27 @@ describe('home dashboard API', () => {
     await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { content: 'Важное обновление' } });
     await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/activity/open`, headers: { authorization: `Bearer ${member.accessToken}` } });
     const connected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voiceChannel.id}/connect`, headers: { authorization: `Bearer ${owner.accessToken}` } });
-    const connection = connected.json<{ participantIdentity: string }>();
+    const connection = connected.json<{
+      participantIdentity: string;
+      voiceSessionId: string;
+    }>();
     const voiceRecord = context.store.serverChannels.get(voiceChannel.id);
     if (!voiceRecord?.livekitRoomName) throw new Error('Missing voice room');
     context.media.connect(voiceRecord.livekitRoomName, connection.participantIdentity);
+    await context.service.handleWebhookEvent({
+      id: 'home-owner-voice-joined',
+      event: 'participant_joined',
+      participant: {
+        identity: connection.participantIdentity,
+        metadata: JSON.stringify({
+          serverId: server.id,
+          channelId: voiceChannel.id,
+          userId: owner.userId,
+          voiceSessionId: connection.voiceSessionId,
+        }),
+      },
+      room: { name: voiceRecord.livekitRoomName },
+    });
 
     const response = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/home`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(response.statusCode).toBe(200);
@@ -1030,6 +1047,55 @@ describe('servers, channels, messages, and roles API', () => {
         ]),
       }),
     ]);
+    const updateOwnVoiceState = await context.app.inject({
+      method: 'PATCH',
+      url: `${API_PREFIX}/channels/${voice.id}/voice-state`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      payload: {
+        sessionId: memberConnection.voiceSessionId,
+        muted: true,
+        deafened: true,
+        speaking: true,
+        connectionQuality: 'good',
+      },
+    });
+    expect(updateOwnVoiceState.statusCode).toBe(204);
+    const updatedOwnVoiceState = await context.app.inject({
+      method: 'GET',
+      url: `${API_PREFIX}/servers/${server.id}/voice-state`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(
+      updatedOwnVoiceState
+        .json<{
+          channels: Array<{
+            channelId: string;
+            members: Array<{
+              userId: string;
+              muted: boolean;
+              deafened: boolean;
+            }>;
+          }>;
+        }>()
+        .channels.find((candidate) => candidate.channelId === voice.id)
+        ?.members.find((candidate) => candidate.userId === member.userId),
+    ).toEqual(expect.objectContaining({ muted: true, deafened: true }));
+    const staleOwnVoiceState = await context.app.inject({
+      method: 'PATCH',
+      url: `${API_PREFIX}/channels/${voice.id}/voice-state`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      payload: {
+        sessionId: 'stale-session',
+        muted: false,
+        deafened: false,
+        speaking: false,
+        connectionQuality: 'unknown',
+      },
+    });
+    expect(staleOwnVoiceState.statusCode).toBe(409);
+    expect(staleOwnVoiceState.json<{ code: string }>().code).toBe(
+      'VOICE_SOURCE_CHANGED',
+    );
     const serverWithPresence = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${owner.accessToken}` } });
     const voiceWithPresence = serverWithPresence.json<{ channels: Array<{ id: string; voiceParticipants?: Array<{ userId: string; identity: string }> }> }>().channels.find((candidate) => candidate.id === voice.id);
     expect(voiceWithPresence?.voiceParticipants).toEqual(expect.arrayContaining([

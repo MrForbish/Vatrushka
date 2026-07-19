@@ -303,6 +303,11 @@ export interface VoiceChannelParticipant {
   displayName: string;
   platformRole: PlatformRole;
   avatarUrl?: string | null;
+  muted?: boolean;
+  deafened?: boolean;
+  speaking?: boolean;
+  screenSharing?: boolean;
+  connectionQuality?: "excellent" | "good" | "poor" | "unknown";
 }
 
 export interface ServerRole {
@@ -792,6 +797,14 @@ export interface ServerVoiceStateDto {
     channelId: string;
     members: VoiceMemberStateDto[];
   }>;
+}
+
+export interface UpdateOwnVoiceStateRequest {
+  sessionId: string;
+  muted: boolean;
+  deafened: boolean;
+  speaking: boolean;
+  connectionQuality: "excellent" | "good" | "poor" | "unknown";
 }
 
 export interface MoveVoiceMemberRequest {

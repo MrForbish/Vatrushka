@@ -192,6 +192,10 @@ export interface ChannelNavigationItem {
         avatarUrl?: string | null;
         canDrag?: boolean;
         pending?: boolean;
+        muted?: boolean;
+        deafened?: boolean;
+        speaking?: boolean;
+        screenSharing?: boolean;
       }>
     | undefined;
 }
@@ -345,6 +349,7 @@ export function ChannelRow({
             <div
               aria-busy={participant.pending || undefined}
               data-pending={participant.pending || undefined}
+              data-speaking={participant.speaking || undefined}
               draggable={participant.canDrag === true}
               key={participant.userId}
               onDragStart={
@@ -367,10 +372,26 @@ export function ChannelRow({
                   : {})}
               />
               <span>{participant.name}</span>
-              {participant.pending ? <small>Перемещение…</small> : null}
-              {participant.founder ? (
-                <Badge tone="founder">CEO Founder</Badge>
-              ) : null}
+              <span className="vui-channel-row__participant-signals">
+                {participant.pending ? <small>Перемещение…</small> : null}
+                {participant.screenSharing ? (
+                  <span aria-label="Демонстрирует экран" role="img" title="Демонстрирует экран">
+                    <Icon name="screen" size={13} />
+                  </span>
+                ) : null}
+                {participant.deafened ? (
+                  <span aria-label="Входящий звук отключён" role="img" title="Входящий звук отключён">
+                    <Icon name="volumeOff" size={13} />
+                  </span>
+                ) : participant.muted ? (
+                  <span aria-label="Микрофон выключен" role="img" title="Микрофон выключен">
+                    <Icon name="micOff" size={13} />
+                  </span>
+                ) : null}
+                {participant.founder ? (
+                  <Badge tone="founder">CEO Founder</Badge>
+                ) : null}
+              </span>
             </div>
           ))}
         </div>
@@ -852,6 +873,111 @@ export interface MemberPanelProps {
   members: MemberNavigationItem[];
 }
 
+function MemberRow({ member }: { member: MemberNavigationItem }): React.JSX.Element {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const openMenu = (x: number, y: number): void =>
+    setMenu({
+      x: Math.max(12, Math.min(x, window.innerWidth - 230)),
+      y: Math.max(12, Math.min(y, window.innerHeight - 120)),
+    });
+  useEffect(() => {
+    if (!menu) return undefined;
+    const close = (event: PointerEvent): void => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenu(null);
+    };
+    const escape = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    document.addEventListener("pointerdown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("pointerdown", close);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [menu]);
+  return (
+    <div
+      className="vui-member-row"
+      data-founder={member.founder || undefined}
+      draggable={member.draggable === true}
+      onContextMenu={
+        member.actions
+          ? (event) => {
+              event.preventDefault();
+              openMenu(event.clientX, event.clientY);
+            }
+          : undefined
+      }
+      onDragStart={
+        member.draggable === true
+          ? (event) => {
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData(
+                "application/x-vatrushka-user",
+                member.id,
+              );
+            }
+          : undefined
+      }
+      title={
+        member.draggable === true
+          ? "Перетащите участника в голосовой канал"
+          : undefined
+      }
+    >
+      <Avatar
+        name={member.name}
+        size="sm"
+        {...(member.avatarUrl ? { src: member.avatarUrl } : {})}
+        {...(member.status === undefined ? {} : { status: member.status })}
+      />
+      <span>
+        <strong title={member.name}>{member.name}</strong>
+        <small
+          title={
+            member.roleLabel ??
+            (member.founder ? "Владелец сервера" : "Участник")
+          }
+        >
+          {member.roleLabel ??
+            (member.founder ? "Владелец сервера" : "Участник")}
+        </small>
+      </span>
+      {member.founder ? <Badge tone="founder">CEO Founder</Badge> : null}
+      {member.actions ? (
+        <button
+          aria-label={`Действия с участником ${member.name}`}
+          className="vui-member-row__menu-trigger"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            openMenu(rect.right, rect.bottom);
+          }}
+          type="button"
+        >
+          •••
+        </button>
+      ) : null}
+      {menu && member.actions
+        ? createPortal(
+            <div
+              aria-label={`Действия с участником ${member.name}`}
+              className="vui-member-context-menu"
+              ref={menuRef}
+              role="menu"
+              style={{ left: menu.x, top: menu.y }}
+              onClick={() => setMenu(null)}
+            >
+              <strong>{member.name}</strong>
+              {member.actions}
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+}
+
 export function MemberPanel({ members }: MemberPanelProps): React.JSX.Element {
   const online = members.filter(
     (member) => member.status !== undefined && member.status !== "offline",
@@ -867,53 +993,7 @@ export function MemberPanel({ members }: MemberPanelProps): React.JSX.Element {
         {online} в сети
       </div>
       <div className="vui-member-panel__list">
-        {members.map((member) => (
-          <div
-            className="vui-member-row"
-            data-founder={member.founder || undefined}
-            draggable={member.draggable === true}
-            key={member.id}
-            onDragStart={
-              member.draggable === true
-                ? (event) => {
-                    event.dataTransfer.effectAllowed = "move";
-                    event.dataTransfer.setData(
-                      "application/x-vatrushka-user",
-                      member.id,
-                    );
-                  }
-                : undefined
-            }
-            title={
-              member.draggable === true
-                ? "Перетащите участника в голосовой канал"
-                : undefined
-            }
-          >
-            <Avatar
-              name={member.name}
-              size="sm"
-              {...(member.avatarUrl ? { src: member.avatarUrl } : {})}
-              {...(member.status === undefined
-                ? {}
-                : { status: member.status })}
-            />
-            <span>
-              <strong title={member.name}>{member.name}</strong>
-              <small
-                title={
-                  member.roleLabel ??
-                  (member.founder ? "Владелец сервера" : "Участник")
-                }
-              >
-                {member.roleLabel ??
-                  (member.founder ? "Владелец сервера" : "Участник")}
-              </small>
-            </span>
-            {member.founder ? <Badge tone="founder">CEO Founder</Badge> : null}
-            {member.actions}
-          </div>
-        ))}
+        {members.map((member) => <MemberRow key={member.id} member={member} />)}
       </div>
     </aside>
   );

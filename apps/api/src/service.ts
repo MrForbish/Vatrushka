@@ -66,6 +66,7 @@ import {
   type MoveVoiceMemberAccepted,
   type MoveVoiceMemberRequest,
   type ServerVoiceStateDto,
+  type UpdateOwnVoiceStateRequest,
   type RealtimeEventType,
   serverPermissions,
   highestRolePosition,
@@ -4103,6 +4104,65 @@ export class VatrushkaService {
     };
   }
 
+  async updateOwnVoiceState(
+    authorization: string | undefined,
+    channelId: string,
+    input: UpdateOwnVoiceStateRequest,
+  ): Promise<void> {
+    const actor = await this.authenticate(authorization);
+    const channel = await this.requireVoiceChannel(channelId);
+    const server = await this.requireServer(channel.serverId);
+    if (!(await this.store.findServerMember(server.id, actor.id)))
+      throw new AppError("SERVER_NOT_FOUND", 404);
+    const current = await this.voicePresenceStore.getSession(actor.id);
+    if (
+      !current ||
+      current.serverId !== server.id ||
+      current.channelId !== channel.id ||
+      current.sessionId !== input.sessionId
+    ) {
+      technicalMetrics.increment("voice_state_updates_total", 1, {
+        result: "stale_session",
+      });
+      throw new AppError("VOICE_SOURCE_CHANGED", 409);
+    }
+    const updated = await this.voicePresenceStore.updateSessionState(
+      actor.id,
+      input.sessionId,
+      {
+        muted: input.muted,
+        deafened: input.deafened,
+        speaking: input.speaking,
+        connectionQuality: input.connectionQuality,
+      },
+    );
+    if (!updated) {
+      technicalMetrics.increment("voice_state_updates_total", 1, {
+        result: "conflict",
+      });
+      throw new AppError("VOICE_SOURCE_CHANGED", 409);
+    }
+    technicalMetrics.increment("voice_state_updates_total", 1, {
+      result: "updated",
+    });
+    await this.publishVoiceUpdate(
+      server.id,
+      [channel.id],
+      "voice.member.state.updated",
+      {
+        channelId: channel.id,
+        userId: actor.id,
+        sessionId: updated.sessionId,
+        patch: {
+          muted: updated.muted,
+          deafened: updated.deafened,
+          speaking: updated.speaking,
+          connectionQuality: updated.connectionQuality,
+        },
+      },
+    );
+  }
+
   async reconcileVoicePresence(serverId?: string): Promise<number> {
     const serverIds = serverId
       ? [serverId]
@@ -6934,39 +6994,34 @@ export class VatrushkaService {
       string,
       VoiceChannelParticipant[]
     >();
-    await Promise.all(
-      visibleChannels
-        .filter(
-          (channel) => channel.type === "voice" && channel.livekitRoomName,
-        )
-        .map(async (channel) => {
-          let identities: string[] = [];
-          try {
-            identities = await this.media.participantIdentities(
-              channel.livekitRoomName!,
-            );
-          } catch {
-            // Server navigation remains available while LiveKit is temporarily unavailable.
-          }
-          const participants = new Map<string, VoiceChannelParticipant>();
-          for (const identity of identities) {
-            const member = publicMembers.find((candidate) =>
-              identity.startsWith(`user_${candidate.userId}_`),
-            );
-            if (member && !participants.has(member.userId))
-              participants.set(member.userId, {
-                identity,
-                userId: member.userId,
-                displayName: member.displayName,
-                platformRole: member.platformRole,
-                avatarUrl: member.avatarUrl ?? null,
-              });
-          }
-          voiceParticipantsByChannel.set(channel.id, [
-            ...participants.values(),
-          ]);
-        }),
-    );
+    const voiceProjection = await this.voicePresenceStore
+      .snapshot(server.id)
+      .catch(() => null);
+    for (const channel of visibleChannels.filter(
+      (candidate) => candidate.type === "voice",
+    )) {
+      const participants: VoiceChannelParticipant[] = [];
+      for (const session of voiceProjection?.sessions ?? []) {
+        if (session.channelId !== channel.id) continue;
+        const member = publicMembers.find(
+          (candidate) => candidate.userId === session.userId,
+        );
+        if (!member) continue;
+        participants.push({
+          identity: session.participantIdentity,
+          userId: member.userId,
+          displayName: member.displayName,
+          platformRole: member.platformRole,
+          avatarUrl: member.avatarUrl ?? null,
+          muted: session.muted,
+          deafened: session.deafened,
+          speaking: session.speaking,
+          screenSharing: session.screenSharing,
+          connectionQuality: session.connectionQuality,
+        });
+      }
+      voiceParticipantsByChannel.set(channel.id, participants);
+    }
     return {
       id: server.id,
       name: server.name,
