@@ -106,12 +106,12 @@
 
 ### P1.1 — Prometheus/Grafana
 
-Статус: отдельный production observability-контур развернут: Prometheus, Grafana, Alertmanager, Loki/S3, Alloy, Blackbox, private agents, расширяемый provisioned набор dashboards, backup/restore/rollback и config validation. Первый этап понятных дашбордов добавляет русский обзор приложения и отдельную диагностику HTTP 2xx/3xx/4xx/5xx с фильтрами, adaptive rate windows и recording rules. Loki хранит логи в отдельном S3 bucket; Grafana доступна через выделенный домен. Остаются следующие продуктовые dashboards, калибровка alerts по baseline и настройка технического receiver.
+Статус: отдельный production observability-контур развернут: Prometheus, Grafana, Alertmanager, Loki/S3, Alloy, Blackbox, private agents, расширяемый provisioned набор dashboards, backup/restore/rollback и config validation. Русские обзоры приложения и HTTP разделяют 2xx/3xx/4xx/5xx и используют adaptive rate windows и recording rules. Infrastructure/Containers покрывают freshness, swap, inode, disk I/O, network errors, clock skew, container limits, throttling, restarts и OOM; `container` нормализован без удаления совместимого `name`. Остаются следующие продуктовые dashboards, калибровка alerts по baseline и настройка технического receiver.
 
 1. Уточнить/стабилизировать API metric names и cardinality. Выполнено для HTTP/runtime/messaging.
 2. Развернуть отдельный observability VPS и перенести Prometheus/Grafana без остановки production. Выполнено; проверены private ingestion, Loki/S3 и публичный доступ к Grafana.
 3. Настроить private ingestion, 30d/55GB Prometheus retention, 30d Loki retention, versioned dashboards и disk budget. Выполнено в конфигурации; требуется production smoke/load verification.
-4. Собрать Infrastructure, Containers, Application, Prometheus Health, Loki Health и Logs Overview dashboards. Выполнено; детальные LiveKit/S3 collectors остаются следующим срезом.
+4. Собрать Infrastructure, Containers, Application, Prometheus Health, Loki Health и Logs Overview dashboards. Базовый набор выполнен; Infrastructure/Containers доведены до эксплуатационного стандарта, остальные detailed dashboards идут следующими MR.
 5. Включить infrastructure/application/self-monitoring alerts и Alertmanager routing. Rules и routing готовы; фактический receiver и корректировка thresholds — после 72 часов параллельной работы и недельного baseline.
 6. После 72 часов стабильности остановить legacy Grafana/Prometheus без удаления volumes, затем отдельным подтверждённым этапом удалить старые данные.
 

@@ -41,7 +41,27 @@ prometheus.scrape "cadvisor" {
   job_name        = "cadvisor"
   scrape_interval = "30s"
   targets         = [{ "__address__" = "127.0.0.1:8080" }]
-  forward_to      = [prometheus.remote_write.central.receiver]
+  forward_to      = [prometheus.relabel.cadvisor.receiver]
+}
+
+prometheus.relabel "cadvisor" {
+  forward_to = [prometheus.remote_write.central.receiver]
+
+  // `container` is the canonical cross-dashboard label. Keep `name` during
+  // the 0.8 compatibility window so existing queries do not break.
+  rule {
+    source_labels = ["name"]
+    regex         = "(.+)"
+    target_label  = "container"
+    replacement   = "$1"
+  }
+
+  // Compose metadata is useful for discovery, but these path/hash labels
+  // multiply every cAdvisor series without helping operational queries.
+  rule {
+    action = "labeldrop"
+    regex  = "container_label_com_docker_compose_(config_hash|project_config_files|project_working_dir|version)"
+  }
 }
 
 prometheus.scrape "postgres" {
