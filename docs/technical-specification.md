@@ -136,7 +136,7 @@ Pixel-perfect означает совпадение композиции, раз
 
 ## 11. Наблюдаемость
 
-Целевая схема: Prometheus + Grafana на VPS, `node_exporter`, `cadvisor`, `postgres_exporter`, `redis_exporter`, API `/metrics` и при необходимости blackbox probes. Grafana и Prometheus не публикуются без auth/VPN/SSH tunnel.
+Реализованная схема: Prometheus + Grafana на VPS, `node_exporter`, cAdvisor, `postgres_exporter`, `redis_exporter`, API `/metrics` и blackbox probes. Все HTTP endpoints monitoring stack bindятся только к `127.0.0.1`, Grafana/Prometheus доступны через SSH tunnel, а публичный Caddy route `/metrics` закрыт.
 
 Обязательные сигналы:
 

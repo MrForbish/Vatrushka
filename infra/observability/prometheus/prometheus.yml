@@ -1,0 +1,63 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  scrape_timeout: 10s
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: [127.0.0.1:9090]
+
+  - job_name: vatrushka-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: [127.0.0.1:3001]
+
+  - job_name: node
+    static_configs:
+      - targets: [127.0.0.1:9100]
+
+  - job_name: cadvisor
+    static_configs:
+      - targets: [127.0.0.1:8080]
+
+  - job_name: postgres
+    static_configs:
+      - targets: [127.0.0.1:9187]
+
+  - job_name: redis
+    static_configs:
+      - targets: [127.0.0.1:9121]
+
+  - job_name: blackbox-http
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - https://api.myvatrushka.ru/health/ready
+          - https://api.myvatrushka.ru/updates/latest.yml
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115
+
+  - job_name: blackbox-turn
+    metrics_path: /probe
+    params:
+      module: [tcp_connect]
+    static_configs:
+      - targets: [turn.myvatrushka.ru:5349]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115

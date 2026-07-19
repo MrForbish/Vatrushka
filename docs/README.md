@@ -20,6 +20,7 @@
 | Приватное S3-хранилище | [object-storage.md](object-storage.md) |
 | Безопасность | [security.md](security.md) |
 | Развертывание | [deployment.md](deployment.md) |
+| Production observability | [observability.md](observability.md) |
 | Self-hosted LiveKit | [self-hosted-livekit.md](self-hosted-livekit.md) |
 | Тестирование | [testing.md](testing.md) |
 | Производительность | [performance.md](performance.md) |
