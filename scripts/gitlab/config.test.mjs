@@ -38,6 +38,10 @@ test('Windows packaging uses verified local Electron and builder archives', asyn
 test('production publication is tag-only and uses protected file variables', async () => {
   const pipeline = await read('.gitlab-ci.yml');
   const publish = pipeline.slice(pipeline.indexOf('publish-production:'));
+  const authSmoke = pipeline.slice(pipeline.indexOf('release-auth-smoke:'), pipeline.indexOf('windows-rc:'));
+  assert.match(authSmoke, /CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"/u);
+  assert.match(authSmoke, /GLAB_ENABLE_CI_AUTOLOGIN: 'true'/u);
+  assert.match(authSmoke, /glab release view v0\.6\.6/u);
   assert.match(publish, /CI_COMMIT_TAG =~ \/\^v\[0-9\]/u);
   assert.match(publish, /PRODUCTION_SSH_PRIVATE_KEY/u);
   assert.match(publish, /PRODUCTION_SSH_HOST_KEY/u);
@@ -52,7 +56,14 @@ test('production publication is tag-only and uses protected file variables', asy
 
 test('GitLab repository metadata replaces GitHub automation', async () => {
   const codeowners = await read('.gitlab/CODEOWNERS');
+  const agentRules = await read('AGENTS.md');
+  const releaseProcess = await read('docs/release-process.md');
   assert.match(codeowners, /@MrForbish/u);
+  assert.match(agentRules, /GLAB_ENABLE_CI_AUTOLOGIN=true/u);
+  assert.match(agentRules, /Do not create a new branch\/MR for a failed pre-merge pipeline/u);
+  assert.match(agentRules, /Immediately set and read back `squash=false`/u);
+  assert.match(releaseProcess, /release-auth-smoke/u);
+  assert.match(releaseProcess, /GITLAB_TOKEN=\$CI_JOB_TOKEN/u);
   for (const template of ['feature', 'release-assemble', 'release', 'hotfix', 'sync']) await access(rootFile(`.gitlab/merge_request_templates/${template}.md`));
   await assert.rejects(access(rootFile('.github/workflows/pr-checks.yml')));
   await assert.rejects(access(rootFile('.github/scripts/pr-policy.mjs')));
