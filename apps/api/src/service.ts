@@ -1845,6 +1845,216 @@ export class VatrushkaService {
         lastActivityByChannel.set(item.channelId, item.createdAt);
     }
 
+    const [voiceRuntime, directContacts] = await Promise.all([
+      Promise.all(
+        details.map(async (server) => {
+          const [snapshot, channelSettings] = await Promise.all([
+            this.voicePresenceStore
+              .snapshot(server.id)
+              .catch(() => ({
+                serverId: server.id,
+                version: 0,
+                generatedAt: this.now().toISOString(),
+                sessions: [],
+              })),
+            this.serverSettingsStore
+              ? this.serverSettingsStore.listChannels(server.id).catch(() => [])
+              : Promise.resolve([]),
+          ]);
+          return { server, snapshot, channelSettings };
+        }),
+      ),
+      this.store.listDirectConversationOverviews(user.id),
+    ]);
+    const visibleMemberIds = new Set(
+      details.flatMap((server) => server.members.map((member) => member.userId)),
+    );
+    const contactRecords = (
+      await Promise.all(
+        [
+          ...new Set(
+            directContacts.map((conversation) => conversation.participant.id),
+          ),
+        ].map((userId) => this.store.findUserById(userId)),
+      )
+    ).filter(
+      (contact): contact is UserRecord =>
+        contact !== null && visibleMemberIds.has(contact.id),
+    );
+    const contactIds = new Set(contactRecords.map((contact) => contact.id));
+    const voiceSpaceByChannel = new Map<
+      string,
+      HomeDashboardResponse["gaming"]["activeSpaces"][number]
+    >();
+    const voiceChannelByUser = new Map<string, string>();
+
+    for (const runtime of voiceRuntime) {
+      const settingsByChannel = new Map(
+        runtime.channelSettings.map((channel) => [channel.id, channel]),
+      );
+      const sessionsByChannel = new Map<string, typeof runtime.snapshot.sessions>();
+      for (const session of runtime.snapshot.sessions) {
+        const sessions = sessionsByChannel.get(session.channelId) ?? [];
+        sessions.push(session);
+        sessionsByChannel.set(session.channelId, sessions);
+        voiceChannelByUser.set(session.userId, session.channelId);
+      }
+      const memberById = new Map(
+        runtime.server.members.map((member) => [member.userId, member]),
+      );
+      for (const channel of runtime.server.channels) {
+        if (channel.type !== "voice") continue;
+        const channelSettings = settingsByChannel.get(channel.id);
+        if (channelSettings?.archivedAt) continue;
+        const sessions = sessionsByChannel.get(channel.id) ?? [];
+        const fallbackParticipants = channel.voiceParticipants ?? [];
+        const participantIds =
+          sessions.length > 0
+            ? sessions.map((session) => session.userId)
+            : fallbackParticipants.map((participant) => participant.userId);
+        const participantCount = new Set(participantIds).size;
+        const participantLimit = channelSettings?.maxParticipants ?? null;
+        const hasFreeSlots =
+          participantLimit === null || participantCount < participantLimit;
+        const lastActivityAt =
+          sessions
+            .map((session) => Date.parse(session.joinedAt))
+            .filter(Number.isFinite)
+            .sort((left, right) => right - left)[0] ??
+          lastActivityByChannel.get(channel.id)?.getTime() ??
+          Date.parse(runtime.server.createdAt);
+        voiceSpaceByChannel.set(channel.id, {
+          channelId: channel.id,
+          serverId: runtime.server.id,
+          serverName: runtime.server.name,
+          serverIconUrl: runtime.server.iconUrl ?? null,
+          channelName: channel.name,
+          gameName: null,
+          coverUrl: runtime.server.bannerUrl ?? null,
+          participantCount,
+          participantLimit,
+          friendCount: participantIds.filter((id) => contactIds.has(id)).length,
+          participantAvatars: participantIds
+            .map((id) => memberById.get(id)?.avatarUrl ?? null)
+            .filter((url): url is string => Boolean(url))
+            .slice(0, 4),
+          hasScreenShare: sessions.some((session) => session.screenSharing),
+          hasFreeSlots,
+          canJoin:
+            hasFreeSlots &&
+            (channel.permissions?.includes("CONNECT_VOICE") ?? false),
+          lastActivityAt: new Date(lastActivityAt).toISOString(),
+        });
+      }
+    }
+
+    const activeGamingSpaces = [...voiceSpaceByChannel.values()]
+      .filter((space) => space.participantCount > 0)
+      .sort((left, right) => {
+        if (left.friendCount !== right.friendCount)
+          return right.friendCount - left.friendCount;
+        if (left.hasScreenShare !== right.hasScreenShare)
+          return left.hasScreenShare ? -1 : 1;
+        if (left.participantCount !== right.participantCount)
+          return right.participantCount - left.participantCount;
+        return Date.parse(right.lastActivityAt) - Date.parse(left.lastActivityAt);
+      })
+      .slice(0, 6);
+
+    const quickReturn: HomeDashboardResponse["gaming"]["quickReturn"] = [];
+    const quickChannelIds = new Set<string>();
+    for (const item of activity) {
+      if (item.type !== "left_voice" || item.channelId === null) continue;
+      const space = voiceSpaceByChannel.get(item.channelId);
+      if (!space || quickChannelIds.has(space.channelId)) continue;
+      quickReturn.push({ ...space, returnReason: "recently_left" });
+      quickChannelIds.add(space.channelId);
+      if (quickReturn.length === 3) break;
+    }
+    for (const space of activeGamingSpaces) {
+      if (quickReturn.length === 3) break;
+      if (quickChannelIds.has(space.channelId)) continue;
+      if (space.friendCount === 0 && !space.hasScreenShare) continue;
+      quickReturn.push({
+        ...space,
+        returnReason:
+          space.friendCount > 0 ? "friends_inside" : "screen_share",
+      });
+      quickChannelIds.add(space.channelId);
+    }
+
+    const currentVoiceSession = await this.voicePresenceStore
+      .getSession(user.id)
+      .catch(() => null);
+    const friendsInGame = (
+      await Promise.all(
+        contactRecords.map(async (contact) => {
+          if (contact.presenceVisibility !== "shared_servers") return null;
+          const publicContactPresence = await this.publicPresence(contact);
+          if (publicContactPresence.effectiveStatus === "offline") return null;
+          const channelId = voiceChannelByUser.get(contact.id);
+          const space = channelId ? voiceSpaceByChannel.get(channelId) : undefined;
+          const customStatusActive =
+            contact.activityVisible &&
+            (contact.customStatusExpiresAt === null ||
+              contact.customStatusExpiresAt > this.now());
+          const gameName = customStatusActive
+            ? (contact.customStatusText ?? null)
+            : null;
+          const avatarUrl =
+            contact.avatarObjectKey && this.objectStorage
+              ? await this.objectStorage.createGetUrl(
+                  contact.avatarObjectKey,
+                  900,
+                )
+              : null;
+          return {
+            userId: contact.id,
+            displayName: contact.displayName ?? contact.email,
+            avatarUrl,
+            presence:
+              publicContactPresence.effectiveStatus === "idle"
+                ? ("away" as const)
+                : publicContactPresence.effectiveStatus === "dnd"
+                  ? ("dnd" as const)
+                  : ("online" as const),
+            gameName,
+            gameDetails: space?.channelName ?? null,
+            voiceChannel: space
+              ? {
+                  channelId: space.channelId,
+                  serverId: space.serverId,
+                  channelName: space.channelName,
+                  canJoin: space.canJoin,
+                }
+              : null,
+          };
+        }),
+      )
+    )
+      .filter(
+        (
+          contact,
+        ): contact is HomeDashboardResponse["gaming"]["friendsInGame"][number] =>
+          contact !== null,
+      )
+      .sort((left, right) => {
+        const score = (
+          contact: HomeDashboardResponse["gaming"]["friendsInGame"][number],
+        ): number =>
+          contact.voiceChannel?.channelId === currentVoiceSession?.channelId
+            ? 4
+            : contact.voiceChannel
+              ? 3
+              : contact.gameName
+                ? 2
+                : contact.presence === "online"
+                  ? 1
+                  : 0;
+        return score(right) - score(left);
+      })
+      .slice(0, 8);
+
     const activeSpaces: HomeDashboardResponse["activeSpaces"] = [];
     for (const server of details) {
       for (const channel of server.channels) {
@@ -2028,6 +2238,18 @@ export class VatrushkaService {
               },
       })),
       onboarding: { visible: onboardingVisible, steps: onboardingSteps },
+      gaming: {
+        voiceStatus: {
+          microphone: { available: false, enabled: false, label: null },
+          output: { available: false, label: null },
+          pingMs: null,
+          connectionQuality:
+            connection === "healthy" ? "excellent" : "poor",
+        },
+        quickReturn,
+        activeSpaces: activeGamingSpaces,
+        friendsInGame,
+      },
     };
   }
 

@@ -1,6 +1,6 @@
 # Vatrushka: техническая спецификация
 
-Статус документа: канонический, версия продукта 0.6.1.
+Статус документа: канонический, версия продукта 0.6.10.
 
 ## 1. Состав системы
 
@@ -41,6 +41,8 @@ Fastify повторно проверяет auth, membership, permissions, owner
 React 19 и TanStack Query отвечают за серверное состояние. `AppRouter` использует `HashRouter`, совместимый с packaged `file://`. `App.tsx` пока остается крупным orchestration controller и является целью безопасной декомпозиции; media connection должна жить выше экранов и settings routes.
 
 Основные feature-модули: `home`, `servers`, `direct-messages`, `voice`, `screen-share`, `settings`, `notifications`, `security`, `update`. Переиспользуемая UI-система находится в `ui/{foundations,primitives,navigation,messaging,voice,overlays,layouts}`.
+
+Gaming Home получает единый агрегат `GET /api/v1/home`. Backend объединяет PostgreSQL server membership и user activity, Redis voice projection, LiveKit-confirmed presence и permission-filtered server DTO. Ответ содержит компактный voice status, `quickReturn`, `activeSpaces` и `friendsInGame`; renderer подменяет только названия input/output фактическими Windows `MediaDeviceInfo`, не создавая демонстрационные production-данные. Realtime voice events coalesced-инвалидируют Home query, а reconnect восстанавливается HTTP snapshot. До появления отдельной friendship-модели социальный список использует реальные контакты существующих личных диалогов; это явно ограниченный compatibility source, а не скрытый mock.
 
 ### 3.2. Electron main/preload
 

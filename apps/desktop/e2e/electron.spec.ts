@@ -612,7 +612,7 @@ test("opens the routed settings shell without replacing the application controll
   await window.getByLabel("Код из письма").fill("123456");
   await window.getByRole("button", { name: /Подтвердить вход/u }).click();
   await expect(
-    window.getByRole("heading", { name: /Добро пожаловать/u }),
+    window.getByRole("heading", { name: "Быстрый возврат" }),
   ).toBeVisible();
 
   await window.evaluate(() => {
@@ -709,7 +709,7 @@ test("opens the routed settings shell without replacing the application controll
   ).toBeVisible();
   await window.getByRole("button", { name: "Вернуться" }).click();
   await expect(
-    window.getByRole("heading", { name: /Добро пожаловать/u }),
+    window.getByRole("heading", { name: "Быстрый возврат" }),
   ).toBeVisible();
 });
 
@@ -907,15 +907,13 @@ test("opens the redesigned Home, creates the first server, and restores it after
   await window.getByLabel("Код из письма").fill("123456");
   await window.getByRole("button", { name: /Подтвердить вход/u }).click();
   await expect(
-    window.getByRole("heading", { name: /Добро пожаловать/u }),
+    window.getByRole("heading", { name: "Быстрый возврат" }),
   ).toBeVisible();
-  await expect(
-    window.getByRole("heading", { name: "Что дальше?" }),
-  ).toBeVisible();
+  await expect(window.getByLabel("Статус голоса")).toBeVisible();
   await expect(window.getByText(/Войти по коду/u)).toHaveCount(0);
 
   await window
-    .locator(".home-quick-actions")
+    .locator(".home-navigation__create")
     .getByRole("button", { name: "Создать сервер" })
     .click();
   const dialog = window.getByRole("dialog", { name: "Новый сервер" });
@@ -943,7 +941,7 @@ test("opens the redesigned Home, creates the first server, and restores it after
   }
   await expect(window.getByText(server.name).first()).toBeVisible();
   await expect(
-    window.getByRole("heading", { name: "Продолжить" }),
+    window.getByRole("heading", { name: "Быстрый возврат" }),
   ).toBeVisible();
 });
 

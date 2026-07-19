@@ -49,34 +49,26 @@ describe('authentication screens', () => {
 });
 
 describe('main screen', () => {
-  it('shows user identity, server actions, audio settings, and app version', () => {
-    render(<HomePage user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="Команда" onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} onCopyInvite={noop} />);
+  it('shows the gaming home sections, server actions, and app version', () => {
+    render(<HomePage user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="Команда" onLogout={noop} onSecurity={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} />);
     expect(screen.getAllByText('Anna').length).toBeGreaterThan(0);
     expect(screen.getAllByRole('button', { name: /Создать сервер/u }).length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Пригласить друзей' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Быстрый возврат' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Активные пространства' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Друзья в игре' })).toBeInTheDocument();
     expect(screen.queryByText(/войти по коду/iu)).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Код приглашения')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Устройство ввода')).toBeInTheDocument();
-    expect(screen.getByLabelText('Динамики / наушники')).toBeInTheDocument();
+    expect(screen.getByLabelText('Статус голоса')).toBeInTheDocument();
     expect(screen.getAllByText(/1\.2\.3/u).length).toBeGreaterThan(0);
     expect(document.querySelector('.vui-app-shell__server-context')).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Безопасность и настройки' }).length).toBeGreaterThan(0);
   });
 
-  it('copies only a short server link and reports success', async () => {
-    const onCopyInvite = vi.fn().mockResolvedValue(undefined);
-    render(<HomePage user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[{ id: 'server-1', name: 'Команда', inviteUrl: 'https://myvatrushka.ru/i/shortLink42', ownerUserId: 'user-1', memberCount: 1, createdAt: '2026-07-17T10:00:00.000Z' }]} serverName="" onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} onCopyInvite={onCopyInvite} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Пригласить друзей' }));
-    expect(screen.getByText('https://myvatrushka.ru/i/shortLink42')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Скопировать ссылку' }));
-    expect(onCopyInvite).toHaveBeenCalledWith('https://myvatrushka.ru/i/shortLink42');
-    expect(await screen.findByRole('button', { name: 'Ссылка скопирована' })).toBeInTheDocument();
-  });
-
   it('uses widget skeletons instead of a fullscreen loader', () => {
-    render(<HomePage user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="" dashboardLoading onLogout={noop} onSecurity={noop} onMicrophone={noop} onOutput={noop} onRefreshDevices={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} onCopyInvite={noop} />);
-    expect(screen.getByLabelText('Загрузка блока Продолжить')).toHaveAttribute('aria-busy', 'true');
+    render(<HomePage user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="" dashboardLoading onLogout={noop} onSecurity={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} />);
+    expect(screen.getByLabelText('Загрузка быстрого возврата')).toHaveAttribute('aria-busy', 'true');
     expect(screen.getByLabelText('Загрузка активных пространств')).toBeInTheDocument();
+    expect(screen.getByLabelText('Загрузка друзей')).toBeInTheDocument();
     expect(screen.queryByText(/Подключаем «Ватрушку»/u)).not.toBeInTheDocument();
   });
 });

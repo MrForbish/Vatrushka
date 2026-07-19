@@ -479,6 +479,7 @@ export default function App(): ReactNode {
   const [notificationPreferences, setNotificationPreferences] =
     useState<UserNotificationPreferences | null>(null);
   const [realtimeRevision, setRealtimeRevision] = useState(0);
+  const [homeRealtimeRevision, setHomeRealtimeRevision] = useState(0);
   const [serverSettingsRevision, setServerSettingsRevision] = useState(0);
   const [typingUsers, setTypingUsers] = useState<Record<string, string[]>>({});
   const [serverName, setServerName] = useState("");
@@ -568,6 +569,8 @@ export default function App(): ReactNode {
     const refresh = (): void => setRealtimeRevision((current) => current + 1);
     const unsubscribeEvent = realtime.onEvent((event) => {
       refresh();
+      if (event.type !== "typing.started" && event.type !== "typing.stopped")
+        setHomeRealtimeRevision((current) => current + 1);
       if (event.type.startsWith("voice.")) {
         if (
           event.type === "voice.member.move.failed" &&
@@ -680,6 +683,14 @@ export default function App(): ReactNode {
   }, [screen, serverDetail?.id, user?.id, voiceSnapshotRevision]);
 
   useEffect(() => {
+    if (!user || screen !== "home") return;
+    for (const server of servers) realtime.subscribeVoiceServer(server.id);
+    return () => {
+      for (const server of servers) realtime.unsubscribeVoiceServer(server.id);
+    };
+  }, [homeServersRevision, screen, user?.id]);
+
+  useEffect(() => {
     let conversationId: string | null = null;
     if (screen === "server" && activeChannelId !== null && activeChannelIsText)
       conversationId = activeChannelId;
@@ -776,15 +787,19 @@ export default function App(): ReactNode {
 
   useEffect(() => {
     if (user === null) return;
-    void queryClient.invalidateQueries({
-      queryKey: homeDashboardQueryKey(user.id),
-      refetchType: screen === "home" ? "active" : "none",
-    });
+    const timer = window.setTimeout(() => {
+      void queryClient.invalidateQueries({
+        queryKey: homeDashboardQueryKey(user.id),
+        refetchType: screen === "home" ? "active" : "none",
+      });
+    }, 180);
+    return () => window.clearTimeout(timer);
   }, [
     connection?.channelId,
     homePresenceRevision,
     homeServersRevision,
     queryClient,
+    homeRealtimeRevision,
     screen,
     user?.id,
   ]);
@@ -1755,6 +1770,22 @@ export default function App(): ReactNode {
     });
   };
 
+  const joinVoiceFromHome = (serverId: string, channelId: string): void => {
+    if (voiceTransitionRef.current) return;
+    voiceTransitionRef.current = true;
+    void run(async () => {
+      try {
+        const detail = await apiClient.getServer(serverId);
+        setServerDetail(detail);
+        setActiveChannelId(channelId);
+        setMessages([]);
+        await enterVoiceChannel(await apiClient.connectVoiceChannel(channelId));
+      } finally {
+        voiceTransitionRef.current = false;
+      }
+    });
+  };
+
   const openServer = (serverId: string): void =>
     openDestination({ type: "server", serverId });
 
@@ -1814,6 +1845,21 @@ export default function App(): ReactNode {
       setActiveDirectConversationId(conversation.id);
       setDirectMessages([]);
       setDirectMessageDraft("");
+    });
+  };
+
+  const messageFriendFromHome = (participantUserId: string): void => {
+    void run(async () => {
+      const conversation =
+        await apiClient.createDirectConversation(participantUserId);
+      setDirectConversations((current) => [
+        conversation,
+        ...current.filter((item) => item.id !== conversation.id),
+      ]);
+      setActiveDirectConversationId(conversation.id);
+      setDirectMessages([]);
+      setDirectMessageDraft("");
+      setScreen("direct");
     });
   };
 
@@ -2884,11 +2930,11 @@ export default function App(): ReactNode {
         .filter((name): name is string => Boolean(name))
         .join(", ")
     : "";
+  const localParticipant = mediaSnapshot.participants.find(
+    (participant) => participant.isLocal,
+  );
   const localInputLevel =
-    connection === null
-      ? undefined
-      : mediaSnapshot.participants.find((participant) => participant.isLocal)
-          ?.audioLevel;
+    connection === null ? undefined : localParticipant?.audioLevel;
   const openConnectedVoice = (): void => {
     if (!connection) return;
     if (serverDetail?.id === connection.serverId) {
@@ -2979,6 +3025,10 @@ export default function App(): ReactNode {
   const openUserSettings = (): void => {
     settingsReturnScreenRef.current = screen;
     void navigate(userSettingsPath());
+  };
+  const openAudioSettings = (): void => {
+    settingsReturnScreenRef.current = screen;
+    void navigate(userSettingsPath("audio"));
   };
   const openServerSettings = (
     section: ServerSettingsSection = "overview",
@@ -3193,7 +3243,16 @@ export default function App(): ReactNode {
         devices={devices}
         microphoneId={settings.microphoneDeviceId}
         outputId={settings.outputDeviceId}
-        inputLevel={localInputLevel}
+        microphoneMuted={mediaSnapshot.isMuted}
+        voiceConnectionQuality={
+          mediaSnapshot.connectionState === ConnectionState.Connected
+            ? localParticipant?.connectionQuality === "Отличное"
+              ? "excellent"
+              : localParticipant?.connectionQuality === "Хорошее"
+                ? "good"
+                : "poor"
+            : undefined
+        }
         busy={busy}
         error={error}
         servers={servers}
@@ -3212,17 +3271,14 @@ export default function App(): ReactNode {
         onRetryDashboard={() => void homeDashboardQuery.refetch()}
         onLogout={logout}
         onSecurity={openUserSettings}
-        onMicrophone={(value) => persistDevice("microphoneDeviceId", value)}
-        onOutput={(value) => persistDevice("outputDeviceId", value)}
-        onRefreshDevices={() => void run(() => refreshDevices(true))}
-        onTestOutput={() => playVoiceCue("message")}
+        onAudioSettings={openAudioSettings}
         onServerName={setServerName}
         onCreateServer={createServer}
         onOpenServer={openServer}
         onOpenDestination={openDestination}
-        onReturnToCall={openConnectedVoice}
+        onJoinVoice={joinVoiceFromHome}
+        onMessageFriend={messageFriendFromHome}
         onDirectMessages={openDirectMessages}
-        onCopyInvite={(inviteUrl) => window.desktop.copyToClipboard(inviteUrl)}
       />,
     );
   if (screen === "server" && user && serverDetail)

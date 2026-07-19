@@ -159,6 +159,67 @@ export interface HomeActiveSpaceItem {
   destination: HomeDestination;
 }
 
+export type GamingHomeConnectionQuality =
+  | "excellent"
+  | "good"
+  | "poor"
+  | "offline";
+
+export interface GamingHomeVoiceStatus {
+  microphone: {
+    available: boolean;
+    enabled: boolean;
+    label: string | null;
+  };
+  output: {
+    available: boolean;
+    label: string | null;
+  };
+  pingMs: number | null;
+  connectionQuality: GamingHomeConnectionQuality;
+}
+
+export interface GamingHomeVoiceSpace {
+  channelId: string;
+  serverId: string;
+  serverName: string;
+  serverIconUrl: string | null;
+  channelName: string;
+  gameName: string | null;
+  coverUrl: string | null;
+  participantCount: number;
+  participantLimit: number | null;
+  friendCount: number;
+  participantAvatars: string[];
+  hasScreenShare: boolean;
+  hasFreeSlots: boolean;
+  canJoin: boolean;
+  lastActivityAt: string;
+}
+
+export interface GamingHomeQuickReturnItem extends GamingHomeVoiceSpace {
+  returnReason:
+    | "recently_left"
+    | "friends_inside"
+    | "screen_share"
+    | "pinned";
+}
+
+export interface GamingHomeFriend {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  presence: "online" | "away" | "dnd";
+  gameName: string | null;
+  gameDetails: string | null;
+  voiceChannel: {
+    channelId: string;
+    serverId: string;
+    channelName: string;
+    canJoin: boolean;
+  } | null;
+}
+
 export type HomeActivityType =
   | "opened_channel"
   | "joined_voice"
@@ -204,6 +265,12 @@ export interface HomeDashboardResponse {
   onboarding: {
     visible: boolean;
     steps: HomeOnboardingStep[];
+  };
+  gaming: {
+    voiceStatus: GamingHomeVoiceStatus;
+    quickReturn: GamingHomeQuickReturnItem[];
+    activeSpaces: GamingHomeVoiceSpace[];
+    friendsInGame: GamingHomeFriend[];
   };
 }
 
