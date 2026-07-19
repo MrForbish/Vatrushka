@@ -213,8 +213,9 @@ database-upgrade:
   stage: release
   timeout: 8m
   services:
-    - name: postgres:17-alpine
+    - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/postgres:17-alpine
       alias: postgres
+      pull_policy: if-not-present
   variables:
     POSTGRES_DB: vatrushka_upgrade
     POSTGRES_USER: vatrushka
