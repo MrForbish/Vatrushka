@@ -110,7 +110,7 @@ Bucket приватный. API создает ограниченный object ke
 
 Каноническая рабочая копия VPS — `/opt/vatrushka`. Docker Compose запускает Caddy, API, PostgreSQL и Redis; LiveKit/TURN развернуты self-hosted по отдельному runbook. API доступен наружу только через Caddy. PostgreSQL и Redis проброшены только на loopback. Media хранится в приватном Timeweb S3 bucket `media-vatrushka`.
 
-Канонический release flow описан в [release-process.md](release-process.md): task PR squash-merge в `develop`, immutable `assemble/<version>` собирает `release/<version>`, release PR merge-commit попадает в `main`, а production publish запускается только annotated SemVer tag. После выпуска `main` синхронизируется обратно в `develop`. Runtime deployment сохраняет PostgreSQL backup, readiness checks и атомарную публикацию update feed (`setup`/`blockmap` раньше `latest.yml`). Schema rollback требует отдельного плана.
+Канонический release flow описан в [release-process.md](release-process.md): task MR squash-merge в `develop`, immutable `assemble/<version>` собирает `release/<version>`, release MR merge-commit попадает в `main`, а production publish запускается только annotated SemVer tag в GitLab. После выпуска `main` синхронизируется обратно в `develop`. Runtime deployment сохраняет PostgreSQL backup, readiness checks и атомарную публикацию update feed (`setup`/`blockmap` раньше `latest.yml`). Schema rollback требует отдельного плана.
 
 ## 9. Тестовая стратегия
 
@@ -153,4 +153,4 @@ Alerts должны покрывать readiness failure, 5xx/latency surge, Red
 
 ## 12. Управление изменениями
 
-Изменения выполняются маленькими PR с одним назначением. Обычные task PR squash-merge в `develop`; assembly, production release, hotfix и обратная синхронизация используют merge commit, чтобы сохранить границы версии и позволить revert целого изменения. Generated outputs, reference-pack и секреты не коммитятся. Мертвый код удаляется только после доказательства отсутствия imports/runtime calls, теста заменяющего контракт и, для БД, завершенной expand/contract migration.
+Изменения выполняются маленькими MR с одним назначением. Обычные task MR squash-merge в `develop`; assembly, production release, hotfix и обратная синхронизация используют merge commit, чтобы сохранить границы версии и позволить revert целого изменения. Generated outputs, reference-pack и секреты не коммитятся. Мертвый код удаляется только после доказательства отсутствия imports/runtime calls, теста заменяющего контракт и, для БД, завершенной expand/contract migration.

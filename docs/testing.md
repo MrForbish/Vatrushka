@@ -41,13 +41,13 @@ CI starts isolated PostgreSQL 17 and Redis 8 services, applies the complete Driz
 
 ## CI и release gates
 
-`pr-checks.yml` является переиспользуемым quality gate для task PR в `develop`: независимые jobs проверяют настоящие PostgreSQL/Redis adapters, lint/typecheck/unit/build/bundle budgets и полный Windows Storybook/Electron/visual набор. Обычный PR не собирает публикуемый installer. Storybook interaction + Electron E2E и 32 последовательных visual scenario выполняются параллельными Windows jobs, после чего единый `desktop-regression` требует успеха обоих. Chromium кэшируется по lockfile; локально быстрые два workers внутри одного visual process были отклонены после деградации на ограниченном GitHub Windows runner.
+Единый `.gitlab-ci.yml` является quality gate для task MR в `develop`: независимые jobs проверяют настоящие PostgreSQL/Redis adapters, lint/typecheck/unit/build/bundle budgets и полный Windows Storybook/Electron/visual набор. Обычный MR не собирает публикуемый installer. Storybook interaction + Electron E2E и 32 последовательных visual scenario выполняются параллельными Windows jobs; общий pipeline успешен только при успехе обоих. Chromium кэшируется по lockfile в project-relative cache; локально быстрые два workers внутри одного visual process были отклонены после деградации на ограниченном Windows runner.
 
-Visual suite сначала собирает production-like статический Storybook, затем обслуживает `storybook-static` через Vite preview. Это сохраняет однопоточный детерминированный screenshot contract, но исключает холодную Vite-трансформацию при открытии каждой story. `run-with-budget.mjs` измеряет Storybook interaction, Electron E2E и visual шаги, пишет фактическое время в GitHub Step Summary и блокирует существенную регрессию. Job-level timeouts защищают от зависшего runner. Актуальная связь рисков, уровней тестов и viewport находится в [test-coverage-matrix.md](test-coverage-matrix.md).
+Visual suite сначала собирает production-like статический Storybook, затем обслуживает `storybook-static` через Vite preview. Это сохраняет однопоточный детерминированный screenshot contract, но исключает холодную Vite-трансформацию при открытии каждой story. `run-with-budget.mjs` измеряет Storybook interaction, Electron E2E и visual шаги, пишет фактическое время в GitLab job log и блокирует существенную регрессию. Job-level timeouts защищают от зависшего runner. Актуальная связь рисков, уровней тестов и viewport находится в [test-coverage-matrix.md](test-coverage-matrix.md).
 
-Baseline PR #23 на GitHub-hosted Windows: Storybook interaction 77,9 секунды, Electron E2E 37,0 секунды, static Storybook visual 90,6 секунды; полный visual job 3:01 вместо 6:01 в PR #21. Эти значения являются ориентиром, а блокирующие budgets намеренно оставляют запас для вариативности cold runner. Static visual budget равен 180 секундам: все 32 сценария обязательны, а запас покрывает наблюдавшийся cold-runner variance без ослабления job timeout.
+Исторический baseline GitHub PR #23: Storybook interaction 77,9 секунды, Electron E2E 37,0 секунды, static Storybook visual 90,6 секунды; полный visual job 3:01 вместо 6:01 в PR #21. Эти значения остаются ориентиром до накопления GitLab Windows baseline, а блокирующие budgets намеренно оставляют запас для вариативности cold runner. Static visual budget равен 180 секундам: все 32 сценария обязательны.
 
-`release-candidate.yml` повторно вызывает тот же quality gate и дополнительно:
+Release-candidate jobs в `.gitlab-ci.yml` повторно используют тот же quality gate и дополнительно:
 
 - проверяет release branch/version/changelog;
 - применяет production schema из текущей production-ветки в чистую PostgreSQL, затем накатывает candidate migrations;
@@ -56,7 +56,7 @@ Baseline PR #23 на GitHub-hosted Windows: Storybook interaction 77,9 секу�
 - проверяет clean silent install и upgrade поверх installer из production feed;
 - сохраняет RC metadata и installer, не публикуя `latest.yml`.
 
-`release-pr.yml` требует full quality evidence, rollback/release notes и запрещает dev URLs. `production-release.yml` доступен только immutable SemVer tag, повторяет quality gate, собирает stable artifacts и после approval атомарно публикует feed. PR workflow не получает signing/SSH secrets. `sync-check.yml` разрешает обратную синхронизацию только при наличии production tag.
+`release-evidence` требует full quality evidence, rollback/release notes и запрещает dev URLs. Production jobs доступны только immutable SemVer tag, повторяют quality gate, собирают stable artifacts и атомарно публикуют feed и GitLab Release. MR pipeline не получает protected signing/SSH secrets. `merge-request-policy` разрешает обратную синхронизацию только при наличии production tag.
 
 Unit/CI intentionally does not send SMTP, contact LiveKit or capture microphone/loopback/screen. Before release, execute a two-machine manual matrix on Windows with real SMTP and production LiveKit:
 

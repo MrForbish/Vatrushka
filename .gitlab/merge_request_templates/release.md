@@ -14,4 +14,4 @@
 - [ ] installer/checksums
 - [ ] silent update
 - [ ] release notes/changelog
-- [ ] production publication выключена в PR
+- [ ] production publication отключена в MR

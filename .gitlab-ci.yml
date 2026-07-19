@@ -1,0 +1,411 @@
+workflow:
+  rules:
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/[0-9]+\.[0-9]+\.[0-9]+$/'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+    - when: never
+
+stages:
+  - policy
+  - quality
+  - release
+  - package
+  - publish
+
+variables:
+  GIT_DEPTH: "0"
+  NPM_CONFIG_AUDIT: "false"
+  NPM_CONFIG_FUND: "false"
+  PRODUCTION_BRANCH: "main"
+  PRODUCTION_API_BASE_URL: "https://api.myvatrushka.ru"
+  PRODUCTION_UPDATE_FEED: "https://api.myvatrushka.ru/updates"
+  WINDOWS_CSC_ENABLED: "false"
+
+.node-linux:
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/node:24-bookworm
+    pull_policy: if-not-present
+  tags: [vatrushka-linux]
+  cache:
+    key:
+      files: [package-lock.json]
+      prefix: linux-npm
+    paths: [.npm/]
+    policy: pull-push
+  before_script:
+    - npm ci --cache .npm --prefer-offline --no-audit --no-fund
+  interruptible: true
+
+.node-windows:
+  tags: [vatrushka-windows]
+  variables:
+    PLAYWRIGHT_BROWSERS_PATH: '$CI_PROJECT_DIR/.cache/ms-playwright'
+  cache:
+    key:
+      files: [package-lock.json]
+      prefix: windows-node-playwright
+    paths:
+      - .npm/
+      - .cache/ms-playwright/
+    policy: pull-push
+  before_script:
+    - $env:Path = "$env:NODE_HOME;$env:Path"
+    - node --version
+    - npm --version
+    - npm ci --cache .npm --prefer-offline --no-audit --no-fund
+  interruptible: true
+
+.quality-rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_TAG'
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/[0-9]+\.[0-9]+\.[0-9]+$/'
+
+.release-candidate-rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\/[0-9]+\.[0-9]+\.[0-9]+$/'
+    - if: '$CI_COMMIT_BRANCH =~ /^release\/[0-9]+\.[0-9]+\.[0-9]+$/'
+
+merge-request-policy:
+  extends: .node-linux
+  stage: policy
+  timeout: 2m
+  before_script: []
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+  script:
+    - node scripts/policy/merge-request-policy.mjs
+    - |
+      if [ "$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME" = "$PRODUCTION_BRANCH" ] && [ "$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" = "develop" ]; then
+        latest_tag=$(git tag --merged HEAD --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)
+        test -n "$latest_tag" || { echo 'Sync MR does not contain a production SemVer tag.' >&2; exit 1; }
+        echo "Sync contains production tag $latest_tag"
+      fi
+
+verify-tag:
+  extends: .node-linux
+  stage: policy
+  timeout: 2m
+  interruptible: false
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+    - if: '$CI_COMMIT_TAG'
+      when: never
+  script:
+    - |
+      version="${CI_COMMIT_TAG#v}"
+      git fetch origin "$PRODUCTION_BRANCH"
+      git merge-base --is-ancestor "$CI_COMMIT_SHA" "origin/$PRODUCTION_BRANCH" || { echo 'Tagged commit is not in the production branch.' >&2; exit 1; }
+      test "$(node -p "require('./package.json').version")" = "$version" || { echo 'Tag and package version differ.' >&2; exit 1; }
+      printf 'VERSION=%s\n' "$version" > release.env
+  artifacts:
+    reports:
+      dotenv: release.env
+    expire_in: 30 days
+
+verify:
+  extends:
+    - .node-linux
+    - .quality-rules
+  stage: quality
+  timeout: 8m
+  script:
+    - npm run repo-policy:test
+    - npm run version:check
+    - npm run lint
+    - npm run typecheck
+    - npm run test
+    - npm run db:check
+    - npm run build
+    - npm run perf:check
+
+integration:
+  extends:
+    - .node-linux
+    - .quality-rules
+  stage: quality
+  timeout: 5m
+  services:
+    - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/postgres:17-alpine
+      alias: postgres
+      pull_policy: if-not-present
+    - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/redis:8-alpine
+      alias: redis
+      pull_policy: if-not-present
+  variables:
+    POSTGRES_DB: vatrushka_test
+    POSTGRES_USER: vatrushka
+    POSTGRES_PASSWORD: integration-test-password
+    INTEGRATION_DATABASE_URL: postgresql://vatrushka:integration-test-password@postgres:5432/vatrushka_test
+    INTEGRATION_REDIS_URL: redis://redis:6379/15
+  script:
+    - npm run build -w @vatrushka/shared
+    - npm run test:integration
+
+desktop-behavior:
+  extends:
+    - .node-windows
+    - .quality-rules
+  stage: quality
+  timeout: 12m
+  script:
+    - npx playwright install chromium
+    - npm run build -w @vatrushka/shared
+    - node scripts/ci/run-with-budget.mjs --name "Storybook interaction" --budget-seconds 180 -- npm run test:storybook
+    - node scripts/ci/run-with-budget.mjs --name "Electron E2E" --budget-seconds 90 -- npm run test:e2e
+  artifacts:
+    when: on_failure
+    expire_in: 14 days
+    paths:
+      - apps/desktop/test-results/
+      - apps/desktop/playwright-report/
+
+visual-regression:
+  extends:
+    - .node-windows
+    - .quality-rules
+  stage: quality
+  timeout: 10m
+  script:
+    - npx playwright install chromium
+    - npm run build -w @vatrushka/shared
+    - node scripts/ci/run-with-budget.mjs --name "Static Storybook visual" --budget-seconds 180 -- npm run test:visual
+  artifacts:
+    when: on_failure
+    expire_in: 14 days
+    paths:
+      - apps/desktop/test-results/
+      - apps/desktop/playwright-report/
+
+release-validate:
+  extends:
+    - .node-linux
+    - .release-candidate-rules
+  stage: release
+  timeout: 5m
+  variables:
+    RELEASE_BRANCH: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME'
+  script:
+    - |
+      if [ -z "$RELEASE_BRANCH" ]; then export RELEASE_BRANCH="$CI_COMMIT_BRANCH"; fi
+      npm run release:validate
+    - npm run db:check
+    - |
+      mkdir -p release-metadata
+      {
+        echo "commit=$CI_COMMIT_SHA"
+        echo "migration_count=$(find apps/api/drizzle -maxdepth 1 -name '*.sql' | wc -l)"
+        echo "last_migration=$(find apps/api/drizzle -maxdepth 1 -name '*.sql' -printf '%f\n' | sort | tail -1)"
+      } > release-metadata/migrations.txt
+  artifacts:
+    expire_in: 30 days
+    paths: [release-metadata/migrations.txt]
+
+database-upgrade:
+  extends:
+    - .node-linux
+    - .release-candidate-rules
+  stage: release
+  timeout: 8m
+  services:
+    - name: postgres:17-alpine
+      alias: postgres
+  variables:
+    POSTGRES_DB: vatrushka_upgrade
+    POSTGRES_USER: vatrushka
+    POSTGRES_PASSWORD: upgrade-test-password
+    DATABASE_URL: postgresql://vatrushka:upgrade-test-password@postgres:5432/vatrushka_upgrade
+  script:
+    - git fetch origin "$PRODUCTION_BRANCH"
+    - git worktree add ../previous-production "origin/$PRODUCTION_BRANCH"
+    - npm --prefix ../previous-production ci --prefer-offline --no-audit --no-fund
+    - npm --prefix ../previous-production run build -w @vatrushka/shared
+    - npm --prefix ../previous-production run db:migrate -w @vatrushka/api
+    - npm run build -w @vatrushka/shared
+    - npm run db:migrate -w @vatrushka/api
+    - npm run db:check
+    - mkdir -p release-metadata
+    - printf 'previous_ref=%s\ncandidate_sha=%s\nresult=passed\n' "origin/$PRODUCTION_BRANCH" "$CI_COMMIT_SHA" > release-metadata/database-upgrade.txt
+  artifacts:
+    expire_in: 30 days
+    paths: [release-metadata/database-upgrade.txt]
+
+release-evidence:
+  extends: .node-linux
+  stage: release
+  timeout: 4m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+  variables:
+    RELEASE_BRANCH: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME'
+  script:
+    - npm run release:validate
+    - |
+      if grep -RInE 'localhost:|127\.0\.0\.1:|VITE_.*DEBUG=true' apps/desktop/.env.production.example apps/desktop/package.json; then
+        echo 'Production desktop configuration contains a development URL or debug flag.' >&2
+        exit 1
+      fi
+    - printf '%s' "$CI_MERGE_REQUEST_DESCRIPTION" | grep -qi 'rollback' || { echo 'MR description must contain a rollback plan.' >&2; exit 1; }
+    - printf '%s' "$CI_MERGE_REQUEST_DESCRIPTION" | grep -Eqi 'release (notes|evidence)|release notes|release evidence' || { echo 'MR description must reference release notes/evidence.' >&2; exit 1; }
+
+windows-rc:
+  extends:
+    - .node-windows
+    - .release-candidate-rules
+  stage: package
+  timeout: 25m
+  interruptible: false
+  needs:
+    - verify
+    - integration
+    - desktop-behavior
+    - visual-regression
+    - release-validate
+    - database-upgrade
+  variables:
+    VITE_PUBLIC_API_BASE_URL: '$PRODUCTION_API_BASE_URL'
+  script:
+    - npm run package:win
+    - |
+      function Install-Client([string]$Path) {
+        $process = Start-Process -FilePath $Path -ArgumentList '/S' -Wait -PassThru
+        if ($process.ExitCode -ne 0) { throw "Silent install failed with $($process.ExitCode): $Path" }
+        $installed = Get-ChildItem "$env:LOCALAPPDATA/Programs" -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue |
+          Where-Object { $_.Name -notlike 'Uninstall*' } | Select-Object -First 1
+        if (-not $installed) { throw 'Installed application executable was not found' }
+        return $installed
+      }
+      function Uninstall-Client {
+        $uninstaller = Get-ChildItem "$env:LOCALAPPDATA/Programs" -Recurse -Filter 'Uninstall*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $uninstaller) { throw 'Uninstaller was not found after clean install' }
+        $process = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
+        if ($process.ExitCode -ne 0) { throw "Silent uninstall failed with $($process.ExitCode)" }
+      }
+      $setup = Get-ChildItem apps/desktop/release/Vatrushka-Setup-*-x64.exe | Select-Object -First 1
+      if (-not $setup) { throw 'NSIS installer was not created' }
+      Install-Client $setup.FullName | Out-Null
+      Uninstall-Client
+      $latest = Invoke-RestMethod "$env:PRODUCTION_UPDATE_FEED/latest.yml"
+      $match = [regex]::Match([string]$latest, '(?m)^path:\s*([^\r\n]+)$')
+      if (-not $match.Success) { throw 'Production latest.yml does not contain an installer path' }
+      $previousName = $match.Groups[1].Value.Trim().Trim('"').Trim("'")
+      $previousUri = [Uri]::new([Uri]"$env:PRODUCTION_UPDATE_FEED/", $previousName)
+      $previousSetup = Join-Path $env:TEMP 'Vatrushka-previous.exe'
+      Invoke-WebRequest $previousUri -OutFile $previousSetup
+      Install-Client $previousSetup | Out-Null
+      Install-Client $setup.FullName | Out-Null
+    - |
+      $package = Get-Content package.json -Raw | ConvertFrom-Json
+      $shortSha = $env:CI_COMMIT_SHA.Substring(0, 7)
+      $setup = Get-ChildItem apps/desktop/release/Vatrushka-Setup-*-x64.exe | Select-Object -First 1
+      $rcName = "Vatrushka-$($package.version)-rc.$env:CI_PIPELINE_IID-$shortSha.exe"
+      Copy-Item $setup.FullName "apps/desktop/release/$rcName"
+      Get-ChildItem apps/desktop/release/* -File | Get-FileHash -Algorithm SHA256 |
+        ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } |
+        Set-Content apps/desktop/release/SHA256SUMS.txt
+      $metadata = [ordered]@{
+        version = "$($package.version)-rc.$env:CI_PIPELINE_IID"
+        commitSha = $env:CI_COMMIT_SHA
+        baseTag = (git describe --tags --abbrev=0 2>$null)
+        buildNumber = [int]$env:CI_PIPELINE_IID
+        channel = 'rc'
+        builtAt = (Get-Date).ToUniversalTime().ToString('o')
+        pipelineId = $env:CI_PIPELINE_ID
+      }
+      $metadata | ConvertTo-Json | Set-Content apps/desktop/release/release-metadata.json
+  artifacts:
+    expire_in: 30 days
+    name: 'vatrushka-rc-$CI_PIPELINE_IID-$CI_COMMIT_SHORT_SHA'
+    paths: [apps/desktop/release/]
+
+windows-production-package:
+  extends: .node-windows
+  stage: package
+  timeout: 25m
+  interruptible: false
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+  needs:
+    - verify-tag
+    - verify
+    - integration
+    - desktop-behavior
+    - visual-regression
+  variables:
+    VITE_PUBLIC_API_BASE_URL: '$PRODUCTION_API_BASE_URL'
+    RELEASE_BRANCH: '$PRODUCTION_BRANCH'
+    CSC_LINK: '$WINDOWS_CSC_LINK'
+    CSC_KEY_PASSWORD: '$WINDOWS_CSC_KEY_PASSWORD'
+    CSC_IDENTITY_AUTO_DISCOVERY: '$WINDOWS_CSC_ENABLED'
+  script:
+    - npm run release:validate
+    - npm run package:win
+    - |
+      Get-ChildItem apps/desktop/release/* -File | Get-FileHash -Algorithm SHA256 |
+        ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } |
+        Set-Content apps/desktop/release/SHA256SUMS.txt
+      $metadata = [ordered]@{
+        version = $env:VERSION
+        commitSha = $env:CI_COMMIT_SHA
+        tag = $env:CI_COMMIT_TAG
+        channel = 'stable'
+        builtAt = (Get-Date).ToUniversalTime().ToString('o')
+        pipelineId = $env:CI_PIPELINE_ID
+      }
+      $metadata | ConvertTo-Json | Set-Content apps/desktop/release/release-metadata.json
+  artifacts:
+    expire_in: 90 days
+    name: 'vatrushka-production-$VERSION'
+    paths: [apps/desktop/release/]
+
+publish-production:
+  image: registry.gitlab.com/gitlab-org/cli:v1.108.0
+  tags: [vatrushka-linux]
+  stage: publish
+  timeout: 15m
+  interruptible: false
+  resource_group: 'production-$CI_COMMIT_TAG'
+  environment:
+    name: production
+    url: https://api.myvatrushka.ru
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+  needs:
+    - job: verify-tag
+      artifacts: true
+    - job: windows-production-package
+      artifacts: true
+  variables:
+    GITLAB_TOKEN: '$CI_JOB_TOKEN'
+  before_script:
+    - apk add --no-cache openssh-client
+  script:
+    - |
+      for name in PRODUCTION_SSH_PRIVATE_KEY PRODUCTION_SSH_HOST_KEY PRODUCTION_SSH_HOST PRODUCTION_SSH_USER PRODUCTION_UPDATE_PATH; do
+        test -n "$(eval "printf '%s' \"\$$name\"")" || { echo "Required production setting is missing: $name" >&2; exit 1; }
+      done
+      echo "$PRODUCTION_UPDATE_PATH" | grep -Eq '^/[A-Za-z0-9._/-]+$' || { echo 'PRODUCTION_UPDATE_PATH has unsafe characters.' >&2; exit 1; }
+    - |
+      install -d -m 700 ~/.ssh
+      install -m 600 "$PRODUCTION_SSH_PRIVATE_KEY" ~/.ssh/id_ed25519
+      install -m 600 "$PRODUCTION_SSH_HOST_KEY" ~/.ssh/known_hosts
+      setup=$(find apps/desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-x64.exe' -print -quit)
+      blockmap=$(find apps/desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-x64.exe.blockmap' -print -quit)
+      test -f "$setup" && test -f "$blockmap" && test -f apps/desktop/release/latest.yml || { echo 'Stable feed artifacts are incomplete.' >&2; exit 1; }
+      remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
+      scp "$setup" "$blockmap" apps/desktop/release/SHA256SUMS.txt apps/desktop/release/release-metadata.json "$remote:$PRODUCTION_UPDATE_PATH/"
+      scp apps/desktop/release/latest.yml "$remote:$PRODUCTION_UPDATE_PATH/latest.yml.next"
+      ssh "$remote" "mv -- '$PRODUCTION_UPDATE_PATH/latest.yml.next' '$PRODUCTION_UPDATE_PATH/latest.yml'"
+    - |
+      mapfile -d '' assets < <(find apps/desktop/release -maxdepth 1 -type f -print0)
+      ((${#assets[@]} > 0)) || { echo 'Release artifact contains no publishable files.' >&2; exit 1; }
+      if glab release view "$CI_COMMIT_TAG" >/dev/null 2>&1; then
+        glab release upload "$CI_COMMIT_TAG" "${assets[@]}" --use-package-registry --package-name "vatrushka-$VERSION"
+      else
+        glab release create "$CI_COMMIT_TAG" "${assets[@]}" --name "Vatrushka $VERSION" --notes "Production release $CI_COMMIT_TAG" --use-package-registry --package-name "vatrushka-$VERSION"
+      fi
