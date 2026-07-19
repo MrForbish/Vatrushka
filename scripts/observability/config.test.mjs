@@ -37,6 +37,5 @@ test('grafana dashboard is valid JSON with the production datasource and critica
 
 test('public Caddy endpoint does not proxy Prometheus metrics', async () => {
   const caddy = await read('infra/caddy/Caddyfile');
-  assert.match(caddy, /@private_metrics path \/metrics/u);
-  assert.match(caddy, /respond @private_metrics 404/u);
+  assert.match(caddy, /handle \/metrics\s*\{\s*respond 404\s*\}/u);
 });
