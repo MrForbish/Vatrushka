@@ -135,6 +135,7 @@ async function completeAuthSession(
   pathValue: unknown,
   body: unknown,
   apiBaseUrlValue: unknown,
+  rememberSessionValue: unknown,
 ): Promise<DesktopAuthCompletionResult> {
   const path = authCompletionPathSchema.parse(pathValue);
   const apiBaseUrl = apiBaseUrlSchema
@@ -166,7 +167,7 @@ async function completeAuthSession(
   await storage.storeAuthSession({
     refreshToken: completed.refreshToken,
     apiBaseUrl,
-  });
+  }, rememberSessionValue !== false);
   return {
     ok: true,
     session: {
@@ -193,7 +194,7 @@ async function refreshAuthSession(
     throw new Error(`Session refresh failed with status ${response.status}`);
   }
   const refreshed = desktopAuthSessionSchema.parse(await response.json());
-  await storage.storeAuthSession({
+  await storage.rotateAuthSession({
     refreshToken: refreshed.refreshToken,
     apiBaseUrl: session.apiBaseUrl,
   });
@@ -279,8 +280,8 @@ export function registerIpc(options: IpcOptions): () => void {
   handle(IPC_CHANNELS.updateInstall, () => options.updater.install());
   handle(
     IPC_CHANNELS.authComplete,
-    (_event, path: unknown, body: unknown, apiBaseUrl: unknown) =>
-      completeAuthSession(options.storage, path, body, apiBaseUrl),
+    (_event, path: unknown, body: unknown, apiBaseUrl: unknown, rememberSession: unknown) =>
+      completeAuthSession(options.storage, path, body, apiBaseUrl, rememberSession),
   );
   handle(IPC_CHANNELS.authRefresh, () => refreshAuthSession(options.storage));
   handle(IPC_CHANNELS.authLogout, async () => {

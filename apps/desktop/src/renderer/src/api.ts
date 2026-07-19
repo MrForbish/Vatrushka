@@ -128,7 +128,7 @@ export class ApiClient {
       email,
       code,
       deviceName: await this.deviceName(),
-    });
+    }, true);
   }
 
   beginPasswordLogin(
@@ -147,6 +147,7 @@ export class ApiClient {
     password: string,
     code: string,
     factor: "email" | "totp" | "recovery",
+    rememberSession = true,
   ): Promise<DesktopAuthSession & { isNewUser: boolean }> {
     return this.completeAuth("/auth/password/complete", {
       email,
@@ -154,7 +155,7 @@ export class ApiClient {
       code,
       factor,
       deviceName: await this.deviceName(),
-    });
+    }, rememberSession);
   }
 
   requestPasswordReset(
@@ -1481,11 +1482,13 @@ export class ApiClient {
   private async completeAuth(
     path: DesktopAuthCompletionPath,
     body: unknown,
+    rememberSession: boolean,
   ): Promise<DesktopAuthSession & { isNewUser: boolean }> {
     const result = await window.desktop.completeAuthSession(
       path,
       body,
       apiBase,
+      rememberSession,
     );
     if (!result.ok)
       throw new ClientError(

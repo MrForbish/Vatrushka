@@ -54,7 +54,7 @@ test("launches the secure auth shell with an allowlisted preload API", async () 
   application = await launchElectron();
   const window = await application.firstWindow();
   await expect(
-    window.getByRole("heading", { name: "С возвращением" }),
+    window.getByRole("heading", { name: "Добро пожаловать" }),
   ).toBeVisible();
   await expect(window.getByLabel("Email")).toBeVisible();
 
@@ -181,7 +181,7 @@ test("completes password reset and returns to login with a confirmation", async 
     .fill("new-secure-password-42");
   await window.getByRole("button", { name: "Сохранить новый пароль" }).click();
   await expect(
-    window.getByRole("heading", { name: "С возвращением" }),
+    window.getByRole("heading", { name: "Добро пожаловать" }),
   ).toBeVisible();
   await expect(window.getByRole("status")).toHaveText(
     "Пароль изменён. Войдите с новым паролем.",
@@ -1072,7 +1072,7 @@ test("accepts a validated invite link after authentication without exposing a ma
   );
   const window = await application.firstWindow();
   await expect(
-    window.getByRole("heading", { name: "С возвращением" }),
+    window.getByRole("heading", { name: "Добро пожаловать" }),
   ).toBeVisible();
   await expect(window.getByText(/Гостевой вход/u)).toHaveCount(0);
   await expect(window.getByText(/Код приглашения/u)).toHaveCount(0);

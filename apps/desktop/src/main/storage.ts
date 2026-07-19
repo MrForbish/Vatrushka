@@ -20,6 +20,9 @@ async function atomicWrite(path: string, data: string | Uint8Array): Promise<voi
 }
 
 export class DesktopStorage {
+  private volatileAuthSession: StoredAuthSession | null = null;
+  private persistAuthSession = true;
+
   private get refreshPath(): string {
     return join(app.getPath('userData'), 'session.bin');
   }
@@ -29,12 +32,15 @@ export class DesktopStorage {
   }
 
   async getAuthSession(): Promise<StoredAuthSession | null> {
+    if (this.volatileAuthSession) return this.volatileAuthSession;
     try {
       if (!safeStorage.isEncryptionAvailable()) return null;
       const encrypted = await fs.readFile(this.refreshPath);
       const parsed = JSON.parse(safeStorage.decryptString(encrypted)) as unknown;
       if (!parsed || typeof parsed !== 'object' || !('refreshToken' in parsed) || !('apiBaseUrl' in parsed) || typeof parsed.refreshToken !== 'string' || typeof parsed.apiBaseUrl !== 'string') return null;
-      return { refreshToken: parsed.refreshToken, apiBaseUrl: parsed.apiBaseUrl };
+      this.volatileAuthSession = { refreshToken: parsed.refreshToken, apiBaseUrl: parsed.apiBaseUrl };
+      this.persistAuthSession = true;
+      return this.volatileAuthSession;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
       await this.clearAuthSession();
@@ -42,12 +48,24 @@ export class DesktopStorage {
     }
   }
 
-  async storeAuthSession(session: StoredAuthSession): Promise<void> {
+  async storeAuthSession(session: StoredAuthSession, persistent = true): Promise<void> {
     if (!safeStorage.isEncryptionAvailable()) throw new Error('Защищённое хранилище операционной системы недоступно');
+    this.volatileAuthSession = session;
+    this.persistAuthSession = persistent;
+    if (!persistent) {
+      await fs.rm(this.refreshPath, { force: true });
+      return;
+    }
     await atomicWrite(this.refreshPath, safeStorage.encryptString(JSON.stringify(session)));
   }
 
+  async rotateAuthSession(session: StoredAuthSession): Promise<void> {
+    await this.storeAuthSession(session, this.persistAuthSession);
+  }
+
   async clearAuthSession(): Promise<void> {
+    this.volatileAuthSession = null;
+    this.persistAuthSession = true;
     try {
       await fs.rm(this.refreshPath, { force: true });
     } catch {

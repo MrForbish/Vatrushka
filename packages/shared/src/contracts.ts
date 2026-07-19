@@ -912,6 +912,7 @@ export interface DesktopBridge {
     path: DesktopAuthCompletionPath,
     body: unknown,
     apiBaseUrl: string,
+    rememberSession?: boolean,
   ): Promise<DesktopAuthCompletionResult>;
   refreshAuthSession(): Promise<DesktopAuthSession | null>;
   logoutAuthSession(): Promise<void>;
