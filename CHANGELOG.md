@@ -10,6 +10,9 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ### Fixed
 
+- avatars now use one round masked component with a stable fallback, profile media controls stay aligned, and avatar uploads include a move/zoom crop preview before upload;
+- signed S3 image URL refreshes are preloaded without blank flashes, while server icon, cover and accent changes immediately invalidate Home data and update navigation/voice cards;
+- the profile preview keeps the avatar above the cover, and the shared status menu is available from Home with outside-click and Escape dismissal;
 - messaging now keeps chronological bottom-anchored history, reports messages received below the viewport, clears canonical unread state after acknowledgement and performs a single bounded highlight when opening a notification;
 - the composer accepts pasted clipboard images, provides an accessible emoji picker and English emoji shortcodes, linkifies safe HTTP(S) URLs through validated Electron IPC and removes the inactive microphone action;
 - direct conversations, message authors and notification actors now render current profile avatars through normalized authenticated media URLs;

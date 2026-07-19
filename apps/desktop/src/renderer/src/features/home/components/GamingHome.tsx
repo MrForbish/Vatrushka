@@ -4,9 +4,9 @@ import type {
   GamingHomeVoiceSpace,
   GamingHomeVoiceStatus,
 } from "@vatrushka/shared";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
-import { Avatar, Badge, Button, Icon } from "../../../ui";
+import { Avatar, Badge, Button, Icon, StableImage } from "../../../ui";
 
 function SectionHeader({
   eyebrow,
@@ -55,7 +55,14 @@ function ParticipantAvatars({
   const visible = avatars.slice(0, 4);
   return (
     <span aria-label={`${count} участников`} className="gaming-avatar-stack">
-      {visible.map((avatar, index) => <img alt="" key={avatar} src={avatar} style={{ zIndex: visible.length - index }} />)}
+      {visible.map((avatar, index) => (
+        <StableImage
+          alt=""
+          key={index}
+          src={avatar}
+          style={{ zIndex: visible.length - index }}
+        />
+      ))}
       {visible.length === 0 ? <i><Icon name="users" size={14} /></i> : null}
       {count > visible.length ? <i>+{count - visible.length}</i> : null}
     </span>
@@ -127,7 +134,20 @@ export function QuickReturnSection({
       ) : (
         <div className="gaming-quick-return__grid">
           {items.slice(0, 3).map((item) => (
-            <article className="gaming-return-card" key={item.channelId} style={item.coverUrl ? { backgroundImage: `linear-gradient(180deg, rgb(5 9 23 / 18%), rgb(5 9 23 / 96%)), url(${JSON.stringify(item.coverUrl)})` } : undefined}>
+            <article
+              className="gaming-return-card"
+              key={item.channelId}
+              style={
+                {
+                  "--server-accent": item.serverAccentColor ?? undefined,
+                } as CSSProperties
+              }
+            >
+              <StableImage
+                alt=""
+                className="gaming-return-card__cover"
+                src={item.coverUrl}
+              />
               <div className="gaming-return-card__badges">
                 {item.gameName ? <Badge tone="primary">{item.gameName}</Badge> : <Badge>{item.serverName}</Badge>}
                 {item.hasScreenShare ? <Badge tone="success"><Icon name="screen" size={13} /> Стрим</Badge> : null}
@@ -167,8 +187,22 @@ export function ActiveVoiceSpacesSection({
       ) : (
         <div className="gaming-active-spaces__list">
           {items.slice(0, 6).map((item) => (
-            <article className="gaming-space-row" key={item.channelId}>
-              <span className="gaming-space-row__server">{item.serverIconUrl ? <img alt="" src={item.serverIconUrl} /> : item.serverName.slice(0, 2).toUpperCase()}</span>
+            <article
+              className="gaming-space-row"
+              key={item.channelId}
+              style={
+                {
+                  "--server-accent": item.serverAccentColor ?? undefined,
+                } as CSSProperties
+              }
+            >
+              <span className="gaming-space-row__server">
+                <StableImage
+                  alt=""
+                  fallback={item.serverName.slice(0, 2).toUpperCase()}
+                  src={item.serverIconUrl}
+                />
+              </span>
               <div className="gaming-space-row__copy">
                 <small>{item.serverName}{item.gameName ? ` · ${item.gameName}` : ""}</small>
                 <strong title={item.channelName}>{item.channelName}</strong>

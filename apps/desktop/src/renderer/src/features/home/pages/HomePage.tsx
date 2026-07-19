@@ -1,8 +1,10 @@
 import { useState } from "react";
 import type {
+  EffectivePresenceStatus,
   GamingHomeConnectionQuality,
   HomeDashboardResponse,
   HomeDestination,
+  PresencePreference,
   PublicUser,
   RoomConnection,
   ServerSummary,
@@ -41,6 +43,8 @@ export interface HomePageProps {
   dashboardError?: string | null;
   onRetryDashboard?: (() => void) | undefined;
   onLogout: () => void;
+  onStatus?: ((status: PresencePreference) => void | Promise<void>) | undefined;
+  status?: EffectivePresenceStatus | undefined;
   onSecurity: () => void;
   onAudioSettings?: (() => void) | undefined;
   onServerName: (value: string) => void;
@@ -139,7 +143,9 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
             onLogout={props.onLogout}
             onOpenServer={props.onOpenServer}
             onSecurity={props.onSecurity}
+            onStatus={props.onStatus}
             servers={effectiveServers}
+            status={props.status ?? props.dashboard?.user.presence}
             user={props.user}
           />
         }

@@ -18,6 +18,23 @@ function device(kind: MediaDeviceKind, deviceId: string, label: string): MediaDe
 }
 
 describe('routed user settings pages', () => {
+  it('opens avatar crop preview and leaves the current avatar unchanged on cancel', async () => {
+    const onAvatar = vi.fn(async () => profile);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:avatar-preview');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    render(<UserProfileSettingsPage onAvatar={onAvatar} onDirtyChange={vi.fn()} onLoad={vi.fn(async () => profile)} onResetAvatar={vi.fn(async () => profile)} onSave={vi.fn(async () => profile)} onUserChange={vi.fn()} user={user} />);
+
+    const input = await screen.findByLabelText('Загрузить аватар: файл');
+    await userEvent.upload(
+      input,
+      new File(['avatar'], 'portrait.png', { type: 'image/png' }),
+    );
+    expect(await screen.findByRole('dialog', { name: 'Выберите область аватара' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Отмена' }));
+    expect(screen.queryByRole('dialog', { name: 'Выберите область аватара' })).not.toBeInTheDocument();
+    expect(onAvatar).not.toHaveBeenCalled();
+  });
+
   it('validates and saves the supported display name field', async () => {
     const onDirtyChange = vi.fn();
     const updatedUser = { ...user, displayName: 'Илья Форбиш', avatarUrl: null };

@@ -8,9 +8,17 @@ import {
 } from "@vatrushka/shared";
 
 import { ClientError } from "../../../api";
-import { Avatar, Badge, Button, FilePicker, Input } from "../../../ui";
+import {
+  Avatar,
+  Badge,
+  Button,
+  FilePicker,
+  Input,
+  StableImage,
+} from "../../../ui";
 import { SettingsPageState } from "../components/SettingsPageState";
 import { SettingsSaveBar } from "../components/SettingsSaveBar";
+import { AvatarCropDialog } from "../components/AvatarCropDialog";
 import type { SettingsSaveState } from "../model/settings.types";
 import "./user-settings-pages.css";
 
@@ -58,6 +66,7 @@ export function UserProfileSettingsPage({
   const [username, setUsername] = useState("");
   const [bio, setBio] = useState("");
   const [avatarFileName, setAvatarFileName] = useState<string | null>(null);
+  const [avatarCandidate, setAvatarCandidate] = useState<File | null>(null);
   const [coverFileName, setCoverFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saveState, setSaveState] = useState<SettingsSaveState>("idle");
@@ -184,30 +193,32 @@ export function UserProfileSettingsPage({
             </div>
           </header>
           <div className="vui-user-profile-avatar-editor">
-            {saved.avatarUrl ? (
-              <img alt="Текущий аватар" src={saved.avatarUrl} />
-            ) : (
-              <Avatar name={previewName} size="lg" status="online" />
-            )}
-            <FilePicker
-              accept="image/png,image/jpeg,image/webp"
-              disabled={loading}
-              label="Загрузить аватар"
-              onFile={(file) => {
-                setAvatarFileName(file.name);
-                avatarAction(() => onAvatar(file));
-              }}
-              selectedName={avatarFileName}
+            <Avatar
+              name={previewName}
+              size="lg"
+              src={saved.avatarUrl ?? undefined}
+              status="online"
             />
-            {saved.avatarUrl ? (
+            <div className="vui-user-profile-media-actions">
+              <FilePicker
+                accept="image/png,image/jpeg,image/webp"
+                disabled={loading}
+                label="Загрузить аватар"
+                onFile={(file) => {
+                  setAvatarFileName(file.name);
+                  setAvatarCandidate(file);
+                }}
+                selectedName={avatarFileName}
+              />
               <Button
+                disabled={loading || !saved.avatarUrl}
                 size="sm"
                 variant="secondary"
                 onClick={() => avatarAction(onResetAvatar)}
               >
                 Удалить
               </Button>
-            ) : null}
+            </div>
           </div>
           {onCover ? (
             <div className="vui-user-profile-cover-editor">
@@ -221,8 +232,9 @@ export function UserProfileSettingsPage({
                 }}
                 selectedName={coverFileName}
               />
-              {saved.coverUrl && onResetCover ? (
+              {onResetCover ? (
                 <Button
+                  disabled={loading || !saved.coverUrl}
                   size="sm"
                   variant="secondary"
                   onClick={() => avatarAction(onResetCover)}
@@ -286,19 +298,15 @@ export function UserProfileSettingsPage({
             </div>
           </header>
           <div className="vui-user-profile-preview__banner">
-            {saved.coverUrl ? (
-              <img alt="Обложка профиля" src={saved.coverUrl} />
-            ) : null}
+            <StableImage alt="Обложка профиля" src={saved.coverUrl} />
           </div>
-          {saved.avatarUrl ? (
-            <img
-              className="vui-user-profile-preview__avatar"
-              alt="Аватар"
-              src={saved.avatarUrl}
-            />
-          ) : (
-            <Avatar name={previewName} size="lg" status="online" />
-          )}
+          <Avatar
+            className="vui-user-profile-preview__avatar"
+            name={previewName}
+            size="lg"
+            src={saved.avatarUrl ?? undefined}
+            status="online"
+          />
           <strong>{previewName}</strong>
           <small>{username ? `@${username}` : saved.email}</small>
           {bio ? <p>{bio}</p> : null}
@@ -311,6 +319,17 @@ export function UserProfileSettingsPage({
         onCancel={reset}
         onSave={save}
         state={saveState === "idle" && dirty ? "dirty" : saveState}
+      />
+      <AvatarCropDialog
+        file={avatarCandidate}
+        onCancel={() => {
+          setAvatarCandidate(null);
+          setAvatarFileName(null);
+        }}
+        onConfirm={(file) => {
+          setAvatarCandidate(null);
+          avatarAction(() => onAvatar(file));
+        }}
       />
     </section>
   );

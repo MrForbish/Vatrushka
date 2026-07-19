@@ -7,7 +7,14 @@ import type {
 } from "@vatrushka/shared";
 
 import brandMarkUrl from "../../assets/brand-mark.png";
-import { Avatar, Badge, Icon, IconButton, StatusDot } from "../primitives";
+import {
+  Avatar,
+  Badge,
+  Icon,
+  IconButton,
+  StableImage,
+  StatusDot,
+} from "../primitives";
 import type { IconName } from "../primitives";
 import "./navigation.css";
 
@@ -45,8 +52,6 @@ export function WorkspaceCard({
   onSelect,
   workspace,
 }: WorkspaceCardProps): React.JSX.Element {
-  const [iconFailed, setIconFailed] = useState(false);
-  useEffect(() => setIconFailed(false), [workspace.iconUrl]);
   const initials = workspace.name
     .split(/\s+/)
     .slice(0, 2)
@@ -71,15 +76,7 @@ export function WorkspaceCard({
           } as React.CSSProperties
         }
       >
-        {workspace.iconUrl && !iconFailed ? (
-          <img
-            alt=""
-            onError={() => setIconFailed(true)}
-            src={workspace.iconUrl}
-          />
-        ) : (
-          initials
-        )}
+        <StableImage alt="" fallback={initials} src={workspace.iconUrl} />
       </span>
       <span className="vui-workspace-card__copy">
         <strong>{workspace.name}</strong>
@@ -568,8 +565,15 @@ export function UserProfileDock({
     const close = (event: MouseEvent): void => {
       if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
     };
+    const closeOnEscape = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
   }, [open]);
   return (
     <div
@@ -733,12 +737,6 @@ export function ServerContext({
   textChannels,
   voiceChannels,
 }: ServerContextProps): React.JSX.Element {
-  const [iconFailed, setIconFailed] = useState(false);
-  const [bannerFailed, setBannerFailed] = useState(false);
-  useEffect(() => {
-    setIconFailed(false);
-    setBannerFailed(false);
-  }, [iconUrl, bannerUrl]);
   return (
     <aside
       aria-label="Навигация сервера"
@@ -748,21 +746,18 @@ export function ServerContext({
       }
     >
       <header className="vui-server-context__header">
-        {bannerUrl && !bannerFailed ? (
-          <img
-            aria-hidden="true"
-            className="vui-server-context__banner"
-            onError={() => setBannerFailed(true)}
-            src={bannerUrl}
-          />
-        ) : null}
+        <StableImage
+          aria-hidden="true"
+          className="vui-server-context__banner"
+          src={bannerUrl}
+        />
         <div>
           <span aria-hidden="true" className="vui-server-context__cover">
-            {iconUrl && !iconFailed ? (
-              <img alt="" onError={() => setIconFailed(true)} src={iconUrl} />
-            ) : (
-              name.slice(0, 1).toUpperCase()
-            )}
+            <StableImage
+              alt=""
+              fallback={name.slice(0, 1).toUpperCase()}
+              src={iconUrl}
+            />
           </span>
           <span>
             <strong title={name}>{name}</strong>

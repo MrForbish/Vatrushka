@@ -241,11 +241,12 @@
 .vui-status-dot--offline { --status-color: var(--color-presence-offline); }
 .vui-status-dot--streaming { --status-color: var(--color-presence-streaming); box-shadow: 0 0 0 2px var(--color-primary-soft); }
 
-.vui-avatar { position: relative; display: inline-grid; overflow: visible; place-items: center; border-radius: var(--radius-round); background: var(--gradient-brand); color: var(--color-text-on-accent); font: var(--text-label-md); }
+.vui-avatar { position: relative; display: inline-grid; overflow: visible; flex: 0 0 auto; place-items: center; border-radius: var(--radius-round); color: var(--color-text-on-accent); font: var(--text-label-md); isolation: isolate; }
 .vui-avatar--sm { width: 28px; height: 28px; }
 .vui-avatar--md { width: 40px; height: 40px; }
 .vui-avatar--lg { width: 56px; height: 56px; font: var(--text-heading-sm); }
-.vui-avatar img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.vui-avatar__mask { display: grid; width: 100%; height: 100%; overflow: hidden; place-items: center; border-radius: inherit; background: var(--gradient-brand); }
+.vui-avatar__mask > img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 .vui-avatar .vui-status-dot { position: absolute; right: -1px; bottom: -1px; }
 
 .vui-progress { width: 100%; height: 8px; overflow: hidden; border-radius: var(--radius-round); background: var(--color-surface-3); }
