@@ -1,6 +1,6 @@
 # Vatrushka: roadmap
 
-Обновлено для версии 0.6.3. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
+Обновлено для версии 0.6.4. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
 
 ## Состояние продукта
 
@@ -32,15 +32,15 @@
 
 ### P0.0 — Git branching и release automation
 
-Статус: выполнено в PR #14–#16. `develop` и `main` введены, production VPS переведен на `main`, policy/version/release workflows работают. GitHub branch protection и обязательный approval остаются внешним ограничением: private repository на текущем плане возвращает `403`; до смены плана направления PR контролирует `pr-policy` workflow.
+Статус: базовая модель выполнена в исторических PR #14–#16. С 19 июля 2026 года репозиторий перенесён в GitLab; `develop` и `main` сохранены, Merge Request policy и единый GitLab pipeline заменяют GitHub Actions. Protected branches, успешный pipeline и resolved discussions настраиваются в GitLab; независимый approval появится после добавления второго Maintainer.
 
 1. Ввести `develop` как интеграционную ветку и выполнить контролируемый переход production `master → main` без разрыва VPS deployment/updater.
-2. Добавить branch/PR policy tests, PR templates, CODEOWNERS и protection после первого зеленого workflow run.
-3. Разделить ordinary PR checks, release candidate, release PR, tag-only production и sync workflows; production secrets не выдавать PR jobs.
+2. Поддерживать branch/MR policy tests, MR templates, CODEOWNERS и protected branch rules.
+3. Разделять rules/jobs для ordinary MR, release candidate, release MR, tag-only production и sync; protected production secrets не выдавать MR jobs.
 4. Добавить единый version check, безопасные `release:prepare --dry-run`/`release:validate`, RC/production metadata и checksums.
 5. Следующий релиз собрать через immutable `assemble/<version> → release/<version>`, выпустить annotated tag и вернуть `[SYNC] main → develop`.
 
-Критерий: некорректные направления PR блокируются автоматически, RC не попадает в stable feed, production publish возможен только из тега в `main`, а ручной rollback описан и проверен. Полный процесс — в [release-process.md](release-process.md).
+Критерий: некорректные направления MR блокируются автоматически, RC не попадает в stable feed, production publish возможен только из защищённого тега в `main`, а ручной rollback описан и проверен. Полный процесс — в [release-process.md](release-process.md).
 
 ### P0.1 — документация и доказательная очистка
 
@@ -84,7 +84,7 @@
 
 ### P0.5 — CI и тестовое покрытие
 
-Статус: выполнено в PR #23 (`chore/ci-quality-gate`). Ordinary/RC/release/tag/sync workflows разделены, PostgreSQL/Redis integration выполняются в изолированных CI services, а desktop suite разделен на параллельные behavior/visual jobs. Visual regression переведён с dev-сервера на заранее собранный статический Storybook, добавлены step budgets/job timeouts и формальная risk/viewport matrix. Число visual scenarios увеличено с 29 до 31 за счёт границ 1280×720 и 1024×680; сценарии не удалялись. На первом GitHub-hosted Windows прогоне visual job сократился с 6:01 до 3:01, а критическое время всего gate — примерно с 6:01 до 3:13 (около 46%).
+Статус: quality gate создан в историческом PR #23 и перенесён в `.gitlab-ci.yml`. PostgreSQL/Redis integration выполняются в изолированных CI services, а desktop suite разделён на параллельные behavior/visual jobs GitLab Windows runner. Visual regression использует заранее собранный статический Storybook, step budgets/job timeouts и формальную risk/viewport matrix. Исторический GitHub baseline сохраняется до накопления сопоставимого GitLab baseline.
 
 1. Зафиксировать mapping риска к тестам и удалить только дублирующие/неактуальные сценарии.
 2. Кэшировать Playwright Chromium по версии lockfile/Playwright. Выполнено.
@@ -103,11 +103,13 @@
 
 ### P1.1 — Prometheus/Grafana
 
-1. Уточнить/стабилизировать API metric names и cardinality.
-2. Развернуть Prometheus, Grafana, node/cAdvisor/PostgreSQL/Redis exporters и blackbox probes.
-3. Ограничить доступ auth/VPN/SSH tunnel; настроить retention, backup dashboards и disk budget.
-4. Собрать dashboards API/WebSocket, messaging/outbox, Redis, PostgreSQL, LiveKit/S3 и host.
-5. После baseline включить alerts по перечню из технической спецификации.
+Статус: базовый приватный stack, exporters, low-cardinality API/runtime metrics, dashboard и alert rules реализованы в `feat/OPS-1-observability`. После production deployment требуется недельный baseline, настройка внешнего получателя alerts и отдельное расширение LiveKit/S3 application-level collectors.
+
+1. Уточнить/стабилизировать API metric names и cardinality. Выполнено для HTTP/runtime/messaging.
+2. Развернуть Prometheus, Grafana, node/cAdvisor/PostgreSQL/Redis exporters и blackbox probes. Конфигурация готова, production rollout выполняется после PR/release.
+3. Ограничить доступ SSH tunnel; настроить retention, versioned dashboards и disk budget. Выполнено в конфигурации.
+4. Собрать dashboards API/WebSocket, messaging/outbox, Redis, PostgreSQL и host. Выполнен overview; детальные LiveKit/S3 collectors остаются следующим срезом.
+5. Включить базовые alert rules. Выполнено; внешний notification receiver и корректировка thresholds — после недельного baseline.
 
 ### P1.2 — сообщества и messaging
 
@@ -128,7 +130,7 @@
 
 1. `docs/git-branching-release-process` — аудит, целевая модель и безопасный cutover.
 2. `chore/repository-policy` — policy tests, templates, CODEOWNERS и version scripts.
-3. `chore/release-workflows` — ordinary/RC/release/tag/sync GitHub Actions и CI speedup.
+3. `chore/migrate-to-gitlab` — единый GitLab pipeline для ordinary/RC/release/tag/sync и перенос repository policy.
 4. `refactor/safe-runtime` — доказуемо мертвые frontend/backend элементы без schema contract.
 5. `feat/ROADMAP-3-profile-audio-controls` — mute/deafen, выполнено.
 6. `feat/ROADMAP-4-server-shell-usability` — описание, rename, realtime и `CEO Founder`, выполнено.
@@ -136,4 +138,4 @@
 8. `refactor/canonical-messaging-contract` — только после client adoption gate.
 9. `feat/observability` — Prometheus/Grafana.
 
-Каждый ordinary PR направляется в `develop` и проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Production получает только стабилизированный `release/*` или hotfix; Windows update публикуется tag workflow по правилам [release-process.md](release-process.md).
+Каждый ordinary MR направляется в `develop` и проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Production получает только стабилизированный `release/*` или hotfix; Windows update публикуется tag pipeline по правилам [release-process.md](release-process.md).

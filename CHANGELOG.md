@@ -4,6 +4,15 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-07-19
+
+### Operations
+
+- repository automation, protected delivery and Windows/Linux quality gates moved to self-managed GitLab CI runners;
+- added a private Prometheus/Grafana stack with host, container, PostgreSQL, Redis and public endpoint probes;
+- added low-cardinality API HTTP/runtime metrics, a provisioned production dashboard and 14 baseline alert rules;
+- blocked public access to `/metrics`; Grafana and Prometheus are available only through an SSH tunnel.
+
 ## [0.6.3] - 2026-07-18
 
 ### CI and quality

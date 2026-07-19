@@ -118,6 +118,25 @@ beforeEach(async () => {
   context = await makeContext();
 });
 
+describe('health and metrics API', () => {
+  it('publishes bounded HTTP/runtime metrics after readiness checks', async () => {
+    const readiness = await context.app.inject({ method: 'GET', url: '/health/ready' });
+    expect(readiness.statusCode).toBe(200);
+
+    const missing = await context.app.inject({ method: 'GET', url: '/not-a-real-route' });
+    expect(missing.statusCode).toBe(404);
+
+    const metrics = await context.app.inject({ method: 'GET', url: '/metrics' });
+    expect(metrics.statusCode).toBe(200);
+    expect(metrics.headers['content-type']).toContain('text/plain');
+    expect(metrics.body).toContain('api_readiness 1');
+    expect(metrics.body).toContain('api_http_requests_total{method="GET",route="/health/ready",status_class="2xx"}');
+    expect(metrics.body).toContain('api_http_requests_total{method="GET",route="unmatched",status_class="4xx"}');
+    expect(metrics.body).toContain('api_http_request_duration_seconds_bucket');
+    expect(metrics.body).toContain('nodejs_event_loop_lag_seconds');
+  });
+});
+
 describe('authentication API', () => {
   it('returns a validation error for malformed JSON bodies', async () => {
     const response = await context.app.inject({

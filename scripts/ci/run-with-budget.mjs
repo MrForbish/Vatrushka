@@ -1,4 +1,3 @@
-import { appendFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -44,10 +43,7 @@ const durationLabel = durationSeconds.toFixed(1);
 const passedCommand = result.code === 0;
 const withinBudget = durationSeconds <= budgetSeconds;
 const outcome = passedCommand && withinBudget ? 'pass' : 'fail';
-const summaryRow = `### CI duration budget\n\n| Suite | Actual | Budget | Result |\n| --- | ---: | ---: | --- |\n| ${name} | ${durationLabel}s | ${budgetSeconds}s | ${outcome} |\n`;
-
 console.log(`[ci-budget] ${name}: ${durationLabel}s / ${budgetSeconds}s (${outcome})`);
-if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, summaryRow, 'utf8');
 
 if (result.error) {
   console.error(`[ci-budget] Could not start ${command}: ${result.error.message}`);

@@ -1,216 +1,150 @@
-# Git branching и выпуск Vatrushka
+# Git branching и выпуск Vatrushka в GitLab
 
-Статус: канонический процесс разработки и поставки. До завершения перехода из раздела «Миграция текущего репозитория» действуют явно отмеченные временные исключения.
+Статус: канонический процесс разработки и поставки. С 19 июля 2026 года GitLab-проект `vatrushka-group/Vatrushka` является источником Git, Merge Requests, CI/CD, artifacts и Releases. GitHub хранится только как исторический read-only remote и не участвует в поставке.
 
-## 1. Текущее состояние и найденные разрывы
-
-На 18 июля 2026 года production-ветка называется `master` и является default branch. В репозитории появился `develop`, созданный от того же production commit, но protection и специализированные workflow еще не включены. Единственный `.github/workflows/ci.yml` запускает lint, typecheck, unit, PostgreSQL/Redis integration, Storybook, Electron E2E, visual regression и Windows package для любого PR. Он не различает обычную разработку, RC и production publish.
-
-Package manager — npm с корневым `package-lock.json` и workspaces. Версия `0.6.1` повторяется в корневом, API, desktop, config и shared `package.json`; автоматической проверки согласованности пока нет. Конфигурация electron-builder находится в `apps/desktop/package.json`. NSIS, portable, blockmap и `latest.yml` собираются CI, но production generic feed публикуется вручную: installer и blockmap копируются раньше `latest.yml`. Git tags, GitHub Releases, repository Actions secrets, PR templates и CODEOWNERS на момент аудита отсутствовали.
-
-Это переходное состояние нельзя считать выполнением целевой release policy.
-
-## 2. Целевая модель веток
-
-```text
-feat|fix|chore|refactor|test|docs ──squash──> develop
-                                                     │ immutable snapshot
-                                                     v
-                                           assemble/<version>
-                                                     │ assembly PR, merge commit
-                                                     v
-main ─────────────────────────────────────> release/<version>
-                                                     │ release fixes only
-                                                     │ release PR, merge commit
-                                                     v
-                                                   main ──tag vX.Y.Z──> production
-                                                     │
-                                                     └──[SYNC] merge commit──> develop
-
-main ──> hotfix/<version>-<description> ──merge commit──> main ──tag──> production
-```
+## Ветки и направления Merge Request
 
 Постоянные ветки:
 
 - `main` — только выпущенное production-состояние;
-- `develop` — интеграция следующего релиза.
+- `develop` — интеграция следующего релиза и default branch.
 
 Временные ветки:
 
-- `feat/<ticket>-<description>`;
-- `fix/<ticket>-<description>`;
-- `chore/<description>`;
-- `refactor/<description>`;
-- `test/<description>`;
-- `docs/<description>`;
-- `assemble/<version>`;
-- `release/<version>`;
-- `release-fix/<version>-<description>`;
+- `feat/<ticket>-<description>` и `fix/<ticket>-<description>`;
+- `chore/<description>`, `refactor/<description>`, `test/<description>`, `docs/<description>`;
+- `assemble/<version>`, `release/<version>`, `release-fix/<version>-<description>`;
 - `hotfix/<version>-<description>`.
-
-Обычная задача начинается только от актуального `develop` и удаляется после squash merge. Незавершенное поведение допускается в `develop` только под безопасным feature flag.
-
-## 3. Разрешенные направления PR
 
 | Source | Target | Merge |
 |---|---|---|
-| `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `test/*`, `docs/*` | `develop` | squash |
-| `assemble/<version>` | `release/<version>` | merge commit |
-| `release-fix/<version>-*` | `release/<version>` | squash |
-| `release/<version>` | `main` | merge commit |
-| `hotfix/<version>-*` | `main` | merge commit |
-| `main` | `develop` | merge commit |
-| `main` | активная `release/*` | merge commit |
+| task branches | `develop` | squash |
+| `assemble/X.Y.Z` | `release/X.Y.Z` | merge commit |
+| `release-fix/X.Y.Z-*` | `release/X.Y.Z` | squash |
+| `release/X.Y.Z` | `main` | merge commit |
+| `hotfix/X.Y.Z-*` | `main` | merge commit |
+| `main` | `develop` или активная `release/*` | merge commit |
 
-Направления `develop → main`, task-ветка → `main`, task-ветка → `release/*`, `assemble/* → main`, `hotfix/* → develop` и `release/* → develop` до production запрещены. Workflow должен отклонять их понятным сообщением.
+Прямые `develop → main`, task → `main`, task → `release/*`, `hotfix/* → develop` и `release/* → develop` запрещены. Job `merge-request-policy` проверяет направление, имя ветки, версию и обязательный prefix заголовка MR.
 
-## 4. Обычная разработка
+## Обычная разработка
 
 ```bash
 git switch develop
-git pull --ff-only
+git pull --ff-only origin develop
 git switch -c fix/WEB-0000-short-description
 ```
 
-PR должен объяснять цель, изменения, проверку, риски, миграции, flags и breaking changes. Для UI прикладываются screenshots целевых viewport. Runtime, generated artifacts, локальный reference-pack и secrets в один commit не смешиваются.
+MR направляется в `develop`, использует шаблон `feature` и включает цель, изменения, проверку, риски, rollback и миграции. Generated artifacts, reference pack и secrets не коммитятся. После зелёного pipeline task MR выполняется squash merge с удалением source-ветки.
 
-## 5. Сборка release candidate
+## GitLab pipeline
+
+Единый `.gitlab-ci.yml` создаёт pipeline для Merge Request, `develop`, `release/*` и SemVer tags. Push task-ветки с открытым MR не создаёт дублирующий branch pipeline.
+
+Quality gate выполняет параллельно:
+
+- `merge-request-policy` — направление и naming MR;
+- `verify` — policy/version, lint, typecheck, unit/API/renderer, schema, build и performance budgets;
+- `integration` — настоящие PostgreSQL 17 и Redis 8 в изолированных CI services;
+- `desktop-behavior` — Storybook interaction и Electron E2E на self-managed Windows runner;
+- `visual-regression` — статический Storybook visual suite на self-managed Windows runner.
+
+Linux jobs используют project runner с тегом `vatrushka-linux` и Node 24 container. Docker Hub images загружаются через GitLab Dependency Proxy, чтобы не зависеть от публичных rate limits. Windows jobs используют project runner `vatrushka-windows`; Playwright хранится в project-relative cache. Оба runner принадлежат инфраструктуре Vatrushka, поэтому не расходуют квоту GitLab-hosted compute. Диагностические artifacts сохраняются только при падении, release artifacts имеют отдельный retention.
+
+## Release candidate
 
 Для версии `X.Y.Z`:
 
-1. Зафиксировать конкретный commit актуального `develop`.
-2. Создать `assemble/X.Y.Z` от этого commit и больше не добавлять в snapshot feature commits.
+1. Зафиксировать commit `develop`.
+2. Создать `assemble/X.Y.Z` от него.
 3. Создать `release/X.Y.Z` от актуального `main`.
-4. Открыть draft PR `[ASSEMBLE] Vatrushka vX.Y.Z`: `assemble/X.Y.Z → release/X.Y.Z`.
-5. Проверить full CI, migration/upgrade/rollback metadata и получить RC installer.
-6. Merge assembly PR только merge commit.
+4. Открыть draft MR `[ASSEMBLE] Vatrushka vX.Y.Z`: `assemble/X.Y.Z → release/X.Y.Z` без squash.
+5. Дождаться full quality, migration report, database upgrade и Windows RC package.
+6. Выполнить merge commit.
 
-RC artifacts именуются `Vatrushka-X.Y.Z-rc.<run-number>-<short-sha>.exe` и не попадают в stable update feed. Вместе с installer сохраняются checksums, Playwright report, migration report и machine-readable metadata.
+RC artifact называется `Vatrushka-X.Y.Z-rc.<pipeline-iid>-<short-sha>.exe` и не публикуется в stable feed. После assembly merge действует freeze; исправления идут только через squash MR `release-fix/X.Y.Z-* → release/X.Y.Z`.
 
-После assembly merge действует freeze. Разрешены только blockers, critical/high bugs, security, migrations, updater/installer, changelog и version metadata. Исправление идет отдельным squash PR `release-fix/X.Y.Z-* → release/X.Y.Z`; каждый merge создает новый RC.
+## Production release
 
-## 6. Production release
+После QA открывается `[RELEASE] Vatrushka vX.Y.Z`: `release/X.Y.Z → main` без squash. MR обязан содержать release evidence и rollback. Публикация из MR невозможна.
 
-После QA открывается `[RELEASE] Vatrushka vX.Y.Z`: `release/X.Y.Z → main`. PR проверяет финальный RC, full CI, clean install, upgrade, migrations, rollback, release notes и отсутствие dev URLs/debug flags. Сам merge ничего не публикует.
-
-После merge создается annotated tag:
+После merge создаётся annotated tag:
 
 ```bash
 git switch main
-git pull --ff-only
+git pull --ff-only origin main
 git tag -a vX.Y.Z -m "Vatrushka vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-Только tag workflow получает production secrets, повторяет full CI, собирает production NSIS/portable, проверяет checksum, создает GitHub Release и публикует stable feed атомарно: setup/blockmap сначала, `latest.yml` последним. До появления code-signing сертификата workflow должен явно фиксировать принятый риск SmartScreen, но updater не отключается.
+Только защищённый SemVer tag запускает production pipeline. Pipeline повторяет quality gate, проверяет принадлежность commit ветке `main`, собирает Windows artifacts, атомарно обновляет VPS feed (`setup`/`blockmap` раньше `latest.yml`) и создаёт GitLab Release с immutable assets в Generic Package Registry. После успешного выпуска выполняется `[SYNC] main → develop` merge commit без squash.
 
-После успешной публикации открывается `[SYNC] vX.Y.Z back to develop`: `main → develop`. Release-ветка удаляется только после production tag, успешной публикации и sync.
+## Hotfix
 
-## 7. Hotfix
-
-Hotfix создается от `main`, не от `develop`:
+Hotfix создаётся только от `main`:
 
 ```bash
 git switch main
-git pull --ff-only
+git pull --ff-only origin main
 git switch -c hotfix/X.Y.Z-description
 ```
 
-После merge commit в `main` создается production tag. Затем обязательны `main → develop` и, если существует следующий release candidate, `main → release/<next-version>`.
+После merge commit создаются tag и production pipeline, затем обязательны sync `main → develop` и, при наличии, `main → release/<next-version>`.
 
-## 8. Rollback и неуспешные workflow
+## Protected branches и merge settings
 
-- Неуспешный task PR исправляется в той же ветке; защищенные ветки не переписываются.
-- Неуспешный RC не публикуется. Исправление идет через `release-fix/*`, старые artifacts сохраняются для диагностики.
-- Если tag workflow упал до изменения feed, повторно запускается тот же workflow для того же immutable tag после исправления инфраструктуры.
-- Если опубликованный client дефектен, выпускается новый patch hotfix; существующий tag и GitHub Release не перезаписываются.
-- Server rollback использует предыдущий application commit/image и обязательный backup. Down migration выполняется только при наличии отдельно проверенного плана; additive schema обычно остается.
-- Stable feed переключается только на полностью загруженный artifact. При аварии возвращается предыдущий проверенный `latest.yml`, но опубликованные файлы не удаляются до завершения расследования.
+GitLab project settings:
 
-## 9. GitHub Actions
+- default branch: `develop`;
+- merge method: merge commit;
+- squash: включён по умолчанию, но выключается для assembly/release/hotfix/sync MR;
+- successful pipeline и resolved discussions обязательны;
+- source branch удаляется после merge;
+- `main`, `develop`, `release/*`: force push и direct push запрещены, merge разрешён Maintainer/Owner;
+- tags `v*`: создание только Maintainer/Owner.
 
-Целевые workflow без дублирования общих steps:
+В одиночном проекте обязательный independent approval не включается: автор и единственный Owner совпадают. Контроль обеспечивают protected branches, policy job и зелёный pipeline. При появлении второго Maintainer следует включить минимум одно approval и сброс approvals после новых commits.
 
-- `pr-policy.yml` — branch names, направления PR, title prefixes и совпадение версий;
-- `pr-checks.yml` — обычный CI для PR в `develop`, без production secrets;
-- `release-candidate.yml` — full CI, migrations, upgrade, Electron RC и metadata для `release/*`;
-- `release-pr.yml` — policy/full evidence для `release/*|hotfix/* → main`, publication выключена;
-- `production-release.yml` — только annotated SemVer tag в `main`, production environment и publish;
-- `sync-check.yml` — `[SYNC] main → develop` и наличие production tag.
+## CI/CD variables
 
-Release workflow использует `concurrency: release-<version>` и `cancel-in-progress: false`. Jobs получают минимальные GitHub token permissions. PR-код, включая forks, никогда не выполняется вместе с signing/deploy secrets.
+Обычные переменные:
 
-## 10. Версия и release metadata
+- `PRODUCTION_BRANCH=main`;
+- `PRODUCTION_API_BASE_URL=https://api.myvatrushka.ru`;
+- `PRODUCTION_UPDATE_FEED=https://api.myvatrushka.ru/updates`;
+- `PRODUCTION_UPDATE_PATH` — абсолютный allowlisted путь feed на VPS;
+- `WINDOWS_CSC_ENABLED=false` до появления сертификата.
 
-SemVer `MAJOR.MINOR.PATCH` является единственным форматом production. До централизации источником считается корневой `package.json`, а `version:check` обязан сверять остальные workspaces, internal dependency versions, Electron artifact name, release branch/tag и changelog. API OpenAPI version также должна получать product version, а не отдельную константу.
+Protected variables только для production tags:
 
-RC metadata содержит version, commit SHA, base production tag, build number, `channel: rc`, timestamp и workflow run id. Production metadata содержит version, commit SHA, tag, `channel: stable`, timestamp и workflow run id.
+- `PRODUCTION_SSH_HOST`, `PRODUCTION_SSH_USER`;
+- `PRODUCTION_SSH_PRIVATE_KEY` — file variable;
+- `PRODUCTION_SSH_HOST_KEY` — file variable;
+- `WINDOWS_CSC_LINK`, `WINDOWS_CSC_KEY_PASSWORD` — только после появления сертификата.
 
-## 11. Ожидаемые secrets и variables
+Fork/MR pipeline не получает protected variables. Значения secrets запрещено печатать в logs и artifacts.
 
-На момент аудита repository Actions secrets отсутствуют. Перед автоматической production publication понадобятся имена без хранения значений в Git:
+## Rollback
 
-- `WINDOWS_CSC_LINK`, `WINDOWS_CSC_KEY_PASSWORD` — когда будет получен code-signing certificate;
-- `PRODUCTION_SSH_PRIVATE_KEY`, `PRODUCTION_SSH_HOST_KEY`, `PRODUCTION_SSH_HOST`, `PRODUCTION_SSH_USER` — ограниченный deploy/update-feed доступ;
-- при отказе от SSH в пользу S3/update CDN — отдельные scoped access key/secret и endpoint/bucket variables.
+- Неуспешный task MR исправляется в той же ветке.
+- Неуспешный RC не публикуется; исправление идёт через `release-fix/*`.
+- Существующие tags и GitLab Releases не перезаписываются для исправления продукта — выпускается новый patch.
+- Stable feed переключается только на полностью загруженный набор; при аварии возвращается предыдущий проверенный `latest.yml`.
+- Server rollback использует предыдущий commit/image и обязательный backup. Down migration выполняется только по отдельному проверенному плану.
 
-`GITHUB_TOKEN` предоставляет GitHub Actions. Public API/update URLs, channel и artifact directory являются environment variables, не secrets. Production environment рекомендуется защитить manual approval. Значения secrets в logs и artifacts запрещены.
-
-## 12. Ручная настройка GitHub
-
-До включения protection необходимо убедиться, что новые workflow уже успешно прошли хотя бы один PR, иначе required checks могут заблокировать репозиторий.
-
-Для `main`:
-
-- PR обязателен, direct/force push и deletion запрещены;
-- минимум один approval, dismiss stale approvals, resolved conversations;
-- branch up to date и required release checks;
-- CODEOWNERS review для release/infrastructure;
-- допустимые источники контролирует `pr-policy`.
-
-Для `develop`:
-
-- PR обязателен, direct/force push запрещены;
-- минимум один approval, resolved conversations, up-to-date и required ordinary checks;
-- squash является обычной стратегией.
-
-Для `release/*`:
-
-- direct/force push запрещены;
-- PR, full CI, Electron package и release-policy обязательны;
-- источники только `assemble/*`, `release-fix/*` и `main`.
-
-Администраторские bypass должны быть минимальны и использоваться только для восстановления. Изменять default branch, удалять `master` или включать блокирующие protection rules до готовности workflow нельзя.
-
-## 13. Миграция текущего репозитория
-
-1. `develop` создан как точная копия production `master`; незавершенные task PR переводятся в него.
-2. Добавить этот документ, PR templates, CODEOWNERS и policy tests отдельными PR в `develop`.
-3. Разделить универсальный CI на обычные и release workflow, сохранив существующее покрытие.
-4. Добавить `version:check`, `release:validate` и безопасный `release:prepare --dry-run`.
-5. Получить первый зеленый workflow run, затем применить protection к `develop`.
-6. Создать `main` от текущего `master`, обновить GitHub default branch и deployment references контролируемым cutover.
-7. Только после проверки ссылок/CI/prod удалить или заархивировать `master` и включить protection `main`.
-8. Следующий feature release собрать через `assemble/* → release/*`, tag и `[SYNC]`.
-
-Текущий `master` остается production веткой до шага 6. Это единственное временное исключение; новые ordinary changes уже направляются в `develop`.
-
-## 14. Локальная проверка
-
-Текущий набор команд:
+## Локальная проверка
 
 ```bash
 npm ci
+npm run repo-policy:test
+npm run version:check
 npm run lint
 npm run typecheck
 npm run test
 npm run test:integration
 npm run db:check
 npm run build
-npm run test:storybook
-npm run test:e2e
-npm run test:visual
-npm run package:win
+npm run perf:check
 ```
 
-Infrastructure PR дополнительно проверяет YAML, policy test cases, artifact naming, version consistency и dry-run release preparation. Реальные SMTP, LiveKit/TURN, Windows devices, upgrade и updater проверяются release matrix, а не заменяются unit tests.
+GitLab CI syntax дополнительно проверяется API endpoint `POST /projects/:id/ci/lint`; production publication проверяется только на защищённом тестовом release/tag flow без выдачи секретов MR jobs.
