@@ -8,6 +8,7 @@ import {
   Menu,
   nativeImage,
   Notification,
+  powerMonitor,
   session,
   Tray,
   type IpcMainInvokeEvent,
@@ -34,6 +35,10 @@ let desktopUpdater: DesktopUpdater | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 const activeNotifications = new Set<Notification>();
+
+function checkForUpdatesIfDue(): void {
+  void desktopUpdater?.checkIfDue();
+}
 
 function isTrustedUrl(value: string): boolean {
   try {
@@ -304,10 +309,13 @@ if (!hasLock) {
     });
     await createWindow();
     desktopUpdater.start();
+    void desktopUpdater.checkIfDue();
+    powerMonitor.on('resume', checkForUpdatesIfDue);
   });
 }
 
 app.on('activate', showMainWindow);
+app.on('browser-window-focus', checkForUpdatesIfDue);
 app.on('before-quit', () => {
   isQuitting = true;
   selectedSource = null;
@@ -317,6 +325,7 @@ app.on('before-quit', () => {
   removeIpcHandlers = null;
   desktopUpdater?.dispose();
   desktopUpdater = null;
+  powerMonitor.removeListener('resume', checkForUpdatesIfDue);
   tray?.destroy();
   tray = null;
 });

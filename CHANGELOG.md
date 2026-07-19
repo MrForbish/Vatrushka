@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.9] - 2026-07-19
+
+### Fixed
+
+- desktop update checks now run immediately after startup, every 15 minutes, and when the application regains focus or Windows resumes;
+- repeated focus events are rate-limited while still allowing a newly published version to be discovered promptly.
+
 ## [0.6.8] - 2026-07-19
 
 ### Fixed
