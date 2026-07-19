@@ -4,6 +4,14 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.10] - 2026-07-19
+
+### Fixed
+
+- Windows production packaging now downloads its locked, SHA-256-verified toolchain from the private GitLab Generic Package Registry with the built-in CI job token;
+- packaging toolchain caches are isolated from Electron E2E and visual-regression caches, preventing unrelated jobs from overwriting them;
+- includes the prompt automatic update discovery fix introduced in the unpublished 0.6.9 tag.
+
 ## [0.6.9] - 2026-07-19
 
 ### Fixed
