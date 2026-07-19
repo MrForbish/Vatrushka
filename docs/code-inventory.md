@@ -1,6 +1,6 @@
 # Инвентаризация кода и данных
 
-Дата аудита: 2026-07-18, базовый commit `4ceedd5`, release 0.6.1.
+Дата аудита: 2026-07-18; актуализировано 2026-07-19 после release 0.6.3.
 
 Этот документ отделяет действительно мертвый код от временной совместимости и от согласованных будущих функций. Он является safety checklist для cleanup PR, а не разрешением удалить все перечисленное одним изменением.
 
@@ -9,7 +9,7 @@
 - Desktop: Electron main/preload, React `App.tsx`, feature-модули и UI kit.
 - API: Fastify transport, application service, PostgreSQL stores, canonical messaging, settings, identity, realtime, presence, LiveKit, S3 cleanup и metrics.
 - Shared: runtime Zod contracts, permissions и domain helpers.
-- Infra: production Compose/Caddy, self-hosted LiveKit и release feed.
+- Infra: production Compose/Caddy, self-hosted LiveKit, release feed и приватный observability-контур Prometheus/Grafana/exporters.
 - Tests: unit/API inject, настоящие PostgreSQL/Redis integration, Storybook interaction, Electron E2E и visual snapshots.
 
 `dist`, `out`, `release`, `storybook-static`, `coverage`, `test-results` и updater artifacts являются генерируемыми outputs и не отслеживаются Git.
@@ -49,7 +49,7 @@ Contract migration допустима только после canonical-only к�
 
 - group conversation data model до отдельного Group DM UI;
 - object deletion queue и compatibility S3 migration до закрытия retention/backfill;
-- metrics endpoint и collectors до подключения Prometheus/Grafana;
+- metrics endpoint, collectors и приватный Prometheus/Grafana-контур; внешний канал доставки алертов и специализированные LiveKit/S3 collectors остаются по roadmap;
 - typed settings routes и media controller, которые потребуются при декомпозиции `App.tsx`;
 - permission/audit primitives для будущих категорий, invite policies и moderation.
 
