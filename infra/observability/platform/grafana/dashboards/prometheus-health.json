@@ -1,0 +1,23 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "id": null,
+  "links": [],
+  "panels": [
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 6, "x": 0, "y": 0 }, "id": 1, "targets": [{ "expr": "sum(up)", "refId": "A" }], "title": "Targets up", "type": "stat" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 6, "x": 6, "y": 0 }, "id": 2, "targets": [{ "expr": "sum(up == 0)", "refId": "A" }], "title": "Targets down", "type": "stat" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 6, "x": 12, "y": 0 }, "id": 3, "targets": [{ "expr": "prometheus_tsdb_head_series", "refId": "A" }], "title": "Active series", "type": "stat" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] }, "gridPos": { "h": 7, "w": 6, "x": 18, "y": 0 }, "id": 4, "targets": [{ "expr": "prometheus_tsdb_storage_blocks_bytes", "refId": "A" }], "title": "TSDB blocks", "type": "stat" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 7 }, "id": 5, "targets": [{ "expr": "rate(prometheus_tsdb_head_samples_appended_total[5m])", "legendFormat": "samples/s", "refId": "A" }], "title": "Samples ingested", "type": "timeseries" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 7 }, "id": 6, "targets": [{ "expr": "prometheus_rule_group_last_duration_seconds", "legendFormat": "{{rule_group}}", "refId": "A" }], "title": "Rule evaluation duration", "type": "timeseries" }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["vatrushka", "prometheus"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "Prometheus Health",
+  "uid": "vatrushka-prometheus",
+  "version": 1
+}

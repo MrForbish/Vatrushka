@@ -88,6 +88,15 @@ variables:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\/[0-9]+\.[0-9]+\.[0-9]+$/'
     - if: '$CI_COMMIT_BRANCH =~ /^release\/[0-9]+\.[0-9]+\.[0-9]+$/'
 
+.observability-rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: [infra/observability/**/*, scripts/observability/**/*]
+    - if: '$CI_COMMIT_TAG'
+      changes: [infra/observability/**/*, scripts/observability/**/*]
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      changes: [infra/observability/**/*, scripts/observability/**/*]
+
 merge-request-policy:
   extends: .node-linux
   stage: policy
@@ -163,6 +172,102 @@ integration:
   script:
     - npm run build -w @vatrushka/shared
     - npm run test:integration
+
+observability-compose:
+  extends: .observability-rules
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:28-cli
+    pull_policy: if-not-present
+  tags: [vatrushka-linux]
+  stage: quality
+  timeout: 3m
+  before_script: []
+  script:
+    - cp infra/observability/platform/.env.observability.example infra/observability/platform/.env.observability
+    - cp infra/observability/platform/secrets/grafana_admin_password.example infra/observability/platform/secrets/grafana_admin_password
+    - cp infra/observability/platform/secrets/alertmanager_webhook_url.example infra/observability/platform/secrets/alertmanager_webhook_url
+    - cp infra/observability/platform/secrets/loki_aws_credentials.example infra/observability/platform/secrets/loki_aws_credentials
+    - docker compose --env-file infra/observability/platform/.env.observability -f infra/observability/platform/docker-compose.yml config -q
+    - POSTGRES_PASSWORD=validation REDIS_PASSWORD=validation docker compose --env-file infra/observability/agents/.env.agent.example -f infra/observability/agents/docker-compose.yml --profile product --profile docker config -q
+
+observability-prometheus:
+  extends: .observability-rules
+  image:
+    name: quay.io/prometheus/prometheus:v3.12.0
+    entrypoint: [""]
+  tags: [vatrushka-linux]
+  stage: quality
+  timeout: 3m
+  before_script: []
+  script:
+    - promtool check config infra/observability/platform/prometheus/prometheus.yml
+    - promtool check rules infra/observability/platform/prometheus/rules/*.yml
+
+observability-alertmanager:
+  extends: .observability-rules
+  image:
+    name: quay.io/prometheus/alertmanager:v0.28.1
+    entrypoint: [""]
+  tags: [vatrushka-linux]
+  stage: quality
+  timeout: 3m
+  before_script: []
+  script:
+    - amtool check-config infra/observability/platform/alertmanager/alertmanager.yml
+
+observability-loki:
+  extends: .observability-rules
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/grafana/loki:3.5.5
+    entrypoint: [""]
+  tags: [vatrushka-linux]
+  stage: quality
+  timeout: 3m
+  before_script: []
+  variables:
+    AWS_ACCESS_KEY_ID: validation
+    AWS_SECRET_ACCESS_KEY: validation
+    LOKI_S3_ENDPOINT: https://s3.example.invalid
+    LOKI_S3_REGION: ru-1
+    LOKI_S3_BUCKET: validation
+  script:
+    - /usr/bin/loki -verify-config=true -config.expand-env=true -config.file=infra/observability/platform/loki/loki.yml
+
+observability-alloy:
+  extends: .observability-rules
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/grafana/alloy:v1.10.2
+    entrypoint: [""]
+  tags: [vatrushka-linux]
+  stage: quality
+  timeout: 3m
+  before_script: []
+  variables:
+    OBSERVABILITY_HOST: validation
+    OBSERVABILITY_ROLE: product
+    OBSERVABILITY_ENVIRONMENT: production
+    OBSERVABILITY_REGION: ru
+    PROMETHEUS_REMOTE_WRITE_URL: http://127.0.0.1:9090/api/v1/write
+    LOKI_WRITE_URL: http://127.0.0.1:3100/loki/api/v1/push
+  script:
+    - alloy validate infra/observability/platform/alloy/platform.alloy
+    - alloy validate infra/observability/agents/alloy/product.alloy
+    - alloy validate infra/observability/agents/alloy/runner.alloy
+
+observability-caddy:
+  extends: .observability-rules
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/caddy:2.10-alpine
+    entrypoint: [""]
+  tags: [vatrushka-linux]
+  stage: quality
+  timeout: 3m
+  before_script: []
+  variables:
+    GRAFANA_DOMAIN: grafana.example.invalid
+    ACME_EMAIL: observability@example.invalid
+  script:
+    - caddy validate --config infra/observability/platform/reverse-proxy/Caddyfile --adapter caddyfile
 
 desktop-behavior:
   extends:
