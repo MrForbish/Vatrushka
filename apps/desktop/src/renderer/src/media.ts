@@ -22,6 +22,15 @@ import type {
 import { SCREEN_SHARE_HEARTBEAT_SECONDS } from "@vatrushka/shared";
 
 import { ClientError, type ApiClient } from "./api.js";
+import {
+  applyScreenAnnotationMessage,
+  encodeScreenAnnotationMessage,
+  parseScreenAnnotationMessage,
+  sanitizeScreenAnnotationStroke,
+  SCREEN_ANNOTATION_TOPIC,
+  type ScreenAnnotationMessage,
+  type ScreenAnnotationStroke,
+} from "./features/screen-share/annotations.js";
 
 export interface ParticipantView {
   identity: string;
@@ -51,6 +60,7 @@ export interface MediaSnapshot {
   hasScreenShareAudio: boolean;
   screenShareAudioMuted: boolean;
   screenShareAudioVolume: number;
+  screenAnnotations: ScreenAnnotationStroke[];
   canPlayAudio: boolean;
   error: string | null;
 }
@@ -68,6 +78,7 @@ const initialSnapshot: MediaSnapshot = {
   hasScreenShareAudio: false,
   screenShareAudioMuted: false,
   screenShareAudioVolume: 1,
+  screenAnnotations: [],
   canPlayAudio: true,
   error: null,
 };
@@ -100,6 +111,8 @@ export class MediaSession {
   private snapshot: MediaSnapshot = initialSnapshot;
   private screenShareAudioVolume = 1;
   private screenShareAudioMuted = false;
+  private screenAnnotations: ScreenAnnotationStroke[] = [];
+  private annotationScreenSharerIdentity: string | null = null;
   private isDeafened = false;
   private microphoneEnabledBeforeDeafen = false;
   private stoppingScreenShare = false;
@@ -133,6 +146,8 @@ export class MediaSession {
     this.isDeafened = false;
     this.screenShareAudioVolume = settings.volume;
     this.screenShareAudioMuted = false;
+    this.screenAnnotations = [];
+    this.annotationScreenSharerIdentity = null;
     const options: RoomOptions = {
       adaptiveStream: false,
       dynacast: false,
@@ -286,6 +301,26 @@ export class MediaSession {
     this.patch({ screenShareAudioMuted: muted });
   }
 
+  async addScreenAnnotationStroke(
+    stroke: ScreenAnnotationStroke,
+  ): Promise<void> {
+    const sanitized = sanitizeScreenAnnotationStroke(stroke);
+    if (!sanitized || !this.room?.localParticipant.isScreenShareEnabled) return;
+    await this.publishScreenAnnotation({ type: "stroke", stroke: sanitized }).catch(
+      () => undefined,
+    );
+  }
+
+  async undoScreenAnnotation(): Promise<void> {
+    if (!this.room?.localParticipant.isScreenShareEnabled) return;
+    await this.publishScreenAnnotation({ type: "undo" }).catch(() => undefined);
+  }
+
+  async clearScreenAnnotations(): Promise<void> {
+    if (!this.room?.localParticipant.isScreenShareEnabled) return;
+    await this.publishScreenAnnotation({ type: "clear" }).catch(() => undefined);
+  }
+
   async waitForPublishingReady(
     timeoutMs = publishingReadyTimeoutMs,
   ): Promise<void> {
@@ -387,6 +422,11 @@ export class MediaSession {
           simulcast: false,
         },
       );
+      this.screenAnnotations = [];
+      this.annotationScreenSharerIdentity = this.room.localParticipant.identity;
+      await this.publishScreenAnnotation({ type: "clear" }).catch(
+        () => undefined,
+      );
       if (includeAudio && !this.isOwnAudioRestricted()) {
         await this.stopScreenShareInternal(false);
         throw new UserFacingMediaError(
@@ -412,6 +452,9 @@ export class MediaSession {
     this.stopHeartbeat();
     const room = this.room;
     if (room?.localParticipant.isScreenShareEnabled) {
+      await this.publishScreenAnnotation({ type: "clear" }).catch(
+        () => undefined,
+      );
       this.stoppingScreenShare = true;
       try {
         await room.localParticipant.setScreenShareEnabled(false);
@@ -456,6 +499,8 @@ export class MediaSession {
     this.microphoneEnabledBeforeDeafen = false;
     this.participantVolumes.clear();
     this.locallyMutedParticipants.clear();
+    this.screenAnnotations = [];
+    this.annotationScreenSharerIdentity = null;
     this.removeRemoteAudioElements();
     this.snapshot.screenTrack?.detach().forEach((element) => element.remove());
     this.snapshot = initialSnapshot;
@@ -488,6 +533,15 @@ export class MediaSession {
           this.audioElements.delete(trackSid);
         }
         refresh();
+      })
+      .on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
+        if (topic !== SCREEN_ANNOTATION_TOPIC || !participant) return;
+        const screenSharer = this.currentScreenSharerIdentity();
+        if (participant.identity !== screenSharer) return;
+        const message = parseScreenAnnotationMessage(payload);
+        if (!message) return;
+        this.screenAnnotations = applyScreenAnnotationMessage(this.screenAnnotations, message);
+        this.patch({ screenAnnotations: this.screenAnnotations });
       })
       .on(RoomEvent.ActiveSpeakersChanged, () => {
         refresh();
@@ -604,6 +658,11 @@ export class MediaSession {
     );
     const screenShareIsLocal =
       firstScreen?.participant === room.localParticipant;
+    const screenSharerIdentity = firstScreen?.participant.identity ?? null;
+    if (screenSharerIdentity !== this.annotationScreenSharerIdentity) {
+      this.annotationScreenSharerIdentity = screenSharerIdentity;
+      this.screenAnnotations = [];
+    }
     this.snapshot = {
       ...this.snapshot,
       connectionState: room.state,
@@ -619,9 +678,38 @@ export class MediaSession {
       ),
       screenShareAudioMuted: this.screenShareAudioMuted,
       screenShareAudioVolume: this.screenShareAudioVolume,
+      screenAnnotations: this.screenAnnotations,
       canPlayAudio: room.canPlaybackAudio,
     };
     this.emit();
+  }
+
+  private currentScreenSharerIdentity(): string | null {
+    const room = this.room;
+    if (!room) return null;
+    return [room.localParticipant, ...room.remoteParticipants.values()].find(
+      (participant) => participant.isScreenShareEnabled,
+    )?.identity ?? null;
+  }
+
+  private async publishScreenAnnotation(
+    message: ScreenAnnotationMessage,
+  ): Promise<void> {
+    const room = this.room;
+    if (!room?.localParticipant.isScreenShareEnabled) return;
+    this.screenAnnotations = applyScreenAnnotationMessage(
+      this.screenAnnotations,
+      message,
+    );
+    this.patch({ screenAnnotations: this.screenAnnotations });
+    if (typeof room.localParticipant.publishData !== "function") return;
+    await room.localParticipant.publishData(
+      encodeScreenAnnotationMessage(message),
+      {
+        reliable: true,
+        topic: SCREEN_ANNOTATION_TOPIC,
+      },
+    );
   }
 
   private async syncOwnVoiceState(): Promise<void> {

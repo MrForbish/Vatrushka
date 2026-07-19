@@ -13,6 +13,8 @@ import type {
 
 import { audioDeviceOptions } from "../../audio-devices";
 import type { MediaSnapshot, ParticipantView } from "../../media";
+import { ScreenAnnotationCanvas } from "../screen-share/ScreenAnnotationCanvas";
+import type { ScreenAnnotationStroke } from "../screen-share/annotations";
 import {
   Badge,
   Icon,
@@ -56,6 +58,9 @@ export interface RoomViewProps {
   onStartAudio(): void;
   onScreenAudioMute(): void;
   onScreenAudioVolume(value: number): void;
+  onScreenAnnotationStroke?(stroke: ScreenAnnotationStroke): void;
+  onScreenAnnotationUndo?(): void;
+  onScreenAnnotationClear?(): void;
   onParticipantMute(identity: string, muted: boolean): void;
   onParticipantVolume(identity: string, volume: number): void;
 }
@@ -179,6 +184,8 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
           <div className="vui-room__stream-stage">
             <div className="vui-room__stream">
               <ScreenTrack
+                annotationEditable={props.snapshot.screenShareIsLocal}
+                annotations={props.snapshot.screenAnnotations}
                 audioAvailable={
                   props.snapshot.hasScreenShareAudio &&
                   !props.snapshot.screenShareIsLocal
@@ -186,6 +193,15 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
                 muted={props.snapshot.screenShareAudioMuted}
                 onMute={props.onScreenAudioMute}
                 onVolume={props.onScreenAudioVolume}
+                onAnnotationStroke={
+                  props.onScreenAnnotationStroke ?? (() => undefined)
+                }
+                onAnnotationUndo={
+                  props.onScreenAnnotationUndo ?? (() => undefined)
+                }
+                onAnnotationClear={
+                  props.onScreenAnnotationClear ?? (() => undefined)
+                }
                 track={props.snapshot.screenTrack}
                 volume={props.snapshot.screenShareAudioVolume}
               />
@@ -427,15 +443,25 @@ export function VoiceConnectionPanel({
 }
 
 function ScreenTrack({
+  annotationEditable,
+  annotations,
   audioAvailable,
   muted,
+  onAnnotationClear,
+  onAnnotationStroke,
+  onAnnotationUndo,
   onMute,
   onVolume,
   track,
   volume,
 }: {
+  annotationEditable: boolean;
+  annotations: ScreenAnnotationStroke[];
   audioAvailable: boolean;
   muted: boolean;
+  onAnnotationClear(): void;
+  onAnnotationStroke(stroke: ScreenAnnotationStroke): void;
+  onAnnotationUndo(): void;
   onMute(): void;
   onVolume(value: number): void;
   track: RemoteTrack | LocalTrack;
@@ -445,6 +471,9 @@ function ScreenTrack({
   const containerRef = useRef<HTMLDivElement>(null);
   const [resolution, setResolution] = useState("Определяем качество…");
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [annotationColor, setAnnotationColor] = useState("#22d3ee");
+  const [annotationSize, setAnnotationSize] = useState(4);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const element = ref.current;
@@ -488,6 +517,79 @@ function ScreenTrack({
         onResize={updateResolution}
         playsInline
       />
+      <ScreenAnnotationCanvas
+        active={drawing}
+        color={annotationColor}
+        editable={annotationEditable}
+        onStroke={onAnnotationStroke}
+        size={annotationSize}
+        strokes={annotations}
+        videoRef={ref}
+      />
+      {annotationEditable ? (
+        <div
+          aria-label="Рисование поверх демонстрации"
+          className="vui-room__annotation-tools"
+          role="toolbar"
+        >
+          <button
+            aria-pressed={drawing}
+            className="vui-room__annotation-toggle"
+            onClick={() => setDrawing((value) => !value)}
+            type="button"
+          >
+            {drawing ? "Готово" : "Рисовать"}
+          </button>
+          {drawing ? (
+            <>
+              <span
+                aria-label="Цвет линии"
+                className="vui-room__annotation-colors"
+              >
+                {["#22d3ee", "#8b5cf6", "#facc15", "#fb7185", "#f8fafc"].map(
+                  (color) => (
+                    <button
+                      aria-label={`Цвет ${color}`}
+                      aria-pressed={annotationColor === color}
+                      key={color}
+                      onClick={() => setAnnotationColor(color)}
+                      style={{ backgroundColor: color }}
+                      type="button"
+                    />
+                  ),
+                )}
+              </span>
+              <label className="vui-room__annotation-size">
+                Толщина
+                <select
+                  onChange={(event) =>
+                    setAnnotationSize(Number(event.target.value))
+                  }
+                  value={annotationSize}
+                >
+                  <option value={2}>Тонкая</option>
+                  <option value={4}>Средняя</option>
+                  <option value={8}>Толстая</option>
+                </select>
+              </label>
+              <button
+                disabled={annotations.length === 0}
+                onClick={onAnnotationUndo}
+                type="button"
+              >
+                Отменить
+              </button>
+              <button
+                disabled={annotations.length === 0}
+                onClick={onAnnotationClear}
+                type="button"
+              >
+                Очистить
+              </button>
+            </>
+          ) : null}
+        </div>
+      ) : null}
       <span className="vui-room__stream-quality">{resolution} · 60 FPS</span>
       <IconButton
         className="vui-room__fullscreen"

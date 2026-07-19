@@ -4,6 +4,10 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+### Added
+
+- автор демонстрации может рисовать синхронные аннотации поверх видео, выбирать цвет и толщину, отменять последний штрих и очищать слой; координаты одинаково масштабируются у всех зрителей и сбрасываются вместе с media-сессией;
+
 ### Fixed
 
 - voice mute/deafen/speaking state now propagates through the authenticated API, Redis projection and realtime server UI; undeafen restores the microphone only when it was enabled before deafen;

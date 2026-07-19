@@ -159,6 +159,7 @@ describe('room UI', () => {
     hasScreenShareAudio: false,
     screenShareAudioMuted: false,
     screenShareAudioVolume: 1,
+    screenAnnotations: [],
     canPlayAudio: true,
     error: null,
   };
