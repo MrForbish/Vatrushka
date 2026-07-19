@@ -4,6 +4,30 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-19
+
+### Added
+
+- LiveKit-confirmed realtime voice presence with Redis projection, versioned snapshots, reconciliation and self/moderator drag-and-drop moves;
+- Gaming Home with compact voice health, quick return, active voice spaces and permission-filtered social activity;
+- redesigned gaming authentication shell with the final Vatrushka logo, approved background and functional session-only sign-in;
+- reproducible Prometheus, Grafana, Loki, Alertmanager, Blackbox and agent configuration for the dedicated observability platform;
+- public server visibility, profile/server media and durable email delivery through the transactional outbox.
+
+### Changed
+
+- Home now keeps exactly four central gaming blocks and removes the retired welcome/onboarding/recent-activity UI;
+- screen sharing and voice movement wait for authoritative LiveKit state instead of optimistic client state;
+- Windows title bar, updater discovery, temporary E2E profiles and responsive Storybook coverage are hardened;
+- canonical product, technical, testing, deployment and roadmap documentation reflects the 0.7 architecture.
+
+### Fixed
+
+- screen sharing no longer falls back to unsafe system-audio capture and validates actual media presence before participant moves;
+- notification email delivery is durable and idempotent;
+- Home realtime refreshes are coalesced and exclude high-frequency typing events;
+- dead Home components and their obsolete stories/selectors/styles are removed while legacy response fields remain compatible.
+
 ## [0.6.10] - 2026-07-19
 
 ### Fixed
