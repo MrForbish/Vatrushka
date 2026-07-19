@@ -4,7 +4,12 @@ import electronUpdater, { type ProgressInfo, type UpdateInfo } from 'electron-up
 
 import type { DesktopUpdateState } from '@vatrushka/shared';
 
-const UPDATE_INTERVAL_MS = 4 * 60 * 60 * 1_000;
+import {
+  isUpdateCheckDue,
+  UPDATE_INTERVAL_MS,
+  UPDATE_START_DELAY_MS,
+} from './updater-schedule.js';
+
 const { autoUpdater } = electronUpdater;
 
 export class DesktopUpdater {
@@ -12,6 +17,7 @@ export class DesktopUpdater {
   private startTimer: NodeJS.Timeout | null = null;
   private interval: NodeJS.Timeout | null = null;
   private started = false;
+  private lastCheckStartedAt: number | null = null;
 
   constructor(private readonly publish: (state: DesktopUpdateState) => void) {}
 
@@ -37,9 +43,9 @@ export class DesktopUpdater {
     autoUpdater.on('update-downloaded', this.onDownloaded);
     autoUpdater.on('error', this.onError);
 
-    this.startTimer = setTimeout(() => { void this.check(); }, 10_000);
+    this.startTimer = setTimeout(() => { void this.checkIfDue(); }, UPDATE_START_DELAY_MS);
     this.startTimer.unref();
-    this.interval = setInterval(() => { void this.check(); }, UPDATE_INTERVAL_MS);
+    this.interval = setInterval(() => { void this.checkIfDue(); }, UPDATE_INTERVAL_MS);
     this.interval.unref();
   }
 
@@ -49,7 +55,18 @@ export class DesktopUpdater {
 
   async check(): Promise<void> {
     if (!this.started) this.start();
+    await this.runCheck();
+  }
+
+  async checkIfDue(): Promise<void> {
+    if (!this.started) this.start();
+    if (!isUpdateCheckDue(this.lastCheckStartedAt)) return;
+    await this.runCheck();
+  }
+
+  private async runCheck(): Promise<void> {
     if (this.state.status === 'unsupported' || this.state.status === 'checking' || this.state.status === 'downloading' || this.state.status === 'ready') return;
+    this.lastCheckStartedAt = Date.now();
     try {
       await autoUpdater.checkForUpdates();
     } catch (error) {
