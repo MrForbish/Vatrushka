@@ -1,0 +1,70 @@
+groups:
+  - name: vatrushka-application
+    rules:
+      - alert: VatrushkaApiDown
+        expr: up{job="vatrushka-api"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Vatrushka API metrics are unavailable
+
+      - alert: VatrushkaPublicReadinessDown
+        expr: probe_success{job="blackbox-http",instance="https://api.myvatrushka.ru/health/ready"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Public API readiness probe is failing
+
+      - alert: VatrushkaApiFiveXxBurst
+        expr: sum(rate(api_http_requests_total{status_class="5xx"}[5m])) > 0.1
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: API 5xx rate is above baseline
+
+      - alert: VatrushkaApiLatencyHigh
+        expr: histogram_quantile(0.95, sum by (le) (rate(api_http_request_duration_seconds_bucket[5m]))) > 0.5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: API p95 latency is above 500 ms
+
+      - alert: VatrushkaOutboxFailed
+        expr: chat_outbox_failed_total > 0
+        for: 1m
+        labels: { severity: critical }
+        annotations:
+          summary: Messaging outbox contains failed events
+
+      - alert: VatrushkaOutboxBacklog
+        expr: chat_outbox_oldest_age_seconds > 60
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: Messaging outbox is delayed
+
+      - alert: VatrushkaRedisPublishErrors
+        expr: increase(chat_redis_publish_errors_total[5m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: Realtime Redis publish errors were recorded
+
+      - alert: VatrushkaRedisEvictions
+        expr: increase(redis_evicted_keys_total[10m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: Redis evicted keys
+
+      - alert: VatrushkaPostgresConnectionsHigh
+        expr: sum(pg_stat_activity_count) / max(pg_settings_max_connections) > 0.8
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: PostgreSQL connection usage is above 80 percent
+
+      - alert: VatrushkaCertificateExpiresSoon
+        expr: (probe_ssl_earliest_cert_expiry - time()) / 86400 < 14
+        for: 1h
+        labels: { severity: warning }
+        annotations:
+          summary: A monitored TLS certificate expires in less than 14 days

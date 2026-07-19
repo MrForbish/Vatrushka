@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "outbox_events_email_delivery_unique" ON "outbox_events" USING btree ("event_type","aggregate_type","aggregate_id") WHERE "outbox_events"."aggregate_type" = 'email_delivery';

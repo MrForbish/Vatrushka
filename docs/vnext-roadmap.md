@@ -1,6 +1,6 @@
 # Vatrushka: roadmap
 
-Обновлено для версии 0.6.5. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
+Обновлено для версии 0.7.0. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
 
 ## Состояние продукта
 
@@ -18,6 +18,8 @@
 - self-hosted LiveKit/TURN;
 - NSIS auto-update с self-hosted feed;
 - unit, integration PostgreSQL/Redis, Storybook interaction, Electron и visual regression CI.
+- gaming auth shell с фирменным логотипом, адаптивом 1100×680 и реальной session-only политикой «Запомнить меня».
+- Gaming Home с компактным voice status, быстрым возвратом, активными голосовыми пространствами и реальными социальными контактами из существующих личных диалогов.
 
 ### Работает, но требует укрепления
 
@@ -103,15 +105,18 @@
 
 ### P1.1 — Prometheus/Grafana
 
-Статус: базовый приватный stack, exporters, low-cardinality API/runtime metrics, dashboard и alert rules реализованы в `feat/OPS-1-observability`. После production deployment требуется недельный baseline, настройка внешнего получателя alerts и отдельное расширение LiveKit/S3 application-level collectors.
+Статус: legacy single-VPS stack работает, аудит зафиксирован в `docs/observability-audit.md`. Подготовлен отдельный воспроизводимый observability-контур: Prometheus, Grafana, Alertmanager, Loki/S3, Alloy, Blackbox, agents, шесть dashboards, backup/restore/rollback и config validation. Production cutover ожидает отдельный VPS, Grafana DNS, private WireGuard addresses, отдельный Loki bucket и технический webhook.
 
 1. Уточнить/стабилизировать API metric names и cardinality. Выполнено для HTTP/runtime/messaging.
-2. Развернуть Prometheus, Grafana, node/cAdvisor/PostgreSQL/Redis exporters и blackbox probes. Конфигурация готова, production rollout выполняется после PR/release.
-3. Ограничить доступ SSH tunnel; настроить retention, versioned dashboards и disk budget. Выполнено в конфигурации.
-4. Собрать dashboards API/WebSocket, messaging/outbox, Redis, PostgreSQL и host. Выполнен overview; детальные LiveKit/S3 collectors остаются следующим срезом.
-5. Включить базовые alert rules. Выполнено; внешний notification receiver и корректировка thresholds — после недельного baseline.
+2. Развернуть отдельный observability VPS и перенести Prometheus/Grafana без остановки production. Конфигурация и migration plan готовы; инфраструктурный rollout заблокирован отсутствующими реквизитами нового VPS/S3/DNS.
+3. Настроить private ingestion, 30d/55GB Prometheus retention, 30d Loki retention, versioned dashboards и disk budget. Выполнено в конфигурации; требуется production smoke/load verification.
+4. Собрать Infrastructure, Containers, Application, Prometheus Health, Loki Health и Logs Overview dashboards. Выполнено; детальные LiveKit/S3 collectors остаются следующим срезом.
+5. Включить infrastructure/application/self-monitoring alerts и Alertmanager routing. Rules и routing готовы; фактический receiver и корректировка thresholds — после 72 часов параллельной работы и недельного baseline.
+6. После 72 часов стабильности остановить legacy Grafana/Prometheus без удаления volumes, затем отдельным подтверждённым этапом удалить старые данные.
 
 ### P1.2 — сообщества и messaging
+
+Текущий клиентский reliability-срез `WEB-25` объединяет связанные исправления без дробления на мелкие pipeline: обязательный one-click updater, безопасный video-only screen share, проверку фактического LiveKit presence перед move, durable email outbox, realtime voice-presence invalidation, каталог публичных серверов, server/profile media, Windows title bar, временные E2E-профили и UI-cleanup. После локального полного quality gate срез поставляется одним ordinary MR в `develop`.
 
 - drag-and-drop порядка каналов и приватные категории;
 - заявки на вступление и расширенные invite policies;
@@ -139,3 +144,27 @@
 9. `feat/observability` — Prometheus/Grafana.
 
 Каждый ordinary MR направляется в `develop` и проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Production получает только стабилизированный `release/*` или hotfix; Windows update публикуется tag pipeline по правилам [release-process.md](release-process.md).
+# WEB-26 — Voice presence and drag-and-drop
+
+- [x] Audit current LiveKit, Redis, WebSocket, permission, state, and DnD flows.
+- [x] Add LiveKit-confirmed Redis projection, snapshot API, versioned events, deduplication, and late-leave protection.
+- [x] Add explicit Cloud and controlled-reconnect transport adapters.
+- [x] Add idempotent self/moderator moves with pending, confirmed, failed, and timeout states.
+- [x] Add normalized renderer state, reconnect snapshots, pending UI, drag-and-drop, and keyboard-accessible move dialog.
+- [x] Add periodic reconciliation, metrics, feature flags, unit tests, and Redis integration coverage.
+- [ ] Production rollout: verify the new webhook path, enable flags in stages, and observe reconciliation/version-gap metrics.
+
+# WEB-27 — Gaming authentication
+
+- [x] Заменить auth shell на игровой адаптивный layout с финальным фирменным знаком и утверждённым фоном.
+- [x] Сохранить password/email/TOTP/recovery/reset контракты и keyboard accessibility.
+- [x] Реализовать настоящий session-only режим при выключенном «Запомнить меня».
+- [x] Покрыть 1100×680, interaction, visual и Electron regression.
+
+# WEB-28 — Gaming Home
+
+- [x] Оставить ровно четыре центральных блока: voice status, быстрый возврат, активные пространства и друзья в игре.
+- [x] Собрать permission-filtered агрегат из PostgreSQL, Redis voice projection и LiveKit-confirmed presence без production mocks.
+- [x] Подключить прямой join голосового канала, переход к личному диалогу, realtime invalidation и offline cache.
+- [x] Добавить empty/loading/error states, Storybook и visual baselines 1600×1000/1100×760.
+- [ ] После отдельного проектирования заменить contacts-from-DM на каноническую friendship-модель с заявками и приватностью.

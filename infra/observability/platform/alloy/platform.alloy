@@ -1,0 +1,75 @@
+logging {
+  level  = "info"
+  format = "json"
+}
+
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+  filter {
+    name   = "name"
+    values = ["vatrushka-observability-platform-*"]
+  }
+}
+
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+    replacement   = "$1"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+loki.process "sanitize" {
+  stage.drop {
+    expression          = "(?i).*(GET|HEAD) /(health|ready|metrics)(/|\\s|\\?).*"
+    drop_counter_reason = "routine_healthcheck"
+  }
+
+  stage.replace {
+    expression = "(?i)(authorization|cookie|password|access[_-]?token|refresh[_-]?token|secret)([=:]\\s*)([^\\s,;]+)"
+    replace    = "$1$2[REDACTED]"
+  }
+
+  stage.static_labels {
+    values = {
+      environment = sys.env("OBSERVABILITY_ENVIRONMENT"),
+      host        = sys.env("OBSERVABILITY_HOST"),
+      region      = sys.env("OBSERVABILITY_REGION"),
+      source      = "docker",
+    }
+  }
+
+  forward_to = [loki.write.central.receiver]
+}
+
+loki.source.docker "containers" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.containers.targets
+  relabel_rules = discovery.relabel.containers.rules
+  forward_to    = [loki.process.sanitize.receiver]
+}
+
+loki.source.journal "system" {
+  path    = "/var/log/journal"
+  matches = "_SYSTEMD_UNIT=ssh.service"
+  labels = {
+    service = "ssh",
+    source  = "journald",
+  }
+  forward_to = [loki.process.sanitize.receiver]
+}
+
+loki.write "central" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

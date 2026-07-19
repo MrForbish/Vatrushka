@@ -50,7 +50,7 @@ test.describe('Vatrushka design system visual baseline', () => {
 
   test('server settings shell', async ({ page }) => {
     await openStory(page, 'features-settings-settings-shell--server-overview');
-    await expect(page.getByRole('heading', { name: 'Обзор' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Настройки сервера' })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Разделы настроек' })).toBeVisible();
     await expect(page).toHaveScreenshot('settings-shell-server.png', { animations: 'disabled', fullPage: true });
   });
@@ -94,22 +94,40 @@ test.describe('Vatrushka design system visual baseline', () => {
   test('personal Home dashboard', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await openStory(page, 'home-homepage--returning-user');
-    await expect(page.getByRole('heading', { name: 'Продолжить' })).toBeVisible();
-    await expect(page).toHaveScreenshot('home-dashboard.png', { animations: 'disabled', fullPage: true });
+    await expect(page.getByRole('heading', { name: 'Быстрый возврат' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Активные пространства' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Друзья в игре' })).toBeVisible();
+    await expect(page).toHaveScreenshot('home-dashboard.png', {
+      animations: 'disabled',
+      fullPage: true,
+      // Windows shell runners exhibit a stable sub-pixel font rasterization
+      // delta on this dense dashboard. Keep a bounded per-screen tolerance.
+      maxDiffPixels: 800,
+    });
   });
 
-  test('personal Home profile drawer', async ({ page }) => {
+  test('personal Home has no duplicate profile drawer', async ({ page }) => {
     await page.setViewportSize({ width: 1100, height: 760 });
     await openStory(page, 'home-homepage--profile-drawer-mode');
-    await page.getByRole('button', { name: 'Открыть профиль' }).click();
-    await expect(page.getByRole('dialog', { name: 'Профиль' })).toBeVisible();
-    await expect(page).toHaveScreenshot('home-profile-drawer.png', { animations: 'disabled', fullPage: true });
+    await expect(page.getByRole('button', { name: 'Открыть профиль' })).toHaveCount(0);
+    await expect(page.getByRole('dialog', { name: 'Профиль' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Активные пространства' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1100);
+    await expect(page).toHaveScreenshot('home-dashboard-compact.png', { animations: 'disabled', fullPage: true });
   });
 
   test('password login', async ({ page }) => {
     await openStory(page, 'screens-current--password-login');
-    await expect(page.getByRole('heading', { name: 'С возвращением' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Добро пожаловать' })).toBeVisible();
     await expect(page).toHaveScreenshot('password-login.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('password login at the minimum desktop viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 680 });
+    await openStory(page, 'screens-current--password-login');
+    await expect(page.getByRole('heading', { name: 'Добро пожаловать' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Продолжить' })).toBeVisible();
+    await expect(page).toHaveScreenshot('password-login-minimum.png', { animations: 'disabled', fullPage: true });
   });
 
   test('password reset', async ({ page }) => {
@@ -184,7 +202,7 @@ test.describe('Vatrushka design system visual baseline', () => {
 
   test('client update ready', async ({ page }) => {
     await openStory(page, 'features-client-update--ready');
-    await expect(page.getByRole('button', { name: 'Перезапустить' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Перезапустить и обновить' })).toBeVisible();
     await expect(page).toHaveScreenshot('client-update-ready.png', { animations: 'disabled', fullPage: true });
   });
 

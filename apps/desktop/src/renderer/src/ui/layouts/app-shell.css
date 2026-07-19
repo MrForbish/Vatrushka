@@ -15,16 +15,61 @@
   font-family: var(--font-ui);
 }
 
-.vui-app-shell__workspaces { grid-area: workspaces; min-width: 0; overflow: hidden; }
-.vui-app-shell__server-context { grid-area: server; min-width: 0; overflow: hidden; }
-.vui-app-shell__topbar { grid-area: topbar; display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: 0 var(--space-4); border-bottom: 1px solid var(--color-border-subtle); background: var(--color-surface-0); }
-.vui-app-shell__content { grid-area: content; min-width: 0; min-height: 0; overflow: hidden; background: var(--color-surface-1); }
-.vui-app-shell__members { display: none; grid-area: members; min-width: 0; overflow: hidden; }
-.vui-app-shell__workspace-toggle { display: none; flex: 0 0 auto; }
-.vui-app-shell__members-toggle { display: inline-flex; flex: 0 0 auto; }
-.vui-app-shell__drawer-content { height: calc(100vh - 86px); margin: calc(var(--space-6) * -1); }
+body.desktopTitlebarOverlay .vui-app-shell {
+  height: 100%;
+  min-height: 642px;
+}
+
+.vui-app-shell__workspaces {
+  grid-area: workspaces;
+  min-width: 0;
+  overflow: hidden;
+}
+.vui-app-shell__server-context {
+  grid-area: server;
+  min-width: 0;
+  overflow: hidden;
+}
+.vui-app-shell__topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-0);
+}
+.vui-app-shell__content {
+  grid-area: content;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--color-surface-1);
+}
+.vui-app-shell__members {
+  display: none;
+  grid-area: members;
+  min-width: 0;
+  overflow: hidden;
+}
+.vui-app-shell__workspace-toggle {
+  display: none;
+  flex: 0 0 auto;
+}
+.vui-app-shell__members-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.vui-app-shell__drawer-content {
+  height: calc(100vh - 86px);
+  margin: calc(var(--space-6) * -1);
+}
 .vui-app-shell__drawer-content > .vui-workspace-library,
-.vui-app-shell__drawer-content > .vui-member-panel { width: 100%; border: 0; }
+.vui-app-shell__drawer-content > .vui-member-panel {
+  width: 100%;
+  border: 0;
+}
 
 .vui-app-shell:not([data-has-server-context]) {
   grid-template-areas:
@@ -34,16 +79,22 @@
 }
 
 @media (min-width: 1440px) {
-  .vui-app-shell[data-has-members='true'][data-variant='default'] {
+  .vui-app-shell[data-has-members="true"][data-variant="default"] {
     grid-template-areas:
       "workspaces server topbar topbar"
       "workspaces server content members";
     grid-template-columns: 220px 292px minmax(620px, 1fr) 280px;
   }
-  .vui-app-shell[data-has-members='true'] .vui-app-shell__members { display: block; }
-  .vui-app-shell[data-has-members='true'] .vui-app-shell__members-toggle { display: none; }
+  .vui-app-shell[data-has-members="true"] .vui-app-shell__members {
+    display: block;
+  }
+  .vui-app-shell[data-has-members="true"] .vui-app-shell__members-toggle {
+    display: none;
+  }
 
-  .vui-app-shell[data-has-members='true'][data-variant='default']:not([data-has-server-context]) {
+  .vui-app-shell[data-has-members="true"][data-variant="default"]:not(
+      [data-has-server-context]
+    ) {
     grid-template-areas:
       "workspaces topbar topbar"
       "workspaces content members";
@@ -51,18 +102,18 @@
   }
 }
 
-.vui-app-shell[data-variant='settings'] {
+.vui-app-shell[data-variant="settings"] {
   grid-template-columns: 220px 264px minmax(0, 1fr);
   min-width: 1024px;
   background: var(--color-canvas);
 }
 
-.vui-app-shell[data-variant='settings'] .vui-app-shell__topbar {
+.vui-app-shell[data-variant="settings"] .vui-app-shell__topbar {
   min-height: 56px;
   padding-inline: var(--space-5);
 }
 
-.vui-app-shell[data-variant='home'] {
+.vui-app-shell[data-variant="home"] {
   grid-template-areas:
     "workspaces topbar"
     "workspaces content";
@@ -71,26 +122,36 @@
   background: var(--color-canvas);
 }
 
-.vui-app-shell[data-variant='home'] .vui-app-shell__topbar {
+.vui-app-shell[data-variant="home"] .vui-app-shell__topbar {
   min-height: 56px;
   padding-inline: var(--home-page-gap);
 }
 
 @media (min-width: 1280px) {
-  .vui-app-shell[data-variant='home'] {
+  .vui-app-shell[data-variant="home"] {
     grid-template-areas:
       "workspaces topbar topbar"
       "workspaces content members";
-    grid-template-columns: var(--home-sidebar-width) minmax(0, 1fr) var(--home-profile-rail-width);
+    grid-template-columns: var(--home-sidebar-width) minmax(0, 1fr) var(
+        --home-profile-rail-width
+      );
   }
 
-  .vui-app-shell[data-variant='home'] .vui-app-shell__members { display: block; }
-  .vui-app-shell[data-variant='home'] .vui-app-shell__members-toggle { display: none; }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__members {
+    display: block;
+  }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__members-toggle {
+    display: none;
+  }
 }
 
 @media (max-width: 1279px) {
-  .vui-app-shell[data-variant='home'] .vui-app-shell__members { display: none; }
-  .vui-app-shell[data-variant='home'] .vui-app-shell__members-toggle { display: inline-flex; }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__members {
+    display: none;
+  }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__members-toggle {
+    display: inline-flex;
+  }
 }
 
 @media (max-width: 1179px) {
@@ -100,8 +161,12 @@
       "server content";
     grid-template-columns: 292px minmax(0, 1fr);
   }
-  .vui-app-shell__workspaces { display: none; }
-  .vui-app-shell__workspace-toggle { display: inline-grid; }
+  .vui-app-shell__workspaces {
+    display: none;
+  }
+  .vui-app-shell__workspace-toggle {
+    display: inline-grid;
+  }
 
   .vui-app-shell:not([data-has-server-context]) {
     grid-template-areas:
@@ -112,7 +177,7 @@
 }
 
 @media (max-width: 1179px) {
-  .vui-app-shell[data-variant='settings'] {
+  .vui-app-shell[data-variant="settings"] {
     grid-template-areas:
       "server topbar"
       "server content";
@@ -121,14 +186,18 @@
 }
 
 @media (max-width: 1179px) {
-  .vui-app-shell[data-variant='home'],
-  .vui-app-shell[data-variant='home']:not([data-has-server-context]) {
+  .vui-app-shell[data-variant="home"],
+  .vui-app-shell[data-variant="home"]:not([data-has-server-context]) {
     grid-template-areas:
       "workspaces topbar"
       "workspaces content";
     grid-template-columns: var(--home-sidebar-width) minmax(0, 1fr);
   }
 
-  .vui-app-shell[data-variant='home'] .vui-app-shell__workspaces { display: block; }
-  .vui-app-shell[data-variant='home'] .vui-app-shell__workspace-toggle { display: none; }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__workspaces {
+    display: block;
+  }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__workspace-toggle {
+    display: none;
+  }
 }

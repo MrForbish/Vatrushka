@@ -22,3 +22,7 @@ Thumbs.db
 storybook-static
 playwright-report/
 test-results/
+
+infra/observability/platform/secrets/*
+!infra/observability/platform/secrets/*.example
+infra/observability/platform/backups/

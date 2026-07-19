@@ -1,0 +1,57 @@
+groups:
+  - name: infrastructure
+    rules:
+      - alert: InstanceMetricsMissing
+        expr: present_over_time(up{job=~"node|alloy-agent"}[15m]) unless on (host, job) present_over_time(up{job=~"node|alloy-agent"}[5m])
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Host metrics have disappeared
+
+      - alert: HostCpuHigh
+        expr: 100 - avg by (host) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100 > 85
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: Host CPU is above 85 percent
+
+      - alert: HostMemoryCritical
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 90
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: Host memory is above 90 percent
+
+      - alert: HostDiskWarning
+        expr: 100 * (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) > 80
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: Filesystem is above 80 percent
+
+      - alert: HostDiskCritical
+        expr: 100 * (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) > 90
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Filesystem is above 90 percent
+
+      - alert: HostInodesHigh
+        expr: 100 * (1 - node_filesystem_files_free{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_files{fstype!~"tmpfs|overlay|squashfs"}) > 85
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: Filesystem inode usage is above 85 percent
+
+      - alert: HostClockSkew
+        expr: abs(node_time_seconds - time()) > 5
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Host clock differs by more than five seconds
+
+      - alert: ContainerRestarting
+        expr: increase(container_start_time_seconds{name!=""}[15m]) > 3
+        labels: { severity: warning }
+        annotations:
+          summary: Container restarted repeatedly

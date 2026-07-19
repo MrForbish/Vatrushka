@@ -1,8 +1,21 @@
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 
-import { AudioLevelMeter, Avatar, Badge, Icon, Slider, type IconName } from '../primitives';
-import './voice.css';
+import {
+  AudioLevelMeter,
+  Avatar,
+  Badge,
+  Icon,
+  Slider,
+  type IconName,
+} from "../primitives";
+import "./voice.css";
 
 export interface VoiceParticipantViewModel {
   id: string;
@@ -15,7 +28,8 @@ export interface VoiceParticipantViewModel {
   volume?: number;
   audioLevel?: number;
   statusLabel?: string;
-  badge?: 'admin' | 'founder';
+  badge?: "admin" | "founder";
+  avatarUrl?: string | null;
 }
 
 export interface VoiceParticipantTileProps {
@@ -28,38 +42,203 @@ export interface VoiceParticipantTileProps {
   showControls?: boolean;
 }
 
-export function VoiceParticipantTile({ canKick = false, featured = false, onKick, onLocalMute, onVolume, participant, showControls = true }: VoiceParticipantTileProps): React.JSX.Element {
+export function VoiceParticipantTile({
+  canKick = false,
+  featured = false,
+  onKick,
+  onLocalMute,
+  onVolume,
+  participant,
+  showControls = true,
+}: VoiceParticipantTileProps): React.JSX.Element {
   const audioLevel = Math.max(0, Math.min(1, participant.audioLevel ?? 0));
-  const volume = participant.locallyMuted === true ? 0 : participant.volume ?? 1;
+  const volume =
+    participant.locallyMuted === true ? 0 : (participant.volume ?? 1);
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const hasMenu = participant.isLocal !== true && showControls;
   useEffect(() => {
     if (menu === null) return undefined;
-    const close = (event: MouseEvent): void => { if (!menuRef.current?.contains(event.target as Node)) setMenu(null); };
-    const escape = (event: KeyboardEvent): void => { if (event.key === 'Escape') setMenu(null); };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', escape);
-    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', escape); };
+    const close = (event: MouseEvent): void => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenu(null);
+    };
+    const escape = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") setMenu(null);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", escape);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", escape);
+    };
   }, [menu]);
-  const openMenu = (x: number, y: number): void => setMenu({ x: Math.min(x, window.innerWidth - 280), y: Math.min(y, window.innerHeight - 230) });
+  const openMenu = (x: number, y: number): void =>
+    setMenu({
+      x: Math.min(x, window.innerWidth - 280),
+      y: Math.min(y, window.innerHeight - 230),
+    });
   return (
-    <article className="vui-voice-participant" data-featured={featured || undefined} data-speaking={participant.isSpeaking || undefined} onContextMenu={(event) => { if (!hasMenu) return; event.preventDefault(); openMenu(event.clientX, event.clientY); }} style={{ '--voice-level': audioLevel } as CSSProperties}>
-      <div className="vui-voice-participant__portrait"><Avatar name={participant.name} size="lg" status={participant.isSpeaking === true ? 'online' : 'offline'} /><span aria-hidden="true" className="vui-voice-participant__pulse" /></div>
-      <div className="vui-voice-participant__identity"><span><strong>{participant.name}{participant.isLocal === true ? ' (вы)' : ''}</strong>{participant.badge === 'founder' ? <Badge tone="founder">CEO Founder</Badge> : participant.badge === 'admin' ? <Badge tone="primary">ADMIN</Badge> : null}</span><small>{participant.isSpeaking === true ? 'Говорит' : participant.statusLabel ?? 'В голосовом канале'}</small></div>
-      <div className="vui-voice-participant__signals"><AudioLevelMeter label={`Уровень голоса ${participant.name}`} segments={featured ? 16 : 8} value={audioLevel} />{participant.isScreenSharing === true ? <Badge tone="success"><Icon name="screen" size={12} /> LIVE</Badge> : null}<span aria-label={participant.isMuted === true ? 'Микрофон выключен' : 'Микрофон включён'} role="img"><Icon name={participant.isMuted === true ? 'micOff' : 'mic'} size={17} /></span></div>
-      {hasMenu ? <button aria-label={`Действия с участником ${participant.name}`} className="vui-voice-participant__menu-trigger" onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); openMenu(rect.right, rect.bottom); }} type="button">•••</button> : null}
-      {menu && hasMenu ? createPortal(<div className="vui-voice-participant__context-menu" ref={menuRef} role="menu" style={{ left: menu.x, top: menu.y }}><strong>{participant.name}</strong><button aria-pressed={participant.locallyMuted === true} onClick={() => onLocalMute?.(participant.id, participant.locallyMuted !== true)} role="menuitem" type="button"><Icon name={participant.locallyMuted === true ? 'volumeOff' : 'volume'} size={16} />{participant.locallyMuted === true ? 'Включить звук' : 'Отключить звук'}</button><Slider className="vui-slider--compact" label={`Громкость ${participant.name}`} max={100} min={0} onChange={(event) => onVolume?.(participant.id, Number(event.target.value) / 100)} value={Math.round(volume * 100)} valueLabel={`${Math.round(volume * 100)}%`} />{canKick && onKick !== undefined ? <button className="vui-voice-participant__kick" onClick={() => { onKick(participant.id); setMenu(null); }} role="menuitem" type="button"><Icon name="close" size={15} />Исключить из канала</button> : null}</div>, document.body) : null}
+    <article
+      className="vui-voice-participant"
+      data-featured={featured || undefined}
+      data-speaking={participant.isSpeaking || undefined}
+      onContextMenu={(event) => {
+        if (!hasMenu) return;
+        event.preventDefault();
+        openMenu(event.clientX, event.clientY);
+      }}
+      style={{ "--voice-level": audioLevel } as CSSProperties}
+    >
+      <div className="vui-voice-participant__portrait">
+        <Avatar
+          name={participant.name}
+          size="lg"
+          {...(participant.avatarUrl ? { src: participant.avatarUrl } : {})}
+          status={participant.isSpeaking === true ? "online" : "offline"}
+        />
+        <span aria-hidden="true" className="vui-voice-participant__pulse" />
+      </div>
+      <div className="vui-voice-participant__identity">
+        <span>
+          <strong>
+            {participant.name}
+            {participant.isLocal === true ? " (вы)" : ""}
+          </strong>
+          {participant.badge === "founder" ? (
+            <Badge tone="founder">CEO Founder</Badge>
+          ) : participant.badge === "admin" ? (
+            <Badge tone="primary">ADMIN</Badge>
+          ) : null}
+        </span>
+        <small>
+          {participant.isSpeaking === true
+            ? "Говорит"
+            : (participant.statusLabel ?? "В голосовом канале")}
+        </small>
+      </div>
+      <div className="vui-voice-participant__signals">
+        <AudioLevelMeter
+          label={`Уровень голоса ${participant.name}`}
+          segments={featured ? 16 : 8}
+          value={audioLevel}
+        />
+        {participant.isScreenSharing === true ? (
+          <Badge tone="success">
+            <Icon name="screen" size={12} /> LIVE
+          </Badge>
+        ) : null}
+        <span
+          aria-label={
+            participant.isMuted === true
+              ? "Микрофон выключен"
+              : "Микрофон включён"
+          }
+          role="img"
+        >
+          <Icon
+            name={participant.isMuted === true ? "micOff" : "mic"}
+            size={17}
+          />
+        </span>
+      </div>
+      {hasMenu ? (
+        <button
+          aria-label={`Действия с участником ${participant.name}`}
+          className="vui-voice-participant__menu-trigger"
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            openMenu(rect.right, rect.bottom);
+          }}
+          type="button"
+        >
+          •••
+        </button>
+      ) : null}
+      {menu && hasMenu
+        ? createPortal(
+            <div
+              className="vui-voice-participant__context-menu"
+              ref={menuRef}
+              role="menu"
+              style={{ left: menu.x, top: menu.y }}
+            >
+              <strong>{participant.name}</strong>
+              <button
+                aria-pressed={participant.locallyMuted === true}
+                onClick={() =>
+                  onLocalMute?.(
+                    participant.id,
+                    participant.locallyMuted !== true,
+                  )
+                }
+                role="menuitem"
+                type="button"
+              >
+                <Icon
+                  name={
+                    participant.locallyMuted === true ? "volumeOff" : "volume"
+                  }
+                  size={16}
+                />
+                {participant.locallyMuted === true
+                  ? "Включить звук"
+                  : "Отключить звук"}
+              </button>
+              <Slider
+                className="vui-slider--compact"
+                label={`Громкость ${participant.name}`}
+                max={100}
+                min={0}
+                onChange={(event) =>
+                  onVolume?.(participant.id, Number(event.target.value) / 100)
+                }
+                value={Math.round(volume * 100)}
+                valueLabel={`${Math.round(volume * 100)}%`}
+              />
+              {canKick && onKick !== undefined ? (
+                <button
+                  className="vui-voice-participant__kick"
+                  onClick={() => {
+                    onKick(participant.id);
+                    setMenu(null);
+                  }}
+                  role="menuitem"
+                  type="button"
+                >
+                  <Icon name="close" size={15} />
+                  Исключить из канала
+                </button>
+              ) : null}
+            </div>,
+            document.body,
+          )
+        : null}
     </article>
   );
 }
 
-export interface VoiceParticipantStripProps extends Omit<VoiceParticipantTileProps, 'featured' | 'participant'> {
+export interface VoiceParticipantStripProps extends Omit<
+  VoiceParticipantTileProps,
+  "featured" | "participant"
+> {
   participants: VoiceParticipantViewModel[];
 }
 
-export function VoiceParticipantStrip({ participants, ...actions }: VoiceParticipantStripProps): React.JSX.Element {
-  return <div aria-label="Участники голосового канала" className="vui-voice-strip">{participants.map((participant) => <VoiceParticipantTile {...actions} key={participant.id} participant={participant} />)}</div>;
+export function VoiceParticipantStrip({
+  participants,
+  ...actions
+}: VoiceParticipantStripProps): React.JSX.Element {
+  return (
+    <div aria-label="Участники голосового канала" className="vui-voice-strip">
+      {participants.map((participant) => (
+        <VoiceParticipantTile
+          {...actions}
+          key={participant.id}
+          participant={participant}
+        />
+      ))}
+    </div>
+  );
 }
 
 export interface VoiceControlButtonProps {
@@ -72,10 +251,47 @@ export interface VoiceControlButtonProps {
   onClick: () => void;
 }
 
-export function VoiceControlButton({ active = false, danger = false, disabled = false, icon, label, onClick, testId }: VoiceControlButtonProps): React.JSX.Element {
-  return <button aria-label={label} aria-pressed={active} className="vui-voice-control" data-active={active || undefined} data-danger={danger || undefined} data-testid={testId} disabled={disabled} onClick={onClick} title={label} type="button"><span><Icon name={icon} size={20} /></span><small>{label}</small></button>;
+export function VoiceControlButton({
+  active = false,
+  danger = false,
+  disabled = false,
+  icon,
+  label,
+  onClick,
+  testId,
+}: VoiceControlButtonProps): React.JSX.Element {
+  return (
+    <button
+      aria-label={label}
+      aria-pressed={active}
+      className="vui-voice-control"
+      data-active={active || undefined}
+      data-danger={danger || undefined}
+      data-testid={testId}
+      disabled={disabled}
+      onClick={onClick}
+      title={label}
+      type="button"
+    >
+      <span>
+        <Icon name={icon} size={20} />
+      </span>
+      <small>{label}</small>
+    </button>
+  );
 }
 
-export function VoiceControlDock({ children }: { children: ReactNode }): React.JSX.Element {
-  return <footer aria-label="Управление голосовым каналом" className="vui-voice-control-dock">{children}</footer>;
+export function VoiceControlDock({
+  children,
+}: {
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <footer
+      aria-label="Управление голосовым каналом"
+      className="vui-voice-control-dock"
+    >
+      {children}
+    </footer>
+  );
 }

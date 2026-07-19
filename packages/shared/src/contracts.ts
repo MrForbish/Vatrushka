@@ -1,63 +1,63 @@
-import type { LocalSettings } from './schemas.js';
+import type { LocalSettings } from "./schemas.js";
 
-export type PlatformRole = 'member' | 'admin' | 'owner';
+export type PlatformRole = "member" | "admin" | "owner";
 
 export const serverPermissions = [
-  'ADMINISTRATOR',
-  'VIEW_SERVER',
-  'VIEW_SERVER_SETTINGS',
-  'MANAGE_SERVER',
-  'MANAGE_APPEARANCE',
-  'MANAGE_MEMBERS',
-  'MANAGE_CHANNELS',
-  'MANAGE_ROLES',
-  'MANAGE_INVITES',
-  'MANAGE_INTEGRATIONS',
-  'VIEW_AUDIT_LOG',
-  'EXPORT_AUDIT_LOG',
-  'MANAGE_MODERATION',
-  'MANAGE_BACKUPS',
-  'TRANSFER_OWNERSHIP',
-  'DELETE_SERVER',
-  'MANAGE_SERVER_SECURITY',
-  'KICK_MEMBERS',
-  'BAN_MEMBERS',
-  'TIMEOUT_MEMBERS',
-  'MANAGE_NICKNAMES',
-  'VIEW_MODERATION_NOTES',
-  'MANAGE_REPORTS',
-  'VIEW_CHANNEL',
-  'READ_MESSAGE_HISTORY',
-  'SEND_MESSAGES',
-  'SEND_ATTACHMENTS',
-  'ADD_REACTIONS',
-  'EMBED_LINKS',
-  'MENTION_EVERYONE',
-  'MANAGE_OWN_MESSAGES',
-  'MANAGE_MESSAGES',
-  'PIN_MESSAGES',
-  'CREATE_THREADS',
-  'CONNECT_VOICE',
-  'SPEAK',
-  'STREAM_SCREEN',
-  'STREAM_APPLICATION_AUDIO',
-  'USE_PRIORITY_VOICE',
-  'MUTE_MEMBERS',
-  'DEAFEN_MEMBERS',
-  'MOVE_MEMBERS',
-  'STOP_OTHERS_STREAM',
-  'CREATE_TEMPORARY_VOICE',
-  'MANAGE_2FA_POLICY',
-  'MANAGE_SESSIONS',
-  'VIEW_TECHNICAL_LOGS',
-  'EXPORT_SERVER_DATA',
+  "ADMINISTRATOR",
+  "VIEW_SERVER",
+  "VIEW_SERVER_SETTINGS",
+  "MANAGE_SERVER",
+  "MANAGE_APPEARANCE",
+  "MANAGE_MEMBERS",
+  "MANAGE_CHANNELS",
+  "MANAGE_ROLES",
+  "MANAGE_INVITES",
+  "MANAGE_INTEGRATIONS",
+  "VIEW_AUDIT_LOG",
+  "EXPORT_AUDIT_LOG",
+  "MANAGE_MODERATION",
+  "MANAGE_BACKUPS",
+  "TRANSFER_OWNERSHIP",
+  "DELETE_SERVER",
+  "MANAGE_SERVER_SECURITY",
+  "KICK_MEMBERS",
+  "BAN_MEMBERS",
+  "TIMEOUT_MEMBERS",
+  "MANAGE_NICKNAMES",
+  "VIEW_MODERATION_NOTES",
+  "MANAGE_REPORTS",
+  "VIEW_CHANNEL",
+  "READ_MESSAGE_HISTORY",
+  "SEND_MESSAGES",
+  "SEND_ATTACHMENTS",
+  "ADD_REACTIONS",
+  "EMBED_LINKS",
+  "MENTION_EVERYONE",
+  "MANAGE_OWN_MESSAGES",
+  "MANAGE_MESSAGES",
+  "PIN_MESSAGES",
+  "CREATE_THREADS",
+  "CONNECT_VOICE",
+  "SPEAK",
+  "STREAM_SCREEN",
+  "STREAM_APPLICATION_AUDIO",
+  "USE_PRIORITY_VOICE",
+  "MUTE_MEMBERS",
+  "DEAFEN_MEMBERS",
+  "MOVE_MEMBERS",
+  "STOP_OTHERS_STREAM",
+  "CREATE_TEMPORARY_VOICE",
+  "MANAGE_2FA_POLICY",
+  "MANAGE_SESSIONS",
+  "VIEW_TECHNICAL_LOGS",
+  "EXPORT_SERVER_DATA",
 ] as const;
 
 export type ServerPermission = (typeof serverPermissions)[number];
-export type ServerChannelType = 'text' | 'voice';
-export type ServerRoleKind = 'EVERYONE' | 'OWNER' | 'CUSTOM';
+export type ServerChannelType = "text" | "voice";
+export type ServerRoleKind = "EVERYONE" | "OWNER" | "CUSTOM";
 
-export type PermissionOverwriteTargetType = 'ROLE' | 'MEMBER';
+export type PermissionOverwriteTargetType = "ROLE" | "MEMBER";
 
 export interface ChannelPermissionOverwrite {
   channelId: string;
@@ -74,13 +74,33 @@ export interface ServerSummary {
   ownerUserId: string;
   memberCount: number;
   createdAt: string;
+  description?: string | null;
+  iconUrl?: string | null;
+  bannerUrl?: string | null;
+  accentColor?: string | null;
+  visibility?: ServerVisibility;
 }
 
-export type HomePresence = 'online' | 'idle' | 'dnd' | 'offline';
-export type PresencePreference = 'online' | 'idle' | 'do_not_disturb' | 'invisible';
-export type EffectivePresenceStatus = 'online' | 'idle' | 'dnd' | 'offline';
-export type DirectMessagePrivacy = 'shared_servers' | 'nobody';
-export type PresenceVisibility = 'shared_servers' | 'nobody';
+export type ServerVisibility = "private" | "public";
+
+export interface PublicServerSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  iconUrl: string | null;
+  bannerUrl: string | null;
+  accentColor: string | null;
+  memberCount: number;
+  featured: boolean;
+  joined: boolean;
+}
+
+export type HomePresence = "online" | "idle" | "dnd" | "offline";
+export type PresencePreference =
+  "online" | "idle" | "do_not_disturb" | "invisible";
+export type EffectivePresenceStatus = "online" | "idle" | "dnd" | "offline";
+export type DirectMessagePrivacy = "shared_servers" | "nobody";
+export type PresenceVisibility = "shared_servers" | "nobody";
 
 export interface UserPresence {
   preference: PresencePreference;
@@ -96,8 +116,8 @@ export interface UserPrivacySettings {
   activityVisible: boolean;
   updatedAt: string;
 }
-export type HomeConnectionStatus = 'healthy' | 'degraded' | 'offline';
-export type HomeDestinationType = 'server' | 'text_channel' | 'voice_channel';
+export type HomeConnectionStatus = "healthy" | "degraded" | "offline";
+export type HomeDestinationType = "server" | "text_channel" | "voice_channel";
 
 export interface HomeDestination {
   type: HomeDestinationType;
@@ -112,7 +132,7 @@ export interface HomeServerSummary extends ServerSummary {
 
 export interface HomeContinueItem {
   id: string;
-  type: 'active_call' | HomeDestinationType;
+  type: "active_call" | HomeDestinationType;
   title: string;
   subtitle: string;
   participantCount: number;
@@ -128,7 +148,7 @@ export interface HomeParticipantPreview {
 
 export interface HomeActiveSpaceItem {
   id: string;
-  type: 'voice_channel' | 'text_channel';
+  type: "voice_channel" | "text_channel";
   title: string;
   subtitle: string;
   participants: HomeParticipantPreview[];
@@ -139,13 +159,74 @@ export interface HomeActiveSpaceItem {
   destination: HomeDestination;
 }
 
+export type GamingHomeConnectionQuality =
+  | "excellent"
+  | "good"
+  | "poor"
+  | "offline";
+
+export interface GamingHomeVoiceStatus {
+  microphone: {
+    available: boolean;
+    enabled: boolean;
+    label: string | null;
+  };
+  output: {
+    available: boolean;
+    label: string | null;
+  };
+  pingMs: number | null;
+  connectionQuality: GamingHomeConnectionQuality;
+}
+
+export interface GamingHomeVoiceSpace {
+  channelId: string;
+  serverId: string;
+  serverName: string;
+  serverIconUrl: string | null;
+  channelName: string;
+  gameName: string | null;
+  coverUrl: string | null;
+  participantCount: number;
+  participantLimit: number | null;
+  friendCount: number;
+  participantAvatars: string[];
+  hasScreenShare: boolean;
+  hasFreeSlots: boolean;
+  canJoin: boolean;
+  lastActivityAt: string;
+}
+
+export interface GamingHomeQuickReturnItem extends GamingHomeVoiceSpace {
+  returnReason:
+    | "recently_left"
+    | "friends_inside"
+    | "screen_share"
+    | "pinned";
+}
+
+export interface GamingHomeFriend {
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  presence: "online" | "away" | "dnd";
+  gameName: string | null;
+  gameDetails: string | null;
+  voiceChannel: {
+    channelId: string;
+    serverId: string;
+    channelName: string;
+    canJoin: boolean;
+  } | null;
+}
+
 export type HomeActivityType =
-  | 'opened_channel'
-  | 'joined_voice'
-  | 'left_voice'
-  | 'sent_message'
-  | 'joined_server'
-  | 'mention_received';
+  | "opened_channel"
+  | "joined_voice"
+  | "left_voice"
+  | "sent_message"
+  | "joined_server"
+  | "mention_received";
 
 export interface HomeRecentActivityItem {
   id: string;
@@ -157,7 +238,7 @@ export interface HomeRecentActivityItem {
 }
 
 export interface HomeOnboardingStep {
-  id: 'create_server' | 'configure_channels' | 'invite_members';
+  id: "create_server" | "configure_channels" | "invite_members";
   title: string;
   description: string;
   complete: boolean;
@@ -171,7 +252,7 @@ export interface HomeDashboardResponse {
     email: string;
     avatarUrl: string | null;
     presence: HomePresence;
-    platformBadge: 'FOUNDER_DEVELOPER' | null;
+    platformBadge: "FOUNDER_DEVELOPER" | null;
   };
   readiness: {
     connection: HomeConnectionStatus;
@@ -184,6 +265,12 @@ export interface HomeDashboardResponse {
   onboarding: {
     visible: boolean;
     steps: HomeOnboardingStep[];
+  };
+  gaming: {
+    voiceStatus: GamingHomeVoiceStatus;
+    quickReturn: GamingHomeQuickReturnItem[];
+    activeSpaces: GamingHomeVoiceSpace[];
+    friendsInGame: GamingHomeFriend[];
   };
 }
 
@@ -215,6 +302,7 @@ export interface VoiceChannelParticipant {
   userId: string;
   displayName: string;
   platformRole: PlatformRole;
+  avatarUrl?: string | null;
 }
 
 export interface ServerRole {
@@ -247,6 +335,7 @@ export interface ServerMember {
   serverDisplayName: string | null;
   privateAlias: string | null;
   platformRole: PlatformRole;
+  avatarUrl?: string | null;
   joinedAt: string;
   roles: ServerRole[];
   presence?: EffectivePresenceStatus;
@@ -261,8 +350,8 @@ export interface ServerDetail extends ServerSummary {
   permissions: ServerPermission[];
 }
 
-export type ServerNotificationLevel = 'all' | 'mentions' | 'none';
-export type ServerVerificationLevel = 'none' | 'email_verified' | 'account_age';
+export type ServerNotificationLevel = "all" | "mentions" | "none";
+export type ServerVerificationLevel = "none" | "email_verified" | "account_age";
 
 export interface ServerOverviewSettings {
   id: string;
@@ -274,6 +363,7 @@ export interface ServerOverviewSettings {
   welcomeChannelId: string | null;
   defaultNotificationLevel: ServerNotificationLevel;
   defaultVoiceInactivitySeconds: number;
+  visibility: ServerVisibility;
   ownerUserId: string;
   ownerDisplayName: string;
   version: number;
@@ -423,7 +513,11 @@ export interface DirectMessageParticipant {
 export interface DirectConversationSummary {
   id: string;
   participant: DirectMessageParticipant;
-  lastMessage: { authorUserId: string; content: string; createdAt: string } | null;
+  lastMessage: {
+    authorUserId: string;
+    content: string;
+    createdAt: string;
+  } | null;
   unreadCount: number;
   createdAt: string;
   updatedAt: string;
@@ -440,8 +534,17 @@ export interface DirectMessage {
   authorDisplayName: string;
   authorPlatformRole: PlatformRole;
   content: string;
-  replyTo: { messageId: string; authorUserId: string; authorDisplayName: string; content: string } | null;
-  reactions: Array<{ emoji: string; count: number; reactedByCurrentUser: boolean }>;
+  replyTo: {
+    messageId: string;
+    authorUserId: string;
+    authorDisplayName: string;
+    content: string;
+  } | null;
+  reactions: Array<{
+    emoji: string;
+    count: number;
+    reactedByCurrentUser: boolean;
+  }>;
   attachments: MessageAttachment[];
   createdAt: string;
   editedAt: string | null;
@@ -449,9 +552,10 @@ export interface DirectMessage {
   deliveryState?: MessageDeliveryState;
 }
 
-export type MessageDeliveryState = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
-export type ConversationType = 'server_channel' | 'direct' | 'group_direct';
-export type ConversationMentionType = 'user' | 'role' | 'everyone';
+export type MessageDeliveryState =
+  "sending" | "sent" | "delivered" | "read" | "failed";
+export type ConversationType = "server_channel" | "direct" | "group_direct";
+export type ConversationMentionType = "user" | "role" | "everyone";
 export interface ConversationMentionDraft {
   type: ConversationMentionType;
   userId?: string | undefined;
@@ -460,7 +564,14 @@ export interface ConversationMentionDraft {
   length: number;
   displayName: string;
 }
-export type ConversationNotificationType = 'message' | 'direct_message' | 'mention' | 'reply' | 'server_invite' | 'moderation' | 'system';
+export type ConversationNotificationType =
+  | "message"
+  | "direct_message"
+  | "mention"
+  | "reply"
+  | "server_invite"
+  | "moderation"
+  | "system";
 
 export interface ConversationSummary {
   id: string;
@@ -469,7 +580,12 @@ export interface ConversationSummary {
   channelId: string | null;
   title: string;
   updatedAt: string;
-  lastMessage: { id: string; authorId: string; content: string; createdAt: string } | null;
+  lastMessage: {
+    id: string;
+    authorId: string;
+    content: string;
+    createdAt: string;
+  } | null;
   unreadCount: number;
   mentionCount: number;
 }
@@ -478,12 +594,41 @@ export interface ConversationMessage {
   id: string;
   conversationId: string;
   clientMessageId: string;
-  author: { id: string; displayName: string; username: string | null; avatarUrl: string | null };
+  author: {
+    id: string;
+    displayName: string;
+    username: string | null;
+    avatarUrl: string | null;
+  };
   content: string;
-  replyTo: { id: string; authorId: string; authorDisplayName: string; content: string } | null;
-  attachments: Array<{ id: string; fileName: string; mimeType: string; sizeBytes: string; width: number | null; height: number | null; durationMs: number | null }>;
-  reactions: Array<{ emoji: string; count: number; reactedByCurrentUser: boolean }>;
-  mentions: Array<{ id: string; type: ConversationMentionType; userId: string | null; roleId: string | null; start: number | null; length: number | null }>;
+  replyTo: {
+    id: string;
+    authorId: string;
+    authorDisplayName: string;
+    content: string;
+  } | null;
+  attachments: Array<{
+    id: string;
+    fileName: string;
+    mimeType: string;
+    sizeBytes: string;
+    width: number | null;
+    height: number | null;
+    durationMs: number | null;
+  }>;
+  reactions: Array<{
+    emoji: string;
+    count: number;
+    reactedByCurrentUser: boolean;
+  }>;
+  mentions: Array<{
+    id: string;
+    type: ConversationMentionType;
+    userId: string | null;
+    roleId: string | null;
+    start: number | null;
+    length: number | null;
+  }>;
   createdAt: string;
   editedAt: string | null;
   deletedAt: string | null;
@@ -511,10 +656,15 @@ export interface UserUnreadSummary {
   totalDirectUnread: number;
   totalMentionUnread: number;
   totalReplyUnread: number;
-  conversations: Array<{ conversationId: string; unreadCount: number; mentionCount: number; firstUnreadMessageId: string | null }>;
+  conversations: Array<{
+    conversationId: string;
+    unreadCount: number;
+    mentionCount: number;
+    firstUnreadMessageId: string | null;
+  }>;
 }
 
-export type NotificationPreviewMode = 'full' | 'sender_only' | 'hidden';
+export type NotificationPreviewMode = "full" | "sender_only" | "hidden";
 
 export interface UserNotificationPreferences {
   desktopEnabled: boolean;
@@ -528,7 +678,7 @@ export interface UserNotificationPreferences {
   updatedAt: string;
 }
 
-export type NotificationPreferenceLevel = 'all' | 'mentions' | 'none';
+export type NotificationPreferenceLevel = "all" | "mentions" | "none";
 
 export interface ServerNotificationPreferences {
   serverId: string;
@@ -563,20 +713,29 @@ export interface InternalNotification {
 }
 
 export type RealtimeEventType =
-  | 'message.created'
-  | 'message.updated'
-  | 'message.deleted'
-  | 'message.reaction.updated'
-  | 'conversation.read_state.updated'
-  | 'conversation.unread.updated'
-  | 'notification.created'
-  | 'typing.started'
-  | 'typing.stopped'
-  | 'presence.updated'
-  | 'server.updated'
-  | 'server.channel.updated'
-  | 'session.revoked'
-  | 'feature_flags.updated';
+  | "message.created"
+  | "message.updated"
+  | "message.deleted"
+  | "message.reaction.updated"
+  | "conversation.read_state.updated"
+  | "conversation.unread.updated"
+  | "notification.created"
+  | "typing.started"
+  | "typing.stopped"
+  | "presence.updated"
+  | "server.updated"
+  | "server.channel.updated"
+  | "voice.presence.updated"
+  | "voice.member.joined"
+  | "voice.member.left"
+  | "voice.member.moved"
+  | "voice.member.move.pending"
+  | "voice.member.move.required"
+  | "voice.member.move.failed"
+  | "voice.member.state.updated"
+  | "voice.server.snapshot.required"
+  | "session.revoked"
+  | "feature_flags.updated";
 
 export interface RealtimeEvent {
   id: string;
@@ -588,15 +747,66 @@ export interface RealtimeEvent {
 }
 
 export type RealtimeClientCommand =
-  | { type: 'auth'; token: string; deviceId: string }
-  | { type: 'subscribe'; conversationId: string }
-  | { type: 'unsubscribe'; conversationId: string }
-  | { type: 'typing.start'; conversationId: string }
-  | { type: 'typing.stop'; conversationId: string }
-  | { type: 'active_conversation.set'; conversationId: string | null }
-  | { type: 'delivery.ack'; conversationId: string; messageId: string }
-  | { type: 'conversation.read'; conversationId: string; messageId: string }
-  | { type: 'ping' };
+  | { type: "auth"; token: string; deviceId: string }
+  | { type: "subscribe"; conversationId: string }
+  | { type: "unsubscribe"; conversationId: string }
+  | { type: "typing.start"; conversationId: string }
+  | { type: "typing.stop"; conversationId: string }
+  | { type: "active_conversation.set"; conversationId: string | null }
+  | { type: "delivery.ack"; conversationId: string; messageId: string }
+  | { type: "conversation.read"; conversationId: string; messageId: string }
+  | { type: "voice.server.subscribe"; serverId: string; knownVersion?: number }
+  | { type: "voice.server.unsubscribe"; serverId: string }
+  | { type: "ping" };
+
+export type VoiceMoveFailureCode =
+  | "NOT_IN_VOICE"
+  | "SOURCE_CHANGED"
+  | "TARGET_NOT_FOUND"
+  | "TARGET_NOT_VOICE"
+  | "TARGET_FULL"
+  | "MISSING_CONNECT_PERMISSION"
+  | "MISSING_MOVE_MEMBERS_PERMISSION"
+  | "ROLE_HIERARCHY_DENIED"
+  | "TARGET_CLIENT_OFFLINE"
+  | "TRANSPORT_ERROR"
+  | "JOIN_FAILED"
+  | "TIMEOUT"
+  | "CONFLICT";
+
+export interface VoiceMemberStateDto {
+  userId: string;
+  sessionId: string;
+  muted: boolean;
+  deafened: boolean;
+  speaking: boolean;
+  screenSharing: boolean;
+  connectionQuality?: "excellent" | "good" | "poor" | "unknown";
+}
+
+export interface ServerVoiceStateDto {
+  serverId: string;
+  version: number;
+  generatedAt: string;
+  channels: Array<{
+    channelId: string;
+    members: VoiceMemberStateDto[];
+  }>;
+}
+
+export interface MoveVoiceMemberRequest {
+  clientRequestId: string;
+  subjectUserId: string;
+  targetChannelId: string;
+  expectedSourceChannelId?: string;
+  expectedVoiceSessionId?: string;
+}
+
+export interface MoveVoiceMemberAccepted {
+  movementId: string;
+  status: "pending";
+  expiresAt: string;
+}
 
 export interface DesktopMessageNotification {
   id: string;
@@ -609,17 +819,20 @@ export interface DesktopMessageNotification {
   silent?: boolean | undefined;
 }
 
-export type DesktopMessageNotificationTarget = Pick<DesktopMessageNotification, 'serverId' | 'channelId' | 'conversationId' | 'messageId'>;
+export type DesktopMessageNotificationTarget = Pick<
+  DesktopMessageNotification,
+  "serverId" | "channelId" | "conversationId" | "messageId"
+>;
 
 export type DesktopUpdateStatus =
-  | 'idle'
-  | 'checking'
-  | 'available'
-  | 'downloading'
-  | 'ready'
-  | 'up-to-date'
-  | 'unsupported'
-  | 'error';
+  | "idle"
+  | "checking"
+  | "available"
+  | "downloading"
+  | "ready"
+  | "up-to-date"
+  | "unsupported"
+  | "error";
 
 export interface DesktopUpdateState {
   status: DesktopUpdateStatus;
@@ -636,6 +849,7 @@ export interface PublicUser {
   platformRole: PlatformRole;
   hasPassword: boolean;
   twoFactorEnabled: boolean;
+  avatarUrl?: string | null;
 }
 
 export interface UserProfileSettings {
@@ -645,6 +859,7 @@ export interface UserProfileSettings {
   username: string | null;
   bio: string | null;
   avatarUrl: string | null;
+  coverUrl?: string | null;
   usernameChangedAt: string | null;
   updatedAt: string;
 }
@@ -666,8 +881,8 @@ export interface UserAccountSettings {
 }
 
 export interface PasswordLoginChallenge {
-  status: 'SECOND_FACTOR_REQUIRED';
-  factor: 'email' | 'totp' | 'recovery';
+  status: "SECOND_FACTOR_REQUIRED";
+  factor: "email" | "totp" | "recovery";
   retryAfterSeconds: number;
 }
 
@@ -692,19 +907,19 @@ export interface UserSession {
 }
 
 export type SecurityEventType =
-  | 'SESSION_CREATED'
-  | 'SESSION_REVOKED'
-  | 'PASSWORD_CHANGED'
-  | 'PASSWORD_RESET'
-  | 'TWO_FACTOR_ENABLED'
-  | 'TWO_FACTOR_DISABLED'
-  | 'RECOVERY_CODES_REGENERATED'
-  | 'REFRESH_TOKEN_REUSE_DETECTED'
-  | 'PROFILE_UPDATED'
-  | 'USERNAME_CHANGED'
-  | 'EMAIL_CHANGED'
-  | 'ACCOUNT_DEACTIVATION_SCHEDULED'
-  | 'ACCOUNT_DEACTIVATION_CANCELLED';
+  | "SESSION_CREATED"
+  | "SESSION_REVOKED"
+  | "PASSWORD_CHANGED"
+  | "PASSWORD_RESET"
+  | "TWO_FACTOR_ENABLED"
+  | "TWO_FACTOR_DISABLED"
+  | "RECOVERY_CODES_REGENERATED"
+  | "REFRESH_TOKEN_REUSE_DETECTED"
+  | "PROFILE_UPDATED"
+  | "USERNAME_CHANGED"
+  | "EMAIL_CHANGED"
+  | "ACCOUNT_DEACTIVATION_SCHEDULED"
+  | "ACCOUNT_DEACTIVATION_CANCELLED";
 
 export interface SecurityEvent {
   id: string;
@@ -727,9 +942,10 @@ export interface RoomConnection {
   livekitUrl: string;
   livekitToken: string;
   participantIdentity: string;
+  voiceSessionId?: string;
   participantDisplayName: string;
   isOwner: boolean;
-  contextType: 'channel';
+  contextType: "channel";
   serverId: string;
   channelId: string;
   serverName?: string;
@@ -746,7 +962,7 @@ export interface DesktopSourceInfo {
   name: string;
   thumbnailDataUrl: string;
   appIconDataUrl?: string;
-  type: 'screen' | 'window';
+  type: "screen" | "window";
   displayName?: string;
   width?: number;
   height?: number;
@@ -759,7 +975,12 @@ export interface DesktopBridge {
   checkForUpdates(): Promise<void>;
   installUpdate(): Promise<void>;
   onUpdateState(callback: (state: DesktopUpdateState) => void): () => void;
-  completeAuthSession(path: DesktopAuthCompletionPath, body: unknown, apiBaseUrl: string): Promise<DesktopAuthCompletionResult>;
+  completeAuthSession(
+    path: DesktopAuthCompletionPath,
+    body: unknown,
+    apiBaseUrl: string,
+    rememberSession?: boolean,
+  ): Promise<DesktopAuthCompletionResult>;
   refreshAuthSession(): Promise<DesktopAuthSession | null>;
   logoutAuthSession(): Promise<void>;
   clearAuthSession(): Promise<void>;
@@ -767,9 +988,16 @@ export interface DesktopBridge {
   selectDesktopSource(sourceId: string, includeAudio: boolean): Promise<void>;
   clearSelectedDesktopSource(): Promise<void>;
   copyToClipboard(text: string): Promise<void>;
+  openExternal(
+    url: "https://t.me/MaksZJ" | "mailto:vatrushka-notify@yandex.ru",
+  ): Promise<void>;
   setBadgeCount(count: number): Promise<void>;
-  showMessageNotification(notification: DesktopMessageNotification): Promise<void>;
-  onMessageNotificationClick(callback: (target: DesktopMessageNotificationTarget) => void): () => void;
+  showMessageNotification(
+    notification: DesktopMessageNotification,
+  ): Promise<void>;
+  onMessageNotificationClick(
+    callback: (target: DesktopMessageNotificationTarget) => void,
+  ): () => void;
   onDeepLink(callback: (inviteToken: string) => void): () => void;
   getPlatform(): Promise<string>;
   getLocalSettings(): Promise<LocalSettings>;
@@ -782,8 +1010,13 @@ export interface DesktopAuthSession {
   user: PublicUser;
 }
 
-export type DesktopAuthCompletionPath = '/auth/register/verify-code' | '/auth/password/complete';
+export type DesktopAuthCompletionPath =
+  "/auth/register/verify-code" | "/auth/password/complete";
 
 export type DesktopAuthCompletionResult =
   | { ok: true; session: DesktopAuthSession & { isNewUser: boolean } }
-  | { ok: false; status: number; error: { code: string; message: string; details: unknown } | null };
+  | {
+      ok: false;
+      status: number;
+      error: { code: string; message: string; details: unknown } | null;
+    };

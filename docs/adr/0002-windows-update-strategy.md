@@ -14,13 +14,13 @@
 
 1. Сохранить `electron-updater`, NSIS target и generic feed. Не внедрять второй updater и не запускать installer через shell/openExternal.
 2. Main process остаётся владельцем updater lifecycle. Renderer получает только типизированное состояние и команды через allowlisted preload IPC.
-3. Расширить state machine состояниями `available`, `downloading`, `downloaded`, `waiting-for-call-end`, `installing`, `error`; повторная команда не создаёт второй download/install job.
-4. Переключить `autoDownload` на `false`: скачивание начинается после явного действия пользователя и идёт в фоне с реальным progress event.
-5. Перед установкой renderer передаёт main только runtime blockers (`activeVoiceCall`, `dirtySettings`). Main повторно проверяет state и принимает окончательное решение. При активном звонке update остаётся downloaded и ждёт выхода либо следующего штатного запуска.
+3. State machine публикует `checking`, `available`, `downloading`, `ready`, `up-to-date`, `error` и `unsupported`; повторные события не создают второй download/install job.
+4. `autoDownload` включён: найденное обязательное обновление сразу загружается в фоне с реальным progress event. Плашку нельзя закрыть на стадиях download/ready.
+5. Renderer блокирует команду установки при активном LiveKit-звонке. Update остаётся `ready` и ждёт явного нажатия после выхода из канала либо следующего штатного запуска.
 6. Тихая установка выполняется только через `quitAndInstall(true, true)` после `update-downloaded`; обработать `before-quit-for-update` и идемпотентное завершение приложения.
 7. В updater-этапе изменить NSIS на `oneClick: true`, сохранив `perMachine: false`, install scope и текущий app identity. Перед production rollout проверить upgrade с последней опубликованной assisted NSIS-версии.
 8. Feed публикуется атомарно: installer и blockmap раньше `latest.yml`. Логи содержат version/state/error class, но не URL с credentials, session identifiers или пользовательские данные.
-9. `silentWindowsUpdates` остаётся выключенным в production до успешной staging-матрицы на реальной установленной Windows-версии. Отсутствие code-signing сертификата не блокирует разработку и staging, но остаётся release risk и должно быть явно показано перед публичным rollout.
+9. Проверка начинается сразу, ограничена 30 секундами и повторяется через минуту после ошибки; далее сохраняется периодическая проверка. Отсутствие code-signing сертификата не блокирует разработку и staging, но остаётся release risk и должно быть явно показано перед публичным rollout.
 
 ## Последствия
 
@@ -41,4 +41,4 @@
 
 ## Статус реализации на 2026-07-18
 
-Базовый безопасный контур выпущен без ожидания code-signing сертификата: окно обновления появляется только при реально доступной или уже загруженной версии, повторные команды идемпотентны, а renderer не разрешает restart во время активного LiveKit-звонка. Текущий совместимый с уже установленной 0.5.x NSIS цепочкой режим остаётся assisted (`oneClick: false`), `autoDownload: true`, `autoInstallOnAppQuit: true`, установка вызывается через `quitAndInstall(false, true)`. Переход к one-click и проверка blockers непосредственно в main process остаются отдельным hardening-этапом после матрицы upgrade-тестов; отсутствие подписи принято как временный release risk владельцем продукта.
+Реализован обязательный one-click контур без ожидания code-signing сертификата: `oneClick: true`, `autoDownload: true`, `autoInstallOnAppQuit: true`, установка вызывается через `quitAndInstall(true, true)`. Проверка начинается сразу, имеет timeout и retry; готовое обязательное обновление нельзя скрыть. Renderer блокирует restart во время активного LiveKit-звонка. Upgrade с последней assisted-версии остаётся обязательной ручной release-проверкой, а отсутствие подписи принято владельцем продукта как временный SmartScreen risk.
