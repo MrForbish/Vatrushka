@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-07-19
+
+### Fixed
+
+- `glab` production publication now enables GitLab CI auto-login, which sends `CI_JOB_TOKEN` through the supported `JOB-TOKEN` header;
+- removed the unnecessary long-lived release-token variable and added a policy guard against configuring `GITLAB_TOKEN` in the production job.
+
 ## [0.6.7] - 2026-07-19
 
 ### Fixed
