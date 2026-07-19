@@ -114,6 +114,8 @@
 
 ### P1.2 — сообщества и messaging
 
+Текущий клиентский reliability-срез `WEB-25` объединяет связанные исправления без дробления на мелкие pipeline: обязательный one-click updater, безопасный video-only screen share, проверку фактического LiveKit presence перед move, durable email outbox, realtime voice-presence invalidation, каталог публичных серверов, server/profile media, Windows title bar, временные E2E-профили и UI-cleanup. После локального полного quality gate срез поставляется одним ordinary MR в `develop`.
+
 - drag-and-drop порядка каналов и приватные категории;
 - заявки на вступление и расширенные invite policies;
 - поиск, закрепленные сообщения и threads;

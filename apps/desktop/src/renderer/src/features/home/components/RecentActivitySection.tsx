@@ -27,5 +27,9 @@ export function RecentActivitySection({ items, onOpen }: RecentActivitySectionPr
 function formatActivityTime(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('ru', { hour: '2-digit', minute: '2-digit' }).format(date);
+  return new Intl.DateTimeFormat('ru', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Moscow',
+  }).format(date);
 }

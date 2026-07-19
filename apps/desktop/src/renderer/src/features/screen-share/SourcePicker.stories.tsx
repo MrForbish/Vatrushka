@@ -41,6 +41,10 @@ export const SelectApplication: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /^Окно приложения$/u }));
     await userEvent.click(canvas.getByRole('button', { name: 'Visual Studio Code, Только выбранное окно' }));
     await userEvent.click(canvas.getByRole('button', { name: 'Начать демонстрацию' }));
-    await expect(args.onSelect).toHaveBeenCalledWith(sources[3], '1080p60');
+    await expect(args.onSelect).toHaveBeenCalledWith(
+      sources[3],
+      '1080p60',
+      false,
+    );
   },
 };

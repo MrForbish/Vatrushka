@@ -1,6 +1,8 @@
-export const UPDATE_START_DELAY_MS = 5_000;
+export const UPDATE_START_DELAY_MS = 0;
 export const UPDATE_INTERVAL_MS = 15 * 60 * 1_000;
 export const UPDATE_ACTIVITY_COOLDOWN_MS = 5 * 60 * 1_000;
+export const UPDATE_CHECK_TIMEOUT_MS = 30_000;
+export const UPDATE_RETRY_DELAY_MS = 60_000;
 
 export function isUpdateCheckDue(
   lastCheckStartedAt: number | null,

@@ -18,6 +18,8 @@
 
 SMTP credentials, OTP и пароль не попадают в production logs. Единственные интерактивные входы — регистрация с паролем и password login с обязательным вторым фактором.
 
+OTP и security notices сохраняются в PostgreSQL outbox до отправки. Код в outbox зашифрован application credential key, SMTP выполняется фоновым worker с повторными попытками и дедупликацией. Создание auth session и ответ после 2FA больше не ждут SMTP; состояние доставки наблюдается через `auth_email_delivery_total`, `auth_email_delivery_duration_seconds` и структурированные outbox logs. Письма имеют отдельный текст по назначению кода, HTML/text версии и footer с allowlisted контактами поддержки.
+
 ## Password reset
 
 `POST /auth/password/reset/request-code` всегда возвращает одинаковый ответ и проходит тот же SMTP-путь как для существующего, так и для неизвестного email, поэтому не раскрывает наличие аккаунта. Reset-код имеет отдельный purpose, HMAC hash, TTL, resend и attempt limits. `POST /auth/password/reset/complete` атомарно обновляет password hash и отзывает все session rows пользователя; активные access/refresh tokens после этого не проходят серверную проверку, presence очищается, а `PASSWORD_RESET` попадает в security feed и email notice. Настроенный TOTP не отключается.

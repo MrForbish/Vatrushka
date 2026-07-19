@@ -1,39 +1,98 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 
-import { UpdateStatus } from './UpdateStatus.js';
+import { UpdateStatus } from "./UpdateStatus.js";
 
-describe('UpdateStatus', () => {
-  it('reports download progress accessibly', () => {
-    render(<UpdateStatus state={{ status: 'downloading', currentVersion: '0.4.0', version: '0.5.0', percent: 42 }} onInstall={vi.fn()} />);
-    expect(screen.getByRole('progressbar')).toHaveAttribute('value', '42');
+describe("UpdateStatus", () => {
+  it("reports download progress accessibly", () => {
+    render(
+      <UpdateStatus
+        state={{
+          status: "downloading",
+          currentVersion: "0.4.0",
+          version: "0.5.0",
+          percent: 42,
+        }}
+        onInstall={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("progressbar")).toHaveAttribute("value", "42");
     expect(screen.getByText(/42%/u)).toBeInTheDocument();
   });
 
-  it('installs a downloaded update only after explicit confirmation', () => {
+  it("installs a downloaded update only after explicit confirmation", () => {
     const onInstall = vi.fn();
-    render(<UpdateStatus state={{ status: 'ready', currentVersion: '0.4.0', version: '0.5.0' }} onInstall={onInstall} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Перезапустить' }));
+    render(
+      <UpdateStatus
+        state={{ status: "ready", currentVersion: "0.4.0", version: "0.5.0" }}
+        onInstall={onInstall}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Перезапустить и обновить" }),
+    );
     expect(onInstall).toHaveBeenCalledOnce();
   });
 
-  it('does not restart the client while a voice call is active', () => {
+  it("does not restart the client while a voice call is active", () => {
     const onInstall = vi.fn();
-    render(<UpdateStatus installBlocked state={{ status: 'ready', currentVersion: '0.4.0', version: '0.5.0' }} onInstall={onInstall} />);
-    const button = screen.getByRole('button', { name: 'После звонка' });
+    render(
+      <UpdateStatus
+        installBlocked
+        state={{ status: "ready", currentVersion: "0.4.0", version: "0.5.0" }}
+        onInstall={onInstall}
+      />,
+    );
+    const button = screen.getByRole("button", { name: "После звонка" });
     expect(button).toBeDisabled();
     fireEvent.click(button);
     expect(onInstall).not.toHaveBeenCalled();
   });
 
-  it.each(['idle', 'checking', 'up-to-date', 'error', 'unsupported'] as const)('stays hidden for %s when no update is available', (status) => {
-    const { container } = render(<UpdateStatus state={{ status, currentVersion: '0.4.0' }} onInstall={vi.fn()} />);
-    expect(container).toBeEmptyDOMElement();
+  it.each(["idle", "checking", "up-to-date", "error", "unsupported"] as const)(
+    "stays hidden for %s when no update is available",
+    (status) => {
+      const { container } = render(
+        <UpdateStatus
+          state={{ status, currentVersion: "0.4.0" }}
+          onInstall={vi.fn()}
+        />,
+      );
+      expect(container).toBeEmptyDOMElement();
+    },
+  );
+
+  it("keeps a mandatory update visible while it downloads", () => {
+    render(
+      <UpdateStatus
+        state={{
+          status: "downloading",
+          currentVersion: "0.4.0",
+          version: "0.5.0",
+          percent: 42,
+        }}
+        onInstall={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("Обновление клиента")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "Скрыть уведомление об обновлении",
+      }),
+    ).not.toBeInTheDocument();
   });
 
-  it('can be dismissed while the update downloads', () => {
-    render(<UpdateStatus state={{ status: 'downloading', currentVersion: '0.4.0', version: '0.5.0', percent: 42 }} onInstall={vi.fn()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Скрыть уведомление об обновлении' }));
-    expect(screen.queryByText('Обновление клиента')).not.toBeInTheDocument();
+  it("keeps a downloaded mandatory update visible until it can be installed", () => {
+    render(
+      <UpdateStatus
+        state={{ status: "ready", currentVersion: "0.4.0", version: "0.5.0" }}
+        onInstall={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", {
+        name: "Скрыть уведомление об обновлении",
+      }),
+    ).not.toBeInTheDocument();
   });
 });

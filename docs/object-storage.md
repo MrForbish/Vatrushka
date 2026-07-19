@@ -76,6 +76,7 @@ Worker также переводит в очередь:
 - незавершённые upload intents старше `MEDIA_CLEANUP_UNFINISHED_HOURS`;
 - объекты сообщений, удалённых раньше retention cutoff;
 - временные preview objects.
+- заменённые или удалённые avatar/profile cover пользователя и icon/banner сервера.
 
 Период запуска задаёт `MEDIA_CLEANUP_INTERVAL_SECONDS`. Значения по умолчанию — 24 часа и 60 секунд. Для проверки:
 
