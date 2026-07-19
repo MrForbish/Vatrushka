@@ -26,12 +26,20 @@ test('GitLab pipeline preserves Linux, integration and Windows quality gates', a
 test('Windows packaging uses verified local Electron and builder archives', async () => {
   const desktopPackage = JSON.parse(await read('apps/desktop/package.json'));
   const packaging = await read('infra/scripts/package-win.ps1');
+  const pipeline = await read('.gitlab-ci.yml');
+  const toolchain = JSON.parse(await read('infra/windows-toolchain-lock.json'));
   assert.match(desktopPackage.scripts['package:win'], /infra\/scripts\/package-win\.ps1/u);
-  assert.match(packaging, /curl\.exe --fail --location --retry 5 --retry-all-errors/u);
+  assert.match(packaging, /'--fail', '--location', '--retry', '5', '--retry-all-errors'/u);
+  assert.match(packaging, /& curl\.exe @curlArguments/u);
   assert.match(packaging, /Get-FileHash -Algorithm SHA256/u);
   assert.match(packaging, /--config\.electronDist=\$electronZip/u);
+  assert.match(packaging, /JOB-TOKEN: \$env:CI_JOB_TOKEN/u);
+  assert.match(packaging, /windows-toolchain-lock\.json/u);
+  assert.match(pipeline, /WINDOWS_TOOLCHAIN_MIRROR:/u);
+  assert.match(pipeline, /key: windows-toolchain-43-1-1/u);
+  assert.equal(toolchain.electron.version, desktopPackage.devDependencies.electron);
   for (const artifact of ['winCodeSign-2.6.0.7z', 'nsis-3.0.4.1.7z', 'nsis-resources-3.4.1.7z']) {
-    assert.match(packaging, new RegExp(artifact.replaceAll('.', '\\.')));
+    assert.ok(toolchain.builderArtifacts.some((item) => item.file === artifact), artifact);
   }
 });
 
@@ -58,12 +66,16 @@ test('GitLab repository metadata replaces GitHub automation', async () => {
   const codeowners = await read('.gitlab/CODEOWNERS');
   const agentRules = await read('AGENTS.md');
   const releaseProcess = await read('docs/release-process.md');
+  const hotfixTemplate = await read('.gitlab/merge_request_templates/hotfix.md');
   assert.match(codeowners, /@MrForbish/u);
   assert.match(agentRules, /GLAB_ENABLE_CI_AUTOLOGIN=true/u);
   assert.match(agentRules, /Do not create a new branch\/MR for a failed pre-merge pipeline/u);
   assert.match(agentRules, /Immediately set and read back `squash=false`/u);
   assert.match(releaseProcess, /release-auth-smoke/u);
   assert.match(releaseProcess, /GITLAB_TOKEN=\$CI_JOB_TOKEN/u);
+  assert.match(hotfixTemplate, /^## Release evidence$/mu);
+  assert.match(hotfixTemplate, /^## Rollback$/mu);
+  assert.match(hotfixTemplate, /^## Миграции и совместимость$/mu);
   for (const template of ['feature', 'release-assemble', 'release', 'hotfix', 'sync']) await access(rootFile(`.gitlab/merge_request_templates/${template}.md`));
   await assert.rejects(access(rootFile('.github/workflows/pr-checks.yml')));
   await assert.rejects(access(rootFile('.github/scripts/pr-policy.mjs')));
