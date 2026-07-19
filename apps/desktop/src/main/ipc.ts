@@ -121,11 +121,22 @@ const apiBaseUrlSchema = z.url().refine((value) => {
 }, "API URL must use HTTPS");
 const externalUrlSchema = z
   .string()
+  .max(2_048)
   .refine(
-    (value) =>
-      value === "https://t.me/MaksZJ" ||
-      value === "mailto:vatrushka-notify@yandex.ru",
-    "External URL is not allowlisted",
+    (value) => {
+      if (value === "mailto:vatrushka-notify@yandex.ru") return true;
+      try {
+        const url = new URL(value);
+        return (
+          (url.protocol === "https:" || url.protocol === "http:") &&
+          url.username === "" &&
+          url.password === ""
+        );
+      } catch {
+        return false;
+      }
+    },
+    "External URL must use HTTP or HTTPS without embedded credentials",
   );
 const refreshTokenSchema = z.string().min(32).max(512);
 const desktopAuthSessionSchema = z.object({

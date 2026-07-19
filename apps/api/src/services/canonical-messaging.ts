@@ -1486,6 +1486,7 @@ export class CanonicalMessagingStore {
       read_at: Date | null;
       dismissed_at: Date | null;
       actor_display_name: string | null;
+      actor_avatar_object_key: string | null;
       conversation_title: string | null;
       server_id: string | null;
       channel_id: string | null;
@@ -1493,7 +1494,8 @@ export class CanonicalMessagingStore {
       `
       select notification.id, notification.type, notification.actor_user_id, notification.conversation_id, notification.message_id::text,
         notification.payload, notification.created_at, notification.read_at, notification.dismissed_at,
-        actor.display_name as actor_display_name, coalesce(channel.name, peer.display_name, peer.username) as conversation_title,
+        actor.display_name as actor_display_name, actor.avatar_object_key as actor_avatar_object_key,
+        coalesce(channel.name, peer.display_name, peer.username) as conversation_title,
         conversation.server_id, conversation.channel_id
       from notifications notification
       left join users actor on actor.id = notification.actor_user_id
@@ -1519,6 +1521,9 @@ export class CanonicalMessagingStore {
       readAt: row.read_at?.toISOString() ?? null,
       dismissedAt: row.dismissed_at?.toISOString() ?? null,
       actorDisplayName: row.actor_display_name,
+      actorAvatarUrl: row.actor_avatar_object_key
+        ? `/api/v1/media/${encodeURIComponent(row.actor_avatar_object_key)}`
+        : null,
       conversationTitle: row.conversation_title,
       serverId: row.server_id,
       channelId: row.channel_id,

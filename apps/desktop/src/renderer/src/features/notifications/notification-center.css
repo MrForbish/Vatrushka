@@ -233,6 +233,31 @@
   width: calc(100% - 16px);
   margin: 8px;
 }
+.vui-notification-center__list .vui-notification-center__update {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 6px;
+  padding: 12px 10px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-primary), transparent 92%);
+}
+.vui-notification-center__update[data-status="error"] {
+  border-color: color-mix(in srgb, var(--color-danger), transparent 50%);
+}
+.vui-notification-center__update progress {
+  width: 100%;
+  height: 5px;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-round);
+  accent-color: var(--color-primary);
+}
+.vui-notification-center__update .vui-button {
+  justify-self: start;
+  margin-top: var(--space-1);
+}
 @media (prefers-reduced-motion: reduce) {
   .vui-notification-center__panel {
     transition: none;

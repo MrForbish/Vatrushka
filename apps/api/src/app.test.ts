@@ -1165,9 +1165,13 @@ describe('servers, channels, messages, and roles API', () => {
   });
 
   it('creates private one-to-one conversations only for users sharing a server', async () => {
+    context = await makeContext(new FakeObjectStorage());
     const anna = await login('dm-anna@example.com', 'Anna');
     const boris = await login('dm-boris@example.com', 'Boris');
     const outsider = await login('dm-outsider@example.com', 'Outsider');
+    const borisRecord = context.store.users.get(boris.userId);
+    if (!borisRecord) throw new Error('Boris was not created');
+    context.store.users.set(boris.userId, { ...borisRecord, avatarObjectKey: 'profiles/boris/avatar.webp' });
 
     const deniedWithoutSharedServer = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { userId: boris.userId } });
     expect(deniedWithoutSharedServer.statusCode).toBe(403);
@@ -1178,12 +1182,13 @@ describe('servers, channels, messages, and roles API', () => {
 
     const candidates = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-conversations/candidates`, headers: { authorization: `Bearer ${anna.accessToken}` } });
     expect(candidates.statusCode).toBe(200);
-    expect(candidates.json<Array<{ userId: string; displayName: string; sharedServerNames: string[] }>>()).toEqual([expect.objectContaining({ userId: boris.userId, displayName: 'Boris', sharedServerNames: ['DM community'] })]);
+    expect(candidates.json<Array<{ userId: string; displayName: string; avatarUrl: string; sharedServerNames: string[] }>>()).toEqual([expect.objectContaining({ userId: boris.userId, displayName: 'Boris', avatarUrl: 'https://storage.test/get/profiles%2Fboris%2Favatar.webp', sharedServerNames: ['DM community'] })]);
 
     const createdConversation = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { userId: boris.userId } });
     expect(createdConversation.statusCode).toBe(201);
-    const conversation = createdConversation.json<{ id: string; participant: { userId: string }; unreadCount: number }>();
+    const conversation = createdConversation.json<{ id: string; participant: { userId: string; avatarUrl: string }; unreadCount: number }>();
     expect(conversation.participant.userId).toBe(boris.userId);
+    expect(conversation.participant.avatarUrl).toBe('https://storage.test/get/profiles%2Fboris%2Favatar.webp');
     const sameConversation = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations`, headers: { authorization: `Bearer ${boris.accessToken}` }, payload: { userId: anna.userId } });
     expect(sameConversation.json<{ id: string }>().id).toBe(conversation.id);
 

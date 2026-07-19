@@ -65,7 +65,6 @@ import {
   type ScreenShareQuality,
 } from "./features/screen-share/index.js";
 import { ServerView } from "./features/servers/index.js";
-import { UpdateStatus } from "./features/update/index.js";
 import {
   diffRemoteParticipants,
   RoomView,
@@ -105,6 +104,7 @@ function toTextMessage(
     channelId: message.conversationId,
     authorUserId: message.author.id,
     authorDisplayName: author?.displayName ?? message.author.displayName,
+    authorAvatarUrl: message.author.avatarUrl,
     authorPlatformRole:
       author?.platformRole ??
       (message.author.id === user.id ? user.platformRole : "member"),
@@ -282,6 +282,7 @@ function toDirectMessage(
     conversationId: message.conversationId,
     authorUserId: message.author.id,
     authorDisplayName: message.author.displayName,
+    authorAvatarUrl: message.author.avatarUrl,
     authorPlatformRole:
       message.author.id === user.id
         ? user.platformRole
@@ -1383,26 +1384,39 @@ export default function App(): ReactNode {
       (screen !== "server" && screen !== "direct")
     )
       return;
-    let secondFrame = 0;
-    const firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        const element = document.querySelector<HTMLElement>(
-          `[data-message-id="${targetMessageId}"]`,
-        );
-        if (!element) return;
-        element.dataset.targeted = "true";
-        element.scrollIntoView({ block: "center" });
-        element.focus({ preventScroll: true });
-      });
-    });
+    const startedAt = Date.now();
+    let timer = 0;
+    let highlightTimer = 0;
+    const findTarget = (): void => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-message-id="${targetMessageId}"]`,
+      );
+      if (!element) {
+        if (Date.now() - startedAt < 3_000) {
+          timer = window.setTimeout(findTarget, 100);
+          return;
+        }
+        setTargetMessageId(null);
+        setError("Сообщение удалено или больше недоступно");
+        return;
+      }
+      element.dataset.targeted = "true";
+      element.scrollIntoView({ block: "center" });
+      element.focus({ preventScroll: true });
+      highlightTimer = window.setTimeout(() => {
+        element.removeAttribute("data-targeted");
+        setTargetMessageId(null);
+      }, 1_700);
+    };
+    timer = window.setTimeout(findTarget, 0);
     return () => {
-      window.cancelAnimationFrame(firstFrame);
-      window.cancelAnimationFrame(secondFrame);
+      window.clearTimeout(timer);
+      window.clearTimeout(highlightTimer);
       document
         .querySelector<HTMLElement>(`[data-message-id="${targetMessageId}"]`)
         ?.removeAttribute("data-targeted");
     };
-  }, [directMessages, messages, screen, targetMessageId]);
+  }, [screen, targetMessageId]);
 
   useEffect(
     () =>
@@ -1544,16 +1558,36 @@ export default function App(): ReactNode {
                     lastDeliveredMessageId: latest.id,
                     lastReadMessageId: latest.id,
                   })
+                  .then(() => {
+                    if (!active) return;
+                    setDirectConversations((current) =>
+                      current.map((conversation) =>
+                        conversation.id === conversationId
+                          ? { ...conversation, unreadCount: 0 }
+                          : conversation,
+                      ),
+                    );
+                    setUnreadSummary((current) => {
+                      if (current === null) return current;
+                      const conversation = current.conversations.find(
+                        (item) => item.conversationId === conversationId,
+                      );
+                      return {
+                        ...current,
+                        conversations: current.conversations.filter(
+                          (item) => item.conversationId !== conversationId,
+                        ),
+                        totalDirectUnread: Math.max(
+                          0,
+                          current.totalDirectUnread -
+                            (conversation?.unreadCount ?? 0),
+                        ),
+                      };
+                    });
+                  })
                   .catch((caught) => {
                     if (active) setError(userMessage(caught));
                   });
-                setDirectConversations((current) =>
-                  current.map((conversation) =>
-                    conversation.id === conversationId
-                      ? { ...conversation, unreadCount: 0 }
-                      : conversation,
-                  ),
-                );
               }, 500);
           }
         })
@@ -1616,21 +1650,41 @@ export default function App(): ReactNode {
                 .updateConversationReadState(channel.id, {
                   lastReadMessageId: latest.id,
                 })
+                .then(() => {
+                  if (!active) return;
+                  setServerDetail((current) =>
+                    current === null
+                      ? current
+                      : {
+                          ...current,
+                          channels: current.channels.map((item) =>
+                            item.id === channel.id
+                              ? { ...item, unreadCount: 0, mentionCount: 0 }
+                              : item,
+                          ),
+                        },
+                  );
+                  setUnreadSummary((current) => {
+                    if (current === null) return current;
+                    const conversation = current.conversations.find(
+                      (item) => item.conversationId === channel.id,
+                    );
+                    return {
+                      ...current,
+                      conversations: current.conversations.filter(
+                        (item) => item.conversationId !== channel.id,
+                      ),
+                      totalMentionUnread: Math.max(
+                        0,
+                        current.totalMentionUnread -
+                          (conversation?.mentionCount ?? 0),
+                      ),
+                    };
+                  });
+                })
                 .catch((caught) => {
                   if (active) setError(userMessage(caught));
                 });
-              setServerDetail((current) =>
-                current === null
-                  ? current
-                  : {
-                      ...current,
-                      channels: current.channels.map((item) =>
-                        item.id === channel.id
-                          ? { ...item, unreadCount: 0, mentionCount: 0 }
-                          : item,
-                      ),
-                    },
-              );
             }, 500);
           }
         })
@@ -2883,7 +2937,7 @@ export default function App(): ReactNode {
         setError(userMessage(caught));
       });
   };
-  const withUpdateStatus = (content: ReactNode): ReactNode => (
+  const withNotifications = (content: ReactNode): ReactNode => (
     <>
       {content}
       {user ? (
@@ -2896,17 +2950,20 @@ export default function App(): ReactNode {
           onMarkAllRead={markAllNotificationsRead}
           onOpen={openNotification}
           onRead={markNotificationRead}
+          updateInstallBlocked={connection !== null}
+          updateState={updateState}
+          onInstallUpdate={() =>
+            void window.desktop
+              .installUpdate()
+              .catch((caught) => setError(userMessage(caught)))
+          }
+          onRetryUpdate={() =>
+            void window.desktop
+              .checkForUpdates()
+              .catch((caught) => setError(userMessage(caught)))
+          }
         />
       ) : null}
-      <UpdateStatus
-        installBlocked={connection !== null}
-        state={updateState}
-        onInstall={() =>
-          void window.desktop
-            .installUpdate()
-            .catch((caught) => setError(userMessage(caught)))
-        }
-      />
       <ConfirmDialog
         confirmLabel="Выйти"
         danger
@@ -3140,7 +3197,7 @@ export default function App(): ReactNode {
   };
 
   if (screen === "boot")
-    return withUpdateStatus(
+    return withNotifications(
       <main className="bootScreen">
         <div className="pulseLogo">
           <span />
@@ -3149,7 +3206,7 @@ export default function App(): ReactNode {
       </main>,
     );
   if (screen === "auth")
-    return withUpdateStatus(
+    return withNotifications(
       <AuthPanel
         mode={authMode}
         stage={authStage}
@@ -3198,7 +3255,7 @@ export default function App(): ReactNode {
       />,
     );
   if (screen === "profile")
-    return withUpdateStatus(
+    return withNotifications(
       <ProfilePanel
         value={displayName}
         busy={busy}
@@ -3208,7 +3265,7 @@ export default function App(): ReactNode {
       />,
     );
   if (settingsRoute !== null && user !== null)
-    return withUpdateStatus(
+    return withNotifications(
       <Suspense
         fallback={
           <main className="bootScreen">
@@ -3280,7 +3337,7 @@ export default function App(): ReactNode {
       </Suspense>,
     );
   if (screen === "home" && user)
-    return withUpdateStatus(
+    return withNotifications(
       <HomePage
         user={user}
         version={version}
@@ -3327,7 +3384,7 @@ export default function App(): ReactNode {
       />,
     );
   if (screen === "server" && user && serverDetail)
-    return withUpdateStatus(
+    return withNotifications(
       <>
         <ServerView
           user={user}
@@ -3342,6 +3399,7 @@ export default function App(): ReactNode {
           directUnreadCount={directUnreadCount}
           typingText={serverTypingText}
           firstUnreadMessageId={serverFirstUnreadMessageId}
+          targetMessageId={targetMessageId}
           hasOlderMessages={
             serverMessageHistory.conversationId === activeChannelId &&
             serverMessageHistory.hasMore
@@ -3417,7 +3475,7 @@ export default function App(): ReactNode {
       </>,
     );
   if (screen === "direct" && user)
-    return withUpdateStatus(
+    return withNotifications(
       <DirectMessagesView
         user={user}
         servers={servers}
@@ -3432,6 +3490,7 @@ export default function App(): ReactNode {
         typingText={directTypingText}
         blockedParticipantIds={blockedDirectUserIds}
         firstUnreadMessageId={directFirstUnreadMessageId}
+        targetMessageId={targetMessageId}
         hasOlderMessages={
           directMessageHistory.conversationId === activeDirectConversationId &&
           directMessageHistory.hasMore
@@ -3461,7 +3520,7 @@ export default function App(): ReactNode {
         onLogout={requestLogout}
       />,
     );
-  return withUpdateStatus(
+  return withNotifications(
     <main className="bootScreen">
       <span>Не удалось открыть экран</span>
       <button

@@ -266,6 +266,12 @@ function safeAttachmentName(fileName: string): string {
   return printable || "attachment";
 }
 
+function mediaUrl(objectKey: string | null | undefined): string | null {
+  return objectKey
+    ? `/api/v1/media/${encodeURIComponent(objectKey)}`
+    : null;
+}
+
 function publicTextMessage(
   message: TextMessageWithAuthor,
   replyTo: TextMessageWithAuthor | null,
@@ -278,6 +284,7 @@ function publicTextMessage(
     channelId: message.channelId,
     authorUserId: message.authorUserId,
     authorDisplayName: message.displayName ?? "Участник",
+    authorAvatarUrl: mediaUrl(message.avatarObjectKey),
     authorPlatformRole: message.platformRole,
     content: message.content,
     mentions: mentions.map(
@@ -328,6 +335,7 @@ function publicDirectMessage(
     conversationId: message.conversationId,
     authorUserId: message.authorUserId,
     authorDisplayName: message.displayName ?? "Участник",
+    authorAvatarUrl: mediaUrl(message.avatarObjectKey),
     authorPlatformRole: message.platformRole,
     content: message.content,
     replyTo:
@@ -368,6 +376,7 @@ function publicDirectConversation(
       userId: overview.participant.id,
       displayName: overview.participant.displayName ?? "Участник",
       platformRole: overview.participant.platformRole,
+      avatarUrl: mediaUrl(overview.participant.avatarObjectKey),
     },
     lastMessage:
       overview.lastMessage === null
@@ -420,6 +429,36 @@ export class VatrushkaService {
 
   now(): Date {
     return this.clock();
+  }
+
+  private async publicMediaUrl(
+    objectKey: string | null | undefined,
+  ): Promise<string | null> {
+    if (!objectKey) return null;
+    return this.objectStorage
+      ? this.objectStorage.createGetUrl(objectKey, 900)
+      : mediaUrl(objectKey);
+  }
+
+  private async resolveMediaUrl(
+    url: string | null | undefined,
+  ): Promise<string | null> {
+    if (!url || !url.startsWith("/api/v1/media/")) return url ?? null;
+    return this.publicMediaUrl(
+      decodeURIComponent(url.slice("/api/v1/media/".length)),
+    );
+  }
+
+  private async resolveConversationMessage(
+    message: ConversationMessage,
+  ): Promise<ConversationMessage> {
+    return {
+      ...message,
+      author: {
+        ...message.author,
+        avatarUrl: await this.resolveMediaUrl(message.author.avatarUrl),
+      },
+    };
   }
 
   inviteUrl(inviteToken: string): string {
@@ -3473,6 +3512,9 @@ export class VatrushkaService {
             userId: member.userId,
             displayName: member.displayName,
             platformRole: member.platformRole,
+            avatarUrl: await this.publicMediaUrl(
+              candidate?.avatarObjectKey ?? null,
+            ),
             sharedServerNames: [server.name],
           });
       }
@@ -3491,8 +3533,16 @@ export class VatrushkaService {
     authorization: string | undefined,
   ): Promise<DirectConversationSummary[]> {
     const user = await this.authenticate(authorization);
-    return (await this.store.listDirectConversationOverviews(user.id)).map(
-      publicDirectConversation,
+    return Promise.all(
+      (await this.store.listDirectConversationOverviews(user.id)).map(
+        async (overview) => {
+          const result = publicDirectConversation(overview);
+          result.participant.avatarUrl = await this.publicMediaUrl(
+            overview.participant.avatarObjectKey,
+          );
+          return result;
+        },
+      ),
     );
   }
 
@@ -3542,7 +3592,11 @@ export class VatrushkaService {
       await this.store.listDirectConversationOverviews(user.id)
     ).find((candidate) => candidate.conversation.id === conversation.id);
     if (!overview) throw new AppError("DIRECT_CONVERSATION_NOT_FOUND", 404);
-    return publicDirectConversation(overview);
+    const result = publicDirectConversation(overview);
+    result.participant.avatarUrl = await this.publicMediaUrl(
+      overview.participant.avatarObjectKey,
+    );
+    return result;
   }
 
   async listDirectMessages(
@@ -3938,15 +3992,21 @@ export class VatrushkaService {
         ...(attachmentsByMessage.get(attachment.messageId) ?? []),
         attachment,
       ]);
-    return messages.map((message) =>
-      publicDirectMessage(
+    return Promise.all(
+      messages.map(async (message) => {
+        const result = publicDirectMessage(
         message,
         message.replyToMessageId === null
           ? null
           : (replies.get(message.replyToMessageId) ?? null),
         reactionsByMessage.get(message.id) ?? [],
-        attachmentsByMessage.get(message.id) ?? [],
-      ),
+          attachmentsByMessage.get(message.id) ?? [],
+        );
+        result.authorAvatarUrl = await this.publicMediaUrl(
+          message.avatarObjectKey,
+        );
+        return result;
+      }),
     );
   }
 
@@ -3990,16 +4050,22 @@ export class VatrushkaService {
         ...(mentionsByMessage.get(mention.messageId) ?? []),
         mention,
       ]);
-    return messages.map((message) =>
-      publicTextMessage(
+    return Promise.all(
+      messages.map(async (message) => {
+        const result = publicTextMessage(
         message,
         message.replyToMessageId === null
           ? null
           : (replies.get(message.replyToMessageId) ?? null),
         byMessage.get(message.id) ?? [],
         attachmentsByMessage.get(message.id) ?? [],
-        mentionsByMessage.get(message.id) ?? [],
-      ),
+          mentionsByMessage.get(message.id) ?? [],
+        );
+        result.authorAvatarUrl = await this.publicMediaUrl(
+          message.avatarObjectKey,
+        );
+        return result;
+      }),
     );
   }
 
@@ -5879,13 +5945,19 @@ export class VatrushkaService {
       user,
       "READ_MESSAGE_HISTORY",
     );
-    return this.messaging().listMessages(
+    const page = await this.messaging().listMessages(
       conversationId,
       user.id,
       before ?? null,
       after ?? null,
       limit,
     );
+    return {
+      ...page,
+      items: await Promise.all(
+        page.items.map((message) => this.resolveConversationMessage(message)),
+      ),
+    };
   }
 
   async createCanonicalMessage(
@@ -5941,7 +6013,7 @@ export class VatrushkaService {
       );
     await this.validateCanonicalMentions(access, user, input.mentions);
     try {
-      return await this.messaging().createMessage({
+      const result = await this.messaging().createMessage({
         conversationId,
         authorId: user.id,
         clientMessageId: input.clientMessageId,
@@ -5951,6 +6023,10 @@ export class VatrushkaService {
         mentions: input.mentions,
         now: this.now(),
       });
+      return {
+        ...result,
+        message: await this.resolveConversationMessage(result.message),
+      };
     } catch (error) {
       if (
         error instanceof Error &&
@@ -5985,7 +6061,7 @@ export class VatrushkaService {
       this.now(),
     );
     if (!updated) throw new AppError("MESSAGE_NOT_FOUND", 404);
-    return updated;
+    return this.resolveConversationMessage(updated);
   }
 
   async deleteCanonicalMessage(
@@ -6039,7 +6115,7 @@ export class VatrushkaService {
       this.now(),
     );
     if (!updated) throw new AppError("MESSAGE_NOT_FOUND", 404);
-    return updated;
+    return this.resolveConversationMessage(updated);
   }
 
   async updateCanonicalReadState(
@@ -6199,11 +6275,19 @@ export class VatrushkaService {
     unreadOnly: boolean,
   ): Promise<InternalNotification[]> {
     const user = await this.authenticate(authorization);
-    return this.messaging().listNotifications(
+    const notifications = await this.messaging().listNotifications(
       user.id,
       before ? new Date(before) : null,
       limit,
       unreadOnly,
+    );
+    return Promise.all(
+      notifications.map(async (notification) => ({
+        ...notification,
+        actorAvatarUrl: await this.resolveMediaUrl(
+          notification.actorAvatarUrl,
+        ),
+      })),
     );
   }
 
@@ -6435,7 +6519,7 @@ export class VatrushkaService {
       user.id,
     );
     if (!updated) throw new AppError("MESSAGE_NOT_FOUND", 404);
-    return updated;
+    return this.resolveConversationMessage(updated);
   }
 
   private messaging(): CanonicalMessagingStore {

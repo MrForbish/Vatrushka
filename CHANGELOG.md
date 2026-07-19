@@ -10,6 +10,10 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ### Fixed
 
+- messaging now keeps chronological bottom-anchored history, reports messages received below the viewport, clears canonical unread state after acknowledgement and performs a single bounded highlight when opening a notification;
+- the composer accepts pasted clipboard images, provides an accessible emoji picker and English emoji shortcodes, linkifies safe HTTP(S) URLs through validated Electron IPC and removes the inactive microphone action;
+- direct conversations, message authors and notification actors now render current profile avatars through normalized authenticated media URLs;
+- client update progress and restart actions now live in one deduplicated Notification Center entry instead of a floating bottom-right overlay;
 - the shared desktop shell now provides synchronized F11/UI fullscreen controls, a confirmation before logout, the canonical Vatrushka brand mark and a responsive Home support rail;
 - Gaming Home keeps the current confirmed voice session at the top of Quick Return, and the retired Spaces navigation action is removed;
 - Windows packaging deterministically generates a multi-resolution 32-bit application icon from the tracked brand asset;

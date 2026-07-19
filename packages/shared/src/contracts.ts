@@ -461,6 +461,7 @@ export interface TextMessage {
   channelId: string;
   authorUserId: string;
   authorDisplayName: string;
+  authorAvatarUrl?: string | null;
   authorPlatformRole: PlatformRole;
   content: string;
   mentions?: MessageMention[];
@@ -514,6 +515,7 @@ export interface DirectMessageParticipant {
   userId: string;
   displayName: string;
   platformRole: PlatformRole;
+  avatarUrl?: string | null;
 }
 
 export interface DirectConversationSummary {
@@ -538,6 +540,7 @@ export interface DirectMessage {
   conversationId: string;
   authorUserId: string;
   authorDisplayName: string;
+  authorAvatarUrl?: string | null;
   authorPlatformRole: PlatformRole;
   content: string;
   replyTo: {
@@ -713,6 +716,7 @@ export interface InternalNotification {
   readAt: string | null;
   dismissedAt: string | null;
   actorDisplayName?: string | null;
+  actorAvatarUrl?: string | null;
   conversationTitle?: string | null;
   serverId?: string | null;
   channelId?: string | null;
@@ -1024,9 +1028,7 @@ export interface DesktopBridge {
   clearSelectedDesktopSource(): Promise<void>;
   logMediaDiagnostic(event: DesktopMediaDiagnostic): Promise<void>;
   copyToClipboard(text: string): Promise<void>;
-  openExternal(
-    url: "https://t.me/MaksZJ" | "mailto:vatrushka-notify@yandex.ru",
-  ): Promise<void>;
+  openExternal(url: string): Promise<void>;
   setBadgeCount(count: number): Promise<void>;
   showMessageNotification(
     notification: DesktopMessageNotification,

@@ -6,13 +6,13 @@
 
 Vatrushka — npm workspaces monorepo:
 
-| Пакет | Ответственность |
-|---|---|
-| `apps/desktop` | Electron main/preload, React renderer, LiveKit client, auto-update, Windows packaging |
-| `apps/api` | Fastify API, WebSocket gateway, PostgreSQL stores, Redis, SMTP, S3, LiveKit server integration |
-| `packages/shared` | Zod-контракты, доменные типы, permissions и общие helpers |
-| `packages/config` | общие TypeScript-настройки |
-| `infra` | Docker, Caddy, LiveKit и операционные scripts |
+| Пакет             | Ответственность                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
+| `apps/desktop`    | Electron main/preload, React renderer, LiveKit client, auto-update, Windows packaging          |
+| `apps/api`        | Fastify API, WebSocket gateway, PostgreSQL stores, Redis, SMTP, S3, LiveKit server integration |
+| `packages/shared` | Zod-контракты, доменные типы, permissions и общие helpers                                      |
+| `packages/config` | общие TypeScript-настройки                                                                     |
+| `infra`           | Docker, Caddy, LiveKit и операционные scripts                                                  |
 
 Ключевой поток:
 
@@ -101,6 +101,8 @@ Bucket приватный. API создает ограниченный object ke
 
 Идемпотентность отправки строится на `(authorId, clientMessageId)`. Cursor истории — стабильный numeric message id. Read/delivered хранятся отдельно по пользователю и conversation. DND/mute/quiet-hours влияют на внешнее уведомление, но не удаляют durable notification.
 
+Renderer нормализует относительные authenticated media URL относительно production API origin. HTTP(S)-ссылки из сообщений открываются только через main-process IPC с проверкой протокола и запретом embedded credentials. Read acknowledgement обновляет серверный cursor до очистки локального счётчика и разделителя. Update state отображается как единственная локальная запись Notification Center и не создаёт отдельный плавающий overlay.
+
 ## 7. Auth lifecycle
 
 - password: scrypt с уникальной солью;
@@ -121,17 +123,17 @@ Bucket приватный. API создает ограниченный object ke
 
 ## 9. Тестовая стратегия
 
-| Уровень | Назначение |
-|---|---|
-| shared unit | Zod, helpers, permissions |
-| API unit/inject | auth, business rules, routes, fakes |
-| integration | настоящие PostgreSQL 17 и Redis 8, миграции и cross-instance semantics |
-| renderer unit/component | media helpers, realtime reducers, UI behavior |
-| Storybook interaction/a11y | состояния переиспользуемых компонентов |
-| Electron E2E | preload/main/auth/navigation/media contracts |
-| visual Playwright | эталонные stories в фиксированном viewport |
-| manual two-machine | WebRTC, Windows devices, scaling и native updater |
-| capacity harness | opt-in API/WebSocket/PostgreSQL/Redis/S3/LiveKit-control baseline и JSON evidence |
+| Уровень                    | Назначение                                                                        |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| shared unit                | Zod, helpers, permissions                                                         |
+| API unit/inject            | auth, business rules, routes, fakes                                               |
+| integration                | настоящие PostgreSQL 17 и Redis 8, миграции и cross-instance semantics            |
+| renderer unit/component    | media helpers, realtime reducers, UI behavior                                     |
+| Storybook interaction/a11y | состояния переиспользуемых компонентов                                            |
+| Electron E2E               | preload/main/auth/navigation/media contracts                                      |
+| visual Playwright          | эталонные stories в фиксированном viewport                                        |
+| manual two-machine         | WebRTC, Windows devices, scaling и native updater                                 |
+| capacity harness           | opt-in API/WebSocket/PostgreSQL/Redis/S3/LiveKit-control baseline и JSON evidence |
 
 CI изолированно поднимает PostgreSQL/Redis services. Coverage оценивается по рискам, а не по проценту: auth, permissions, message idempotency, reconnect, media cleanup и migrations являются блокирующими зонами.
 
@@ -161,6 +163,7 @@ Alerts должны покрывать readiness failure, 5xx/latency surge, Red
 ## 12. Управление изменениями
 
 Изменения выполняются маленькими MR с одним назначением. Обычные task MR squash-merge в `develop`; assembly, production release, hotfix и обратная синхронизация используют merge commit, чтобы сохранить границы версии и позволить revert целого изменения. Generated outputs, reference-pack и секреты не коммитятся. Мертвый код удаляется только после доказательства отсутствия imports/runtime calls, теста заменяющего контракт и, для БД, завершенной expand/contract migration.
+
 # Voice presence and movement
 
 Voice membership is confirmed by LiveKit webhooks, projected atomically into Redis, versioned per server, and delivered through the application WebSocket. `docs/adr/0005-livekit-confirmed-voice-presence.md` defines source-of-truth boundaries, Redis keys, adapters, reconciliation, and migration behavior. PostgreSQL does not store ephemeral voice membership.

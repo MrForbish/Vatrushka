@@ -1,9 +1,24 @@
 import { expect, test, type Page } from '@playwright/test';
 
 async function openStory(page: Page, id: string): Promise<void> {
-  await page.goto(`/iframe.html?id=${id}&viewMode=story`, { waitUntil: 'load' });
-  await page.locator('#storybook-root:not(:empty):visible, [role="dialog"]:visible, [role="complementary"]:visible').first().waitFor({ state: 'attached' });
-  await page.evaluate(async () => document.fonts.ready);
+  const storyUrl = `/iframe.html?id=${id}&viewMode=story`;
+  const renderedStory = page
+    .locator(
+      '#storybook-root:not(:empty), [role="dialog"], [role="complementary"]',
+    )
+    .first();
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await page.goto(storyUrl, { waitUntil: 'load' });
+    try {
+      await renderedStory.waitFor({ state: 'attached', timeout: 10_000 });
+      await page.evaluate(async () => document.fonts.ready);
+      return;
+    } catch (caught) {
+      if (attempt === 1) throw caught;
+      await page.goto('about:blank');
+    }
+  }
 }
 
 test.describe('Vatrushka design system visual baseline', () => {
@@ -207,7 +222,7 @@ test.describe('Vatrushka design system visual baseline', () => {
   });
 
   test('client update ready', async ({ page }) => {
-    await openStory(page, 'features-client-update--ready');
+    await openStory(page, 'features-notifications-notification-center--update-ready');
     await expect(page.getByRole('button', { name: 'Перезапустить и обновить' })).toBeVisible();
     await expect(page).toHaveScreenshot('client-update-ready.png', { animations: 'disabled', fullPage: true });
   });
