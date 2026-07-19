@@ -26,6 +26,7 @@ const connection: RoomConnection = {
 
 const snapshot: MediaSnapshot = {
   connectionState: ConnectionState.Connected,
+  pingMs: 28,
   participants: [
     {
       identity: "owner-local",

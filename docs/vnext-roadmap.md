@@ -68,11 +68,11 @@
 
 ### P0.3 — профильная voice-плашка
 
-Статус: выполнено в `feat/ROADMAP-3-profile-audio-controls`. Кнопки используют фактический media snapshot, deafen fail-safe выключает микрофон и все входящие LiveKit-аудиоисточники, а undeafen не включает микрофон автоматически. Unit, Storybook, Electron E2E и visual regression покрывают поведение и двухстрочную адаптивную компоновку.
+Статус: выполнено и укреплено в WEB-30. Кнопки используют фактический media snapshot, deafen fail-safe выключает микрофон и все входящие LiveKit-аудиоисточники, а undeafen восстанавливает микрофон только если он был включён до deafen. Состояние синхронизируется через API/Redis/realtime; unit, Storybook, Electron E2E и visual regression покрывают поведение и двухстрочную адаптивную компоновку.
 
 1. Добавить рядом с настройками две icon buttons: микрофон и входящий звук.
 2. Синхронизировать их с фактическим LiveKit/media snapshot, а не локальной иллюзией состояния.
-3. Deafen выключает входящий звук и микрофон; undeafen не включает микрофон неожиданно.
+3. Deafen выключает входящий звук и микрофон; undeafen восстанавливает только прежнее состояние микрофона.
 4. Добавить tooltip, aria-label, disabled/reconnecting состояния и unit/Storybook/E2E tests.
 
 ### P0.4 — server shell usability

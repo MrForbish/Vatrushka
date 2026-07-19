@@ -64,19 +64,24 @@ describe("MediaSession incoming audio", () => {
   } {
     const session = new MediaSession({} as ApiClient);
     const setMicrophoneEnabled = vi.fn().mockResolvedValue(undefined);
+    const localParticipant = {
+      isMicrophoneEnabled: true,
+      setMicrophoneEnabled: async (enabled: boolean): Promise<void> => {
+        localParticipant.isMicrophoneEnabled = enabled;
+        await setMicrophoneEnabled(enabled);
+      },
+    };
     const setVolume = vi.fn();
     const participant = { identity: "remote-1", setVolume };
     const internals = session as unknown as {
       room: {
-        localParticipant: {
-          setMicrophoneEnabled(enabled: boolean): Promise<void>;
-        };
+        localParticipant: typeof localParticipant;
         remoteParticipants: Map<string, typeof participant>;
       };
       refreshSnapshot(): void;
     };
     internals.room = {
-      localParticipant: { setMicrophoneEnabled },
+      localParticipant,
       remoteParticipants: new Map([[participant.identity, participant]]),
     };
     vi.spyOn(internals, "refreshSnapshot").mockImplementation(() => undefined);
@@ -99,9 +104,73 @@ describe("MediaSession incoming audio", () => {
 
     await session.setDeafened(false);
 
-    expect(setMicrophoneEnabled).toHaveBeenCalledTimes(1);
+    expect(setMicrophoneEnabled).toHaveBeenCalledTimes(2);
+    expect(setMicrophoneEnabled).toHaveBeenLastCalledWith(true);
     expect(setVolume).toHaveBeenCalledWith(0.7, Track.Source.Microphone);
     expect(setVolume).toHaveBeenCalledWith(0.6, Track.Source.ScreenShareAudio);
+  });
+
+  it("keeps the microphone muted after undeafening when it was muted before", async () => {
+    const { session, setMicrophoneEnabled } = deafeningSession();
+
+    await session.setMuted(true);
+    await session.setDeafened(true);
+    await session.setDeafened(false);
+
+    expect(setMicrophoneEnabled).toHaveBeenCalledTimes(2);
+    expect(setMicrophoneEnabled).toHaveBeenNthCalledWith(1, false);
+    expect(setMicrophoneEnabled).toHaveBeenNthCalledWith(2, false);
+  });
+
+  it("publishes the authenticated local mute state for the current voice session", async () => {
+    const updateOwnVoiceState = vi.fn().mockResolvedValue(undefined);
+    const session = new MediaSession({ updateOwnVoiceState } as unknown as ApiClient);
+    const localParticipant = {
+      isMicrophoneEnabled: true,
+      isSpeaking: false,
+      connectionQuality: 0,
+      setMicrophoneEnabled: vi.fn(async (enabled: boolean) => {
+        localParticipant.isMicrophoneEnabled = enabled;
+      }),
+    };
+    const internals = session as unknown as {
+      room: {
+        localParticipant: typeof localParticipant;
+        remoteParticipants: Map<string, never>;
+      };
+      connection: RoomConnection;
+      refreshSnapshot(): void;
+    };
+    internals.room = {
+      localParticipant,
+      remoteParticipants: new Map<string, never>(),
+    };
+    internals.connection = {
+      roomId: "channel-1",
+      ownerUserId: "owner-1",
+      livekitUrl: "ws://test",
+      livekitToken: "token",
+      participantIdentity: "user-1",
+      participantDisplayName: "User",
+      isOwner: false,
+      contextType: "channel",
+      serverId: "11111111-1111-4111-8111-111111111111",
+      channelId: "22222222-2222-4222-8222-222222222222",
+      voiceSessionId: "voice-session-1",
+    };
+    vi.spyOn(internals, "refreshSnapshot").mockImplementation(() => undefined);
+
+    await session.setMuted(true);
+
+    expect(updateOwnVoiceState).toHaveBeenCalledWith(
+      internals.connection.channelId,
+      expect.objectContaining({
+        sessionId: "voice-session-1",
+        muted: true,
+        deafened: false,
+        speaking: false,
+      }),
+    );
   });
 
   it("reattaches existing remote audio tracks after LiveKit reconnect", async () => {
@@ -158,6 +227,27 @@ describe("MediaSession incoming audio", () => {
     expect(audio.dataset.vatrushkaParticipant).toBe(participant.identity);
     expect(setVolume).toHaveBeenCalledWith(1, Track.Source.Microphone);
     audio.remove();
+  });
+});
+
+describe("MediaSession connection latency", () => {
+  it("uses the measured LiveKit signalling RTT", () => {
+    const session = new MediaSession({} as ApiClient);
+    const internals = session as unknown as {
+      room: {
+        state: ConnectionState;
+        engine: { client: { rtt: number } };
+      };
+      sampleLatency(): void;
+    };
+    internals.room = {
+      state: ConnectionState.Connected,
+      engine: { client: { rtt: 42 } },
+    };
+
+    internals.sampleLatency();
+
+    expect(session.getSnapshot().pingMs).toBe(42);
   });
 });
 

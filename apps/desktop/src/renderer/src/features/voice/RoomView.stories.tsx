@@ -16,6 +16,7 @@ const meta = {
     connection: { roomId: 'channel-1', ownerUserId: 'founder', livekitUrl: 'wss://livekit.example', livekitToken: 'storybook', participantIdentity: 'user_founder_local', participantDisplayName: 'Илья Форбиш', isOwner: true, contextType: 'channel', serverId: 'server-1', channelId: 'channel-1' },
     snapshot: {
       connectionState: ConnectionState.Connected,
+      pingMs: 31,
       participants: [
         { identity: 'user_founder_local', displayName: 'Илья Форбиш', isLocal: true, isOwner: true, isMuted: false, isSpeaking: false, audioLevel: 0.08, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'owner', connectionQuality: 'Отличное' },
         { identity: 'user_anna_remote', displayName: 'Анна Белова', isLocal: false, isOwner: false, isMuted: false, isSpeaking: true, audioLevel: 0.76, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'member', connectionQuality: 'Отличное' },
@@ -60,11 +61,12 @@ type Story = StoryObj<typeof meta>;
 export const DeviceSelection: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole('button', { name: 'Устройства' }));
     await userEvent.click(canvas.getByLabelText('Устройство ввода'));
-    await userEvent.click(canvas.getByRole('option', { name: 'Studio Microphone' }));
+    await userEvent.click(page.getByRole('option', { name: 'Studio Microphone' }));
     await userEvent.click(canvas.getByLabelText('Устройство вывода'));
-    await userEvent.click(canvas.getByRole('option', { name: 'USB Headphones' }));
+    await userEvent.click(page.getByRole('option', { name: 'USB Headphones' }));
     await expect(args.onMicrophone).toHaveBeenCalledWith('microphone-studio');
     await expect(args.onOutput).toHaveBeenCalledWith('headphones-usb');
     await userEvent.click(canvas.getByRole('button', { name: 'Обновить список аудиоустройств' }));

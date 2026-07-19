@@ -164,3 +164,5 @@ Alerts должны покрывать readiness failure, 5xx/latency surge, Red
 # Voice presence and movement
 
 Voice membership is confirmed by LiveKit webhooks, projected atomically into Redis, versioned per server, and delivered through the application WebSocket. `docs/adr/0005-livekit-confirmed-voice-presence.md` defines source-of-truth boundaries, Redis keys, adapters, reconciliation, and migration behavior. PostgreSQL does not store ephemeral voice membership.
+
+Клиент отправляет собственные bounded state transitions (`muted`, `deafened`, throttled `speaking`, `connectionQuality`) через `PATCH /api/v1/channels/:channelId/voice-state`. Backend сверяет authenticated user, channel и exact voice `sessionId`, обновляет Redis и публикует `voice.member.state.updated`; stale session получает `409 VOICE_SOURCE_CHANGED`. WebRTC RTT измеряется renderer через active ICE candidate pair и не записывается в PostgreSQL.

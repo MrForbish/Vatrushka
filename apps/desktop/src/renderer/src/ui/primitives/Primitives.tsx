@@ -9,6 +9,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Icon, type IconName } from './Icon';
 import './primitives.css';
@@ -205,18 +206,70 @@ export function Select({ className, defaultValue, disabled = false, error, hint,
   const id = providedId ?? generatedId;
   const listboxId = `${id}-listbox`;
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [menuPosition, setMenuPosition] = useState({
+    top: 0,
+    left: 0,
+    width: 0,
+    maxHeight: 260,
+  });
   const [uncontrolledValue, setUncontrolledValue] = useState(defaultValue ?? options.find((option) => option.disabled !== true)?.value ?? '');
   const selectedValue = value ?? uncontrolledValue;
   const selected = options.find((option) => option.value === selectedValue) ?? options[0];
+  const enabled = options.filter((option) => option.disabled !== true);
+
+  const updateMenuPosition = (): void => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const gap = 8;
+    const edge = 12;
+    const below = window.innerHeight - rect.bottom - gap - edge;
+    const above = rect.top - gap - edge;
+    const placeBelow = below >= 180 || below >= above;
+    const desiredHeight = Math.min(260, options.length * 38 + 8);
+    const availableHeight = Math.max(48, placeBelow ? below : above);
+    const maxHeight = Math.min(desiredHeight, availableHeight);
+    const width = Math.min(
+      Math.max(rect.width, 160),
+      window.innerWidth - edge * 2,
+    );
+    const left = Math.max(edge, Math.min(rect.left, window.innerWidth - width - edge));
+    setMenuPosition({
+      top: placeBelow ? rect.bottom + gap : rect.top - gap - maxHeight,
+      left,
+      width,
+      maxHeight,
+    });
+  };
 
   useEffect(() => {
     if (!open) return;
     const close = (event: PointerEvent): void => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      if (
+        !rootRef.current?.contains(target) &&
+        !menuRef.current?.contains(target)
+      )
+        setOpen(false);
     };
+    const reposition = (): void => updateMenuPosition();
     document.addEventListener('pointerdown', close);
-    return () => document.removeEventListener('pointerdown', close);
+    window.addEventListener('resize', reposition);
+    window.addEventListener('scroll', reposition, true);
+    updateMenuPosition();
+    const selectedIndex = enabled.findIndex(
+      (option) => option.value === selectedValue,
+    );
+    setActiveIndex(Math.max(0, selectedIndex));
+    requestAnimationFrame(() => menuRef.current?.focus());
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      window.removeEventListener('resize', reposition);
+      window.removeEventListener('scroll', reposition, true);
+    };
   }, [open]);
 
   const commit = (nextValue: string): void => {
@@ -227,12 +280,10 @@ export function Select({ className, defaultValue, disabled = false, error, hint,
   };
 
   const move = (direction: 1 | -1): void => {
-    const enabled = options.filter((option) => option.disabled !== true);
     if (enabled.length === 0) return;
-    const currentIndex = enabled.findIndex((option) => option.value === selectedValue);
-    const nextIndex = currentIndex < 0 ? 0 : (currentIndex + direction + enabled.length) % enabled.length;
-    const next = enabled[nextIndex];
-    if (next) commit(next.value);
+    setActiveIndex((current) =>
+      (current + direction + enabled.length) % enabled.length,
+    );
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>): void => {
@@ -246,11 +297,27 @@ export function Select({ className, defaultValue, disabled = false, error, hint,
     }
   };
 
+  const handleListboxKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      move(event.key === 'ArrowDown' ? 1 : -1);
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      const option = enabled[activeIndex];
+      if (option) commit(option.value);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      setOpen(false);
+      triggerRef.current?.focus();
+    }
+  };
+
   return (
     <FieldFrame error={error} hint={hint} id={id} label={label}>
       <div className={cx('vui-select-root', className)} ref={rootRef}>
         <button
           {...props}
+          ref={triggerRef}
           aria-controls={listboxId}
           aria-describedby={error === undefined && hint === undefined ? undefined : `${id}-message`}
           aria-expanded={open}
@@ -266,19 +333,48 @@ export function Select({ className, defaultValue, disabled = false, error, hint,
           <span className="vui-select__value" title={selected?.label}>{selected?.label ?? 'Нет доступных вариантов'}</span>
           <Icon name="chevronDown" size={18} />
         </button>
-        {open ? <div aria-label={label} className="vui-select-menu" id={listboxId} role="listbox">{options.map((option) => (
-          <button
-            aria-selected={option.value === selectedValue}
-            disabled={option.disabled}
-            key={option.value}
-            onClick={() => commit(option.value)}
-            role="option"
-            title={option.label}
-            type="button"
-          >
-            <span>{option.label}</span>{option.value === selectedValue ? <Icon name="check" size={16} /> : null}
-          </button>
-        ))}</div> : null}
+        {open
+          ? createPortal(
+              <div
+                aria-label={label}
+                className="vui-select-menu"
+                id={listboxId}
+                onKeyDown={handleListboxKeyDown}
+                onPointerDown={(event) => event.stopPropagation()}
+                ref={menuRef}
+                role="listbox"
+                style={menuPosition}
+                tabIndex={-1}
+              >
+                {options.map((option) => {
+                  const enabledIndex = enabled.findIndex(
+                    (candidate) => candidate.value === option.value,
+                  );
+                  return (
+                    <button
+                      aria-selected={option.value === selectedValue}
+                      data-active={enabledIndex === activeIndex || undefined}
+                      disabled={option.disabled}
+                      key={option.value}
+                      onClick={() => commit(option.value)}
+                      onMouseEnter={() => {
+                        if (enabledIndex >= 0) setActiveIndex(enabledIndex);
+                      }}
+                      role="option"
+                      title={option.label}
+                      type="button"
+                    >
+                      <span>{option.label}</span>
+                      {option.value === selectedValue ? (
+                        <Icon name="check" size={16} />
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>,
+              document.body,
+            )
+          : null}
       </div>
     </FieldFrame>
   );

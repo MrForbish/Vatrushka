@@ -491,14 +491,31 @@ return {1, version}
     const current = await this.getSession(userId);
     if (!current || current.sessionId !== expectedSessionId) return null;
     const updated = { ...current, ...patch, updatedAt: new Date().toISOString() };
-    await this.client.hSet(this.userKey(userId), {
-      muted: updated.muted ? "1" : "0",
-      deafened: updated.deafened ? "1" : "0",
-      speaking: updated.speaking ? "1" : "0",
-      screenSharing: updated.screenSharing ? "1" : "0",
-      connectionQuality: updated.connectionQuality,
-      updatedAt: updated.updatedAt,
-    });
+    const changed = Number(
+      await this.client.eval(
+        `
+if redis.call('HGET', KEYS[1], 'sessionId') ~= ARGV[1] then return 0 end
+redis.call('HSET', KEYS[1],
+  'muted', ARGV[2], 'deafened', ARGV[3], 'speaking', ARGV[4],
+  'screenSharing', ARGV[5], 'connectionQuality', ARGV[6],
+  'updatedAt', ARGV[7])
+return 1
+`,
+        {
+          keys: [this.userKey(userId)],
+          arguments: [
+            expectedSessionId,
+            updated.muted ? "1" : "0",
+            updated.deafened ? "1" : "0",
+            updated.speaking ? "1" : "0",
+            updated.screenSharing ? "1" : "0",
+            updated.connectionQuality,
+            updated.updatedAt,
+          ],
+        },
+      ),
+    );
+    if (changed !== 1) return null;
     return updated;
   }
 

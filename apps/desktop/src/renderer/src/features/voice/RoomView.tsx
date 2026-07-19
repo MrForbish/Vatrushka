@@ -6,7 +6,10 @@ import {
   type RemoteTrack,
 } from "livekit-client";
 
-import type { RoomConnection } from "@vatrushka/shared";
+import type {
+  RoomConnection,
+  VoiceChannelParticipant,
+} from "@vatrushka/shared";
 
 import { audioDeviceOptions } from "../../audio-devices";
 import type { MediaSnapshot, ParticipantView } from "../../media";
@@ -40,10 +43,11 @@ export interface RoomViewProps {
   error: string | null;
   participantNames?: Record<string, string> | undefined;
   participantAvatars?: Record<string, string | null> | undefined;
+  voiceParticipants?: VoiceChannelParticipant[] | undefined;
   onMute(): void;
   onDeafen?(): void;
   onShare(): void;
-  onCopy(): void;
+  onCopy(): void | Promise<void>;
   onLeave(): void;
   onKick(identity: string): void;
   onMicrophone(value: string): void;
@@ -60,8 +64,10 @@ function participantModel(
   participant: ParticipantView,
   participantNames: Record<string, string> = {},
   participantAvatars: Record<string, string | null> = {},
+  voiceParticipants: VoiceChannelParticipant[] = [],
 ): VoiceParticipantViewModel {
   const userId = /^user_([^_]+)_/u.exec(participant.identity)?.[1];
+  const voiceState = voiceParticipants.find((item) => item.userId === userId);
   return {
     id: participant.identity,
     name: userId
@@ -70,8 +76,11 @@ function participantModel(
     avatarUrl: userId ? (participantAvatars[userId] ?? null) : null,
     isLocal: participant.isLocal,
     isMuted: participant.isMuted,
+    isDeafened: voiceState?.deafened ?? false,
     isSpeaking: participant.isSpeaking,
-    isScreenSharing: participant.isScreenSharing,
+    isScreenSharing:
+      participant.isScreenSharing ||
+      (voiceState?.screenSharing ?? false),
     locallyMuted: participant.locallyMuted,
     volume: participant.volume,
     audioLevel: participant.audioLevel,
@@ -87,6 +96,9 @@ function participantModel(
 }
 
 export function RoomView(props: RoomViewProps): React.JSX.Element {
+  const [inviteState, setInviteState] = useState<
+    "idle" | "copying" | "copied" | "error"
+  >("idle");
   const reconnecting =
     props.snapshot.connectionState === ConnectionState.Reconnecting ||
     props.snapshot.connectionState === ConnectionState.SignalReconnecting;
@@ -95,6 +107,7 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
       participant,
       props.participantNames,
       props.participantAvatars,
+      props.voiceParticipants,
     ),
   );
   const screenSharerName =
@@ -108,6 +121,17 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
     onKick: props.onKick,
     onLocalMute: props.onParticipantMute,
     onVolume: props.onParticipantVolume,
+  };
+  const copyInvite = async (): Promise<void> => {
+    if (inviteState === "copying") return;
+    setInviteState("copying");
+    try {
+      await props.onCopy();
+      setInviteState("copied");
+      window.setTimeout(() => setInviteState("idle"), 2_500);
+    } catch {
+      setInviteState("error");
+    }
   };
 
   return (
@@ -277,8 +301,14 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
           />
           <VoiceControlButton
             icon="copy"
-            label="Пригласить"
-            onClick={props.onCopy}
+            label={
+              inviteState === "copying"
+                ? "Копируем…"
+                : inviteState === "copied"
+                  ? "Ссылка скопирована"
+                  : "Пригласить"
+            }
+            onClick={() => void copyInvite()}
             testId="copy-invite-control"
           />
           <VoiceControlButton
@@ -289,6 +319,13 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
             testId="leave-control"
           />
         </VoiceControlDock>
+        {inviteState === "copied" || inviteState === "error" ? (
+          <span className="vui-room__invite-status" role="status">
+            {inviteState === "copied"
+              ? "Ссылка на сервер скопирована"
+              : "Не удалось скопировать ссылку"}
+          </span>
+        ) : null}
       </div>
     </section>
   );
