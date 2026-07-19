@@ -51,6 +51,8 @@ infra/
   caddy/               TLS reverse proxy
   livekit/             optional single-node self-hosted LiveKit
   scripts/             UFW and Windows icon scripts
+.gitlab/                CODEOWNERS and Merge Request templates
+.gitlab-ci.yml          GitLab quality, RC and production pipeline
 docs/                   operating and design documentation
 ```
 

@@ -1,0 +1,13 @@
+# GitLab account and group owner already exist; no placeholder users are used.
+* @MrForbish
+
+/.gitlab-ci.yml @MrForbish
+/.gitlab/ @MrForbish
+/scripts/policy/ @MrForbish
+/scripts/release/ @MrForbish
+/package.json @MrForbish
+/package-lock.json @MrForbish
+/apps/desktop/package.json @MrForbish
+/apps/desktop/src/main/ @MrForbish
+/apps/api/drizzle/ @MrForbish
+/infra/ @MrForbish
