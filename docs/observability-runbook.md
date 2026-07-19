@@ -48,7 +48,22 @@ curl -fsS "http://${OBSERVABILITY_PRIVATE_BIND_IP}:3100/ready"
 curl -fsS "https://${GRAFANA_DOMAIN}/api/health"
 ```
 
-В Grafana должны присутствовать datasources Prometheus/Loki и provisioned dashboards. Базовый набор включает Infrastructure, Containers, «Приложение: обзор», «API: детали HTTP», Prometheus Health, Loki Health и Logs Overview; последующие продуктовые дашборды добавляются без жёсткого ограничения их количества.
+В Grafana должны присутствовать datasources Prometheus/Loki и provisioned dashboards. Базовый набор включает «Инфраструктура: обзор», «Контейнеры: обзор», «Приложение: обзор», «API: детали HTTP», Prometheus Health, Loki Health и Logs Overview; последующие продуктовые дашборды добавляются без жёсткого ограничения их количества.
+
+## Infrastructure and containers
+
+Дашборды `Инфраструктура: обзор` и `Контейнеры: обзор` используют фильтры contour/region/host/role/container и сохраняют время при переходе в соседние dashboards. `Нет данных` означает отсутствие series, а не нулевую нагрузку. `Наблюдаемые контейнеры` показывает только свежесть cAdvisor, не Docker health.
+
+Пороговые значения синхронизированы с rules:
+
+- CPU host: warning выше 85% в течение 15 минут;
+- RAM host: critical выше 90% в течение 10 минут;
+- filesystem: warning 80%, critical 90%; inode warning 85%;
+- clock skew: warning выше 5 секунд;
+- container restarts: warning, если `container_start_time_seconds` изменился более трёх раз за 15 минут;
+- container OOM: critical при любом событии за 15 минут.
+
+При срабатывании сначала сузьте host/container, сопоставьте время с `Рестарты и OOM`, CPU throttling, host iowait и disk latency, затем перейдите в логи. Прогноз свободного места на 24 часа — диагностический сигнал по шестичасовому тренду, не самостоятельный alert. После rollout убедитесь, что cAdvisor публикует `container`; прежний `name` сохранён на один release для совместимости.
 
 ## API HTTP
 

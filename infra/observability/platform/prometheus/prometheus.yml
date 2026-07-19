@@ -42,12 +42,14 @@ scrape_configs:
       - targets: [node-exporter:9100]
         labels:
           host: observability
+          role: observability
 
   - job_name: observability-alloy
     static_configs:
       - targets: [alloy:12345]
         labels:
           host: observability
+          role: observability
 
   - job_name: blackbox-http
     metrics_path: /probe
