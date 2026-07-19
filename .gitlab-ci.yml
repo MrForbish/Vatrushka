@@ -44,6 +44,7 @@ variables:
   tags: [vatrushka-windows]
   variables:
     PLAYWRIGHT_BROWSERS_PATH: '$CI_PROJECT_DIR/.cache/ms-playwright'
+    ELECTRON_BUILDER_CACHE: '$CI_PROJECT_DIR/.cache/electron-builder'
   cache:
     key:
       files: [package-lock.json]
@@ -51,6 +52,8 @@ variables:
     paths:
       - .npm/
       - .cache/ms-playwright/
+      - .cache/electron-builder/
+      - .cache/electron-dist/
     policy: pull-push
   before_script:
     - $env:Path = "$env:NODE_HOME;$env:Path"
