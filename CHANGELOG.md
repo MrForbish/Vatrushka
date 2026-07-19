@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-07-19
+
+### Fixed
+
+- production GitLab Release publication now uses POSIX-compatible commands instead of Bash-only `mapfile` in the Alpine `glab` image;
+- the production SSH file variable preserves the final OpenSSH newline required by Alpine `libcrypto`.
+
 ## [0.6.4] - 2026-07-19
 
 ### Operations

@@ -403,10 +403,9 @@ publish-production:
       scp apps/desktop/release/latest.yml "$remote:$PRODUCTION_UPDATE_PATH/latest.yml.next"
       ssh "$remote" "mv -- '$PRODUCTION_UPDATE_PATH/latest.yml.next' '$PRODUCTION_UPDATE_PATH/latest.yml'"
     - |
-      mapfile -d '' assets < <(find apps/desktop/release -maxdepth 1 -type f -print0)
-      ((${#assets[@]} > 0)) || { echo 'Release artifact contains no publishable files.' >&2; exit 1; }
-      if glab release view "$CI_COMMIT_TAG" >/dev/null 2>&1; then
-        glab release upload "$CI_COMMIT_TAG" "${assets[@]}" --use-package-registry --package-name "vatrushka-$VERSION"
-      else
-        glab release create "$CI_COMMIT_TAG" "${assets[@]}" --name "Vatrushka $VERSION" --notes "Production release $CI_COMMIT_TAG" --use-package-registry --package-name "vatrushka-$VERSION"
+      find apps/desktop/release -maxdepth 1 -type f -print -quit | grep -q . || { echo 'Release artifact contains no publishable files.' >&2; exit 1; }
+      if ! glab release view "$CI_COMMIT_TAG" >/dev/null 2>&1; then
+        glab release create "$CI_COMMIT_TAG" --name "Vatrushka $VERSION" --notes "Production release $CI_COMMIT_TAG"
       fi
+      find apps/desktop/release -maxdepth 1 -type f \
+        -exec glab release upload "$CI_COMMIT_TAG" --use-package-registry --package-name "vatrushka-$VERSION" {} +
