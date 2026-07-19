@@ -1,0 +1,23 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }, "id": 1, "targets": [{ "expr": "sum by (host, name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[5m])) * 100", "legendFormat": "{{host}} {{name}}", "refId": "A" }], "title": "Container CPU", "type": "timeseries" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] }, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }, "id": 2, "targets": [{ "expr": "container_memory_working_set_bytes{name!=\"\"}", "legendFormat": "{{host}} {{name}}", "refId": "A" }], "title": "Container RAM", "type": "timeseries" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 8, "x": 0, "y": 8 }, "id": 3, "targets": [{ "expr": "count by (host) (container_last_seen{name!=\"\"})", "legendFormat": "{{host}}", "refId": "A" }], "title": "Observed containers", "type": "stat" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 8, "x": 8, "y": 8 }, "id": 4, "targets": [{ "expr": "increase(container_oom_events_total[1h])", "legendFormat": "{{host}} {{name}}", "refId": "A" }], "title": "OOM events", "type": "timeseries" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] }, "gridPos": { "h": 7, "w": 8, "x": 16, "y": 8 }, "id": 5, "targets": [{ "expr": "sum by (host, name) (rate(container_network_receive_bytes_total[5m]) + rate(container_network_transmit_bytes_total[5m]))", "legendFormat": "{{host}} {{name}}", "refId": "A" }], "title": "Container network", "type": "timeseries" }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["vatrushka", "containers"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "Containers Overview",
+  "uid": "vatrushka-containers",
+  "version": 1
+}

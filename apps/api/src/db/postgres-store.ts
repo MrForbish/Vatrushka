@@ -1,9 +1,31 @@
-import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, or, sql } from 'drizzle-orm';
-import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
-import pg from 'pg';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import pg from "pg";
 
-import { decideScreenShareLease, expiresAt, isExpired } from '@vatrushka/shared';
-import type { PermissionOverwriteTargetType, PlatformRole } from '@vatrushka/shared';
+import {
+  decideScreenShareLease,
+  expiresAt,
+  isExpired,
+} from "@vatrushka/shared";
+import type {
+  PermissionOverwriteTargetType,
+  PlatformRole,
+} from "@vatrushka/shared";
 
 import type {
   AuthCodeRecord,
@@ -41,9 +63,9 @@ import type {
   DirectMessageAttachmentRecord,
   DirectMessageAttachmentMetadata,
   ChannelLeaseRecord,
-} from '../domain.js';
-import type { DataStore } from '../ports.js';
-import * as schema from './schema.js';
+} from "../domain.js";
+import type { DataStore } from "../ports.js";
+import * as schema from "./schema.js";
 
 type Database = NodePgDatabase<typeof schema>;
 
@@ -51,7 +73,7 @@ export class PostgresStore implements DataStore {
   constructor(private readonly db: Database) {}
 
   async healthCheck(): Promise<void> {
-    await this.db.execute('select 1');
+    await this.db.execute("select 1");
   }
 
   async replaceAuthCode(code: AuthCodeRecord): Promise<void> {
@@ -59,16 +81,30 @@ export class PostgresStore implements DataStore {
       await tx
         .update(schema.authCodes)
         .set({ consumedAt: code.createdAt })
-        .where(and(eq(schema.authCodes.email, code.email), eq(schema.authCodes.purpose, code.purpose), isNull(schema.authCodes.consumedAt)));
+        .where(
+          and(
+            eq(schema.authCodes.email, code.email),
+            eq(schema.authCodes.purpose, code.purpose),
+            isNull(schema.authCodes.consumedAt),
+          ),
+        );
       await tx.insert(schema.authCodes).values(code);
     });
   }
 
-  async findLatestAuthCodeForPurpose(email: string, purpose: AuthCodeRecord['purpose']): Promise<AuthCodeRecord | null> {
+  async findLatestAuthCodeForPurpose(
+    email: string,
+    purpose: AuthCodeRecord["purpose"],
+  ): Promise<AuthCodeRecord | null> {
     const [row] = await this.db
       .select()
       .from(schema.authCodes)
-      .where(and(eq(schema.authCodes.email, email), eq(schema.authCodes.purpose, purpose)))
+      .where(
+        and(
+          eq(schema.authCodes.email, email),
+          eq(schema.authCodes.purpose, purpose),
+        ),
+      )
       .orderBy(desc(schema.authCodes.createdAt))
       .limit(1);
     return (row as AuthCodeRecord | undefined) ?? null;
@@ -87,12 +123,17 @@ export class PostgresStore implements DataStore {
     const rows = await this.db
       .update(schema.authCodes)
       .set({ consumedAt: at })
-      .where(and(eq(schema.authCodes.id, id), isNull(schema.authCodes.consumedAt)))
+      .where(
+        and(eq(schema.authCodes.id, id), isNull(schema.authCodes.consumedAt)),
+      )
       .returning({ id: schema.authCodes.id });
     return rows.length === 1;
   }
 
-  async getOrCreateUser(email: string, now: Date): Promise<{ user: UserRecord; isNewUser: boolean }> {
+  async getOrCreateUser(
+    email: string,
+    now: Date,
+  ): Promise<{ user: UserRecord; isNewUser: boolean }> {
     const id = crypto.randomUUID();
     const inserted = await this.db
       .insert(schema.users)
@@ -100,22 +141,38 @@ export class PostgresStore implements DataStore {
       .onConflictDoNothing({ target: schema.users.email })
       .returning();
     if (inserted[0]) return { user: inserted[0], isNewUser: true };
-    const [user] = await this.db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
-    if (!user) throw new Error('User conflict without existing row');
+    const [user] = await this.db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, email))
+      .limit(1);
+    if (!user) throw new Error("User conflict without existing row");
     return { user, isNewUser: false };
   }
 
   async findUserById(id: string): Promise<UserRecord | null> {
-    const [row] = await this.db.select().from(schema.users).where(eq(schema.users.id, id)).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, id))
+      .limit(1);
     return row ?? null;
   }
 
   async findUserByEmail(email: string): Promise<UserRecord | null> {
-    const [row] = await this.db.select().from(schema.users).where(eq(schema.users.email, email)).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, email))
+      .limit(1);
     return row ?? null;
   }
 
-  async createUserWithPassword(email: string, passwordHash: string, now: Date): Promise<UserRecord | null> {
+  async createUserWithPassword(
+    email: string,
+    passwordHash: string,
+    now: Date,
+  ): Promise<UserRecord | null> {
     const [row] = await this.db
       .insert(schema.users)
       .values({
@@ -132,7 +189,11 @@ export class PostgresStore implements DataStore {
     return row ?? null;
   }
 
-  async updateDisplayName(id: string, displayName: string, now: Date): Promise<UserRecord | null> {
+  async updateDisplayName(
+    id: string,
+    displayName: string,
+    now: Date,
+  ): Promise<UserRecord | null> {
     const [row] = await this.db
       .update(schema.users)
       .set({ displayName, updatedAt: now })
@@ -141,21 +202,49 @@ export class PostgresStore implements DataStore {
     return row ?? null;
   }
 
-  async updatePresence(id: string, values: { preference: UserRecord['presencePreference']; customText: string | null; customTextExpiresAt: Date | null }, now: Date): Promise<UserRecord | null> {
+  async updatePresence(
+    id: string,
+    values: {
+      preference: UserRecord["presencePreference"];
+      customText: string | null;
+      customTextExpiresAt: Date | null;
+    },
+    now: Date,
+  ): Promise<UserRecord | null> {
     const [row] = await this.db
       .update(schema.users)
-      .set({ presencePreference: values.preference, customStatusText: values.customText, customStatusExpiresAt: values.customTextExpiresAt, updatedAt: now })
+      .set({
+        presencePreference: values.preference,
+        customStatusText: values.customText,
+        customStatusExpiresAt: values.customTextExpiresAt,
+        updatedAt: now,
+      })
       .where(eq(schema.users.id, id))
       .returning();
     return row ?? null;
   }
 
-  async updatePrivacySettings(id: string, values: Pick<UserRecord, 'directMessagePrivacy' | 'presenceVisibility' | 'activityVisible'>, now: Date): Promise<UserRecord | null> {
-    const [row] = await this.db.update(schema.users).set({ ...values, updatedAt: now }).where(eq(schema.users.id, id)).returning();
+  async updatePrivacySettings(
+    id: string,
+    values: Pick<
+      UserRecord,
+      "directMessagePrivacy" | "presenceVisibility" | "activityVisible"
+    >,
+    now: Date,
+  ): Promise<UserRecord | null> {
+    const [row] = await this.db
+      .update(schema.users)
+      .set({ ...values, updatedAt: now })
+      .where(eq(schema.users.id, id))
+      .returning();
     return row ?? null;
   }
 
-  async updatePassword(id: string, passwordHash: string, now: Date): Promise<UserRecord | null> {
+  async updatePassword(
+    id: string,
+    passwordHash: string,
+    now: Date,
+  ): Promise<UserRecord | null> {
     const [row] = await this.db
       .update(schema.users)
       .set({ passwordHash, emailVerifiedAt: now, updatedAt: now })
@@ -164,7 +253,11 @@ export class PostgresStore implements DataStore {
     return row ?? null;
   }
 
-  async resetPasswordAndRevokeSessions(id: string, passwordHash: string, now: Date): Promise<{ user: UserRecord; revokedSessionIds: string[] } | null> {
+  async resetPasswordAndRevokeSessions(
+    id: string,
+    passwordHash: string,
+    now: Date,
+  ): Promise<{ user: UserRecord; revokedSessionIds: string[] } | null> {
     return this.db.transaction(async (tx) => {
       const [user] = await tx
         .update(schema.users)
@@ -175,22 +268,40 @@ export class PostgresStore implements DataStore {
       const revoked = await tx
         .update(schema.sessions)
         .set({ revokedAt: now })
-        .where(and(eq(schema.sessions.userId, id), isNull(schema.sessions.revokedAt)))
+        .where(
+          and(
+            eq(schema.sessions.userId, id),
+            isNull(schema.sessions.revokedAt),
+          ),
+        )
         .returning({ id: schema.sessions.id });
       return { user, revokedSessionIds: revoked.map((session) => session.id) };
     });
   }
 
-  async updateTwoFactor(id: string, secretEncrypted: string | null, enabled: boolean, now: Date): Promise<UserRecord | null> {
+  async updateTwoFactor(
+    id: string,
+    secretEncrypted: string | null,
+    enabled: boolean,
+    now: Date,
+  ): Promise<UserRecord | null> {
     const [row] = await this.db
       .update(schema.users)
-      .set({ totpSecretEncrypted: secretEncrypted, twoFactorEnabled: enabled, updatedAt: now })
+      .set({
+        totpSecretEncrypted: secretEncrypted,
+        twoFactorEnabled: enabled,
+        updatedAt: now,
+      })
       .where(eq(schema.users.id, id))
       .returning();
     return row ?? null;
   }
 
-  async setPlatformRoleByEmail(email: string, role: PlatformRole, now: Date): Promise<UserRecord | null> {
+  async setPlatformRoleByEmail(
+    email: string,
+    role: PlatformRole,
+    now: Date,
+  ): Promise<UserRecord | null> {
     const [row] = await this.db
       .update(schema.users)
       .set({ platformRole: role, updatedAt: now })
@@ -204,41 +315,67 @@ export class PostgresStore implements DataStore {
   }
 
   async findSessionById(id: string): Promise<SessionRecord | null> {
-    const [row] = await this.db.select().from(schema.sessions).where(eq(schema.sessions.id, id)).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(schema.sessions)
+      .where(eq(schema.sessions.id, id))
+      .limit(1);
     return row ?? null;
   }
 
   async listSessionsForUser(userId: string): Promise<SessionRecord[]> {
-    return this.db.select().from(schema.sessions).where(eq(schema.sessions.userId, userId)).orderBy(desc(schema.sessions.createdAt));
+    return this.db
+      .select()
+      .from(schema.sessions)
+      .where(eq(schema.sessions.userId, userId))
+      .orderBy(desc(schema.sessions.createdAt));
   }
 
-  async rotateSession(tokenHash: string, replacement: SessionRecord, now: Date): Promise<RefreshRotation> {
+  async rotateSession(
+    tokenHash: string,
+    replacement: SessionRecord,
+    now: Date,
+  ): Promise<RefreshRotation> {
     return this.db.transaction(async (tx) => {
       const [session] = await tx
         .select()
         .from(schema.sessions)
         .where(eq(schema.sessions.tokenHash, tokenHash))
         .limit(1)
-        .for('update');
-      if (!session) return { status: 'not_found' };
+        .for("update");
+      if (!session) return { status: "not_found" };
       if (session.revokedAt || session.replacedBySessionId) {
         await tx
           .update(schema.sessions)
           .set({ revokedAt: now })
-          .where(and(eq(schema.sessions.tokenFamilyId, session.tokenFamilyId), isNull(schema.sessions.revokedAt)));
-        return { status: 'reused', session };
+          .where(
+            and(
+              eq(schema.sessions.tokenFamilyId, session.tokenFamilyId),
+              isNull(schema.sessions.revokedAt),
+            ),
+          );
+        return { status: "reused", session };
       }
       if (isExpired(session.expiresAt, now)) {
-        await tx.update(schema.sessions).set({ revokedAt: now }).where(eq(schema.sessions.id, session.id));
-        return { status: 'expired', session };
+        await tx
+          .update(schema.sessions)
+          .set({ revokedAt: now })
+          .where(eq(schema.sessions.id, session.id));
+        return { status: "expired", session };
       }
-      const next: SessionRecord = { ...replacement, userId: session.userId, tokenFamilyId: session.tokenFamilyId, deviceName: session.deviceName, trustedAt: session.trustedAt };
+      const next: SessionRecord = {
+        ...replacement,
+        userId: session.userId,
+        tokenFamilyId: session.tokenFamilyId,
+        deviceName: session.deviceName,
+        trustedAt: session.trustedAt,
+      };
       await tx.insert(schema.sessions).values(next);
       await tx
         .update(schema.sessions)
         .set({ revokedAt: now, replacedBySessionId: next.id, lastUsedAt: now })
         .where(eq(schema.sessions.id, session.id));
-      return { status: 'ok', oldSession: session, newSession: next };
+      return { status: "ok", oldSession: session, newSession: next };
     });
   }
 
@@ -246,69 +383,136 @@ export class PostgresStore implements DataStore {
     await this.db
       .update(schema.sessions)
       .set({ revokedAt: now })
-      .where(and(eq(schema.sessions.tokenHash, tokenHash), isNull(schema.sessions.revokedAt)));
+      .where(
+        and(
+          eq(schema.sessions.tokenHash, tokenHash),
+          isNull(schema.sessions.revokedAt),
+        ),
+      );
   }
 
   async revokeSessionFamily(familyId: string, now: Date): Promise<void> {
     await this.db
       .update(schema.sessions)
       .set({ revokedAt: now })
-      .where(and(eq(schema.sessions.tokenFamilyId, familyId), isNull(schema.sessions.revokedAt)));
+      .where(
+        and(
+          eq(schema.sessions.tokenFamilyId, familyId),
+          isNull(schema.sessions.revokedAt),
+        ),
+      );
   }
 
-  async revokeSessionFamilyForUser(userId: string, familyId: string, now: Date): Promise<boolean> {
+  async revokeSessionFamilyForUser(
+    userId: string,
+    familyId: string,
+    now: Date,
+  ): Promise<boolean> {
     const rows = await this.db
       .update(schema.sessions)
       .set({ revokedAt: now })
-      .where(and(eq(schema.sessions.userId, userId), eq(schema.sessions.tokenFamilyId, familyId), isNull(schema.sessions.revokedAt)))
+      .where(
+        and(
+          eq(schema.sessions.userId, userId),
+          eq(schema.sessions.tokenFamilyId, familyId),
+          isNull(schema.sessions.revokedAt),
+        ),
+      )
       .returning({ id: schema.sessions.id });
     if (rows.length > 0) return true;
-    const [existing] = await this.db.select({ id: schema.sessions.id }).from(schema.sessions)
-      .where(and(eq(schema.sessions.userId, userId), eq(schema.sessions.tokenFamilyId, familyId))).limit(1);
+    const [existing] = await this.db
+      .select({ id: schema.sessions.id })
+      .from(schema.sessions)
+      .where(
+        and(
+          eq(schema.sessions.userId, userId),
+          eq(schema.sessions.tokenFamilyId, familyId),
+        ),
+      )
+      .limit(1);
     return existing !== undefined;
   }
 
-  async setSessionFamilyTrusted(userId: string, familyId: string, trustedAt: Date | null): Promise<boolean> {
+  async setSessionFamilyTrusted(
+    userId: string,
+    familyId: string,
+    trustedAt: Date | null,
+  ): Promise<boolean> {
     const rows = await this.db
       .update(schema.sessions)
       .set({ trustedAt })
-      .where(and(eq(schema.sessions.userId, userId), eq(schema.sessions.tokenFamilyId, familyId)))
+      .where(
+        and(
+          eq(schema.sessions.userId, userId),
+          eq(schema.sessions.tokenFamilyId, familyId),
+        ),
+      )
       .returning({ id: schema.sessions.id });
     return rows.length > 0;
   }
 
-  async replaceRecoveryCodes(userId: string, codes: RecoveryCodeRecord[]): Promise<void> {
+  async replaceRecoveryCodes(
+    userId: string,
+    codes: RecoveryCodeRecord[],
+  ): Promise<void> {
     await this.db.transaction(async (tx) => {
-      await tx.delete(schema.userRecoveryCodes).where(eq(schema.userRecoveryCodes.userId, userId));
-      if (codes.length > 0) await tx.insert(schema.userRecoveryCodes).values(codes);
+      await tx
+        .delete(schema.userRecoveryCodes)
+        .where(eq(schema.userRecoveryCodes.userId, userId));
+      if (codes.length > 0)
+        await tx.insert(schema.userRecoveryCodes).values(codes);
     });
   }
 
-  async consumeRecoveryCode(userId: string, codeHash: string, now: Date): Promise<boolean> {
-    const rows = await this.db.update(schema.userRecoveryCodes).set({ usedAt: now })
-      .where(and(eq(schema.userRecoveryCodes.userId, userId), eq(schema.userRecoveryCodes.codeHash, codeHash), isNull(schema.userRecoveryCodes.usedAt)))
+  async consumeRecoveryCode(
+    userId: string,
+    codeHash: string,
+    now: Date,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .update(schema.userRecoveryCodes)
+      .set({ usedAt: now })
+      .where(
+        and(
+          eq(schema.userRecoveryCodes.userId, userId),
+          eq(schema.userRecoveryCodes.codeHash, codeHash),
+          isNull(schema.userRecoveryCodes.usedAt),
+        ),
+      )
       .returning({ id: schema.userRecoveryCodes.id });
     return rows.length === 1;
   }
 
   async deleteRecoveryCodes(userId: string): Promise<void> {
-    await this.db.delete(schema.userRecoveryCodes).where(eq(schema.userRecoveryCodes.userId, userId));
+    await this.db
+      .delete(schema.userRecoveryCodes)
+      .where(eq(schema.userRecoveryCodes.userId, userId));
   }
 
   async createSecurityEvent(event: SecurityEventRecord): Promise<void> {
     await this.db.insert(schema.securityEvents).values(event);
   }
 
-  async listSecurityEvents(userId: string, limit: number): Promise<SecurityEventRecord[]> {
-    return this.db.select().from(schema.securityEvents).where(eq(schema.securityEvents.userId, userId))
-      .orderBy(desc(schema.securityEvents.createdAt)).limit(limit);
+  async listSecurityEvents(
+    userId: string,
+    limit: number,
+  ): Promise<SecurityEventRecord[]> {
+    return this.db
+      .select()
+      .from(schema.securityEvents)
+      .where(eq(schema.securityEvents.userId, userId))
+      .orderBy(desc(schema.securityEvents.createdAt))
+      .limit(limit);
   }
 
   async createUserActivity(activity: UserActivityRecord): Promise<void> {
     await this.db.insert(schema.userActivity).values(activity);
   }
 
-  async listUserActivity(userId: string, limit: number): Promise<UserActivityRecord[]> {
+  async listUserActivity(
+    userId: string,
+    limit: number,
+  ): Promise<UserActivityRecord[]> {
     return this.db
       .select()
       .from(schema.userActivity)
@@ -319,11 +523,16 @@ export class PostgresStore implements DataStore {
 
   async createServerGraph(graph: ServerGraph): Promise<boolean> {
     return this.db.transaction(async (tx) => {
-      const inserted = await tx.insert(schema.servers).values(graph.server).onConflictDoNothing().returning({ id: schema.servers.id });
+      const inserted = await tx
+        .insert(schema.servers)
+        .values(graph.server)
+        .onConflictDoNothing()
+        .returning({ id: schema.servers.id });
       if (inserted.length === 0) return false;
       await tx.insert(schema.serverMembers).values(graph.members);
       await tx.insert(schema.serverRoles).values(graph.roles);
-      if (graph.memberRoles.length > 0) await tx.insert(schema.serverMemberRoles).values(graph.memberRoles);
+      if (graph.memberRoles.length > 0)
+        await tx.insert(schema.serverMemberRoles).values(graph.memberRoles);
       await tx.insert(schema.serverChannels).values(graph.channels);
       return true;
     });
@@ -336,63 +545,171 @@ export class PostgresStore implements DataStore {
         memberCount: sql<number>`(select count(*)::int from ${schema.serverMembers} counted where counted.server_id = ${schema.servers.id})`,
       })
       .from(schema.servers)
-      .innerJoin(schema.serverMembers, and(eq(schema.serverMembers.serverId, schema.servers.id), eq(schema.serverMembers.userId, userId)))
+      .innerJoin(
+        schema.serverMembers,
+        and(
+          eq(schema.serverMembers.serverId, schema.servers.id),
+          eq(schema.serverMembers.userId, userId),
+        ),
+      )
       .orderBy(asc(schema.servers.createdAt));
-    return rows.map(({ server, memberCount }) => ({ ...server, memberCount: Number(memberCount) }));
+    return rows.map(({ server, memberCount }) => ({
+      ...server,
+      memberCount: Number(memberCount),
+    }));
   }
 
   async findServerById(id: string): Promise<ServerRecord | null> {
-    const [row] = await this.db.select().from(schema.servers).where(eq(schema.servers.id, id)).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(schema.servers)
+      .where(eq(schema.servers.id, id))
+      .limit(1);
     return row ?? null;
   }
 
-  async findServerByInviteToken(inviteToken: string): Promise<ServerRecord | null> {
-    const [row] = await this.db.select().from(schema.servers).where(eq(schema.servers.inviteToken, inviteToken)).limit(1);
+  async findServerByInviteToken(
+    inviteToken: string,
+  ): Promise<ServerRecord | null> {
+    const [row] = await this.db
+      .select()
+      .from(schema.servers)
+      .where(eq(schema.servers.inviteToken, inviteToken))
+      .limit(1);
     return row ?? null;
   }
 
-  async findServerMember(serverId: string, userId: string): Promise<ServerMemberRecord | null> {
-    const [row] = await this.db.select().from(schema.serverMembers).where(and(eq(schema.serverMembers.serverId, serverId), eq(schema.serverMembers.userId, userId))).limit(1);
+  async findServerMember(
+    serverId: string,
+    userId: string,
+  ): Promise<ServerMemberRecord | null> {
+    const [row] = await this.db
+      .select()
+      .from(schema.serverMembers)
+      .where(
+        and(
+          eq(schema.serverMembers.serverId, serverId),
+          eq(schema.serverMembers.userId, userId),
+        ),
+      )
+      .limit(1);
     return row ?? null;
   }
 
   async addServerMember(member: ServerMemberRecord): Promise<boolean> {
-    const rows = await this.db.insert(schema.serverMembers).values(member).onConflictDoNothing().returning({ userId: schema.serverMembers.userId });
+    const rows = await this.db
+      .insert(schema.serverMembers)
+      .values(member)
+      .onConflictDoNothing()
+      .returning({ userId: schema.serverMembers.userId });
     return rows.length === 1;
   }
 
-  async updateOwnServerDisplayName(serverId: string, userId: string, displayName: string | null): Promise<boolean> {
-    const rows = await this.db.update(schema.serverMembers).set({ nickname: displayName }).where(and(eq(schema.serverMembers.serverId, serverId), eq(schema.serverMembers.userId, userId))).returning({ userId: schema.serverMembers.userId });
+  async updateOwnServerDisplayName(
+    serverId: string,
+    userId: string,
+    displayName: string | null,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .update(schema.serverMembers)
+      .set({ nickname: displayName })
+      .where(
+        and(
+          eq(schema.serverMembers.serverId, serverId),
+          eq(schema.serverMembers.userId, userId),
+        ),
+      )
+      .returning({ userId: schema.serverMembers.userId });
     return rows.length === 1;
   }
 
-  async setServerMemberAlias(serverId: string, viewerUserId: string, targetUserId: string, alias: string | null, now: Date): Promise<boolean> {
+  async setServerMemberAlias(
+    serverId: string,
+    viewerUserId: string,
+    targetUserId: string,
+    alias: string | null,
+    now: Date,
+  ): Promise<boolean> {
     if (alias === null) {
-      await this.db.delete(schema.serverMemberAliases).where(and(eq(schema.serverMemberAliases.serverId, serverId), eq(schema.serverMemberAliases.viewerUserId, viewerUserId), eq(schema.serverMemberAliases.targetUserId, targetUserId)));
+      await this.db
+        .delete(schema.serverMemberAliases)
+        .where(
+          and(
+            eq(schema.serverMemberAliases.serverId, serverId),
+            eq(schema.serverMemberAliases.viewerUserId, viewerUserId),
+            eq(schema.serverMemberAliases.targetUserId, targetUserId),
+          ),
+        );
       return true;
     }
-    await this.db.insert(schema.serverMemberAliases).values({ serverId, viewerUserId, targetUserId, alias, updatedAt: now }).onConflictDoUpdate({
-      target: [schema.serverMemberAliases.serverId, schema.serverMemberAliases.viewerUserId, schema.serverMemberAliases.targetUserId],
-      set: { alias, updatedAt: now },
-    });
+    await this.db
+      .insert(schema.serverMemberAliases)
+      .values({ serverId, viewerUserId, targetUserId, alias, updatedAt: now })
+      .onConflictDoUpdate({
+        target: [
+          schema.serverMemberAliases.serverId,
+          schema.serverMemberAliases.viewerUserId,
+          schema.serverMemberAliases.targetUserId,
+        ],
+        set: { alias, updatedAt: now },
+      });
     return true;
   }
 
-  async listServerMemberAliases(serverId: string, viewerUserId: string): Promise<Array<{ targetUserId: string; alias: string }>> {
-    return this.db.select({ targetUserId: schema.serverMemberAliases.targetUserId, alias: schema.serverMemberAliases.alias }).from(schema.serverMemberAliases).where(and(eq(schema.serverMemberAliases.serverId, serverId), eq(schema.serverMemberAliases.viewerUserId, viewerUserId)));
+  async listServerMemberAliases(
+    serverId: string,
+    viewerUserId: string,
+  ): Promise<Array<{ targetUserId: string; alias: string }>> {
+    return this.db
+      .select({
+        targetUserId: schema.serverMemberAliases.targetUserId,
+        alias: schema.serverMemberAliases.alias,
+      })
+      .from(schema.serverMemberAliases)
+      .where(
+        and(
+          eq(schema.serverMemberAliases.serverId, serverId),
+          eq(schema.serverMemberAliases.viewerUserId, viewerUserId),
+        ),
+      );
   }
 
   async removeServerMember(serverId: string, userId: string): Promise<boolean> {
     return this.db.transaction(async (tx) => {
-      await tx.delete(schema.serverMemberRoles).where(and(eq(schema.serverMemberRoles.serverId, serverId), eq(schema.serverMemberRoles.userId, userId)));
-      const rows = await tx.delete(schema.serverMembers).where(and(eq(schema.serverMembers.serverId, serverId), eq(schema.serverMembers.userId, userId))).returning({ userId: schema.serverMembers.userId });
+      await tx
+        .delete(schema.serverMemberRoles)
+        .where(
+          and(
+            eq(schema.serverMemberRoles.serverId, serverId),
+            eq(schema.serverMemberRoles.userId, userId),
+          ),
+        );
+      const rows = await tx
+        .delete(schema.serverMembers)
+        .where(
+          and(
+            eq(schema.serverMembers.serverId, serverId),
+            eq(schema.serverMembers.userId, userId),
+          ),
+        )
+        .returning({ userId: schema.serverMembers.userId });
       return rows.length === 1;
     });
   }
 
   async listServerMembers(serverId: string): Promise<ServerMemberProfile[]> {
     const rows = await this.db
-      .select({ member: schema.serverMembers, displayName: schema.users.displayName, platformRole: schema.users.platformRole, presencePreference: schema.users.presencePreference, customStatusText: schema.users.customStatusText, customStatusExpiresAt: schema.users.customStatusExpiresAt, presenceVisibility: schema.users.presenceVisibility, updatedAt: schema.users.updatedAt })
+      .select({
+        member: schema.serverMembers,
+        displayName: schema.users.displayName,
+        avatarObjectKey: schema.users.avatarObjectKey,
+        platformRole: schema.users.platformRole,
+        presencePreference: schema.users.presencePreference,
+        customStatusText: schema.users.customStatusText,
+        customStatusExpiresAt: schema.users.customStatusExpiresAt,
+        presenceVisibility: schema.users.presenceVisibility,
+        updatedAt: schema.users.updatedAt,
+      })
       .from(schema.serverMembers)
       .innerJoin(schema.users, eq(schema.users.id, schema.serverMembers.userId))
       .where(eq(schema.serverMembers.serverId, serverId))
@@ -401,59 +718,156 @@ export class PostgresStore implements DataStore {
   }
 
   async listServerRoles(serverId: string): Promise<ServerRoleRecord[]> {
-    return this.db.select().from(schema.serverRoles).where(eq(schema.serverRoles.serverId, serverId)).orderBy(asc(schema.serverRoles.position));
+    return this.db
+      .select()
+      .from(schema.serverRoles)
+      .where(eq(schema.serverRoles.serverId, serverId))
+      .orderBy(asc(schema.serverRoles.position));
   }
 
   async listMemberRoleIds(serverId: string, userId: string): Promise<string[]> {
-    const rows = await this.db.select({ roleId: schema.serverMemberRoles.roleId }).from(schema.serverMemberRoles).where(and(eq(schema.serverMemberRoles.serverId, serverId), eq(schema.serverMemberRoles.userId, userId)));
+    const rows = await this.db
+      .select({ roleId: schema.serverMemberRoles.roleId })
+      .from(schema.serverMemberRoles)
+      .where(
+        and(
+          eq(schema.serverMemberRoles.serverId, serverId),
+          eq(schema.serverMemberRoles.userId, userId),
+        ),
+      );
     return rows.map((row) => row.roleId);
   }
 
-  async listAllMemberRoles(serverId: string): Promise<Array<{ userId: string; roleId: string }>> {
-    return this.db.select({ userId: schema.serverMemberRoles.userId, roleId: schema.serverMemberRoles.roleId }).from(schema.serverMemberRoles).where(eq(schema.serverMemberRoles.serverId, serverId));
+  async listAllMemberRoles(
+    serverId: string,
+  ): Promise<Array<{ userId: string; roleId: string }>> {
+    return this.db
+      .select({
+        userId: schema.serverMemberRoles.userId,
+        roleId: schema.serverMemberRoles.roleId,
+      })
+      .from(schema.serverMemberRoles)
+      .where(eq(schema.serverMemberRoles.serverId, serverId));
   }
 
   async createServerRole(role: ServerRoleRecord): Promise<void> {
     await this.db.insert(schema.serverRoles).values(role);
   }
 
-  async updateServerRole(id: string, values: Partial<Pick<ServerRoleRecord, 'name' | 'color' | 'permissions' | 'position'>>, now: Date): Promise<ServerRoleRecord | null> {
-    const [row] = await this.db.update(schema.serverRoles).set({ ...values, updatedAt: now }).where(eq(schema.serverRoles.id, id)).returning();
+  async updateServerRole(
+    id: string,
+    values: Partial<
+      Pick<ServerRoleRecord, "name" | "color" | "permissions" | "position">
+    >,
+    now: Date,
+  ): Promise<ServerRoleRecord | null> {
+    const [row] = await this.db
+      .update(schema.serverRoles)
+      .set({ ...values, updatedAt: now })
+      .where(eq(schema.serverRoles.id, id))
+      .returning();
     return row ?? null;
   }
 
-  async reorderServerRole(serverId: string, id: string, currentPosition: number, position: number, now: Date): Promise<ServerRoleRecord | null> {
+  async reorderServerRole(
+    serverId: string,
+    id: string,
+    currentPosition: number,
+    position: number,
+    now: Date,
+  ): Promise<ServerRoleRecord | null> {
     return this.db.transaction(async (tx) => {
-      const range = position > currentPosition
-        ? and(gt(schema.serverRoles.position, currentPosition), lte(schema.serverRoles.position, position))
-        : and(gte(schema.serverRoles.position, position), lt(schema.serverRoles.position, currentPosition));
-      await tx.update(schema.serverRoles).set({ position: sql`${schema.serverRoles.position} + ${position > currentPosition ? -1 : 1}`, updatedAt: now }).where(and(eq(schema.serverRoles.serverId, serverId), eq(schema.serverRoles.kind, 'CUSTOM'), ne(schema.serverRoles.id, id), range));
-      const [updated] = await tx.update(schema.serverRoles).set({ position, updatedAt: now }).where(and(eq(schema.serverRoles.serverId, serverId), eq(schema.serverRoles.id, id))).returning();
+      const range =
+        position > currentPosition
+          ? and(
+              gt(schema.serverRoles.position, currentPosition),
+              lte(schema.serverRoles.position, position),
+            )
+          : and(
+              gte(schema.serverRoles.position, position),
+              lt(schema.serverRoles.position, currentPosition),
+            );
+      await tx
+        .update(schema.serverRoles)
+        .set({
+          position: sql`${schema.serverRoles.position} + ${position > currentPosition ? -1 : 1}`,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(schema.serverRoles.serverId, serverId),
+            eq(schema.serverRoles.kind, "CUSTOM"),
+            ne(schema.serverRoles.id, id),
+            range,
+          ),
+        );
+      const [updated] = await tx
+        .update(schema.serverRoles)
+        .set({ position, updatedAt: now })
+        .where(
+          and(
+            eq(schema.serverRoles.serverId, serverId),
+            eq(schema.serverRoles.id, id),
+          ),
+        )
+        .returning();
       return updated ?? null;
     });
   }
 
   async deleteServerRole(id: string): Promise<boolean> {
     return this.db.transaction(async (tx) => {
-      await tx.delete(schema.channelPermissionOverwrites).where(and(eq(schema.channelPermissionOverwrites.targetType, 'ROLE'), eq(schema.channelPermissionOverwrites.targetId, id)));
-      const rows = await tx.delete(schema.serverRoles).where(eq(schema.serverRoles.id, id)).returning({ id: schema.serverRoles.id });
+      await tx
+        .delete(schema.channelPermissionOverwrites)
+        .where(
+          and(
+            eq(schema.channelPermissionOverwrites.targetType, "ROLE"),
+            eq(schema.channelPermissionOverwrites.targetId, id),
+          ),
+        );
+      const rows = await tx
+        .delete(schema.serverRoles)
+        .where(eq(schema.serverRoles.id, id))
+        .returning({ id: schema.serverRoles.id });
       return rows.length === 1;
     });
   }
 
-  async assignMemberRoles(serverId: string, userId: string, roleIds: string[]): Promise<void> {
+  async assignMemberRoles(
+    serverId: string,
+    userId: string,
+    roleIds: string[],
+  ): Promise<void> {
     await this.db.transaction(async (tx) => {
-      await tx.delete(schema.serverMemberRoles).where(and(eq(schema.serverMemberRoles.serverId, serverId), eq(schema.serverMemberRoles.userId, userId)));
-      if (roleIds.length > 0) await tx.insert(schema.serverMemberRoles).values(roleIds.map((roleId) => ({ serverId, userId, roleId })));
+      await tx
+        .delete(schema.serverMemberRoles)
+        .where(
+          and(
+            eq(schema.serverMemberRoles.serverId, serverId),
+            eq(schema.serverMemberRoles.userId, userId),
+          ),
+        );
+      if (roleIds.length > 0)
+        await tx
+          .insert(schema.serverMemberRoles)
+          .values(roleIds.map((roleId) => ({ serverId, userId, roleId })));
     });
   }
 
   async listServerChannels(serverId: string): Promise<ServerChannelRecord[]> {
-    return this.db.select().from(schema.serverChannels).where(eq(schema.serverChannels.serverId, serverId)).orderBy(asc(schema.serverChannels.position));
+    return this.db
+      .select()
+      .from(schema.serverChannels)
+      .where(eq(schema.serverChannels.serverId, serverId))
+      .orderBy(asc(schema.serverChannels.position));
   }
 
   async findServerChannel(id: string): Promise<ServerChannelRecord | null> {
-    const [row] = await this.db.select().from(schema.serverChannels).where(eq(schema.serverChannels.id, id)).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(schema.serverChannels)
+      .where(eq(schema.serverChannels.id, id))
+      .limit(1);
     return row ?? null;
   }
 
@@ -462,24 +876,58 @@ export class PostgresStore implements DataStore {
   }
 
   async deleteServerChannel(id: string): Promise<boolean> {
-    const rows = await this.db.delete(schema.serverChannels).where(eq(schema.serverChannels.id, id)).returning({ id: schema.serverChannels.id });
+    const rows = await this.db
+      .delete(schema.serverChannels)
+      .where(eq(schema.serverChannels.id, id))
+      .returning({ id: schema.serverChannels.id });
     return rows.length === 1;
   }
 
-  async listChannelPermissionOverwrites(channelIds: string[]): Promise<ChannelPermissionOverwriteRecord[]> {
+  async listChannelPermissionOverwrites(
+    channelIds: string[],
+  ): Promise<ChannelPermissionOverwriteRecord[]> {
     if (channelIds.length === 0) return [];
-    return this.db.select().from(schema.channelPermissionOverwrites).where(inArray(schema.channelPermissionOverwrites.channelId, channelIds));
+    return this.db
+      .select()
+      .from(schema.channelPermissionOverwrites)
+      .where(inArray(schema.channelPermissionOverwrites.channelId, channelIds));
   }
 
-  async upsertChannelPermissionOverwrite(overwrite: ChannelPermissionOverwriteRecord): Promise<void> {
-    await this.db.insert(schema.channelPermissionOverwrites).values(overwrite).onConflictDoUpdate({
-      target: [schema.channelPermissionOverwrites.channelId, schema.channelPermissionOverwrites.targetType, schema.channelPermissionOverwrites.targetId],
-      set: { allow: overwrite.allow, deny: overwrite.deny, updatedAt: overwrite.updatedAt },
-    });
+  async upsertChannelPermissionOverwrite(
+    overwrite: ChannelPermissionOverwriteRecord,
+  ): Promise<void> {
+    await this.db
+      .insert(schema.channelPermissionOverwrites)
+      .values(overwrite)
+      .onConflictDoUpdate({
+        target: [
+          schema.channelPermissionOverwrites.channelId,
+          schema.channelPermissionOverwrites.targetType,
+          schema.channelPermissionOverwrites.targetId,
+        ],
+        set: {
+          allow: overwrite.allow,
+          deny: overwrite.deny,
+          updatedAt: overwrite.updatedAt,
+        },
+      });
   }
 
-  async deleteChannelPermissionOverwrite(channelId: string, targetType: PermissionOverwriteTargetType, targetId: string): Promise<boolean> {
-    const rows = await this.db.delete(schema.channelPermissionOverwrites).where(and(eq(schema.channelPermissionOverwrites.channelId, channelId), eq(schema.channelPermissionOverwrites.targetType, targetType), eq(schema.channelPermissionOverwrites.targetId, targetId))).returning({ channelId: schema.channelPermissionOverwrites.channelId });
+  async deleteChannelPermissionOverwrite(
+    channelId: string,
+    targetType: PermissionOverwriteTargetType,
+    targetId: string,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .delete(schema.channelPermissionOverwrites)
+      .where(
+        and(
+          eq(schema.channelPermissionOverwrites.channelId, channelId),
+          eq(schema.channelPermissionOverwrites.targetType, targetType),
+          eq(schema.channelPermissionOverwrites.targetId, targetId),
+        ),
+      )
+      .returning({ channelId: schema.channelPermissionOverwrites.channelId });
     return rows.length === 1;
   }
 
@@ -487,47 +935,115 @@ export class PostgresStore implements DataStore {
     await this.db.insert(schema.serverAuditLogs).values(entry);
   }
 
-  async listServerAuditLog(serverId: string, limit: number): Promise<Array<ServerAuditLogRecord & { actorDisplayName: string | null }>> {
-    const rows = await this.db.select({ entry: schema.serverAuditLogs, actorDisplayName: schema.users.displayName }).from(schema.serverAuditLogs).leftJoin(schema.users, eq(schema.users.id, schema.serverAuditLogs.actorUserId)).where(eq(schema.serverAuditLogs.serverId, serverId)).orderBy(desc(schema.serverAuditLogs.createdAt)).limit(limit);
-    return rows.map(({ entry, actorDisplayName }) => ({ ...entry, actorDisplayName }));
+  async listServerAuditLog(
+    serverId: string,
+    limit: number,
+  ): Promise<
+    Array<ServerAuditLogRecord & { actorDisplayName: string | null }>
+  > {
+    const rows = await this.db
+      .select({
+        entry: schema.serverAuditLogs,
+        actorDisplayName: schema.users.displayName,
+      })
+      .from(schema.serverAuditLogs)
+      .leftJoin(
+        schema.users,
+        eq(schema.users.id, schema.serverAuditLogs.actorUserId),
+      )
+      .where(eq(schema.serverAuditLogs.serverId, serverId))
+      .orderBy(desc(schema.serverAuditLogs.createdAt))
+      .limit(limit);
+    return rows.map(({ entry, actorDisplayName }) => ({
+      ...entry,
+      actorDisplayName,
+    }));
   }
 
-  async listTextMessages(channelId: string, before: Date | null, limit: number): Promise<TextMessageWithAuthor[]> {
+  async listTextMessages(
+    channelId: string,
+    before: Date | null,
+    limit: number,
+  ): Promise<TextMessageWithAuthor[]> {
     const where = before
-      ? and(eq(schema.textMessages.channelId, channelId), lt(schema.textMessages.createdAt, before))
+      ? and(
+          eq(schema.textMessages.channelId, channelId),
+          lt(schema.textMessages.createdAt, before),
+        )
       : eq(schema.textMessages.channelId, channelId);
     const rows = await this.db
-      .select({ message: schema.textMessages, displayName: schema.users.displayName, platformRole: schema.users.platformRole })
+      .select({
+        message: schema.textMessages,
+        displayName: schema.users.displayName,
+        platformRole: schema.users.platformRole,
+      })
       .from(schema.textMessages)
-      .innerJoin(schema.users, eq(schema.users.id, schema.textMessages.authorUserId))
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.textMessages.authorUserId),
+      )
       .where(where)
       .orderBy(desc(schema.textMessages.createdAt))
       .limit(limit);
-    return rows.reverse().map(({ message, displayName, platformRole }) => ({ ...message, displayName, platformRole }));
+    return rows
+      .reverse()
+      .map(({ message, displayName, platformRole }) => ({
+        ...message,
+        displayName,
+        platformRole,
+      }));
   }
 
   async findTextMessage(id: string): Promise<TextMessageRecord | null> {
-    const [row] = await this.db.select().from(schema.textMessages).where(eq(schema.textMessages.id, id)).limit(1);
+    const [row] = await this.db
+      .select()
+      .from(schema.textMessages)
+      .where(eq(schema.textMessages.id, id))
+      .limit(1);
     return row ?? null;
   }
 
-  async findTextMessagesWithAuthors(ids: string[]): Promise<TextMessageWithAuthor[]> {
+  async findTextMessagesWithAuthors(
+    ids: string[],
+  ): Promise<TextMessageWithAuthor[]> {
     if (ids.length === 0) return [];
     const rows = await this.db
-      .select({ message: schema.textMessages, displayName: schema.users.displayName, platformRole: schema.users.platformRole })
+      .select({
+        message: schema.textMessages,
+        displayName: schema.users.displayName,
+        platformRole: schema.users.platformRole,
+      })
       .from(schema.textMessages)
-      .innerJoin(schema.users, eq(schema.users.id, schema.textMessages.authorUserId))
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.textMessages.authorUserId),
+      )
       .where(inArray(schema.textMessages.id, ids));
-    return rows.map(({ message, displayName, platformRole }) => ({ ...message, displayName, platformRole }));
+    return rows.map(({ message, displayName, platformRole }) => ({
+      ...message,
+      displayName,
+      platformRole,
+    }));
   }
 
-  async listMessageReactionSummaries(messageIds: string[], currentUserId: string): Promise<MessageReactionSummary[]> {
+  async listMessageReactionSummaries(
+    messageIds: string[],
+    currentUserId: string,
+  ): Promise<MessageReactionSummary[]> {
     if (messageIds.length === 0) return [];
-    const rows = await this.db.select().from(schema.messageReactions).where(inArray(schema.messageReactions.messageId, messageIds));
+    const rows = await this.db
+      .select()
+      .from(schema.messageReactions)
+      .where(inArray(schema.messageReactions.messageId, messageIds));
     const grouped = new Map<string, MessageReactionSummary>();
     for (const reaction of rows) {
       const key = `${reaction.messageId}:${reaction.emoji}`;
-      const current = grouped.get(key) ?? { messageId: reaction.messageId, emoji: reaction.emoji, count: 0, reactedByCurrentUser: false };
+      const current = grouped.get(key) ?? {
+        messageId: reaction.messageId,
+        emoji: reaction.emoji,
+        count: 0,
+        reactedByCurrentUser: false,
+      };
       current.count += 1;
       current.reactedByCurrentUser ||= reaction.userId === currentUserId;
       grouped.set(key, current);
@@ -535,112 +1051,313 @@ export class PostgresStore implements DataStore {
     return [...grouped.values()];
   }
 
-  async createTextMessage(message: TextMessageRecord, mentions: MessageMentionRecord[]): Promise<void> {
+  async createTextMessage(
+    message: TextMessageRecord,
+    mentions: MessageMentionRecord[],
+  ): Promise<void> {
     await this.db.transaction(async (tx) => {
       await tx.insert(schema.textMessages).values(message);
-      if (mentions.length > 0) await tx.insert(schema.messageMentions).values(mentions);
+      if (mentions.length > 0)
+        await tx.insert(schema.messageMentions).values(mentions);
     });
   }
 
-  async updateTextMessage(id: string, content: string, now: Date, mentions: MessageMentionRecord[]): Promise<TextMessageRecord | null> {
+  async updateTextMessage(
+    id: string,
+    content: string,
+    now: Date,
+    mentions: MessageMentionRecord[],
+  ): Promise<TextMessageRecord | null> {
     return this.db.transaction(async (tx) => {
-      const [row] = await tx.update(schema.textMessages).set({ content, editedAt: now }).where(eq(schema.textMessages.id, id)).returning();
+      const [row] = await tx
+        .update(schema.textMessages)
+        .set({ content, editedAt: now })
+        .where(eq(schema.textMessages.id, id))
+        .returning();
       if (!row) return null;
-      await tx.delete(schema.messageMentions).where(eq(schema.messageMentions.messageId, id));
-      if (mentions.length > 0) await tx.insert(schema.messageMentions).values(mentions);
+      await tx
+        .delete(schema.messageMentions)
+        .where(eq(schema.messageMentions.messageId, id));
+      if (mentions.length > 0)
+        await tx.insert(schema.messageMentions).values(mentions);
       return row;
     });
   }
 
   async deleteTextMessage(id: string): Promise<boolean> {
-    const rows = await this.db.delete(schema.textMessages).where(eq(schema.textMessages.id, id)).returning({ id: schema.textMessages.id });
+    const rows = await this.db
+      .delete(schema.textMessages)
+      .where(eq(schema.textMessages.id, id))
+      .returning({ id: schema.textMessages.id });
     return rows.length === 1;
   }
 
-  async listMessageMentions(messageIds: string[]): Promise<MessageMentionWithUser[]> {
+  async listMessageMentions(
+    messageIds: string[],
+  ): Promise<MessageMentionWithUser[]> {
     if (messageIds.length === 0) return [];
     return this.db
-      .select({ messageId: schema.messageMentions.messageId, mentionedUserId: schema.messageMentions.mentionedUserId, start: schema.messageMentions.start, length: schema.messageMentions.length, displayName: schema.users.displayName })
+      .select({
+        messageId: schema.messageMentions.messageId,
+        mentionedUserId: schema.messageMentions.mentionedUserId,
+        start: schema.messageMentions.start,
+        length: schema.messageMentions.length,
+        displayName: schema.users.displayName,
+      })
       .from(schema.messageMentions)
-      .leftJoin(schema.users, eq(schema.users.id, schema.messageMentions.mentionedUserId))
+      .leftJoin(
+        schema.users,
+        eq(schema.users.id, schema.messageMentions.mentionedUserId),
+      )
       .where(inArray(schema.messageMentions.messageId, messageIds))
-      .orderBy(asc(schema.messageMentions.messageId), asc(schema.messageMentions.start));
+      .orderBy(
+        asc(schema.messageMentions.messageId),
+        asc(schema.messageMentions.start),
+      );
   }
 
   async addMessageReaction(reaction: MessageReactionRecord): Promise<void> {
-    await this.db.insert(schema.messageReactions).values(reaction).onConflictDoNothing();
+    await this.db
+      .insert(schema.messageReactions)
+      .values(reaction)
+      .onConflictDoNothing();
   }
 
-  async removeMessageReaction(messageId: string, userId: string, emoji: string): Promise<void> {
-    await this.db.delete(schema.messageReactions).where(and(eq(schema.messageReactions.messageId, messageId), eq(schema.messageReactions.userId, userId), eq(schema.messageReactions.emoji, emoji)));
+  async removeMessageReaction(
+    messageId: string,
+    userId: string,
+    emoji: string,
+  ): Promise<void> {
+    await this.db
+      .delete(schema.messageReactions)
+      .where(
+        and(
+          eq(schema.messageReactions.messageId, messageId),
+          eq(schema.messageReactions.userId, userId),
+          eq(schema.messageReactions.emoji, emoji),
+        ),
+      );
   }
 
   async markChannelRead(state: ChannelReadStateRecord): Promise<void> {
-    await this.db.insert(schema.channelReadStates).values(state).onConflictDoUpdate({
-      target: [schema.channelReadStates.channelId, schema.channelReadStates.userId],
-      set: { readAt: sql`greatest(${schema.channelReadStates.readAt}, ${state.readAt})` },
-    });
+    await this.db
+      .insert(schema.channelReadStates)
+      .values(state)
+      .onConflictDoUpdate({
+        target: [
+          schema.channelReadStates.channelId,
+          schema.channelReadStates.userId,
+        ],
+        set: {
+          readAt: sql`greatest(${schema.channelReadStates.readAt}, ${state.readAt})`,
+        },
+      });
   }
 
-  async listChannelUnreadCounts(channelIds: string[], userId: string, since: Date): Promise<ChannelUnreadCount[]> {
+  async listChannelUnreadCounts(
+    channelIds: string[],
+    userId: string,
+    since: Date,
+  ): Promise<ChannelUnreadCount[]> {
     if (channelIds.length === 0) return [];
     const [states, messages] = await Promise.all([
-      this.db.select().from(schema.channelReadStates).where(and(eq(schema.channelReadStates.userId, userId), inArray(schema.channelReadStates.channelId, channelIds))),
-      this.db.select({ channelId: schema.textMessages.channelId, createdAt: schema.textMessages.createdAt }).from(schema.textMessages).where(and(inArray(schema.textMessages.channelId, channelIds), ne(schema.textMessages.authorUserId, userId), gte(schema.textMessages.createdAt, since))),
+      this.db
+        .select()
+        .from(schema.channelReadStates)
+        .where(
+          and(
+            eq(schema.channelReadStates.userId, userId),
+            inArray(schema.channelReadStates.channelId, channelIds),
+          ),
+        ),
+      this.db
+        .select({
+          channelId: schema.textMessages.channelId,
+          createdAt: schema.textMessages.createdAt,
+        })
+        .from(schema.textMessages)
+        .where(
+          and(
+            inArray(schema.textMessages.channelId, channelIds),
+            ne(schema.textMessages.authorUserId, userId),
+            gte(schema.textMessages.createdAt, since),
+          ),
+        ),
     ]);
-    const readAt = new Map(states.map((state) => [state.channelId, state.readAt]));
-    return channelIds.map((channelId) => ({ channelId, count: messages.filter((message) => message.channelId === channelId && (readAt.has(channelId) ? message.createdAt > readAt.get(channelId)! : message.createdAt >= since)).length }));
-  }
-
-  async listChannelMentionCounts(channelIds: string[], userId: string, since: Date): Promise<ChannelMentionCount[]> {
-    if (channelIds.length === 0) return [];
-    const [states, rows] = await Promise.all([
-      this.db.select().from(schema.channelReadStates).where(and(eq(schema.channelReadStates.userId, userId), inArray(schema.channelReadStates.channelId, channelIds))),
-      this.db.select({ messageId: schema.textMessages.id, channelId: schema.textMessages.channelId, createdAt: schema.textMessages.createdAt })
-        .from(schema.messageMentions)
-        .innerJoin(schema.textMessages, eq(schema.textMessages.id, schema.messageMentions.messageId))
-        .where(and(eq(schema.messageMentions.mentionedUserId, userId), ne(schema.textMessages.authorUserId, userId), inArray(schema.textMessages.channelId, channelIds), gte(schema.textMessages.createdAt, since))),
-    ]);
-    const readAt = new Map(states.map((state) => [state.channelId, state.readAt]));
+    const readAt = new Map(
+      states.map((state) => [state.channelId, state.readAt]),
+    );
     return channelIds.map((channelId) => ({
       channelId,
-      count: new Set(rows.filter((row) => row.channelId === channelId && (readAt.has(channelId) ? row.createdAt > readAt.get(channelId)! : row.createdAt >= since)).map((row) => row.messageId)).size,
+      count: messages.filter(
+        (message) =>
+          message.channelId === channelId &&
+          (readAt.has(channelId)
+            ? message.createdAt > readAt.get(channelId)!
+            : message.createdAt >= since),
+      ).length,
     }));
   }
 
-  async listMessageAttachments(messageIds: string[]): Promise<MessageAttachmentMetadata[]> {
+  async listChannelMentionCounts(
+    channelIds: string[],
+    userId: string,
+    since: Date,
+  ): Promise<ChannelMentionCount[]> {
+    if (channelIds.length === 0) return [];
+    const [states, rows] = await Promise.all([
+      this.db
+        .select()
+        .from(schema.channelReadStates)
+        .where(
+          and(
+            eq(schema.channelReadStates.userId, userId),
+            inArray(schema.channelReadStates.channelId, channelIds),
+          ),
+        ),
+      this.db
+        .select({
+          messageId: schema.textMessages.id,
+          channelId: schema.textMessages.channelId,
+          createdAt: schema.textMessages.createdAt,
+        })
+        .from(schema.messageMentions)
+        .innerJoin(
+          schema.textMessages,
+          eq(schema.textMessages.id, schema.messageMentions.messageId),
+        )
+        .where(
+          and(
+            eq(schema.messageMentions.mentionedUserId, userId),
+            ne(schema.textMessages.authorUserId, userId),
+            inArray(schema.textMessages.channelId, channelIds),
+            gte(schema.textMessages.createdAt, since),
+          ),
+        ),
+    ]);
+    const readAt = new Map(
+      states.map((state) => [state.channelId, state.readAt]),
+    );
+    return channelIds.map((channelId) => ({
+      channelId,
+      count: new Set(
+        rows
+          .filter(
+            (row) =>
+              row.channelId === channelId &&
+              (readAt.has(channelId)
+                ? row.createdAt > readAt.get(channelId)!
+                : row.createdAt >= since),
+          )
+          .map((row) => row.messageId),
+      ).size,
+    }));
+  }
+
+  async listMessageAttachments(
+    messageIds: string[],
+  ): Promise<MessageAttachmentMetadata[]> {
     if (messageIds.length === 0) return [];
-    return this.db.select({ id: schema.messageAttachments.id, messageId: schema.messageAttachments.messageId, uploaderUserId: schema.messageAttachments.uploaderUserId, fileName: schema.messageAttachments.fileName, mimeType: schema.messageAttachments.mimeType, size: schema.messageAttachments.size, storageKey: schema.messageAttachments.storageKey, createdAt: schema.messageAttachments.createdAt }).from(schema.messageAttachments).where(inArray(schema.messageAttachments.messageId, messageIds)).orderBy(asc(schema.messageAttachments.createdAt));
+    return this.db
+      .select({
+        id: schema.messageAttachments.id,
+        messageId: schema.messageAttachments.messageId,
+        uploaderUserId: schema.messageAttachments.uploaderUserId,
+        fileName: schema.messageAttachments.fileName,
+        mimeType: schema.messageAttachments.mimeType,
+        size: schema.messageAttachments.size,
+        storageKey: schema.messageAttachments.storageKey,
+        createdAt: schema.messageAttachments.createdAt,
+      })
+      .from(schema.messageAttachments)
+      .where(inArray(schema.messageAttachments.messageId, messageIds))
+      .orderBy(asc(schema.messageAttachments.createdAt));
   }
 
   async listChannelAttachmentStorageKeys(channelId: string): Promise<string[]> {
-    const rows = await this.db.select({ storageKey: schema.messageAttachments.storageKey }).from(schema.messageAttachments).innerJoin(schema.textMessages, eq(schema.textMessages.id, schema.messageAttachments.messageId)).where(and(eq(schema.textMessages.channelId, channelId), isNotNull(schema.messageAttachments.storageKey)));
-    return rows.flatMap(({ storageKey }) => storageKey === null ? [] : [storageKey]);
+    const rows = await this.db
+      .select({ storageKey: schema.messageAttachments.storageKey })
+      .from(schema.messageAttachments)
+      .innerJoin(
+        schema.textMessages,
+        eq(schema.textMessages.id, schema.messageAttachments.messageId),
+      )
+      .where(
+        and(
+          eq(schema.textMessages.channelId, channelId),
+          isNotNull(schema.messageAttachments.storageKey),
+        ),
+      );
+    return rows.flatMap(({ storageKey }) =>
+      storageKey === null ? [] : [storageKey],
+    );
   }
 
-  async listLegacyMessageAttachments(limit: number): Promise<MessageAttachmentRecord[]> {
-    return this.db.select().from(schema.messageAttachments).where(isNull(schema.messageAttachments.storageKey)).orderBy(asc(schema.messageAttachments.createdAt), asc(schema.messageAttachments.id)).limit(limit);
+  async listLegacyMessageAttachments(
+    limit: number,
+  ): Promise<MessageAttachmentRecord[]> {
+    return this.db
+      .select()
+      .from(schema.messageAttachments)
+      .where(isNull(schema.messageAttachments.storageKey))
+      .orderBy(
+        asc(schema.messageAttachments.createdAt),
+        asc(schema.messageAttachments.id),
+      )
+      .limit(limit);
   }
 
-  async findMessageAttachment(id: string): Promise<MessageAttachmentRecord | null> {
-    const [attachment] = await this.db.select().from(schema.messageAttachments).where(eq(schema.messageAttachments.id, id)).limit(1);
+  async findMessageAttachment(
+    id: string,
+  ): Promise<MessageAttachmentRecord | null> {
+    const [attachment] = await this.db
+      .select()
+      .from(schema.messageAttachments)
+      .where(eq(schema.messageAttachments.id, id))
+      .limit(1);
     return attachment ?? null;
   }
 
-  async createMessageAttachment(attachment: MessageAttachmentRecord): Promise<void> {
+  async createMessageAttachment(
+    attachment: MessageAttachmentRecord,
+  ): Promise<void> {
     await this.db.insert(schema.messageAttachments).values(attachment);
   }
 
-  async moveMessageAttachmentToStorage(id: string, storageKey: string): Promise<boolean> {
-    const rows = await this.db.update(schema.messageAttachments).set({ storageKey }).where(and(eq(schema.messageAttachments.id, id), isNull(schema.messageAttachments.storageKey))).returning({ id: schema.messageAttachments.id });
+  async moveMessageAttachmentToStorage(
+    id: string,
+    storageKey: string,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .update(schema.messageAttachments)
+      .set({ storageKey })
+      .where(
+        and(
+          eq(schema.messageAttachments.id, id),
+          isNull(schema.messageAttachments.storageKey),
+        ),
+      )
+      .returning({ id: schema.messageAttachments.id });
     return rows.length === 1;
   }
 
   async deleteMessageAttachment(id: string): Promise<boolean> {
-    return (await this.db.delete(schema.messageAttachments).where(eq(schema.messageAttachments.id, id)).returning({ id: schema.messageAttachments.id })).length === 1;
+    return (
+      (
+        await this.db
+          .delete(schema.messageAttachments)
+          .where(eq(schema.messageAttachments.id, id))
+          .returning({ id: schema.messageAttachments.id })
+      ).length === 1
+    );
   }
 
-  async listMessageNotifications(userId: string, since: Date, afterId: string | null, limit: number): Promise<MessageNotificationRecord[]> {
+  async listMessageNotifications(
+    userId: string,
+    since: Date,
+    afterId: string | null,
+    limit: number,
+  ): Promise<MessageNotificationRecord[]> {
     return this.db
       .select({
         id: schema.textMessages.id,
@@ -655,90 +1372,301 @@ export class PostgresStore implements DataStore {
         createdAt: schema.textMessages.createdAt,
       })
       .from(schema.textMessages)
-      .innerJoin(schema.users, eq(schema.users.id, schema.textMessages.authorUserId))
-      .innerJoin(schema.serverChannels, eq(schema.serverChannels.id, schema.textMessages.channelId))
-      .innerJoin(schema.servers, eq(schema.servers.id, schema.serverChannels.serverId))
-      .innerJoin(schema.serverMembers, and(eq(schema.serverMembers.serverId, schema.servers.id), eq(schema.serverMembers.userId, userId)))
-      .where(and(
-        eq(schema.serverChannels.type, 'text'),
-        ne(schema.textMessages.authorUserId, userId),
-        afterId === null
-          ? gte(schema.textMessages.createdAt, since)
-          : or(gt(schema.textMessages.createdAt, since), and(eq(schema.textMessages.createdAt, since), gt(schema.textMessages.id, afterId))),
-      ))
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.textMessages.authorUserId),
+      )
+      .innerJoin(
+        schema.serverChannels,
+        eq(schema.serverChannels.id, schema.textMessages.channelId),
+      )
+      .innerJoin(
+        schema.servers,
+        eq(schema.servers.id, schema.serverChannels.serverId),
+      )
+      .innerJoin(
+        schema.serverMembers,
+        and(
+          eq(schema.serverMembers.serverId, schema.servers.id),
+          eq(schema.serverMembers.userId, userId),
+        ),
+      )
+      .where(
+        and(
+          eq(schema.serverChannels.type, "text"),
+          ne(schema.textMessages.authorUserId, userId),
+          afterId === null
+            ? gte(schema.textMessages.createdAt, since)
+            : or(
+                gt(schema.textMessages.createdAt, since),
+                and(
+                  eq(schema.textMessages.createdAt, since),
+                  gt(schema.textMessages.id, afterId),
+                ),
+              ),
+        ),
+      )
       .orderBy(asc(schema.textMessages.createdAt), asc(schema.textMessages.id))
       .limit(limit);
   }
 
-  async getOrCreateDirectConversation(userAId: string, userBId: string, now: Date): Promise<DirectConversationRecord> {
+  async getOrCreateDirectConversation(
+    userAId: string,
+    userBId: string,
+    now: Date,
+  ): Promise<DirectConversationRecord> {
     const [firstUserId, secondUserId] = [userAId, userBId].sort();
-    const candidate: DirectConversationRecord = { id: crypto.randomUUID(), userAId: firstUserId!, userBId: secondUserId!, userAReadAt: now, userBReadAt: now, userAReadMessageId: null, userBReadMessageId: null, createdAt: now, updatedAt: now };
-    const [created] = await this.db.insert(schema.directConversations).values(candidate).onConflictDoNothing({ target: [schema.directConversations.userAId, schema.directConversations.userBId] }).returning();
+    const candidate: DirectConversationRecord = {
+      id: crypto.randomUUID(),
+      userAId: firstUserId!,
+      userBId: secondUserId!,
+      userAReadAt: now,
+      userBReadAt: now,
+      userAReadMessageId: null,
+      userBReadMessageId: null,
+      createdAt: now,
+      updatedAt: now,
+    };
+    const [created] = await this.db
+      .insert(schema.directConversations)
+      .values(candidate)
+      .onConflictDoNothing({
+        target: [
+          schema.directConversations.userAId,
+          schema.directConversations.userBId,
+        ],
+      })
+      .returning();
     if (created) return created;
-    const [existing] = await this.db.select().from(schema.directConversations).where(and(eq(schema.directConversations.userAId, firstUserId!), eq(schema.directConversations.userBId, secondUserId!))).limit(1);
-    if (!existing) throw new Error('Direct conversation conflict could not be resolved');
+    const [existing] = await this.db
+      .select()
+      .from(schema.directConversations)
+      .where(
+        and(
+          eq(schema.directConversations.userAId, firstUserId!),
+          eq(schema.directConversations.userBId, secondUserId!),
+        ),
+      )
+      .limit(1);
+    if (!existing)
+      throw new Error("Direct conversation conflict could not be resolved");
     return existing;
   }
 
-  async findDirectConversation(id: string): Promise<DirectConversationRecord | null> {
-    const [conversation] = await this.db.select().from(schema.directConversations).where(eq(schema.directConversations.id, id)).limit(1);
+  async findDirectConversation(
+    id: string,
+  ): Promise<DirectConversationRecord | null> {
+    const [conversation] = await this.db
+      .select()
+      .from(schema.directConversations)
+      .where(eq(schema.directConversations.id, id))
+      .limit(1);
     return conversation ?? null;
   }
 
-  async listDirectConversationOverviews(userId: string): Promise<DirectConversationOverviewRecord[]> {
-    const conversations = await this.db.select().from(schema.directConversations).where(or(eq(schema.directConversations.userAId, userId), eq(schema.directConversations.userBId, userId))).orderBy(desc(schema.directConversations.updatedAt)).limit(100);
-    return Promise.all(conversations.map(async (conversation): Promise<DirectConversationOverviewRecord> => {
-      const participantId = conversation.userAId === userId ? conversation.userBId : conversation.userAId;
-      const [participant] = await this.db.select({ id: schema.users.id, displayName: schema.users.displayName, platformRole: schema.users.platformRole }).from(schema.users).where(eq(schema.users.id, participantId)).limit(1);
-      if (!participant) throw new Error('Direct conversation participant was not found');
-      const [lastMessage] = await this.db.select({ authorUserId: schema.directMessages.authorUserId, content: schema.directMessages.content, createdAt: schema.directMessages.createdAt }).from(schema.directMessages).where(eq(schema.directMessages.conversationId, conversation.id)).orderBy(desc(schema.directMessages.createdAt), desc(schema.directMessages.id)).limit(1);
-      const readAt = conversation.userAId === userId ? conversation.userAReadAt : conversation.userBReadAt;
-      const readMessageId = conversation.userAId === userId ? conversation.userAReadMessageId : conversation.userBReadMessageId;
-      const [unread] = await this.db.select({ count: sql<number>`count(*)::int` }).from(schema.directMessages).where(and(eq(schema.directMessages.conversationId, conversation.id), ne(schema.directMessages.authorUserId, userId), or(gt(schema.directMessages.createdAt, readAt), and(eq(schema.directMessages.createdAt, readAt), readMessageId === null ? sql`true` : gt(schema.directMessages.id, readMessageId)))));
-      return { conversation, participant, lastMessage: lastMessage ?? null, unreadCount: unread?.count ?? 0 };
+  async listDirectConversationOverviews(
+    userId: string,
+  ): Promise<DirectConversationOverviewRecord[]> {
+    const conversations = await this.db
+      .select()
+      .from(schema.directConversations)
+      .where(
+        or(
+          eq(schema.directConversations.userAId, userId),
+          eq(schema.directConversations.userBId, userId),
+        ),
+      )
+      .orderBy(desc(schema.directConversations.updatedAt))
+      .limit(100);
+    return Promise.all(
+      conversations.map(
+        async (conversation): Promise<DirectConversationOverviewRecord> => {
+          const participantId =
+            conversation.userAId === userId
+              ? conversation.userBId
+              : conversation.userAId;
+          const [participant] = await this.db
+            .select({
+              id: schema.users.id,
+              displayName: schema.users.displayName,
+              platformRole: schema.users.platformRole,
+            })
+            .from(schema.users)
+            .where(eq(schema.users.id, participantId))
+            .limit(1);
+          if (!participant)
+            throw new Error("Direct conversation participant was not found");
+          const [lastMessage] = await this.db
+            .select({
+              authorUserId: schema.directMessages.authorUserId,
+              content: schema.directMessages.content,
+              createdAt: schema.directMessages.createdAt,
+            })
+            .from(schema.directMessages)
+            .where(eq(schema.directMessages.conversationId, conversation.id))
+            .orderBy(
+              desc(schema.directMessages.createdAt),
+              desc(schema.directMessages.id),
+            )
+            .limit(1);
+          const readAt =
+            conversation.userAId === userId
+              ? conversation.userAReadAt
+              : conversation.userBReadAt;
+          const readMessageId =
+            conversation.userAId === userId
+              ? conversation.userAReadMessageId
+              : conversation.userBReadMessageId;
+          const [unread] = await this.db
+            .select({ count: sql<number>`count(*)::int` })
+            .from(schema.directMessages)
+            .where(
+              and(
+                eq(schema.directMessages.conversationId, conversation.id),
+                ne(schema.directMessages.authorUserId, userId),
+                or(
+                  gt(schema.directMessages.createdAt, readAt),
+                  and(
+                    eq(schema.directMessages.createdAt, readAt),
+                    readMessageId === null
+                      ? sql`true`
+                      : gt(schema.directMessages.id, readMessageId),
+                  ),
+                ),
+              ),
+            );
+          return {
+            conversation,
+            participant,
+            lastMessage: lastMessage ?? null,
+            unreadCount: unread?.count ?? 0,
+          };
+        },
+      ),
+    );
+  }
+
+  async listDirectMessages(
+    conversationId: string,
+    before: Date | null,
+    limit: number,
+  ): Promise<DirectMessageWithAuthor[]> {
+    const where = before
+      ? and(
+          eq(schema.directMessages.conversationId, conversationId),
+          lt(schema.directMessages.createdAt, before),
+        )
+      : eq(schema.directMessages.conversationId, conversationId);
+    const rows = await this.db
+      .select({
+        message: schema.directMessages,
+        displayName: schema.users.displayName,
+        platformRole: schema.users.platformRole,
+      })
+      .from(schema.directMessages)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.directMessages.authorUserId),
+      )
+      .where(where)
+      .orderBy(
+        desc(schema.directMessages.createdAt),
+        desc(schema.directMessages.id),
+      )
+      .limit(limit);
+    return rows
+      .reverse()
+      .map(({ message, displayName, platformRole }) => ({
+        ...message,
+        displayName,
+        platformRole,
+      }));
+  }
+
+  async findDirectMessagesWithAuthors(
+    ids: string[],
+  ): Promise<DirectMessageWithAuthor[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.db
+      .select({
+        message: schema.directMessages,
+        displayName: schema.users.displayName,
+        platformRole: schema.users.platformRole,
+      })
+      .from(schema.directMessages)
+      .innerJoin(
+        schema.users,
+        eq(schema.users.id, schema.directMessages.authorUserId),
+      )
+      .where(inArray(schema.directMessages.id, ids));
+    return rows.map(({ message, displayName, platformRole }) => ({
+      ...message,
+      displayName,
+      platformRole,
     }));
   }
 
-  async listDirectMessages(conversationId: string, before: Date | null, limit: number): Promise<DirectMessageWithAuthor[]> {
-    const where = before ? and(eq(schema.directMessages.conversationId, conversationId), lt(schema.directMessages.createdAt, before)) : eq(schema.directMessages.conversationId, conversationId);
-    const rows = await this.db.select({ message: schema.directMessages, displayName: schema.users.displayName, platformRole: schema.users.platformRole }).from(schema.directMessages).innerJoin(schema.users, eq(schema.users.id, schema.directMessages.authorUserId)).where(where).orderBy(desc(schema.directMessages.createdAt), desc(schema.directMessages.id)).limit(limit);
-    return rows.reverse().map(({ message, displayName, platformRole }) => ({ ...message, displayName, platformRole }));
-  }
-
-  async findDirectMessagesWithAuthors(ids: string[]): Promise<DirectMessageWithAuthor[]> {
-    if (ids.length === 0) return [];
-    const rows = await this.db.select({ message: schema.directMessages, displayName: schema.users.displayName, platformRole: schema.users.platformRole }).from(schema.directMessages).innerJoin(schema.users, eq(schema.users.id, schema.directMessages.authorUserId)).where(inArray(schema.directMessages.id, ids));
-    return rows.map(({ message, displayName, platformRole }) => ({ ...message, displayName, platformRole }));
-  }
-
   async findDirectMessage(id: string): Promise<DirectMessageRecord | null> {
-    const [message] = await this.db.select().from(schema.directMessages).where(eq(schema.directMessages.id, id)).limit(1);
+    const [message] = await this.db
+      .select()
+      .from(schema.directMessages)
+      .where(eq(schema.directMessages.id, id))
+      .limit(1);
     return message ?? null;
   }
 
   async createDirectMessage(message: DirectMessageRecord): Promise<void> {
     await this.db.transaction(async (tx) => {
       await tx.insert(schema.directMessages).values(message);
-      await tx.update(schema.directConversations).set({ updatedAt: message.createdAt }).where(eq(schema.directConversations.id, message.conversationId));
+      await tx
+        .update(schema.directConversations)
+        .set({ updatedAt: message.createdAt })
+        .where(eq(schema.directConversations.id, message.conversationId));
     });
   }
 
-  async updateDirectMessage(id: string, content: string, now: Date): Promise<DirectMessageRecord | null> {
-    const [message] = await this.db.update(schema.directMessages).set({ content, editedAt: now }).where(eq(schema.directMessages.id, id)).returning();
+  async updateDirectMessage(
+    id: string,
+    content: string,
+    now: Date,
+  ): Promise<DirectMessageRecord | null> {
+    const [message] = await this.db
+      .update(schema.directMessages)
+      .set({ content, editedAt: now })
+      .where(eq(schema.directMessages.id, id))
+      .returning();
     return message ?? null;
   }
 
   async deleteDirectMessage(id: string): Promise<boolean> {
-    return (await this.db.delete(schema.directMessages).where(eq(schema.directMessages.id, id)).returning({ id: schema.directMessages.id })).length === 1;
+    return (
+      (
+        await this.db
+          .delete(schema.directMessages)
+          .where(eq(schema.directMessages.id, id))
+          .returning({ id: schema.directMessages.id })
+      ).length === 1
+    );
   }
 
-  async listDirectMessageReactionSummaries(messageIds: string[], currentUserId: string): Promise<MessageReactionSummary[]> {
+  async listDirectMessageReactionSummaries(
+    messageIds: string[],
+    currentUserId: string,
+  ): Promise<MessageReactionSummary[]> {
     if (messageIds.length === 0) return [];
-    const rows = await this.db.select().from(schema.directMessageReactions).where(inArray(schema.directMessageReactions.messageId, messageIds));
+    const rows = await this.db
+      .select()
+      .from(schema.directMessageReactions)
+      .where(inArray(schema.directMessageReactions.messageId, messageIds));
     const grouped = new Map<string, MessageReactionSummary>();
     for (const reaction of rows) {
       const key = `${reaction.messageId}:${reaction.emoji}`;
-      const current = grouped.get(key) ?? { messageId: reaction.messageId, emoji: reaction.emoji, count: 0, reactedByCurrentUser: false };
+      const current = grouped.get(key) ?? {
+        messageId: reaction.messageId,
+        emoji: reaction.emoji,
+        count: 0,
+        reactedByCurrentUser: false,
+      };
       current.count += 1;
       current.reactedByCurrentUser ||= reaction.userId === currentUserId;
       grouped.set(key, current);
@@ -746,85 +1674,284 @@ export class PostgresStore implements DataStore {
     return [...grouped.values()];
   }
 
-  async addDirectMessageReaction(reaction: MessageReactionRecord): Promise<void> {
-    await this.db.insert(schema.directMessageReactions).values(reaction).onConflictDoNothing();
+  async addDirectMessageReaction(
+    reaction: MessageReactionRecord,
+  ): Promise<void> {
+    await this.db
+      .insert(schema.directMessageReactions)
+      .values(reaction)
+      .onConflictDoNothing();
   }
 
-  async removeDirectMessageReaction(messageId: string, userId: string, emoji: string): Promise<void> {
-    await this.db.delete(schema.directMessageReactions).where(and(eq(schema.directMessageReactions.messageId, messageId), eq(schema.directMessageReactions.userId, userId), eq(schema.directMessageReactions.emoji, emoji)));
+  async removeDirectMessageReaction(
+    messageId: string,
+    userId: string,
+    emoji: string,
+  ): Promise<void> {
+    await this.db
+      .delete(schema.directMessageReactions)
+      .where(
+        and(
+          eq(schema.directMessageReactions.messageId, messageId),
+          eq(schema.directMessageReactions.userId, userId),
+          eq(schema.directMessageReactions.emoji, emoji),
+        ),
+      );
   }
 
-  async markDirectConversationRead(conversationId: string, userId: string, readAt: Date, messageId: string): Promise<boolean> {
-    const [conversation] = await this.db.select().from(schema.directConversations).where(eq(schema.directConversations.id, conversationId)).limit(1);
+  async markDirectConversationRead(
+    conversationId: string,
+    userId: string,
+    readAt: Date,
+    messageId: string,
+  ): Promise<boolean> {
+    const [conversation] = await this.db
+      .select()
+      .from(schema.directConversations)
+      .where(eq(schema.directConversations.id, conversationId))
+      .limit(1);
     if (!conversation) return false;
-    if (conversation.userAId === userId) await this.db.update(schema.directConversations).set({ userAReadAt: readAt, userAReadMessageId: messageId }).where(and(eq(schema.directConversations.id, conversationId), or(lt(schema.directConversations.userAReadAt, readAt), and(eq(schema.directConversations.userAReadAt, readAt), or(isNull(schema.directConversations.userAReadMessageId), lt(schema.directConversations.userAReadMessageId, messageId))))));
-    else if (conversation.userBId === userId) await this.db.update(schema.directConversations).set({ userBReadAt: readAt, userBReadMessageId: messageId }).where(and(eq(schema.directConversations.id, conversationId), or(lt(schema.directConversations.userBReadAt, readAt), and(eq(schema.directConversations.userBReadAt, readAt), or(isNull(schema.directConversations.userBReadMessageId), lt(schema.directConversations.userBReadMessageId, messageId))))));
+    if (conversation.userAId === userId)
+      await this.db
+        .update(schema.directConversations)
+        .set({ userAReadAt: readAt, userAReadMessageId: messageId })
+        .where(
+          and(
+            eq(schema.directConversations.id, conversationId),
+            or(
+              lt(schema.directConversations.userAReadAt, readAt),
+              and(
+                eq(schema.directConversations.userAReadAt, readAt),
+                or(
+                  isNull(schema.directConversations.userAReadMessageId),
+                  lt(schema.directConversations.userAReadMessageId, messageId),
+                ),
+              ),
+            ),
+          ),
+        );
+    else if (conversation.userBId === userId)
+      await this.db
+        .update(schema.directConversations)
+        .set({ userBReadAt: readAt, userBReadMessageId: messageId })
+        .where(
+          and(
+            eq(schema.directConversations.id, conversationId),
+            or(
+              lt(schema.directConversations.userBReadAt, readAt),
+              and(
+                eq(schema.directConversations.userBReadAt, readAt),
+                or(
+                  isNull(schema.directConversations.userBReadMessageId),
+                  lt(schema.directConversations.userBReadMessageId, messageId),
+                ),
+              ),
+            ),
+          ),
+        );
     else return false;
     return true;
   }
 
-  async listDirectMessageAttachments(messageIds: string[]): Promise<DirectMessageAttachmentMetadata[]> {
+  async listDirectMessageAttachments(
+    messageIds: string[],
+  ): Promise<DirectMessageAttachmentMetadata[]> {
     if (messageIds.length === 0) return [];
-    return this.db.select({ id: schema.directMessageAttachments.id, messageId: schema.directMessageAttachments.messageId, uploaderUserId: schema.directMessageAttachments.uploaderUserId, fileName: schema.directMessageAttachments.fileName, mimeType: schema.directMessageAttachments.mimeType, size: schema.directMessageAttachments.size, storageKey: schema.directMessageAttachments.storageKey, createdAt: schema.directMessageAttachments.createdAt }).from(schema.directMessageAttachments).where(inArray(schema.directMessageAttachments.messageId, messageIds)).orderBy(asc(schema.directMessageAttachments.createdAt));
+    return this.db
+      .select({
+        id: schema.directMessageAttachments.id,
+        messageId: schema.directMessageAttachments.messageId,
+        uploaderUserId: schema.directMessageAttachments.uploaderUserId,
+        fileName: schema.directMessageAttachments.fileName,
+        mimeType: schema.directMessageAttachments.mimeType,
+        size: schema.directMessageAttachments.size,
+        storageKey: schema.directMessageAttachments.storageKey,
+        createdAt: schema.directMessageAttachments.createdAt,
+      })
+      .from(schema.directMessageAttachments)
+      .where(inArray(schema.directMessageAttachments.messageId, messageIds))
+      .orderBy(asc(schema.directMessageAttachments.createdAt));
   }
 
-  async listLegacyDirectMessageAttachments(limit: number): Promise<DirectMessageAttachmentRecord[]> {
-    return this.db.select().from(schema.directMessageAttachments).where(isNull(schema.directMessageAttachments.storageKey)).orderBy(asc(schema.directMessageAttachments.createdAt), asc(schema.directMessageAttachments.id)).limit(limit);
+  async listLegacyDirectMessageAttachments(
+    limit: number,
+  ): Promise<DirectMessageAttachmentRecord[]> {
+    return this.db
+      .select()
+      .from(schema.directMessageAttachments)
+      .where(isNull(schema.directMessageAttachments.storageKey))
+      .orderBy(
+        asc(schema.directMessageAttachments.createdAt),
+        asc(schema.directMessageAttachments.id),
+      )
+      .limit(limit);
   }
 
-  async findDirectMessageAttachment(id: string): Promise<DirectMessageAttachmentRecord | null> {
-    const [attachment] = await this.db.select().from(schema.directMessageAttachments).where(eq(schema.directMessageAttachments.id, id)).limit(1);
+  async findDirectMessageAttachment(
+    id: string,
+  ): Promise<DirectMessageAttachmentRecord | null> {
+    const [attachment] = await this.db
+      .select()
+      .from(schema.directMessageAttachments)
+      .where(eq(schema.directMessageAttachments.id, id))
+      .limit(1);
     return attachment ?? null;
   }
 
-  async createDirectMessageAttachment(attachment: DirectMessageAttachmentRecord): Promise<void> {
+  async createDirectMessageAttachment(
+    attachment: DirectMessageAttachmentRecord,
+  ): Promise<void> {
     await this.db.insert(schema.directMessageAttachments).values(attachment);
   }
 
-  async moveDirectMessageAttachmentToStorage(id: string, storageKey: string): Promise<boolean> {
-    const rows = await this.db.update(schema.directMessageAttachments).set({ storageKey }).where(and(eq(schema.directMessageAttachments.id, id), isNull(schema.directMessageAttachments.storageKey))).returning({ id: schema.directMessageAttachments.id });
+  async moveDirectMessageAttachmentToStorage(
+    id: string,
+    storageKey: string,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .update(schema.directMessageAttachments)
+      .set({ storageKey })
+      .where(
+        and(
+          eq(schema.directMessageAttachments.id, id),
+          isNull(schema.directMessageAttachments.storageKey),
+        ),
+      )
+      .returning({ id: schema.directMessageAttachments.id });
     return rows.length === 1;
   }
 
   async deleteDirectMessageAttachment(id: string): Promise<boolean> {
-    return (await this.db.delete(schema.directMessageAttachments).where(eq(schema.directMessageAttachments.id, id)).returning({ id: schema.directMessageAttachments.id })).length === 1;
+    return (
+      (
+        await this.db
+          .delete(schema.directMessageAttachments)
+          .where(eq(schema.directMessageAttachments.id, id))
+          .returning({ id: schema.directMessageAttachments.id })
+      ).length === 1
+    );
   }
 
-  async claimChannelLease(channelId: string, participantIdentity: string, participantDisplayName: string, now: Date, leaseSeconds: number): Promise<{ status: 'ok'; lease: ChannelLeaseRecord } | { status: 'busy'; lease: ChannelLeaseRecord }> {
+  async claimChannelLease(
+    channelId: string,
+    participantIdentity: string,
+    participantDisplayName: string,
+    now: Date,
+    leaseSeconds: number,
+  ): Promise<
+    | { status: "ok"; lease: ChannelLeaseRecord }
+    | { status: "busy"; lease: ChannelLeaseRecord }
+  > {
     return this.db.transaction(async (tx) => {
-      await tx.select({ id: schema.serverChannels.id }).from(schema.serverChannels).where(eq(schema.serverChannels.id, channelId)).for('update');
-      const [current] = await tx.select().from(schema.channelScreenShareLeases).where(eq(schema.channelScreenShareLeases.channelId, channelId)).limit(1).for('update');
-      const decision = decideScreenShareLease(current ?? null, participantIdentity, participantDisplayName, now, leaseSeconds);
-      if (!decision.ok) return { status: 'busy', lease: { channelId, ...decision.current } };
+      await tx
+        .select({ id: schema.serverChannels.id })
+        .from(schema.serverChannels)
+        .where(eq(schema.serverChannels.id, channelId))
+        .for("update");
+      const [current] = await tx
+        .select()
+        .from(schema.channelScreenShareLeases)
+        .where(eq(schema.channelScreenShareLeases.channelId, channelId))
+        .limit(1)
+        .for("update");
+      const decision = decideScreenShareLease(
+        current ?? null,
+        participantIdentity,
+        participantDisplayName,
+        now,
+        leaseSeconds,
+      );
+      if (!decision.ok)
+        return { status: "busy", lease: { channelId, ...decision.current } };
       const lease: ChannelLeaseRecord = { channelId, ...decision.lease };
-      await tx.insert(schema.channelScreenShareLeases).values(lease).onConflictDoUpdate({
-        target: schema.channelScreenShareLeases.channelId,
-        set: { participantIdentity: lease.participantIdentity, participantDisplayName: lease.participantDisplayName, acquiredAt: lease.acquiredAt, expiresAt: lease.expiresAt },
-      });
-      return { status: 'ok', lease };
+      await tx
+        .insert(schema.channelScreenShareLeases)
+        .values(lease)
+        .onConflictDoUpdate({
+          target: schema.channelScreenShareLeases.channelId,
+          set: {
+            participantIdentity: lease.participantIdentity,
+            participantDisplayName: lease.participantDisplayName,
+            acquiredAt: lease.acquiredAt,
+            expiresAt: lease.expiresAt,
+          },
+        });
+      return { status: "ok", lease };
     });
   }
 
-  async heartbeatChannelLease(channelId: string, participantIdentity: string, now: Date, leaseSeconds: number): Promise<ChannelLeaseRecord | null> {
-    const [row] = await this.db.update(schema.channelScreenShareLeases).set({ expiresAt: expiresAt(now, leaseSeconds) }).where(and(eq(schema.channelScreenShareLeases.channelId, channelId), eq(schema.channelScreenShareLeases.participantIdentity, participantIdentity))).returning();
+  async heartbeatChannelLease(
+    channelId: string,
+    participantIdentity: string,
+    now: Date,
+    leaseSeconds: number,
+  ): Promise<ChannelLeaseRecord | null> {
+    const [row] = await this.db
+      .update(schema.channelScreenShareLeases)
+      .set({ expiresAt: expiresAt(now, leaseSeconds) })
+      .where(
+        and(
+          eq(schema.channelScreenShareLeases.channelId, channelId),
+          eq(
+            schema.channelScreenShareLeases.participantIdentity,
+            participantIdentity,
+          ),
+        ),
+      )
+      .returning();
     return row ?? null;
   }
 
-  async releaseChannelLease(channelId: string, participantIdentity: string): Promise<boolean> {
-    const rows = await this.db.delete(schema.channelScreenShareLeases).where(and(eq(schema.channelScreenShareLeases.channelId, channelId), eq(schema.channelScreenShareLeases.participantIdentity, participantIdentity))).returning({ channelId: schema.channelScreenShareLeases.channelId });
+  async releaseChannelLease(
+    channelId: string,
+    participantIdentity: string,
+  ): Promise<boolean> {
+    const rows = await this.db
+      .delete(schema.channelScreenShareLeases)
+      .where(
+        and(
+          eq(schema.channelScreenShareLeases.channelId, channelId),
+          eq(
+            schema.channelScreenShareLeases.participantIdentity,
+            participantIdentity,
+          ),
+        ),
+      )
+      .returning({ channelId: schema.channelScreenShareLeases.channelId });
     return rows.length === 1;
   }
 
-  async releaseChannelLeaseByParticipant(participantIdentity: string): Promise<void> {
-    await this.db.delete(schema.channelScreenShareLeases).where(eq(schema.channelScreenShareLeases.participantIdentity, participantIdentity));
+  async releaseChannelLeaseByParticipant(
+    participantIdentity: string,
+  ): Promise<void> {
+    await this.db
+      .delete(schema.channelScreenShareLeases)
+      .where(
+        eq(
+          schema.channelScreenShareLeases.participantIdentity,
+          participantIdentity,
+        ),
+      );
   }
 
   async releaseChannelLeaseByChannel(channelId: string): Promise<void> {
-    await this.db.delete(schema.channelScreenShareLeases).where(eq(schema.channelScreenShareLeases.channelId, channelId));
+    await this.db
+      .delete(schema.channelScreenShareLeases)
+      .where(eq(schema.channelScreenShareLeases.channelId, channelId));
   }
 }
 
-export function createPostgresStore(databaseUrl: string): { store: PostgresStore; close: () => Promise<void> } {
-  const pool = new pg.Pool({ connectionString: databaseUrl, max: 10, idleTimeoutMillis: 30_000 });
-  return { store: new PostgresStore(drizzle(pool, { schema })), close: () => pool.end() };
+export function createPostgresStore(databaseUrl: string): {
+  store: PostgresStore;
+  close: () => Promise<void>;
+} {
+  const pool = new pg.Pool({
+    connectionString: databaseUrl,
+    max: 10,
+    idleTimeoutMillis: 30_000,
+  });
+  return {
+    store: new PostgresStore(drizzle(pool, { schema })),
+    close: () => pool.end(),
+  };
 }

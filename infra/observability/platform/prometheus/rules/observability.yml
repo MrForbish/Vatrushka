@@ -1,0 +1,49 @@
+groups:
+  - name: observability
+    rules:
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 3m
+        labels: { severity: critical }
+        annotations:
+          summary: Prometheus target is down
+
+      - alert: PrometheusRuleEvaluationFailures
+        expr: increase(prometheus_rule_evaluation_failures_total[10m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: Prometheus rule evaluation failed
+
+      - alert: PrometheusConfigurationReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Prometheus configuration reload failed
+
+      - alert: LokiDiscardedLogs
+        expr: sum(rate(loki_discarded_samples_total[5m])) > 0
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: Loki is discarding log lines
+
+      - alert: LokiS3Errors
+        expr: sum(rate(loki_boltdb_shipper_request_duration_seconds_count{status_code!~"2.."}[5m])) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Loki object storage requests are failing
+
+      - alert: BlackboxProbeSlow
+        expr: probe_duration_seconds{job="blackbox-http"} > 2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Public endpoint probe is slower than two seconds
+
+      - alert: AlertmanagerNotificationsFailing
+        expr: increase(alertmanager_notifications_failed_total[10m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: Alertmanager failed to deliver notifications

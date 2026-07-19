@@ -1,10 +1,15 @@
-import { createClient } from 'redis';
+import { createClient } from "redis";
 
-import type { RealtimeEvent, RealtimeEventType } from '@vatrushka/shared';
+import type { RealtimeEvent, RealtimeEventType } from "@vatrushka/shared";
 
-import type { AppConfig } from '../config.js';
-import type { CanonicalMessagingStore, OutboxEventRecord } from './canonical-messaging.js';
-import { technicalMetrics } from './metrics.js';
+import type { AppConfig } from "../config.js";
+import type { Mailer } from "../ports.js";
+import { decryptCredential } from "../security.js";
+import type {
+  CanonicalMessagingStore,
+  OutboxEventRecord,
+} from "./canonical-messaging.js";
+import { technicalMetrics } from "./metrics.js";
 
 type RedisClient = ReturnType<typeof createClient>;
 type EventListener = (event: RealtimeEvent) => void;
@@ -13,13 +18,13 @@ export class RedisRealtimeBus {
   private readonly publisher: RedisClient;
   private readonly subscriber: RedisClient;
   private readonly listeners = new Set<EventListener>();
-  private readonly channel = 'vatrushka:realtime:v1';
+  private readonly channel = "vatrushka:realtime:v1";
 
   constructor(redisUrl: string) {
     this.publisher = createClient({ url: redisUrl });
     this.subscriber = this.publisher.duplicate();
-    this.publisher.on('error', () => undefined);
-    this.subscriber.on('error', () => undefined);
+    this.publisher.on("error", () => undefined);
+    this.subscriber.on("error", () => undefined);
   }
 
   async start(): Promise<void> {
@@ -41,19 +46,34 @@ export class RedisRealtimeBus {
 
   async publish(event: RealtimeEvent): Promise<boolean> {
     const dedupeKey = `vatrushka:realtime:dedupe:${event.id}`;
-    const accepted = await this.publisher.set(dedupeKey, '1', { NX: true, EX: 24 * 60 * 60 });
-    if (accepted !== 'OK') return false;
+    const accepted = await this.publisher.set(dedupeKey, "1", {
+      NX: true,
+      EX: 24 * 60 * 60,
+    });
+    if (accepted !== "OK") return false;
     try {
       await this.publisher.publish(this.channel, JSON.stringify(event));
       return true;
     } catch (error) {
-      technicalMetrics.increment('chat_redis_publish_errors_total');
+      technicalMetrics.increment("chat_redis_publish_errors_total");
       throw error;
     }
   }
 
-  async registerConnection(userId: string, connectionId: string, deviceId: string): Promise<void> {
-    await this.publisher.hSet(`vatrushka:ws:user:${userId}`, connectionId, JSON.stringify({ deviceId, instanceId: process.pid, connectedAt: new Date().toISOString() }));
+  async registerConnection(
+    userId: string,
+    connectionId: string,
+    deviceId: string,
+  ): Promise<void> {
+    await this.publisher.hSet(
+      `vatrushka:ws:user:${userId}`,
+      connectionId,
+      JSON.stringify({
+        deviceId,
+        instanceId: process.pid,
+        connectedAt: new Date().toISOString(),
+      }),
+    );
     await this.publisher.expire(`vatrushka:ws:user:${userId}`, 120);
   }
 
@@ -61,30 +81,60 @@ export class RedisRealtimeBus {
     await this.publisher.expire(`vatrushka:ws:user:${userId}`, 120);
   }
 
-  async unregisterConnection(userId: string, connectionId: string): Promise<void> {
+  async unregisterConnection(
+    userId: string,
+    connectionId: string,
+  ): Promise<void> {
     await this.publisher.hDel(`vatrushka:ws:user:${userId}`, connectionId);
   }
 
-  async setTyping(conversationId: string, userId: string, active: boolean): Promise<void> {
+  async setTyping(
+    conversationId: string,
+    userId: string,
+    active: boolean,
+  ): Promise<void> {
     const key = `vatrushka:typing:${conversationId}:${userId}`;
-    if (active) await this.publisher.set(key, '1', { EX: 8 });
+    if (active) await this.publisher.set(key, "1", { EX: 8 });
     else await this.publisher.del(key);
-    await this.publish({ id: `typing:${conversationId}:${userId}:${active ? 'start' : 'stop'}:${Date.now()}`, type: active ? 'typing.started' : 'typing.stopped', occurredAt: new Date().toISOString(), conversationId, targetUserIds: [], payload: { conversationId, userId } });
+    await this.publish({
+      id: `typing:${conversationId}:${userId}:${active ? "start" : "stop"}:${Date.now()}`,
+      type: active ? "typing.started" : "typing.stopped",
+      occurredAt: new Date().toISOString(),
+      conversationId,
+      targetUserIds: [],
+      payload: { conversationId, userId },
+    });
   }
 
-  async setActiveConversation(userId: string, deviceId: string, conversationId: string | null): Promise<void> {
+  async setActiveConversation(
+    userId: string,
+    deviceId: string,
+    conversationId: string | null,
+  ): Promise<void> {
     const key = `vatrushka:active-conversation:${userId}:${deviceId}`;
-    if (conversationId) await this.publisher.set(key, conversationId, { EX: 120 });
+    if (conversationId)
+      await this.publisher.set(key, conversationId, { EX: 120 });
     else await this.publisher.del(key);
   }
 
-  async publishPresence(userId: string, targetUserIds: string[], payload: Record<string, unknown>): Promise<boolean> {
+  async publishPresence(
+    userId: string,
+    targetUserIds: string[],
+    payload: Record<string, unknown>,
+  ): Promise<boolean> {
     const fingerprint = JSON.stringify(payload);
     const stateKey = `vatrushka:realtime:presence-state:${userId}`;
     const previous = await this.publisher.get(stateKey);
     await this.publisher.set(stateKey, fingerprint, { EX: 5 * 60 });
     if (previous === fingerprint) return false;
-    return this.publish({ id: `presence:${userId}:${Date.now()}`, type: 'presence.updated', occurredAt: new Date().toISOString(), conversationId: null, targetUserIds: [...new Set(targetUserIds)], payload: { userId, ...payload } });
+    return this.publish({
+      id: `presence:${userId}:${Date.now()}`,
+      type: "presence.updated",
+      occurredAt: new Date().toISOString(),
+      conversationId: null,
+      targetUserIds: [...new Set(targetUserIds)],
+      payload: { userId, ...payload },
+    });
   }
 
   async close(): Promise<void> {
@@ -99,9 +149,17 @@ export class OutboxWorker {
 
   constructor(
     private readonly store: CanonicalMessagingStore,
-    private readonly bus: RedisRealtimeBus,
+    private readonly bus: RedisRealtimeBus | null,
+    private readonly mailer: Mailer,
+    private readonly credentialEncryptionKey: string,
     private readonly intervalMs = 500,
-    private readonly report: (details: { eventId: string; backendInstanceId: number; durationMs: number; result: 'published' | 'retry'; errorCode?: string }) => void = () => undefined,
+    private readonly report: (details: {
+      eventId: string;
+      backendInstanceId: number;
+      durationMs: number;
+      result: "published" | "retry";
+      errorCode?: string;
+    }) => void = () => undefined,
   ) {}
 
   start(): void {
@@ -120,9 +178,12 @@ export class OutboxWorker {
     const events = await this.store.claimOutboxBatch(100, new Date());
     for (const event of events) await this.process(event);
     const metrics = await this.store.outboxMetrics(new Date());
-    technicalMetrics.set('chat_outbox_pending_total', metrics.pending);
-    technicalMetrics.set('chat_outbox_failed_total', metrics.failed);
-    technicalMetrics.set('chat_outbox_oldest_age_seconds', metrics.oldestAgeSeconds);
+    technicalMetrics.set("chat_outbox_pending_total", metrics.pending);
+    technicalMetrics.set("chat_outbox_failed_total", metrics.failed);
+    technicalMetrics.set(
+      "chat_outbox_oldest_age_seconds",
+      metrics.oldestAgeSeconds,
+    );
     return events.length;
   }
 
@@ -132,16 +193,52 @@ export class OutboxWorker {
     } catch {
       // The next poll retries; durable state remains in PostgreSQL.
     } finally {
-      if (this.running) this.timer = setTimeout(() => void this.tick(), this.intervalMs);
+      if (this.running)
+        this.timer = setTimeout(() => void this.tick(), this.intervalMs);
     }
   }
 
   private async process(event: OutboxEventRecord): Promise<void> {
     const startedAt = performance.now();
     try {
-      const recipientIds = Array.isArray(event.payload.recipientIds) ? event.payload.recipientIds.filter((value): value is string => typeof value === 'string') : [];
-      if (event.eventType === 'conversation.read_state.updated' && typeof event.payload.userId === 'string') recipientIds.push(event.payload.userId);
-      const conversationId = typeof event.payload.conversationId === 'string' ? event.payload.conversationId : event.aggregateType === 'conversation' ? event.aggregateId : null;
+      if (event.aggregateType === "email_delivery") {
+        await this.deliverEmail(event);
+        await this.store.completeOutboxEvent(event.id, new Date());
+        technicalMetrics.increment("auth_email_delivery_total", 1, {
+          result: "sent",
+          type: event.eventType,
+        });
+        technicalMetrics.observeHistogram(
+          "auth_email_delivery_duration_seconds",
+          (performance.now() - startedAt) / 1_000,
+          [0.1, 0.5, 1, 2, 5, 10, 20],
+          { type: event.eventType },
+        );
+        this.report({
+          eventId: event.id,
+          backendInstanceId: process.pid,
+          durationMs: performance.now() - startedAt,
+          result: "published",
+        });
+        return;
+      }
+      const recipientIds = Array.isArray(event.payload.recipientIds)
+        ? event.payload.recipientIds.filter(
+            (value): value is string => typeof value === "string",
+          )
+        : [];
+      if (
+        event.eventType === "conversation.read_state.updated" &&
+        typeof event.payload.userId === "string"
+      )
+        recipientIds.push(event.payload.userId);
+      const conversationId =
+        typeof event.payload.conversationId === "string"
+          ? event.payload.conversationId
+          : event.aggregateType === "conversation"
+            ? event.aggregateId
+            : null;
+      if (!this.bus) throw new Error("Realtime bus is unavailable");
       await this.bus.publish({
         id: `outbox:${event.id}`,
         type: event.eventType as RealtimeEventType,
@@ -151,15 +248,82 @@ export class OutboxWorker {
         payload: event.payload,
       });
       await this.store.completeOutboxEvent(event.id, new Date());
-      this.report({ eventId: event.id, backendInstanceId: process.pid, durationMs: performance.now() - startedAt, result: 'published' });
+      this.report({
+        eventId: event.id,
+        backendInstanceId: process.pid,
+        durationMs: performance.now() - startedAt,
+        result: "published",
+      });
     } catch (error) {
-      await this.store.retryOutboxEvent(event.id, event.attempts, error instanceof Error ? error.message : 'Unknown realtime publish error', new Date());
-      this.report({ eventId: event.id, backendInstanceId: process.pid, durationMs: performance.now() - startedAt, result: 'retry', errorCode: error instanceof Error ? error.name : 'UNKNOWN' });
+      await this.store.retryOutboxEvent(
+        event.id,
+        event.attempts,
+        error instanceof Error
+          ? error.message
+          : "Unknown realtime publish error",
+        new Date(),
+      );
+      if (event.aggregateType === "email_delivery")
+        technicalMetrics.increment("auth_email_delivery_total", 1, {
+          result: "retry",
+          type: event.eventType,
+        });
+      this.report({
+        eventId: event.id,
+        backendInstanceId: process.pid,
+        durationMs: performance.now() - startedAt,
+        result: "retry",
+        errorCode: error instanceof Error ? error.name : "UNKNOWN",
+      });
     }
+  }
+
+  private async deliverEmail(event: OutboxEventRecord): Promise<void> {
+    const email =
+      typeof event.payload.email === "string" ? event.payload.email : null;
+    if (!email) throw new Error("Email outbox payload is invalid");
+    if (event.eventType === "email.otp") {
+      const encryptedCode =
+        typeof event.payload.encryptedCode === "string"
+          ? event.payload.encryptedCode
+          : null;
+      const expiresInMinutes =
+        typeof event.payload.expiresInMinutes === "number"
+          ? event.payload.expiresInMinutes
+          : null;
+      const purpose =
+        typeof event.payload.purpose === "string"
+          ? (event.payload.purpose as Parameters<Mailer["sendOtp"]>[3])
+          : undefined;
+      if (!encryptedCode || expiresInMinutes === null)
+        throw new Error("OTP outbox payload is invalid");
+      await this.mailer.sendOtp(
+        email,
+        decryptCredential(encryptedCode, this.credentialEncryptionKey),
+        expiresInMinutes,
+        purpose,
+      );
+      return;
+    }
+    if (event.eventType === "email.security_notice") {
+      const title =
+        typeof event.payload.title === "string" ? event.payload.title : null;
+      const message =
+        typeof event.payload.message === "string"
+          ? event.payload.message
+          : null;
+      if (!title || !message)
+        throw new Error("Security notice outbox payload is invalid");
+      await this.mailer.sendSecurityNotice(email, title, message);
+      return;
+    }
+    throw new Error("Unsupported email outbox event");
   }
 }
 
-export async function createRealtimeBus(config: AppConfig): Promise<RedisRealtimeBus | null> {
+export async function createRealtimeBus(
+  config: AppConfig,
+): Promise<RedisRealtimeBus | null> {
   if (!config.REDIS_URL) return null;
   const bus = new RedisRealtimeBus(config.REDIS_URL);
   await bus.start();

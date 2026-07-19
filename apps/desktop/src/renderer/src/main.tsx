@@ -25,4 +25,14 @@ const queryClient = new QueryClient({
   },
 });
 
-createRoot(root).render(<StrictMode><QueryClientProvider client={queryClient}><AppRouter><App /></AppRouter></QueryClientProvider></StrictMode>);
+async function bootstrap(container: HTMLElement): Promise<void> {
+  try {
+    if ((await window.desktop.getPlatform()) === 'win32')
+      document.body.classList.add('desktopTitlebarOverlay');
+  } catch {
+    /* The renderer remains usable if platform detection is unavailable. */
+  }
+  createRoot(container).render(<StrictMode><QueryClientProvider client={queryClient}><AppRouter><App /></AppRouter></QueryClientProvider></StrictMode>);
+}
+
+void bootstrap(root);

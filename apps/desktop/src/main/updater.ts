@@ -1,21 +1,30 @@
-import { app } from 'electron';
-import log from 'electron-log/main';
-import electronUpdater, { type ProgressInfo, type UpdateInfo } from 'electron-updater';
+import { app } from "electron";
+import log from "electron-log/main";
+import electronUpdater, {
+  type ProgressInfo,
+  type UpdateInfo,
+} from "electron-updater";
 
-import type { DesktopUpdateState } from '@vatrushka/shared';
+import type { DesktopUpdateState } from "@vatrushka/shared";
 
 import {
   isUpdateCheckDue,
+  UPDATE_CHECK_TIMEOUT_MS,
   UPDATE_INTERVAL_MS,
+  UPDATE_RETRY_DELAY_MS,
   UPDATE_START_DELAY_MS,
-} from './updater-schedule.js';
+} from "./updater-schedule.js";
 
 const { autoUpdater } = electronUpdater;
 
 export class DesktopUpdater {
-  private state: DesktopUpdateState = { status: 'idle', currentVersion: app.getVersion() };
+  private state: DesktopUpdateState = {
+    status: "idle",
+    currentVersion: app.getVersion(),
+  };
   private startTimer: NodeJS.Timeout | null = null;
   private interval: NodeJS.Timeout | null = null;
+  private retryTimer: NodeJS.Timeout | null = null;
   private started = false;
   private lastCheckStartedAt: number | null = null;
 
@@ -24,11 +33,17 @@ export class DesktopUpdater {
   start(): void {
     if (this.started) return;
     this.started = true;
-    if (!app.isPackaged || process.platform !== 'win32' || Boolean(process.env.PORTABLE_EXECUTABLE_FILE)) {
+    if (
+      !app.isPackaged ||
+      process.platform !== "win32" ||
+      Boolean(process.env.PORTABLE_EXECUTABLE_FILE)
+    ) {
       this.setState({
-        status: 'unsupported',
+        status: "unsupported",
         currentVersion: app.getVersion(),
-        message: app.isPackaged ? 'Автообновление доступно в установленной Windows-версии.' : 'Автообновление отключено в режиме разработки.',
+        message: app.isPackaged
+          ? "Автообновление доступно в установленной Windows-версии."
+          : "Автообновление отключено в режиме разработки.",
       });
       return;
     }
@@ -36,16 +51,20 @@ export class DesktopUpdater {
     autoUpdater.logger = log;
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
-    autoUpdater.on('checking-for-update', this.onChecking);
-    autoUpdater.on('update-available', this.onAvailable);
-    autoUpdater.on('update-not-available', this.onNotAvailable);
-    autoUpdater.on('download-progress', this.onProgress);
-    autoUpdater.on('update-downloaded', this.onDownloaded);
-    autoUpdater.on('error', this.onError);
+    autoUpdater.on("checking-for-update", this.onChecking);
+    autoUpdater.on("update-available", this.onAvailable);
+    autoUpdater.on("update-not-available", this.onNotAvailable);
+    autoUpdater.on("download-progress", this.onProgress);
+    autoUpdater.on("update-downloaded", this.onDownloaded);
+    autoUpdater.on("error", this.onError);
 
-    this.startTimer = setTimeout(() => { void this.checkIfDue(); }, UPDATE_START_DELAY_MS);
+    this.startTimer = setTimeout(() => {
+      void this.checkIfDue();
+    }, UPDATE_START_DELAY_MS);
     this.startTimer.unref();
-    this.interval = setInterval(() => { void this.checkIfDue(); }, UPDATE_INTERVAL_MS);
+    this.interval = setInterval(() => {
+      void this.checkIfDue();
+    }, UPDATE_INTERVAL_MS);
     this.interval.unref();
   }
 
@@ -65,48 +84,66 @@ export class DesktopUpdater {
   }
 
   private async runCheck(): Promise<void> {
-    if (this.state.status === 'unsupported' || this.state.status === 'checking' || this.state.status === 'downloading' || this.state.status === 'ready') return;
+    if (
+      this.state.status === "unsupported" ||
+      this.state.status === "checking" ||
+      this.state.status === "downloading" ||
+      this.state.status === "ready"
+    )
+      return;
     this.lastCheckStartedAt = Date.now();
     try {
-      await autoUpdater.checkForUpdates();
+      await withTimeout(autoUpdater.checkForUpdates(), UPDATE_CHECK_TIMEOUT_MS);
     } catch (error) {
-      this.onError(error instanceof Error ? error : new Error('Unknown updater error'));
+      this.onError(
+        error instanceof Error ? error : new Error("Unknown updater error"),
+      );
     }
   }
 
   install(): void {
-    if (this.state.status !== 'ready') return;
-    setImmediate(() => autoUpdater.quitAndInstall(false, true));
+    if (this.state.status !== "ready") return;
+    setImmediate(() => autoUpdater.quitAndInstall(true, true));
   }
 
   dispose(): void {
     if (this.startTimer) clearTimeout(this.startTimer);
     if (this.interval) clearInterval(this.interval);
+    if (this.retryTimer) clearTimeout(this.retryTimer);
     this.startTimer = null;
     this.interval = null;
-    autoUpdater.removeListener('checking-for-update', this.onChecking);
-    autoUpdater.removeListener('update-available', this.onAvailable);
-    autoUpdater.removeListener('update-not-available', this.onNotAvailable);
-    autoUpdater.removeListener('download-progress', this.onProgress);
-    autoUpdater.removeListener('update-downloaded', this.onDownloaded);
-    autoUpdater.removeListener('error', this.onError);
+    this.retryTimer = null;
+    autoUpdater.removeListener("checking-for-update", this.onChecking);
+    autoUpdater.removeListener("update-available", this.onAvailable);
+    autoUpdater.removeListener("update-not-available", this.onNotAvailable);
+    autoUpdater.removeListener("download-progress", this.onProgress);
+    autoUpdater.removeListener("update-downloaded", this.onDownloaded);
+    autoUpdater.removeListener("error", this.onError);
   }
 
   private readonly onChecking = (): void => {
-    this.setState({ status: 'checking', currentVersion: app.getVersion() });
+    this.setState({ status: "checking", currentVersion: app.getVersion() });
   };
 
   private readonly onAvailable = (info: UpdateInfo): void => {
-    this.setState({ status: 'available', currentVersion: app.getVersion(), version: info.version });
+    this.setState({
+      status: "available",
+      currentVersion: app.getVersion(),
+      version: info.version,
+    });
   };
 
   private readonly onNotAvailable = (info: UpdateInfo): void => {
-    this.setState({ status: 'up-to-date', currentVersion: app.getVersion(), version: info.version });
+    this.setState({
+      status: "up-to-date",
+      currentVersion: app.getVersion(),
+      version: info.version,
+    });
   };
 
   private readonly onProgress = (progress: ProgressInfo): void => {
     this.setState({
-      status: 'downloading',
+      status: "downloading",
       currentVersion: app.getVersion(),
       ...(this.state.version ? { version: this.state.version } : {}),
       percent: Math.max(0, Math.min(100, Math.round(progress.percent))),
@@ -114,20 +151,54 @@ export class DesktopUpdater {
   };
 
   private readonly onDownloaded = (info: UpdateInfo): void => {
-    this.setState({ status: 'ready', currentVersion: app.getVersion(), version: info.version, percent: 100 });
-  };
-
-  private readonly onError = (error: Error): void => {
-    log.error('Automatic update failed', { error });
     this.setState({
-      status: 'error',
+      status: "ready",
       currentVersion: app.getVersion(),
-      message: 'Не удалось проверить или загрузить обновление. Повторите попытку позже.',
+      version: info.version,
+      percent: 100,
     });
   };
 
+  private readonly onError = (error: Error): void => {
+    log.error("Automatic update failed", { error });
+    this.setState({
+      status: "error",
+      currentVersion: app.getVersion(),
+      message:
+        "Не удалось проверить или загрузить обновление. Повторите попытку позже.",
+    });
+    if (this.retryTimer) clearTimeout(this.retryTimer);
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null;
+      void this.runCheck();
+    }, UPDATE_RETRY_DELAY_MS);
+    this.retryTimer.unref();
+  };
+
   private setState(state: DesktopUpdateState): void {
+    if (JSON.stringify(this.state) === JSON.stringify(state)) return;
     this.state = state;
     this.publish({ ...state });
+  }
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timeout: NodeJS.Timeout | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("Update check timed out")),
+          timeoutMs,
+        );
+        timeout.unref();
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }

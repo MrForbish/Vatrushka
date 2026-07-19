@@ -1,0 +1,130 @@
+logging {
+  level  = "info"
+  format = "json"
+}
+
+prometheus.remote_write "central" {
+  external_labels = {
+    environment = sys.env("OBSERVABILITY_ENVIRONMENT"),
+    host        = sys.env("OBSERVABILITY_HOST"),
+    region      = sys.env("OBSERVABILITY_REGION"),
+    role        = sys.env("OBSERVABILITY_ROLE"),
+  }
+
+  endpoint {
+    url = sys.env("PROMETHEUS_REMOTE_WRITE_URL")
+  }
+}
+
+prometheus.scrape "api" {
+  job_name        = "vatrushka-api"
+  scrape_interval = "15s"
+  targets         = [{ "__address__" = "127.0.0.1:3001" }]
+  forward_to      = [prometheus.remote_write.central.receiver]
+}
+
+prometheus.scrape "node" {
+  job_name        = "node"
+  scrape_interval = "30s"
+  targets         = [{ "__address__" = "127.0.0.1:9100" }]
+  forward_to      = [prometheus.remote_write.central.receiver]
+}
+
+prometheus.scrape "alloy" {
+  job_name        = "alloy-agent"
+  scrape_interval = "30s"
+  targets         = [{ "__address__" = "127.0.0.1:12345" }]
+  forward_to      = [prometheus.remote_write.central.receiver]
+}
+
+prometheus.scrape "cadvisor" {
+  job_name        = "cadvisor"
+  scrape_interval = "30s"
+  targets         = [{ "__address__" = "127.0.0.1:8080" }]
+  forward_to      = [prometheus.remote_write.central.receiver]
+}
+
+prometheus.scrape "postgres" {
+  job_name        = "postgres"
+  scrape_interval = "30s"
+  targets         = [{ "__address__" = "127.0.0.1:9187" }]
+  forward_to      = [prometheus.remote_write.central.receiver]
+}
+
+prometheus.scrape "redis" {
+  job_name        = "redis"
+  scrape_interval = "30s"
+  targets         = [{ "__address__" = "127.0.0.1:9121" }]
+  forward_to      = [prometheus.remote_write.central.receiver]
+}
+
+discovery.docker "product" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+  filter {
+    name   = "name"
+    values = ["vatrushka-*"]
+  }
+}
+
+discovery.relabel "product" {
+  targets = discovery.docker.product.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+    replacement   = "$1"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "service"
+  }
+}
+
+loki.process "sanitize" {
+  stage.drop {
+    expression          = "(?i).*(GET|HEAD) /(health|ready|metrics)(/|\\s|\\?).*"
+    drop_counter_reason = "routine_healthcheck"
+  }
+
+  stage.replace {
+    expression = "(?i)(authorization|cookie|password|access[_-]?token|refresh[_-]?token|secret)([=:]\\s*)([^\\s,;]+)"
+    replace    = "$1$2[REDACTED]"
+  }
+
+  stage.static_labels {
+    values = {
+      environment = sys.env("OBSERVABILITY_ENVIRONMENT"),
+      host        = sys.env("OBSERVABILITY_HOST"),
+      region      = sys.env("OBSERVABILITY_REGION"),
+      source      = "docker",
+    }
+  }
+
+  forward_to = [loki.write.central.receiver]
+}
+
+loki.source.docker "product" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.product.targets
+  relabel_rules = discovery.relabel.product.rules
+  forward_to    = [loki.process.sanitize.receiver]
+}
+
+loki.source.journal "system" {
+  path    = "/var/log/journal"
+  matches = "_SYSTEMD_UNIT=ssh.service"
+  labels = {
+    service = "ssh",
+    source  = "journald",
+  }
+  forward_to = [loki.process.sanitize.receiver]
+}
+
+loki.write "central" {
+  endpoint {
+    url = sys.env("LOKI_WRITE_URL")
+  }
+}

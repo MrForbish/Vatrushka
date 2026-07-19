@@ -1,6 +1,6 @@
 # Vatrushka: техническая спецификация
 
-Статус документа: канонический, версия продукта 0.6.1.
+Статус документа: канонический, версия продукта 0.7.0.
 
 ## 1. Состав системы
 
@@ -42,9 +42,15 @@ React 19 и TanStack Query отвечают за серверное состоя
 
 Основные feature-модули: `home`, `servers`, `direct-messages`, `voice`, `screen-share`, `settings`, `notifications`, `security`, `update`. Переиспользуемая UI-система находится в `ui/{foundations,primitives,navigation,messaging,voice,overlays,layouts}`.
 
+Gaming Home получает единый агрегат `GET /api/v1/home`. Backend объединяет PostgreSQL server membership и user activity, Redis voice projection, LiveKit-confirmed presence и permission-filtered server DTO. Ответ содержит компактный voice status, `quickReturn`, `activeSpaces` и `friendsInGame`; renderer подменяет только названия input/output фактическими Windows `MediaDeviceInfo`, не создавая демонстрационные production-данные. Realtime voice events coalesced-инвалидируют Home query, а reconnect восстанавливается HTTP snapshot. До появления отдельной friendship-модели социальный список использует реальные контакты существующих личных диалогов; это явно ограниченный compatibility source, а не скрытый mock.
+
 ### 3.2. Electron main/preload
 
 Main process владеет single-instance/deep-link обработкой, safeStorage, updater, desktopCapturer, native notifications и window lifecycle. Screen source передается renderer только через одноразовый allowlist. Updater работает с generic feed `/updates`, portable-сборка не автообновляется.
+
+Windows-окно использует безопасный `titleBarOverlay`: сохраняются системные minimize/maximize/close, Snap и double-click maximize, а renderer резервирует drag-region и размещает единственный центр уведомлений перед системными кнопками. Внешние контакты открываются только через typed IPC allowlist (`https://t.me/MaksZJ`, `mailto:vatrushka-notify@yandex.ru`).
+
+Серверы имеют `private/public` visibility. Авторизованный каталог публичных серверов возвращает только безопасную сводку, поддерживает пагинацию/rate limit и поднимает configured `FEATURED_SERVER_ID` первым. Присоединение к public server не требует invite token. Иконка, banner и accent входят в presentation DTO через временные S3 URL; внутренние object keys не передаются. Профиль пользователя поддерживает avatar и cover object keys с JPEG/PNG/WebP upload intents.
 
 ### 3.3. Media
 
@@ -100,6 +106,7 @@ Bucket приватный. API создает ограниченный object ke
 - password: scrypt с уникальной солью;
 - access JWT: 15 минут;
 - opaque refresh: 30 дней, hash в PostgreSQL, rotation и reuse detection;
+- Electron main хранит refresh только в DPAPI-encrypted file при включённом `rememberSession`; для session-only входа token rotation остаётся в памяти main process;
 - второй фактор при каждом входе: email/TOTP/recovery;
 - OTP rate limits, TTL и pepper;
 - password reset использует отдельный OTP purpose, neutral request response и атомарный revoke всех PostgreSQL sessions;
@@ -154,3 +161,6 @@ Alerts должны покрывать readiness failure, 5xx/latency surge, Red
 ## 12. Управление изменениями
 
 Изменения выполняются маленькими MR с одним назначением. Обычные task MR squash-merge в `develop`; assembly, production release, hotfix и обратная синхронизация используют merge commit, чтобы сохранить границы версии и позволить revert целого изменения. Generated outputs, reference-pack и секреты не коммитятся. Мертвый код удаляется только после доказательства отсутствия imports/runtime calls, теста заменяющего контракт и, для БД, завершенной expand/contract migration.
+# Voice presence and movement
+
+Voice membership is confirmed by LiveKit webhooks, projected atomically into Redis, versioned per server, and delivered through the application WebSocket. `docs/adr/0005-livekit-confirmed-voice-presence.md` defines source-of-truth boundaries, Redis keys, adapters, reconciliation, and migration behavior. PostgreSQL does not store ephemeral voice membership.

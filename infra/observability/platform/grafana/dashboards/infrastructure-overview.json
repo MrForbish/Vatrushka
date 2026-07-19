@@ -1,0 +1,24 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }, "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 }, "id": 1, "targets": [{ "expr": "100 - avg by (host) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100", "legendFormat": "{{host}}", "refId": "A" }], "title": "CPU", "type": "timeseries" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }, "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 }, "id": 2, "targets": [{ "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100", "legendFormat": "{{host}}", "refId": "A" }], "title": "RAM", "type": "timeseries" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }, "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 }, "id": 3, "targets": [{ "expr": "100 * (1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"})", "legendFormat": "{{host}} {{mountpoint}}", "refId": "A" }], "title": "Disk usage", "type": "timeseries" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 8, "x": 0, "y": 8 }, "id": 4, "targets": [{ "expr": "node_load1", "legendFormat": "{{host}}", "refId": "A" }], "title": "Load average", "type": "timeseries" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] }, "gridPos": { "h": 7, "w": 8, "x": 8, "y": 8 }, "id": 5, "targets": [{ "expr": "sum by (host) (rate(node_network_receive_bytes_total{device!~\"lo\"}[5m]))", "legendFormat": "{{host}} receive", "refId": "A" }, { "expr": "sum by (host) (rate(node_network_transmit_bytes_total{device!~\"lo\"}[5m]))", "legendFormat": "{{host}} transmit", "refId": "B" }], "title": "Network", "type": "timeseries" },
+    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }, "gridPos": { "h": 7, "w": 8, "x": 16, "y": 8 }, "id": 6, "targets": [{ "expr": "time() - node_boot_time_seconds", "legendFormat": "{{host}}", "refId": "A" }], "title": "Uptime", "type": "stat" }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["vatrushka", "infrastructure"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "Infrastructure Overview",
+  "uid": "vatrushka-infrastructure",
+  "version": 1
+}

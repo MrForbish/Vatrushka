@@ -44,3 +44,12 @@
 @media (max-width: 1180px) {
   .vui-role-editor { grid-template-columns: 1fr; }
 }
+.server-view__move-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.server-view__move-list > button {
+  justify-content: flex-start;
+  width: 100%;
+}

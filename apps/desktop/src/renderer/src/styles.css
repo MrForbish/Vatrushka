@@ -6,31 +6,136 @@
   background: var(--color-canvas);
 }
 
-* { box-sizing: border-box; }
-html, body, #root { width: 100%; min-width: 1024px; height: 100%; min-height: 680px; margin: 0; overflow: hidden; }
-body { background: var(--color-canvas); }
-button, input, select { font: inherit; }
-button { color: inherit; }
-button, select { cursor: pointer; }
-button:focus-visible, input:not(.vui-input):focus-visible, select:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
-button:disabled { cursor: not-allowed; opacity: .5; }
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 1024px;
+  height: 100%;
+  min-height: 680px;
+  margin: 0;
+  overflow: hidden;
+}
+body {
+  background: var(--color-canvas);
+}
+body.desktopTitlebarOverlay::before {
+  position: fixed;
+  z-index: 65;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 38px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: #090d18;
+  content: "";
+  -webkit-app-region: drag;
+}
+body.desktopTitlebarOverlay #root {
+  height: calc(100% - 38px);
+  min-height: 642px;
+  margin-top: 38px;
+}
+body.desktopTitlebarOverlay button,
+body.desktopTitlebarOverlay input,
+body.desktopTitlebarOverlay select,
+body.desktopTitlebarOverlay textarea,
+body.desktopTitlebarOverlay a {
+  -webkit-app-region: no-drag;
+}
+button,
+input,
+select {
+  font: inherit;
+}
+button {
+  color: inherit;
+}
+button,
+select {
+  cursor: pointer;
+}
+button:focus-visible,
+input:not(.vui-input):focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
 
-.secondaryButton { min-height: var(--control-height-md); padding: 0 var(--space-4); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-2); color: var(--color-text-primary); font: var(--text-label-md); }
-.secondaryButton:hover { border-color: var(--color-border-strong); background: var(--color-surface-3); }
+.secondaryButton {
+  min-height: var(--control-height-md);
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-2);
+  color: var(--color-text-primary);
+  font: var(--text-label-md);
+}
+.secondaryButton:hover {
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-3);
+}
 
-.bootScreen { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4); background: var(--color-canvas); color: var(--color-text-secondary); font: var(--text-body-md); }
-.pulseLogo { width: 56px; height: 56px; display: grid; place-items: center; border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); background: var(--gradient-brand); box-shadow: 0 14px 42px var(--color-primary-soft); animation: pulse 1.6s ease-in-out infinite; }
-.pulseLogo > span { width: 10px; height: 6px; margin: -15px 0 0 -10px; border-radius: var(--radius-round); background: rgba(255, 255, 255, .5); transform: rotate(-24deg); }
-@keyframes pulse { 50% { transform: scale(.94); opacity: .75; } }
+.bootScreen {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  background: var(--color-canvas);
+  color: var(--color-text-secondary);
+  font: var(--text-body-md);
+}
+.pulseLogo {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--gradient-brand);
+  box-shadow: 0 14px 42px var(--color-primary-soft);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+.pulseLogo > span {
+  width: 10px;
+  height: 6px;
+  margin: -15px 0 0 -10px;
+  border-radius: var(--radius-round);
+  background: rgba(255, 255, 255, 0.5);
+  transform: rotate(-24deg);
+}
+@keyframes pulse {
+  50% {
+    transform: scale(0.94);
+    opacity: 0.75;
+  }
+}
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Current design-system pages. */
 .vui-auth-page {
   display: grid;
-  grid-template-columns: minmax(470px, 1.1fr) minmax(500px, .9fr);
+  grid-template-columns: minmax(470px, 1.1fr) minmax(500px, 0.9fr);
   width: 100%;
   height: 100vh;
   min-height: 680px;
@@ -39,51 +144,497 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   color: var(--color-text-primary);
   font-family: var(--font-ui);
 }
-.vui-auth-visual { position: relative; display: grid; grid-template-rows: auto 1fr auto; gap: var(--space-8); min-width: 0; padding: clamp(34px, 5vw, 72px); overflow: hidden; border-right: 1px solid var(--color-border-subtle); background: radial-gradient(circle at 18% 18%, color-mix(in srgb, var(--color-primary), transparent 78%), transparent 34%), radial-gradient(circle at 84% 75%, color-mix(in srgb, var(--color-cyan), transparent 86%), transparent 36%), var(--color-surface-0); }
-.vui-auth-visual::after { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(color-mix(in srgb, var(--color-border-subtle), transparent 35%) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--color-border-subtle), transparent 35%) 1px, transparent 1px); background-size: 52px 52px; mask-image: linear-gradient(to bottom, transparent, black 28%, transparent); opacity: .18; content: ''; }
-.vui-auth-brand { position: relative; z-index: 1; display: flex; align-items: center; gap: var(--space-3); font: var(--text-heading-sm); letter-spacing: .13em; }
-.vui-auth-brand > span { display: grid; width: 40px; height: 40px; place-items: center; border: 1px solid var(--color-border-strong); border-radius: var(--radius-sm); background: var(--gradient-brand); box-shadow: 0 10px 32px var(--color-primary-soft); color: white; }
-.vui-auth-visual__copy { position: relative; z-index: 1; align-self: center; max-width: 720px; }
-.vui-auth-visual__copy .vui-badge { gap: var(--space-1); }
-.vui-auth-visual__copy h2 { margin: var(--space-5) 0 var(--space-4); font: var(--text-display-lg); letter-spacing: -.045em; }
-.vui-auth-visual__copy h2 em { color: var(--color-cyan); font-style: normal; }
-.vui-auth-visual__copy p { max-width: 590px; margin: 0; color: var(--color-text-secondary); font: var(--text-body-lg); line-height: 1.7; }
-.vui-auth-preview { position: absolute; z-index: 0; right: -72px; bottom: 130px; display: grid; grid-template-columns: 42px 230px; width: 330px; height: 190px; padding: var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-xl); background: color-mix(in srgb, var(--color-surface-2), transparent 12%); box-shadow: var(--shadow-float); opacity: .55; transform: rotate(-5deg); }
-.vui-auth-preview__rail { border-radius: var(--radius-md); background: var(--color-surface-0); }
-.vui-auth-preview > div { display: grid; align-content: start; gap: var(--space-2); padding: var(--space-2); }
-.vui-auth-preview > div span { height: 28px; border-radius: var(--radius-xs); background: var(--color-surface-3); }
-.vui-auth-preview > div span:first-child { background: var(--color-primary-soft); }
-.vui-auth-preview > i { position: absolute; right: 20px; bottom: 20px; width: 90px; height: 7px; border-radius: var(--radius-round); background: var(--gradient-brand); }
-.vui-auth-preview > i:last-child { right: 116px; width: 32px; background: var(--color-cyan); }
-.vui-auth-benefits { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
-.vui-auth-benefits li { display: flex; align-items: center; gap: var(--space-3); min-width: 0; padding: var(--space-3); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-surface-1), transparent 10%); color: var(--color-cyan); }
-.vui-auth-benefits li > span { display: grid; min-width: 0; gap: 2px; }
-.vui-auth-benefits strong { overflow: hidden; color: var(--color-text-primary); font: var(--text-label-md); text-overflow: ellipsis; white-space: nowrap; }
-.vui-auth-benefits small { overflow: hidden; color: var(--color-text-muted); font: var(--text-caption); text-overflow: ellipsis; white-space: nowrap; }
-.vui-auth-surface { display: grid; place-items: center; min-width: 0; padding: clamp(32px, 5vw, 72px); overflow-y: auto; background: radial-gradient(circle at 50% 0, var(--color-primary-soft), transparent 33%), var(--color-surface-1); }
-.vui-auth-card { width: min(440px, 100%); }
-.vui-auth-card__mobile-brand { display: none; }
-.vui-auth-card__heading > span { color: var(--color-cyan); font: var(--text-overline); letter-spacing: .14em; text-transform: uppercase; }
-.vui-auth-card__heading h1 { margin: var(--space-2) 0 var(--space-3); font: var(--text-display-md); letter-spacing: -.035em; }
-.vui-auth-card__heading p { margin: 0 0 var(--space-6); color: var(--color-text-secondary); font: var(--text-body-md); line-height: 1.65; }
-.vui-auth-card > .vui-segmented { display: flex; width: 100%; margin-bottom: var(--space-5); }
-.vui-auth-card > .vui-segmented > button { flex: 1; }
-.vui-auth-form { display: grid; gap: var(--space-4); }
+body.desktopTitlebarOverlay .vui-auth-page {
+  height: 100%;
+  min-height: 642px;
+}
+.vui-auth-visual {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--space-8);
+  min-width: 0;
+  padding: clamp(34px, 5vw, 72px);
+  overflow: hidden;
+  border-right: 1px solid var(--color-border-subtle);
+  background:
+    radial-gradient(
+      circle at 18% 18%,
+      color-mix(in srgb, var(--color-primary), transparent 78%),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 84% 75%,
+      color-mix(in srgb, var(--color-cyan), transparent 86%),
+      transparent 36%
+    ),
+    var(--color-surface-0);
+}
+.vui-auth-visual::after {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(
+      color-mix(in srgb, var(--color-border-subtle), transparent 35%) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--color-border-subtle), transparent 35%) 1px,
+      transparent 1px
+    );
+  background-size: 52px 52px;
+  mask-image: linear-gradient(to bottom, transparent, black 28%, transparent);
+  opacity: 0.18;
+  content: "";
+}
+.vui-auth-brand {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font: var(--text-heading-sm);
+  letter-spacing: 0.13em;
+}
+.vui-auth-brand > span {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--gradient-brand);
+  box-shadow: 0 10px 32px var(--color-primary-soft);
+  color: white;
+}
+.vui-auth-visual__copy {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+  max-width: 720px;
+}
+.vui-auth-visual__copy .vui-badge {
+  gap: var(--space-1);
+}
+.vui-auth-visual__copy h2 {
+  margin: var(--space-5) 0 var(--space-4);
+  font: var(--text-display-lg);
+  letter-spacing: -0.045em;
+}
+.vui-auth-visual__copy h2 em {
+  color: var(--color-cyan);
+  font-style: normal;
+}
+.vui-auth-visual__copy p {
+  max-width: 590px;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font: var(--text-body-lg);
+  line-height: 1.7;
+}
+.vui-auth-preview {
+  position: absolute;
+  z-index: 0;
+  right: -72px;
+  bottom: 130px;
+  display: grid;
+  grid-template-columns: 42px 230px;
+  width: 330px;
+  height: 190px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--color-surface-2), transparent 12%);
+  box-shadow: var(--shadow-float);
+  opacity: 0.55;
+  transform: rotate(-5deg);
+}
+.vui-auth-preview__rail {
+  border-radius: var(--radius-md);
+  background: var(--color-surface-0);
+}
+.vui-auth-preview > div {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-2);
+}
+.vui-auth-preview > div span {
+  height: 28px;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-3);
+}
+.vui-auth-preview > div span:first-child {
+  background: var(--color-primary-soft);
+}
+.vui-auth-preview > i {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: 90px;
+  height: 7px;
+  border-radius: var(--radius-round);
+  background: var(--gradient-brand);
+}
+.vui-auth-preview > i:last-child {
+  right: 116px;
+  width: 32px;
+  background: var(--color-cyan);
+}
+.vui-auth-benefits {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.vui-auth-benefits li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-1), transparent 10%);
+  color: var(--color-cyan);
+}
+.vui-auth-benefits li > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.vui-auth-benefits strong {
+  overflow: hidden;
+  color: var(--color-text-primary);
+  font: var(--text-label-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vui-auth-benefits small {
+  overflow: hidden;
+  color: var(--color-text-muted);
+  font: var(--text-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vui-auth-surface {
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: clamp(32px, 5vw, 72px);
+  overflow-y: auto;
+  background:
+    radial-gradient(
+      circle at 50% 0,
+      var(--color-primary-soft),
+      transparent 33%
+    ),
+    var(--color-surface-1);
+}
+.vui-auth-card {
+  width: min(440px, 100%);
+}
+.vui-auth-card__mobile-brand {
+  display: none;
+}
+.vui-auth-card__heading > span {
+  color: var(--color-cyan);
+  font: var(--text-overline);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.vui-auth-card__heading h1 {
+  margin: var(--space-2) 0 var(--space-3);
+  font: var(--text-display-md);
+  letter-spacing: -0.035em;
+}
+.vui-auth-card__heading p {
+  margin: 0 0 var(--space-6);
+  color: var(--color-text-secondary);
+  font: var(--text-body-md);
+  line-height: 1.65;
+}
+.vui-auth-card > .vui-segmented {
+  display: flex;
+  width: 100%;
+  margin-bottom: var(--space-5);
+}
+.vui-auth-card > .vui-segmented > button {
+  flex: 1;
+}
+.vui-auth-form {
+  display: grid;
+  gap: var(--space-4);
+}
 .vui-auth-form .vui-field,
-.vui-auth-form .vui-input-frame { width: 100%; min-width: 0; }
-.vui-auth-otp { font: var(--text-heading-lg); letter-spacing: .32em; text-align: center; }
-.vui-auth-submit { width: 100%; margin-top: var(--space-1); }
-.vui-auth-error { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--color-danger), transparent 45%); border-radius: var(--radius-sm); background: var(--color-danger-soft); color: var(--color-danger); font: var(--text-body-md); }
-.vui-auth-notice { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-3); border: 1px solid color-mix(in srgb, var(--color-success), transparent 45%); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-success), transparent 88%); color: var(--color-success); font: var(--text-body-md); }
-.vui-auth-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2); margin-top: var(--space-4); }
-.vui-auth-links button { min-height: 30px; padding: 0 var(--space-2); border: 0; background: transparent; color: var(--color-text-secondary); font: var(--text-caption); }
-.vui-auth-links button:hover:not(:disabled) { color: var(--color-cyan); }
-.vui-auth-security { display: flex; align-items: center; justify-content: center; gap: var(--space-2); margin-top: var(--space-7); color: var(--color-text-muted); font: var(--text-caption); text-align: center; }
+.vui-auth-form .vui-input-frame {
+  width: 100%;
+  min-width: 0;
+}
+.vui-auth-otp {
+  font: var(--text-heading-lg);
+  letter-spacing: 0.32em;
+  text-align: center;
+}
+.vui-auth-submit {
+  width: 100%;
+  margin-top: var(--space-1);
+}
+.vui-auth-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-danger), transparent 45%);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font: var(--text-body-md);
+}
+.vui-auth-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--color-success), transparent 45%);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-success), transparent 88%);
+  color: var(--color-success);
+  font: var(--text-body-md);
+}
+.vui-auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.vui-auth-links button {
+  min-height: 30px;
+  padding: 0 var(--space-2);
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: var(--text-caption);
+}
+.vui-auth-links button:hover:not(:disabled) {
+  color: var(--color-cyan);
+}
+.vui-auth-security {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-7);
+  color: var(--color-text-muted);
+  font: var(--text-caption);
+  text-align: center;
+}
 .vui-auth-page--profile .vui-auth-benefits,
-.vui-auth-page--profile .vui-auth-preview { display: none; }
+.vui-auth-page--profile .vui-auth-preview {
+  display: none;
+}
 
 @media (max-width: 1180px) {
-  .vui-auth-page { grid-template-columns: minmax(400px, .85fr) minmax(520px, 1.15fr); }
-  .vui-auth-benefits { grid-template-columns: 1fr; }
-  .vui-auth-benefits li:nth-child(n+2) { display: none; }
+  .vui-auth-page {
+    grid-template-columns: minmax(400px, 0.85fr) minmax(520px, 1.15fr);
+  }
+  .vui-auth-benefits {
+    grid-template-columns: 1fr;
+  }
+  .vui-auth-benefits li:nth-child(n + 2) {
+    display: none;
+  }
+}
+
+/* Gaming authentication shell. */
+.vui-auth-page {
+  grid-template-columns: minmax(580px, 3fr) minmax(480px, 2fr);
+  background: #050917;
+}
+.vui-auth-visual {
+  grid-template-rows: auto 1fr;
+  gap: 0;
+  padding: clamp(30px, 4.2vw, 68px);
+  isolation: isolate;
+  background: #050817;
+}
+.vui-auth-visual::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgb(3 7 20 / 28%) 0%, transparent 58%),
+    linear-gradient(to bottom, rgb(3 7 20 / 4%) 28%, rgb(3 7 20 / 82%) 76%, #030714 100%);
+  content: "";
+}
+.vui-auth-visual::after {
+  z-index: 0;
+  inset: auto 0 0;
+  height: 46%;
+  background: radial-gradient(ellipse at 42% 100%, rgb(91 52 241 / 22%), transparent 64%);
+  mask-image: none;
+  opacity: 1;
+}
+.vui-auth-brand {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+.vui-auth-brand > img {
+  flex: 0 0 auto;
+  filter: drop-shadow(0 8px 18px rgb(102 69 255 / 36%));
+}
+.vui-auth-game-art {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 62% center;
+  opacity: 0.94;
+}
+.vui-auth-visual__copy {
+  align-self: end;
+  max-width: 760px;
+  padding-bottom: clamp(12px, 4vh, 54px);
+}
+.vui-auth-kicker {
+  display: block;
+  color: var(--color-cyan);
+  font: var(--text-overline);
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+.vui-auth-visual__copy h2 {
+  max-width: 720px;
+  margin: var(--space-4) 0 var(--space-4);
+  color: #f7f8ff;
+  font-family: var(--font-display);
+  font-size: clamp(38px, 4.4vw, 76px);
+  font-weight: 850;
+  line-height: 1.03;
+  letter-spacing: -0.055em;
+  text-transform: uppercase;
+  text-shadow: 0 9px 36px rgb(0 0 0 / 52%);
+}
+.vui-auth-visual__copy h2 em {
+  background: linear-gradient(90deg, #28d9ff, #7e83ff 84%);
+  background-clip: text;
+  color: transparent;
+}
+.vui-auth-visual__copy p {
+  color: rgb(218 224 246 / 75%);
+  font-size: clamp(15px, 1.25vw, 20px);
+}
+.vui-auth-surface {
+  padding: clamp(36px, 5vw, 82px);
+  border-left: 1px solid rgb(111 105 173 / 22%);
+  background:
+    radial-gradient(circle at 50% 42%, rgb(83 51 225 / 14%), transparent 38%),
+    linear-gradient(155deg, #070b1a, #080d20 68%, #060916);
+}
+.vui-auth-card {
+  width: min(470px, 100%);
+}
+.vui-auth-card__heading > span {
+  color: var(--color-cyan);
+}
+.vui-auth-card__heading h1 {
+  margin-top: var(--space-3);
+  color: #f8f8ff;
+  font: var(--text-display-md);
+}
+.vui-auth-card__heading p {
+  color: rgb(196 203 228 / 78%);
+}
+.vui-auth-card > .vui-segmented {
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+.vui-auth-card > .vui-segmented > button {
+  min-height: 44px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.vui-auth-card > .vui-segmented > button[aria-pressed="true"] {
+  border-bottom: 2px solid #a562ff;
+  color: #b97cff;
+  box-shadow: 0 8px 20px rgb(110 63 243 / 12%);
+}
+.vui-auth-form__options {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: 36px;
+}
+.vui-auth-form__options .vui-choice {
+  padding: 0;
+}
+.vui-auth-form__options .vui-choice__copy strong {
+  color: var(--color-text-secondary);
+  font: var(--text-body-sm);
+  font-weight: 500;
+}
+.vui-auth-form__options > button {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #b97cff;
+  font: var(--text-body-sm);
+}
+.vui-auth-form__options > button:hover {
+  color: var(--color-cyan);
+}
+.vui-auth-submit {
+  box-shadow: 0 14px 38px rgb(103 60 240 / 30%);
+}
+
+@media (max-width: 1180px) {
+  .vui-auth-page {
+    grid-template-columns: minmax(520px, 1.08fr) minmax(500px, 0.92fr);
+  }
+  .vui-auth-game-art {
+    object-position: 66% center;
+  }
+  .vui-auth-visual__copy h2 {
+    font-size: clamp(36px, 4.5vw, 58px);
+  }
+  .vui-auth-surface {
+    padding-inline: 42px;
+  }
+}
+
+@media (max-height: 740px) {
+  .vui-auth-visual,
+  .vui-auth-surface {
+    padding-block: 28px;
+  }
+  .vui-auth-game-art {
+    object-position: 64% 46%;
+  }
+  .vui-auth-card__heading p {
+    margin-bottom: var(--space-4);
+    line-height: 1.45;
+  }
+  .vui-auth-form {
+    gap: var(--space-3);
+  }
+  .vui-auth-security {
+    margin-top: var(--space-4);
+  }
 }
