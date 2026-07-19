@@ -17,7 +17,7 @@ test('legacy stack remains private and available for rollback', async () => {
 test('new platform pins services and exposes only Grafana plus private ingestion', async () => {
   const compose = await read('infra/observability/platform/docker-compose.yml');
   const images = [...compose.matchAll(/^\s+image:\s+(\S+)$/gmu)].map((match) => match[1]);
-  assert.equal(images.length, 8);
+  assert.equal(images.length, 9);
   assert.ok(images.every((image) => image.includes(':') && !image.endsWith(':latest')), images.join('\n'));
   assert.match(compose, /GRAFANA_BIND_ADDRESS[^\n]+:80:80/u);
   assert.match(compose, /GRAFANA_BIND_ADDRESS[^\n]+:443:443/u);
@@ -84,7 +84,7 @@ test('grafana provisions valid, linked and extensible dashboards', async () => {
   assert.ok(files.length >= 7, `expected at least 7 dashboards, got ${files.length}`);
   const dashboards = await Promise.all(files.map(async (file) => JSON.parse(await read(`infra/observability/platform/grafana/dashboards/${file}`))));
   const titles = new Set(dashboards.map((dashboard) => dashboard.title));
-  for (const title of ['Инфраструктура: обзор', 'Контейнеры: обзор', 'Приложение: обзор', 'API: детали HTTP', 'Prometheus Health', 'Loki Health', 'Logs Overview']) assert.ok(titles.has(title), title);
+  for (const title of ['Инфраструктура: обзор', 'Контейнеры: обзор', 'Приложение: обзор', 'API: детали HTTP', 'Prometheus Health', 'Loki: состояние', 'Логи: обзор']) assert.ok(titles.has(title), title);
   assert.ok(dashboards.every((dashboard) => dashboard.uid && dashboard.panels.length >= 3));
 
   const uids = dashboards.map((dashboard) => dashboard.uid);
@@ -183,6 +183,41 @@ test('cAdvisor labels and restart alerts use bounded container semantics', async
   assert.match(rules, /alert: ContainerRestarting[\s\S]+changes\(container_start_time_seconds\{container!=""\}\[15m\]\) > 3/u);
   assert.doesNotMatch(rules, /increase\(container_start_time_seconds/u);
   for (const record of ['vatrushka:host_cpu_utilization:ratio5m', 'vatrushka:host_memory_utilization:ratio', 'vatrushka:host_filesystem_utilization:ratio', 'vatrushka:host_inode_utilization:ratio']) assert.match(rules, new RegExp(`record: ${record}`, 'u'));
+});
+
+test('Alloy normalizes bounded log levels without labeling correlation fields', async () => {
+  for (const file of ['infra/observability/platform/alloy/platform.alloy', 'infra/observability/agents/alloy/product.alloy', 'infra/observability/agents/alloy/runner.alloy']) {
+    const config = await read(file);
+    assert.match(config, /stage\.json/u);
+    assert.match(config, /stage\.template[\s\S]+source\s*=\s*"level"/u);
+    assert.match(config, /trace[\s\S]+debug[\s\S]+info[\s\S]+warn[\s\S]+error[\s\S]+fatal[\s\S]+unknown/u);
+    assert.match(config, /stage\.labels[\s\S]+level\s*=\s*""/u);
+    assert.doesNotMatch(config, /stage\.labels[\s\S]+(request_id|trace_id|user_id|session_id|error_code|exception_type)\s*=/u);
+  }
+});
+
+test('logs and Loki dashboards use structured levels and TSDB-compatible diagnostics', async () => {
+  const logs = JSON.parse(await read('infra/observability/platform/grafana/dashboards/logs-overview.json'));
+  const loki = JSON.parse(await read('infra/observability/platform/grafana/dashboards/loki-health.json'));
+  for (const dashboard of [logs, loki]) {
+    assert.ok(dashboard.description, `${dashboard.uid}: missing description`);
+    assert.ok(dashboard.panels.every((panel) => panel.description), `${dashboard.uid}: every panel needs a description`);
+    assert.doesNotMatch(JSON.stringify(dashboard), /\[5m\]/u);
+  }
+  const logsText = JSON.stringify(logs);
+  assert.match(logsText, /level=~\\"warn\|error\|fatal/u);
+  assert.match(logsText, /request_id/u);
+  assert.match(logsText, /__error__/u);
+  for (const variable of ['environment', 'service', 'host', 'container', 'level', 'search']) assert.ok(logs.templating.list.some((item) => item.name === variable));
+
+  const lokiText = JSON.stringify(loki);
+  assert.match(lokiText, /loki_canary_missing_entries_total/u);
+  assert.match(lokiText, /loki_ingester_wal_/u);
+  assert.match(lokiText, /loki_compactor_/u);
+  assert.doesNotMatch(lokiText, /loki_boltdb/iu);
+  const rules = await read('infra/observability/platform/prometheus/rules/observability.yml');
+  assert.doesNotMatch(rules, /loki_boltdb/iu);
+  assert.match(rules, /alert: LokiCanaryMissingEntries/u);
 });
 
 test('migration and recovery scripts preserve old metrics and secrets', async () => {

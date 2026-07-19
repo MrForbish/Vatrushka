@@ -106,6 +106,18 @@ services:
     networks: [monitoring, egress]
     logging: *logging
 
+  loki-canary:
+    image: grafana/loki-canary:3.5.5
+    restart: unless-stopped
+    command:
+      - -addr=loki:3100
+      - -labelname=service
+      - -labelvalue=loki-canary
+      - -user=self-monitoring
+    networks: [monitoring]
+    depends_on: [loki]
+    logging: *logging
+
   blackbox-exporter:
     image: quay.io/prometheus/blackbox-exporter:v0.28.0
     restart: unless-stopped

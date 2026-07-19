@@ -89,6 +89,20 @@ curl -fsS "https://${GRAFANA_DOMAIN}/api/health"
 
 При росте cardinality проверьте `labelValueCountByLabelName` в Prometheus и active streams/discarded lines Loki. Сначала остановите источник новых labels, затем уменьшайте retention/очищайте данные только по отдельному плану.
 
+## Logs and Loki
+
+Alloy разбирает JSON `level` и нормализует только закрытый набор `trace/debug/info/warn/error/fatal/unknown`. Pino numeric levels 10–60 преобразуются в те же значения. `request_id`, `error_code`, `exception_type` и message остаются полями строки: ищите их через query-time `| json`, не превращайте в labels. Неструктурированные journald/Docker строки доступны в явно обозначенной fallback-панели.
+
+`Loki: состояние` использует только TSDB/S3-совместимые и общие request metrics; BoltDB Shipper метрики запрещены. Отсутствие конкретной vendor series отображается как `Нет данных`, а не зелёный ноль. `loki-canary` — end-to-end проверка: он пишет тестовые строки, читает их обратно и экспортирует latency/missing entries.
+
+При инциденте:
+
+1. Проверьте `Loki up` и `End-to-end canary`.
+2. Если canary missing > 0, сопоставьте время с discarded reasons, request 5xx, WAL и compactor.
+3. Проверьте Loki container logs, private route и S3 credentials/policy, не выводя secret.
+4. Выполните контролируемый LogQL smoke: JSON error line должна появиться по `level=error` и request ID.
+5. Если пропал один service, проверьте соответствующий Alloy agent и его remote endpoint; не перезапускайте весь контур без необходимости.
+
 ## Инциденты
 
 - Disk >80%: определить TSDB/WAL/cache, проверить retention и noisy source; не удалять active TSDB вручную.
