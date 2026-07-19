@@ -941,11 +941,25 @@ describe('servers, channels, messages, and roles API', () => {
     if (!voice) throw new Error('Missing voice channel');
     const connected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/connect`, headers: { authorization: `Bearer ${owner.accessToken}` } });
     expect(connected.statusCode).toBe(200);
-    const connection = connected.json<{ contextType: string; participantIdentity: string }>();
+    const connection = connected.json<{ contextType: string; participantIdentity: string; voiceSessionId: string }>();
     expect(connection.contextType).toBe('channel');
     const channel = context.store.serverChannels.get(voice.id);
     if (!channel?.livekitRoomName) throw new Error('Missing LiveKit channel room');
     context.media.connect(channel.livekitRoomName, connection.participantIdentity);
+    await context.service.handleWebhookEvent({
+      id: 'voice-owner-joined-source',
+      event: 'participant_joined',
+      participant: {
+        identity: connection.participantIdentity,
+        metadata: JSON.stringify({
+          serverId: server.id,
+          channelId: voice.id,
+          userId: owner.userId,
+          voiceSessionId: connection.voiceSessionId,
+        }),
+      },
+      room: { name: channel.livekitRoomName },
+    });
     const claimed = await context.app.inject({
       method: 'POST',
       url: `${API_PREFIX}/channels/${voice.id}/screen-share/claim`,
@@ -954,6 +968,17 @@ describe('servers, channels, messages, and roles API', () => {
     });
     expect(claimed.statusCode).toBe(200);
     expect(context.store.channelLeases.has(voice.id)).toBe(true);
+    context.media.available = false;
+    const heartbeatDuringMediaOutage = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/channels/${voice.id}/screen-share/heartbeat`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { participantIdentity: connection.participantIdentity },
+    });
+    expect(heartbeatDuringMediaOutage.statusCode).toBe(200);
+    const heartbeatMetrics = await context.app.inject({ method: 'GET', url: '/metrics' });
+    expect(heartbeatMetrics.body).toContain('screen_share_lease_heartbeat_total{result="renewed"} 1');
+    context.media.available = true;
 
     const audioDenied = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/channels/${voice.id}/overwrites/MEMBER/${member.userId}`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { allow: [], deny: ['STREAM_APPLICATION_AUDIO'] } });
     expect(audioDenied.statusCode).toBe(204);
@@ -977,7 +1002,22 @@ describe('servers, channels, messages, and roles API', () => {
       },
       room: { name: channel.livekitRoomName },
     });
+    context.media.available = false;
+    const claimDuringMediaOutage = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/channels/${voice.id}/screen-share/claim`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      payload: { participantIdentity: memberConnection.participantIdentity },
+    });
+    expect(claimDuringMediaOutage.statusCode).toBe(503);
+    expect(claimDuringMediaOutage.json<{ code: string; requestId: string }>()).toEqual(expect.objectContaining({
+      code: 'LIVEKIT_UNAVAILABLE',
+      requestId: expect.any(String),
+    }));
+    const errorMetrics = await context.app.inject({ method: 'GET', url: '/metrics' });
+    expect(errorMetrics.body).toContain('api_errors_total{code="LIVEKIT_UNAVAILABLE",route="/api/v1/channels/:channelId/screen-share/claim",status_class="5xx"} 1');
     const initialVoiceState = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}/voice-state`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    context.media.available = true;
     expect(initialVoiceState.statusCode).toBe(200);
     const initialVoiceSnapshot = initialVoiceState.json<{ version: number; channels: Array<{ channelId: string; members: Array<{ userId: string }> }> }>();
     expect(initialVoiceSnapshot.version).toBeGreaterThanOrEqual(2);

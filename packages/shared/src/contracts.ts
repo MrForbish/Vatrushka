@@ -969,6 +969,24 @@ export interface DesktopSourceInfo {
   audioAvailable: boolean;
 }
 
+export interface DesktopMediaDiagnostic {
+  event:
+    | "voice_reconnecting"
+    | "voice_reconnected"
+    | "voice_audio_restored"
+    | "voice_audio_restore_failed"
+    | "voice_track_subscription_failed"
+    | "screen_share_heartbeat_failed"
+    | "screen_share_heartbeat_recovered"
+    | "screen_share_lease_lost";
+  occurredAt: string;
+  serverId: string;
+  channelId: string;
+  voiceSessionId?: string;
+  reason?: string;
+  attempt?: number;
+}
+
 export interface DesktopBridge {
   getAppVersion(): Promise<string>;
   getUpdateState(): Promise<DesktopUpdateState>;
@@ -987,6 +1005,7 @@ export interface DesktopBridge {
   listDesktopSources(): Promise<DesktopSourceInfo[]>;
   selectDesktopSource(sourceId: string, includeAudio: boolean): Promise<void>;
   clearSelectedDesktopSource(): Promise<void>;
+  logMediaDiagnostic(event: DesktopMediaDiagnostic): Promise<void>;
   copyToClipboard(text: string): Promise<void>;
   openExternal(
     url: "https://t.me/MaksZJ" | "mailto:vatrushka-notify@yandex.ru",

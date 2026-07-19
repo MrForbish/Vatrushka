@@ -27,7 +27,7 @@
 - Storybook покрывает основные компоненты, но не все production edge states и viewport;
 - canonical messaging все еще содержит legacy compatibility reads/tables;
 - крупные orchestration-файлы затрудняют безопасные изменения;
-- `/metrics` реализован, но не собирается production Prometheus;
+- production Prometheus собирает API/runtime/messaging/media metrics; требуется накопить baseline и откалибровать alert thresholds;
 - installer не подписан code-signing сертификатом;
 
 ## План выполнения
@@ -105,10 +105,10 @@
 
 ### P1.1 — Prometheus/Grafana
 
-Статус: legacy single-VPS stack работает, аудит зафиксирован в `docs/observability-audit.md`. Подготовлен отдельный воспроизводимый observability-контур: Prometheus, Grafana, Alertmanager, Loki/S3, Alloy, Blackbox, agents, шесть dashboards, backup/restore/rollback и config validation. Production cutover ожидает отдельный VPS, Grafana DNS, private WireGuard addresses, отдельный Loki bucket и технический webhook.
+Статус: отдельный production observability-контур развернут: Prometheus, Grafana, Alertmanager, Loki/S3, Alloy, Blackbox, private agents, шесть dashboards, backup/restore/rollback и config validation. Loki хранит логи в отдельном S3 bucket; Grafana доступна через выделенный домен. Остаются калибровка alerts по baseline и настройка технического receiver.
 
 1. Уточнить/стабилизировать API metric names и cardinality. Выполнено для HTTP/runtime/messaging.
-2. Развернуть отдельный observability VPS и перенести Prometheus/Grafana без остановки production. Конфигурация и migration plan готовы; инфраструктурный rollout заблокирован отсутствующими реквизитами нового VPS/S3/DNS.
+2. Развернуть отдельный observability VPS и перенести Prometheus/Grafana без остановки production. Выполнено; проверены private ingestion, Loki/S3 и публичный доступ к Grafana.
 3. Настроить private ingestion, 30d/55GB Prometheus retention, 30d Loki retention, versioned dashboards и disk budget. Выполнено в конфигурации; требуется production smoke/load verification.
 4. Собрать Infrastructure, Containers, Application, Prometheus Health, Loki Health и Logs Overview dashboards. Выполнено; детальные LiveKit/S3 collectors остаются следующим срезом.
 5. Включить infrastructure/application/self-monitoring alerts и Alertmanager routing. Rules и routing готовы; фактический receiver и корректировка thresholds — после 72 часов параллельной работы и недельного baseline.

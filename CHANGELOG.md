@@ -4,6 +4,14 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+### Fixed
+
+- screen sharing now tolerates transient heartbeat/network failures, keeps authoritative lease conflicts deterministic and records bounded heartbeat diagnostics;
+- remote audio tracks are reattached after a LiveKit reconnect and desktop media diagnostics include safe session/correlation context;
+- voice-state reads no longer synchronously poll LiveKit, preventing a transient RoomService failure from becoming an API 500;
+- Windows system-audio capture uses a compatible `restrictOwnAudio` constraint and refuses an unsafe stream when Chromium cannot exclude Vatrushka output;
+- production observability no longer sends Loki internal gRPC through the egress proxy, probes TURN with a real TLS handshake and avoids the AppArmor-incompatible systemd collector.
+
 ## [0.7.0] - 2026-07-19
 
 ### Added

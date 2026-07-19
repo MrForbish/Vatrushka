@@ -26,6 +26,8 @@ test('new platform pins services and exposes only Grafana plus private ingestion
   assert.doesNotMatch(compose, /:9093:9093|:9115:9115|:3000:3000|:12345:12345/u);
   assert.match(compose, /GF_AUTH_ANONYMOUS_ENABLED: "false"/u);
   assert.match(compose, /loki_aws_credentials/u);
+  assert.match(compose, /NO_PROXY: [^\n]*0\.0\.0\.0[^\n]*loki/u);
+  assert.doesNotMatch(compose, /--collector\.systemd/u);
   assert.doesNotMatch(compose, /aws_secret_access_key\s*[:=]\s*[^$]/iu);
 });
 
@@ -38,10 +40,11 @@ test('prometheus has remote write, alertmanager, external labels and separated r
   assert.match(prometheus, /external_labels:[\s\S]+monitoring_cluster: primary/u);
   assert.match(prometheus, /targets: \[alertmanager:9093\]/u);
   assert.match(prometheus, /\/etc\/prometheus\/rules\/\*\.yml/u);
+  assert.match(prometheus, /job_name: blackbox-turn[\s\S]+module: \[tcp_tls\]/u);
 
   const rules = await Promise.all(['infrastructure', 'applications', 'observability'].map((name) => read(`infra/observability/platform/prometheus/rules/${name}.yml`)));
   const merged = rules.join('\n');
-  for (const alert of ['HostCpuHigh', 'HostMemoryCritical', 'HostDiskCritical', 'VatrushkaPublicReadinessDown', 'VatrushkaOutboxFailed', 'PrometheusTargetDown', 'LokiDiscardedLogs', 'AlertmanagerNotificationsFailing']) {
+  for (const alert of ['HostCpuHigh', 'HostMemoryCritical', 'HostDiskCritical', 'VatrushkaPublicReadinessDown', 'VatrushkaApiUnhandledErrors', 'VatrushkaScreenShareHeartbeatFailures', 'VatrushkaOutboxFailed', 'PrometheusTargetDown', 'LokiDiscardedLogs', 'AlertmanagerNotificationsFailing']) {
     assert.match(merged, new RegExp(`alert: ${alert}`, 'u'));
   }
 });
@@ -51,6 +54,7 @@ test('loki uses S3 TSDB schema and bounded 30-day ingestion', async () => {
   assert.match(loki, /object_store: s3/u);
   assert.match(loki, /schema: v13/u);
   assert.match(loki, /retention_period: 744h/u);
+  assert.match(loki, /grpc_listen_address: 0\.0\.0\.0/u);
   assert.match(loki, /ingestion_rate_mb: 4/u);
   assert.match(loki, /max_global_streams_per_user: 5000/u);
   assert.match(loki, /reporting_enabled: false/u);

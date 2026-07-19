@@ -22,6 +22,20 @@ groups:
         annotations:
           summary: API 5xx rate is above baseline
 
+      - alert: VatrushkaApiUnhandledErrors
+        expr: sum by (code, route) (increase(api_errors_total{status_class="5xx"}[5m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: API returned an internal or dependency error
+          description: "{{ $labels.code }} on {{ $labels.route }} occurred {{ $value }} time(s) in 5 minutes"
+
+      - alert: VatrushkaScreenShareHeartbeatFailures
+        expr: sum by (result) (increase(screen_share_lease_heartbeat_total{result=~"ownership_lost|dependency_error"}[5m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: Screen-share lease heartbeat is failing
+          description: "Heartbeat result {{ $labels.result }} occurred {{ $value }} time(s) in 5 minutes"
+
       - alert: VatrushkaApiLatencyHigh
         expr: histogram_quantile(0.95, sum by (le) (rate(api_http_request_duration_seconds_bucket[5m]))) > 0.5
         for: 10m

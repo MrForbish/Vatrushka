@@ -9,6 +9,7 @@ import {
   type Participant,
   type RemoteParticipant,
   type RemoteTrack,
+  type RemoteTrackPublication,
   type RoomOptions,
 } from "livekit-client";
 
@@ -18,8 +19,9 @@ import type {
   PlatformRole,
   RoomConnection,
 } from "@vatrushka/shared";
+import { SCREEN_SHARE_HEARTBEAT_SECONDS } from "@vatrushka/shared";
 
-import type { ApiClient } from "./api.js";
+import { ClientError, type ApiClient } from "./api.js";
 
 export interface ParticipantView {
   identity: string;
@@ -75,13 +77,20 @@ const defaultScreenShareEncoding = {
   priority: "high" as const,
 };
 const publishingReadyTimeoutMs = 20_000;
+const screenShareHeartbeatIntervalMs = SCREEN_SHARE_HEARTBEAT_SECONDS * 1_000;
+const screenShareHeartbeatRetryMs = 2_500;
+const screenShareHeartbeatGraceMs = 25_000;
 
 class UserFacingMediaError extends Error {}
 
 export class MediaSession {
   private room: Room | null = null;
   private connection: RoomConnection | null = null;
-  private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private heartbeat: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatLastSuccessAt = 0;
+  private heartbeatFailureCount = 0;
+  private heartbeatGeneration = 0;
+  private heartbeatInFlightGeneration: number | null = null;
   private snapshot: MediaSnapshot = initialSnapshot;
   private screenShareAudioVolume = 1;
   private screenShareAudioMuted = false;
@@ -90,6 +99,7 @@ export class MediaSession {
   private screenShareTransition: Promise<void> = Promise.resolve();
   private readonly participantVolumes = new Map<string, number>();
   private readonly locallyMutedParticipants = new Set<string>();
+  private readonly audioElements = new Map<string, HTMLMediaElement>();
   private readonly listeners = new Set<() => void>();
   private readonly terminationListeners = new Set<(reason: unknown) => void>();
 
@@ -335,7 +345,10 @@ export class MediaSession {
         {
           audio: includeAudio
             ? {
-                restrictOwnAudio: { exact: true },
+                // getDisplayMedia treats this boolean as an ideal constraint.
+                // Using `{ exact: true }` can reject an otherwise valid Windows
+                // loopback stream with OverconstrainedError.
+                restrictOwnAudio: true,
                 echoCancellation: false,
                 noiseSuppression: false,
                 autoGainControl: false,
@@ -418,6 +431,7 @@ export class MediaSession {
     this.isDeafened = false;
     this.participantVolumes.clear();
     this.locallyMutedParticipants.clear();
+    this.removeRemoteAudioElements();
     this.snapshot.screenTrack?.detach().forEach((element) => element.remove());
     this.snapshot = initialSnapshot;
     this.emit();
@@ -427,11 +441,26 @@ export class MediaSession {
     const refresh = (): void => this.refreshSnapshot();
     room
       .on(RoomEvent.ConnectionStateChanged, refresh)
+      .on(RoomEvent.Reconnecting, () => {
+        this.reportDiagnostic("voice_reconnecting");
+        refresh();
+      })
+      .on(RoomEvent.Reconnected, () => {
+        this.reportDiagnostic("voice_reconnected");
+        void this.restoreIncomingAudio("reconnected");
+        refresh();
+      })
       .on(RoomEvent.Moved, refresh)
       .on(RoomEvent.ParticipantConnected, refresh)
       .on(RoomEvent.ParticipantDisconnected, (participant) => {
         this.participantVolumes.delete(participant.identity);
         this.locallyMutedParticipants.delete(participant.identity);
+        for (const [trackSid, element] of this.audioElements) {
+          if (element.dataset.vatrushkaParticipant !== participant.identity)
+            continue;
+          element.remove();
+          this.audioElements.delete(trackSid);
+        }
         refresh();
       })
       .on(RoomEvent.ActiveSpeakersChanged, refresh)
@@ -454,14 +483,7 @@ export class MediaSession {
       })
       .on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
         if (track.kind === Track.Kind.Audio) {
-          const element = track.attach();
-          element.dataset.vatrushkaAudio = publication.trackSid;
-          element.dataset.vatrushkaAudioSource = publication.source;
-          document.body.appendChild(element);
-          if (publication.source === Track.Source.ScreenShareAudio)
-            this.applyScreenShareAudioPreferences();
-          if (publication.source === Track.Source.Microphone)
-            this.applyParticipantAudioPreferences(participant);
+          this.attachRemoteAudioTrack(track, publication, participant);
         }
         if (
           publication.source === Track.Source.ScreenShare &&
@@ -476,8 +498,14 @@ export class MediaSession {
         }
         refresh();
       })
-      .on(RoomEvent.TrackUnsubscribed, (track) => {
+      .on(RoomEvent.TrackSubscriptionFailed, (trackSid) => {
+        this.reportDiagnostic("voice_track_subscription_failed", {
+          reason: trackSid ? "track_subscription_failed" : "unknown_track",
+        });
+      })
+      .on(RoomEvent.TrackUnsubscribed, (track, publication) => {
         track.detach().forEach((element) => element.remove());
+        this.audioElements.delete(publication.trackSid);
         refresh();
       })
       .on(RoomEvent.AudioPlaybackStatusChanged, refresh)
@@ -564,21 +592,156 @@ export class MediaSession {
 
   private startHeartbeat(): void {
     this.stopHeartbeat();
-    this.heartbeat = setInterval(() => {
-      const connection = this.connection;
-      if (!connection) return;
-      void this.api.heartbeatScreenShare(connection).catch(() => {
+    this.heartbeatLastSuccessAt = Date.now();
+    this.heartbeatFailureCount = 0;
+    this.scheduleHeartbeat(
+      screenShareHeartbeatIntervalMs,
+      this.heartbeatGeneration,
+    );
+  }
+
+  private scheduleHeartbeat(delayMs: number, generation: number): void {
+    if (this.heartbeat) clearTimeout(this.heartbeat);
+    this.heartbeat = setTimeout(
+      () => void this.runHeartbeat(generation),
+      delayMs,
+    );
+  }
+
+  private async runHeartbeat(
+    generation = this.heartbeatGeneration,
+  ): Promise<void> {
+    const connection = this.connection;
+    const room = this.room;
+    if (
+      generation !== this.heartbeatGeneration ||
+      !connection ||
+      !room?.localParticipant.isScreenShareEnabled ||
+      this.heartbeatInFlightGeneration === generation
+    )
+      return;
+    this.heartbeatInFlightGeneration = generation;
+    try {
+      await this.api.heartbeatScreenShare(connection);
+      if (generation !== this.heartbeatGeneration) return;
+      if (this.heartbeatFailureCount > 0)
+        this.reportDiagnostic("screen_share_heartbeat_recovered", {
+          attempt: this.heartbeatFailureCount + 1,
+        });
+      this.heartbeatLastSuccessAt = Date.now();
+      this.heartbeatFailureCount = 0;
+      this.scheduleHeartbeat(screenShareHeartbeatIntervalMs, generation);
+    } catch (error) {
+      if (generation !== this.heartbeatGeneration) return;
+      this.heartbeatFailureCount += 1;
+      const confirmedLoss = isConfirmedScreenShareLeaseLoss(error);
+      const graceExpired =
+        Date.now() - this.heartbeatLastSuccessAt >= screenShareHeartbeatGraceMs;
+      this.reportDiagnostic(
+        confirmedLoss
+          ? "screen_share_lease_lost"
+          : "screen_share_heartbeat_failed",
+        {
+          attempt: this.heartbeatFailureCount,
+          reason: mediaFailureReason(error),
+        },
+      );
+      if (confirmedLoss || graceExpired) {
         this.patch({
-          error: "Право на демонстрацию потеряно — показ экрана остановлен",
+          error: confirmedLoss
+            ? "Право на демонстрацию занято или отозвано — запустите показ повторно"
+            : "Сервер не подтвердил демонстрацию после восстановления сети — запустите показ повторно",
         });
         void this.stopScreenShare(false);
-      });
-    }, 10_000);
+      } else {
+        this.scheduleHeartbeat(screenShareHeartbeatRetryMs, generation);
+      }
+    } finally {
+      if (this.heartbeatInFlightGeneration === generation)
+        this.heartbeatInFlightGeneration = null;
+    }
   }
 
   private stopHeartbeat(): void {
-    if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeatGeneration += 1;
+    if (this.heartbeat) clearTimeout(this.heartbeat);
     this.heartbeat = null;
+    this.heartbeatInFlightGeneration = null;
+    this.heartbeatFailureCount = 0;
+  }
+
+  private attachRemoteAudioTrack(
+    track: RemoteTrack,
+    publication: RemoteTrackPublication,
+    participant: RemoteParticipant,
+    forceReplace = false,
+  ): void {
+    const existing = this.audioElements.get(publication.trackSid);
+    if (existing && !forceReplace && existing.isConnected) return;
+    if (forceReplace) track.detach().forEach((element) => element.remove());
+    existing?.remove();
+    const element = track.attach();
+    element.dataset.vatrushkaAudio = publication.trackSid;
+    element.dataset.vatrushkaAudioSource = publication.source;
+    element.dataset.vatrushkaParticipant = participant.identity;
+    document.body.appendChild(element);
+    this.audioElements.set(publication.trackSid, element);
+    if (publication.source === Track.Source.ScreenShareAudio)
+      this.applyScreenShareAudioPreferences();
+    if (publication.source === Track.Source.Microphone)
+      this.applyParticipantAudioPreferences(participant);
+  }
+
+  private async restoreIncomingAudio(reason: string): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    try {
+      for (const participant of room.remoteParticipants.values()) {
+        for (const publication of participant.trackPublications.values()) {
+          const track = publication.track;
+          if (!track || track.kind !== Track.Kind.Audio) continue;
+          this.attachRemoteAudioTrack(
+            track,
+            publication,
+            participant,
+            true,
+          );
+        }
+      }
+      await room.startAudio();
+      this.reportDiagnostic("voice_audio_restored", { reason });
+    } catch (error) {
+      this.reportDiagnostic("voice_audio_restore_failed", {
+        reason: mediaFailureReason(error),
+      });
+    } finally {
+      this.refreshSnapshot();
+    }
+  }
+
+  private removeRemoteAudioElements(): void {
+    for (const element of this.audioElements.values()) element.remove();
+    this.audioElements.clear();
+  }
+
+  private reportDiagnostic(
+    event: Parameters<typeof window.desktop.logMediaDiagnostic>[0]["event"],
+    details: { reason?: string; attempt?: number } = {},
+  ): void {
+    const connection = this.connection;
+    if (!connection) return;
+    void window.desktop
+      .logMediaDiagnostic({
+        event,
+        occurredAt: new Date().toISOString(),
+        serverId: connection.serverId,
+        channelId: connection.channelId,
+        ...(connection.voiceSessionId
+          ? { voiceSessionId: connection.voiceSessionId }
+          : {}),
+        ...details,
+      })
+      .catch(() => undefined);
   }
 
   private applyScreenShareAudioPreferences(): void {
@@ -650,6 +813,26 @@ function deviceErrorMessage(error: unknown): string {
   if (error instanceof DOMException && error.name === "NotReadableError")
     return "Микрофон используется другим приложением";
   return "Не удалось включить микрофон";
+}
+
+function isConfirmedScreenShareLeaseLoss(error: unknown): boolean {
+  return (
+    error instanceof ClientError &&
+    (error.status === 401 ||
+      error.status === 403 ||
+      error.status === 404 ||
+      error.status === 409 ||
+      error.code === "SCREEN_SHARE_BUSY" ||
+      error.code === "PARTICIPANT_NOT_FOUND")
+  );
+}
+
+function mediaFailureReason(error: unknown): string {
+  if (error instanceof ClientError)
+    return `${error.code.toLowerCase()}:${error.status}`.slice(0, 100);
+  if (error instanceof DOMException) return error.name.slice(0, 100);
+  if (error instanceof Error) return error.name.slice(0, 100);
+  return "unknown";
 }
 
 function screenShareErrorMessage(error: unknown): string {

@@ -4081,7 +4081,6 @@ export class VatrushkaService {
       const permissions = await this.channelPermissionsFor(server, channel, actor);
       if (permissions.has("VIEW_CHANNEL")) visibleVoiceChannels.add(channel.id);
     }
-    await this.reconcileVoicePresence(server.id);
     const snapshot = await this.voicePresenceStore.snapshot(server.id);
     return {
       serverId: server.id,
@@ -4606,25 +4605,44 @@ export class VatrushkaService {
     channelId: string,
     participantIdentity: string,
   ): Promise<{ expiresAt: string }> {
-    await this.validateChannelMediaParticipant(
-      authorization,
-      channelId,
-      participantIdentity,
-      "STREAM_SCREEN",
-    );
-    const lease = await this.store.heartbeatChannelLease(
-      channelId,
-      participantIdentity,
-      this.now(),
-      this.config.SCREEN_SHARE_LEASE_SECONDS,
-    );
-    if (!lease)
-      throw new AppError(
-        "SCREEN_SHARE_BUSY",
-        409,
-        "Право на демонстрацию экрана утрачено",
+    try {
+      // The claim verifies LiveKit presence. Heartbeats only renew that exact
+      // owner; participant_left/track_unpublished webhooks release the lease.
+      // Avoid coupling every renewal to a transient RoomService HTTP call.
+      await this.validateChannelMediaParticipant(
+        authorization,
+        channelId,
+        participantIdentity,
+        "STREAM_SCREEN",
+        false,
       );
-    return { expiresAt: lease.expiresAt.toISOString() };
+      const lease = await this.store.heartbeatChannelLease(
+        channelId,
+        participantIdentity,
+        this.now(),
+        this.config.SCREEN_SHARE_LEASE_SECONDS,
+      );
+      if (!lease)
+        throw new AppError(
+          "SCREEN_SHARE_BUSY",
+          409,
+          "Право на демонстрацию экрана утрачено",
+        );
+      technicalMetrics.increment("screen_share_lease_heartbeat_total", 1, {
+        result: "renewed",
+      });
+      return { expiresAt: lease.expiresAt.toISOString() };
+    } catch (error) {
+      technicalMetrics.increment("screen_share_lease_heartbeat_total", 1, {
+        result:
+          error instanceof AppError && error.statusCode === 409
+            ? "ownership_lost"
+            : error instanceof AppError && error.statusCode < 500
+              ? "rejected"
+              : "dependency_error",
+      });
+      throw error;
+    }
   }
 
   async releaseChannelScreenShare(
@@ -7000,6 +7018,7 @@ export class VatrushkaService {
     channelId: string,
     participantIdentity: string,
     permission: ServerPermission,
+    verifyLiveKitPresence = true,
   ): Promise<{
     channel: ServerChannelRecord;
     displayName: string;
@@ -7016,6 +7035,8 @@ export class VatrushkaService {
     );
     if (!participantIdentity.startsWith(`user_${user.id}_`))
       throw new AppError("UNAUTHORIZED", 401);
+    if (!verifyLiveKitPresence)
+      return { channel, displayName: user.displayName, user };
     try {
       if (
         !channel.livekitRoomName ||
@@ -7027,7 +7048,7 @@ export class VatrushkaService {
         throw new AppError("PARTICIPANT_NOT_FOUND", 404);
     } catch (error) {
       if (error instanceof AppError) throw error;
-      throw new AppError("LIVEKIT_UNAVAILABLE", 503);
+      throw new AppError("LIVEKIT_UNAVAILABLE", 503, undefined, null, error);
     }
     return { channel, displayName: user.displayName, user };
   }
