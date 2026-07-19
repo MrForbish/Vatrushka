@@ -19,8 +19,6 @@ const presenceStore = await createPresenceStore(config);
 const canonicalMessagingStore = createCanonicalMessagingStore(config.DATABASE_URL);
 const serverSettingsStore = createServerSettingsStore(config.DATABASE_URL);
 const identitySettingsStore = createIdentitySettingsStore(config.DATABASE_URL);
-const accountLifecycleWorker = new AccountLifecycleWorker(identitySettingsStore, (error) => console.error('Account lifecycle worker failed', error));
-accountLifecycleWorker.start();
 const realtimeBus = await createRealtimeBus(config);
 if (config.PLATFORM_OWNER_EMAIL) {
   await database.store.setPlatformRoleByEmail(config.PLATFORM_OWNER_EMAIL, 'owner', new Date());
@@ -38,6 +36,8 @@ const service = new VatrushkaService({
   identitySettingsStore,
 });
 const app = await buildApp({ config, service, ...(realtimeBus ? { realtimeBus } : {}) });
+const accountLifecycleWorker = new AccountLifecycleWorker(identitySettingsStore, (error) => app.log.error({ err: error }, 'Account lifecycle worker failed'));
+accountLifecycleWorker.start();
 const outboxWorker = realtimeBus ? new OutboxWorker(canonicalMessagingStore, realtimeBus, 500, (details) => app.log.info(details, 'Canonical messaging outbox event')) : null;
 outboxWorker?.start();
 const mediaCleanupWorker = createMediaCleanupWorker(config, canonicalMessagingStore, objectStorage, (details) => app.log.info(details, 'Media cleanup job'));

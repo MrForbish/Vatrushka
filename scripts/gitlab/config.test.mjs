@@ -43,6 +43,20 @@ test('Windows packaging uses verified local Electron and builder archives', asyn
   }
 });
 
+test('observability validation runs only for observability changes with pinned tools', async () => {
+  const pipeline = await read('.gitlab-ci.yml');
+  for (const job of ['observability-compose', 'observability-prometheus', 'observability-alertmanager', 'observability-loki', 'observability-alloy', 'observability-caddy']) {
+    assert.match(pipeline, new RegExp(`^${job}:`, 'mu'), job);
+  }
+  assert.match(pipeline, /changes: \[infra\/observability\/\*\*\/\*, scripts\/observability\/\*\*\/\*\]/u);
+  assert.match(pipeline, /docker compose[\s\S]+config -q/u);
+  assert.match(pipeline, /promtool check config/u);
+  assert.match(pipeline, /amtool check-config/u);
+  assert.match(pipeline, /loki -verify-config=true/u);
+  assert.match(pipeline, /alloy validate/u);
+  assert.match(pipeline, /caddy validate/u);
+});
+
 test('production publication is tag-only and uses protected file variables', async () => {
   const pipeline = await read('.gitlab-ci.yml');
   const publish = pipeline.slice(pipeline.indexOf('publish-production:'));

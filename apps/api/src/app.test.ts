@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { API_PREFIX, type RealtimeEvent } from '@vatrushka/shared';
 
-import { buildApp } from './app.js';
+import { buildApp, logRedactPaths } from './app.js';
 import { loadConfig } from './config.js';
 import { MAX_ATTACHMENT_BYTES, VatrushkaService } from './service.js';
 import type { RedisRealtimeBus } from './services/realtime.js';
@@ -24,6 +24,25 @@ interface TestContext {
 }
 
 let context: TestContext;
+
+describe('structured logging policy', () => {
+  it('redacts authentication, cookie, storage and infrastructure secrets', () => {
+    for (const path of [
+      'req.headers.authorization',
+      'req.headers.cookie',
+      'req.body.password',
+      'req.body.recoveryCode',
+      'accessToken',
+      'livekitToken',
+      'S3_SECRET_ACCESS_KEY',
+      'ACCESS_TOKEN_SECRET',
+      'CREDENTIAL_ENCRYPTION_KEY',
+      'OTP_PEPPER',
+    ]) {
+      expect(logRedactPaths).toContain(path);
+    }
+  });
+});
 
 function inviteTokenFromUrl(inviteUrl: string): string {
   const token = new URL(inviteUrl).pathname.split('/').filter(Boolean).at(-1);

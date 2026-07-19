@@ -1,0 +1,98 @@
+name: vatrushka-observability-agent
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.11.1
+    restart: unless-stopped
+    network_mode: host
+    pid: host
+    command:
+      - --path.rootfs=/host
+      - --web.listen-address=127.0.0.1:9100
+      - --collector.systemd
+    volumes:
+      - /:/host:ro,rslave
+      - /run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
+    logging: *logging
+
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.57.0
+    profiles: [docker]
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    command:
+      - --listen_ip=127.0.0.1
+      - --port=8080
+      - --docker_only=true
+      - --housekeeping_interval=30s
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    logging: *logging
+
+  postgres-exporter:
+    image: quay.io/prometheuscommunity/postgres-exporter:v0.19.1
+    profiles: [product]
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      DATA_SOURCE_URI: 127.0.0.1:5433/${POSTGRES_DB:-vatrushka}?sslmode=disable
+      DATA_SOURCE_USER: ${POSTGRES_USER:-vatrushka}
+      DATA_SOURCE_PASS: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    command:
+      - --web.listen-address=127.0.0.1:9187
+      - --collector.postmaster
+      - --collector.process_idle
+    logging: *logging
+
+  redis-exporter:
+    image: quay.io/oliver006/redis_exporter:v1.84.0
+    profiles: [product]
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      REDIS_ADDR: redis://127.0.0.1:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command:
+      - --web.listen-address=127.0.0.1:9121
+    logging: *logging
+
+  alloy:
+    image: grafana/alloy:v1.10.2
+    restart: unless-stopped
+    network_mode: host
+    command:
+      - run
+      - --server.http.listen-addr=127.0.0.1:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/${ALLOY_CONFIG_FILE:-product.alloy}
+    environment:
+      OBSERVABILITY_HOST: ${OBSERVABILITY_HOST:?OBSERVABILITY_HOST is required}
+      OBSERVABILITY_ROLE: ${OBSERVABILITY_ROLE:?OBSERVABILITY_ROLE is required}
+      OBSERVABILITY_ENVIRONMENT: ${OBSERVABILITY_ENVIRONMENT:-production}
+      OBSERVABILITY_REGION: ${OBSERVABILITY_REGION:-ru}
+      PROMETHEUS_REMOTE_WRITE_URL: ${PROMETHEUS_REMOTE_WRITE_URL:?PROMETHEUS_REMOTE_WRITE_URL is required}
+      LOKI_WRITE_URL: ${LOKI_WRITE_URL:?LOKI_WRITE_URL is required}
+    volumes:
+      - ./alloy:/etc/alloy:ro
+      - alloy_data:/var/lib/alloy/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/log/journal:/var/log/journal:ro
+      - /run/log/journal:/run/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+    logging: *logging
+
+volumes:
+  alloy_data:

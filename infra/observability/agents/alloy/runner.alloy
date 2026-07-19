@@ -1,0 +1,89 @@
+logging {
+  level  = "info"
+  format = "json"
+}
+
+prometheus.remote_write "central" {
+  external_labels = {
+    environment = sys.env("OBSERVABILITY_ENVIRONMENT"),
+    host        = sys.env("OBSERVABILITY_HOST"),
+    region      = sys.env("OBSERVABILITY_REGION"),
+    role        = "gitlab-runner",
+  }
+
+  endpoint {
+    url = sys.env("PROMETHEUS_REMOTE_WRITE_URL")
+  }
+}
+
+prometheus.scrape "node" {
+  job_name        = "node"
+  scrape_interval = "30s"
+  targets         = [{ "__address__" = "127.0.0.1:9100" }]
+  forward_to      = [prometheus.remote_write.central.receiver]
+}
+
+prometheus.scrape "alloy" {
+  job_name        = "alloy-agent"
+  scrape_interval = "30s"
+  targets         = [{ "__address__" = "127.0.0.1:12345" }]
+  forward_to      = [prometheus.remote_write.central.receiver]
+}
+
+prometheus.scrape "cadvisor" {
+  job_name        = "cadvisor"
+  scrape_interval = "30s"
+  targets         = [{ "__address__" = "127.0.0.1:8080" }]
+  forward_to      = [prometheus.remote_write.central.receiver]
+}
+
+loki.process "sanitize" {
+  stage.replace {
+    expression = "(?i)(authorization|cookie|password|access[_-]?token|refresh[_-]?token|secret)([=:]\\s*)([^\\s,;]+)"
+    replace    = "$1$2[REDACTED]"
+  }
+
+  stage.static_labels {
+    values = {
+      environment = sys.env("OBSERVABILITY_ENVIRONMENT"),
+      host        = sys.env("OBSERVABILITY_HOST"),
+      region      = sys.env("OBSERVABILITY_REGION"),
+      source      = "journald",
+    }
+  }
+
+  forward_to = [loki.write.central.receiver]
+}
+
+loki.source.journal "runner" {
+  path    = "/var/log/journal"
+  matches = "_SYSTEMD_UNIT=gitlab-runner.service"
+  labels = {
+    service = "gitlab-runner",
+  }
+  forward_to = [loki.process.sanitize.receiver]
+}
+
+loki.source.journal "docker" {
+  path    = "/var/log/journal"
+  matches = "_SYSTEMD_UNIT=docker.service"
+  labels = {
+    service = "docker",
+  }
+  forward_to = [loki.process.sanitize.receiver]
+}
+
+loki.source.journal "ssh" {
+  path    = "/var/log/journal"
+  matches = "_SYSTEMD_UNIT=ssh.service"
+  labels = {
+    service = "ssh",
+  }
+  forward_to = [loki.process.sanitize.receiver]
+}
+
+loki.write "central" {
+  endpoint {
+    url = sys.env("LOKI_WRITE_URL")
+  }
+}

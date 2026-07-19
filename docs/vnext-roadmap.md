@@ -103,13 +103,14 @@
 
 ### P1.1 — Prometheus/Grafana
 
-Статус: базовый приватный stack, exporters, low-cardinality API/runtime metrics, dashboard и alert rules реализованы в `feat/OPS-1-observability`. После production deployment требуется недельный baseline, настройка внешнего получателя alerts и отдельное расширение LiveKit/S3 application-level collectors.
+Статус: legacy single-VPS stack работает, аудит зафиксирован в `docs/observability-audit.md`. Подготовлен отдельный воспроизводимый observability-контур: Prometheus, Grafana, Alertmanager, Loki/S3, Alloy, Blackbox, agents, шесть dashboards, backup/restore/rollback и config validation. Production cutover ожидает отдельный VPS, Grafana DNS, private WireGuard addresses, отдельный Loki bucket и технический webhook.
 
 1. Уточнить/стабилизировать API metric names и cardinality. Выполнено для HTTP/runtime/messaging.
-2. Развернуть Prometheus, Grafana, node/cAdvisor/PostgreSQL/Redis exporters и blackbox probes. Конфигурация готова, production rollout выполняется после PR/release.
-3. Ограничить доступ SSH tunnel; настроить retention, versioned dashboards и disk budget. Выполнено в конфигурации.
-4. Собрать dashboards API/WebSocket, messaging/outbox, Redis, PostgreSQL и host. Выполнен overview; детальные LiveKit/S3 collectors остаются следующим срезом.
-5. Включить базовые alert rules. Выполнено; внешний notification receiver и корректировка thresholds — после недельного baseline.
+2. Развернуть отдельный observability VPS и перенести Prometheus/Grafana без остановки production. Конфигурация и migration plan готовы; инфраструктурный rollout заблокирован отсутствующими реквизитами нового VPS/S3/DNS.
+3. Настроить private ingestion, 30d/55GB Prometheus retention, 30d Loki retention, versioned dashboards и disk budget. Выполнено в конфигурации; требуется production smoke/load verification.
+4. Собрать Infrastructure, Containers, Application, Prometheus Health, Loki Health и Logs Overview dashboards. Выполнено; детальные LiveKit/S3 collectors остаются следующим срезом.
+5. Включить infrastructure/application/self-monitoring alerts и Alertmanager routing. Rules и routing готовы; фактический receiver и корректировка thresholds — после 72 часов параллельной работы и недельного baseline.
+6. После 72 часов стабильности остановить legacy Grafana/Prometheus без удаления volumes, затем отдельным подтверждённым этапом удалить старые данные.
 
 ### P1.2 — сообщества и messaging
 

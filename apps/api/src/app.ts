@@ -259,6 +259,28 @@ export interface BuildAppOptions {
   realtimeBus?: RedisRealtimeBus | undefined;
 }
 
+export const logRedactPaths = [
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers["set-cookie"]',
+  'res.headers["set-cookie"]',
+  'req.body.code',
+  'req.body.otp',
+  'req.body.recoveryCode',
+  'req.body.password',
+  'req.body.refreshToken',
+  'refreshToken',
+  'accessToken',
+  'token',
+  'livekitToken',
+  'SMTP_PASSWORD',
+  'LIVEKIT_API_SECRET',
+  'S3_SECRET_ACCESS_KEY',
+  'ACCESS_TOKEN_SECRET',
+  'CREDENTIAL_ENCRYPTION_KEY',
+  'OTP_PEPPER',
+] as const;
+
 function routeErrors(): Record<number, typeof errorResponseSchema> {
   return { 400: errorResponseSchema, 401: errorResponseSchema, 403: errorResponseSchema, 404: errorResponseSchema, 409: errorResponseSchema, 410: errorResponseSchema, 413: errorResponseSchema, 429: errorResponseSchema, 500: errorResponseSchema, 503: errorResponseSchema };
 }
@@ -273,17 +295,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
         : {
             level: config.LOG_LEVEL,
             redact: {
-              paths: [
-                'req.headers.authorization',
-                'req.body.code',
-                'req.body.password',
-                'req.body.refreshToken',
-                'refreshToken',
-                'accessToken',
-                'livekitToken',
-                'SMTP_PASSWORD',
-                'LIVEKIT_API_SECRET',
-              ],
+              paths: [...logRedactPaths],
               censor: '[REDACTED]',
             },
           },
