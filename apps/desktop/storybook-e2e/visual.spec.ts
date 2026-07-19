@@ -94,7 +94,9 @@ test.describe('Vatrushka design system visual baseline', () => {
   test('personal Home dashboard', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await openStory(page, 'home-homepage--returning-user');
-    await expect(page.getByRole('heading', { name: 'Продолжить' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Быстрый возврат' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Активные пространства' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Друзья в игре' })).toBeVisible();
     await expect(page).toHaveScreenshot('home-dashboard.png', {
       animations: 'disabled',
       fullPage: true,
@@ -109,6 +111,9 @@ test.describe('Vatrushka design system visual baseline', () => {
     await openStory(page, 'home-homepage--profile-drawer-mode');
     await expect(page.getByRole('button', { name: 'Открыть профиль' })).toHaveCount(0);
     await expect(page.getByRole('dialog', { name: 'Профиль' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Активные пространства' })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1100);
+    await expect(page).toHaveScreenshot('home-dashboard-compact.png', { animations: 'disabled', fullPage: true });
   });
 
   test('password login', async ({ page }) => {

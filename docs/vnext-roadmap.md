@@ -1,6 +1,6 @@
 # Vatrushka: roadmap
 
-Обновлено для версии 0.6.5. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
+Обновлено для версии 0.6.10. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
 
 ## Состояние продукта
 
@@ -19,6 +19,7 @@
 - NSIS auto-update с self-hosted feed;
 - unit, integration PostgreSQL/Redis, Storybook interaction, Electron и visual regression CI.
 - gaming auth shell с фирменным логотипом, адаптивом 1100×680 и реальной session-only политикой «Запомнить меня».
+- Gaming Home с компактным voice status, быстрым возвратом, активными голосовыми пространствами и реальными социальными контактами из существующих личных диалогов.
 
 ### Работает, но требует укрепления
 
@@ -152,3 +153,18 @@
 - [x] Add normalized renderer state, reconnect snapshots, pending UI, drag-and-drop, and keyboard-accessible move dialog.
 - [x] Add periodic reconciliation, metrics, feature flags, unit tests, and Redis integration coverage.
 - [ ] Production rollout: verify the new webhook path, enable flags in stages, and observe reconciliation/version-gap metrics.
+
+# WEB-27 — Gaming authentication
+
+- [x] Заменить auth shell на игровой адаптивный layout с финальным фирменным знаком и утверждённым фоном.
+- [x] Сохранить password/email/TOTP/recovery/reset контракты и keyboard accessibility.
+- [x] Реализовать настоящий session-only режим при выключенном «Запомнить меня».
+- [x] Покрыть 1100×680, interaction, visual и Electron regression.
+
+# WEB-28 — Gaming Home
+
+- [x] Оставить ровно четыре центральных блока: voice status, быстрый возврат, активные пространства и друзья в игре.
+- [x] Собрать permission-filtered агрегат из PostgreSQL, Redis voice projection и LiveKit-confirmed presence без production mocks.
+- [x] Подключить прямой join голосового канала, переход к личному диалогу, realtime invalidation и offline cache.
+- [x] Добавить empty/loading/error states, Storybook и visual baselines 1600×1000/1100×760.
+- [ ] После отдельного проектирования заменить contacts-from-DM на каноническую friendship-модель с заявками и приватностью.

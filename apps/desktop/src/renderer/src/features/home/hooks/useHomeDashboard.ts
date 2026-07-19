@@ -15,7 +15,14 @@ function readCachedDashboard(userId: string): HomeDashboardResponse | undefined 
     const raw = localStorage.getItem(`${HOME_CACHE_PREFIX}${userId}`);
     if (raw === null) return undefined;
     const value = JSON.parse(raw) as Partial<HomeDashboardResponse>;
-    if (value.user?.id !== userId || !Array.isArray(value.servers) || !Array.isArray(value.continueItems)) return undefined;
+    if (
+      value.user?.id !== userId ||
+      !Array.isArray(value.servers) ||
+      !Array.isArray(value.continueItems) ||
+      !Array.isArray(value.gaming?.quickReturn) ||
+      !Array.isArray(value.gaming.activeSpaces) ||
+      !Array.isArray(value.gaming.friendsInGame)
+    ) return undefined;
     return value as HomeDashboardResponse;
   } catch {
     return undefined;

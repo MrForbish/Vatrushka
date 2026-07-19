@@ -539,11 +539,12 @@ describe('home dashboard API', () => {
     const response = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/home`, headers: { authorization: `Bearer ${auth.accessToken}` } });
 
     expect(response.statusCode).toBe(200);
-    const home = response.json<{ servers: unknown[]; continueItems: unknown[]; onboarding: { visible: boolean; steps: Array<{ id: string }> } }>();
+    const home = response.json<{ servers: unknown[]; continueItems: unknown[]; onboarding: { visible: boolean; steps: Array<{ id: string }> }; gaming: { quickReturn: unknown[]; activeSpaces: unknown[]; friendsInGame: unknown[] } }>();
     expect(home.servers).toEqual([]);
     expect(home.continueItems).toEqual([]);
     expect(home.onboarding.visible).toBe(true);
     expect(home.onboarding.steps.map((step) => step.id)).toEqual(['create_server', 'configure_channels', 'invite_members']);
+    expect(home.gaming).toMatchObject({ quickReturn: [], activeSpaces: [], friendsInGame: [] });
     expect(JSON.stringify(home)).not.toMatch(/join.by.code|inviteCode|по коду/iu);
   });
 
@@ -566,13 +567,17 @@ describe('home dashboard API', () => {
 
     const response = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/home`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(response.statusCode).toBe(200);
-    const home = response.json<{ servers: Array<{ unreadCount: number; activeVoiceCount: number }>; activeSpaces: Array<{ type: string; id: string }>; recentActivity: Array<{ type: string }> }>();
+    const home = response.json<{ servers: Array<{ unreadCount: number; activeVoiceCount: number }>; activeSpaces: Array<{ type: string; id: string }>; recentActivity: Array<{ type: string }>; gaming: { voiceStatus: { connectionQuality: string }; activeSpaces: Array<{ channelId: string; participantCount: number; canJoin: boolean }>; quickReturn: unknown[] } }>();
     expect(home.servers[0]).toEqual(expect.objectContaining({ unreadCount: 1, activeVoiceCount: 1 }));
     expect(home.activeSpaces).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: voiceChannel.id, type: 'voice_channel' }),
       expect.objectContaining({ id: textChannel.id, type: 'text_channel' }),
     ]));
     expect(home.recentActivity.map((item) => item.type)).toContain('opened_channel');
+    expect(home.gaming.voiceStatus.connectionQuality).toBe('excellent');
+    expect(home.gaming.activeSpaces).toEqual(expect.arrayContaining([
+      expect.objectContaining({ channelId: voiceChannel.id, participantCount: 1, canJoin: true }),
+    ]));
   });
 });
 

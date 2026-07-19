@@ -397,6 +397,23 @@ const homeOnboardingStepResponseSchema = z.object({
   complete: z.boolean(),
   destination: homeDestinationResponseSchema.nullable(),
 });
+const gamingHomeVoiceSpaceResponseSchema = z.object({
+  channelId: z.string(),
+  serverId: z.string(),
+  serverName: z.string(),
+  serverIconUrl: z.string().nullable(),
+  channelName: z.string(),
+  gameName: z.string().nullable(),
+  coverUrl: z.string().nullable(),
+  participantCount: z.number(),
+  participantLimit: z.number().nullable(),
+  friendCount: z.number(),
+  participantAvatars: z.array(z.string()),
+  hasScreenShare: z.boolean(),
+  hasFreeSlots: z.boolean(),
+  canJoin: z.boolean(),
+  lastActivityAt: z.string(),
+});
 const homeDashboardResponseSchema = z.object({
   user: z.object({
     id: z.string(),
@@ -417,6 +434,50 @@ const homeDashboardResponseSchema = z.object({
   onboarding: z.object({
     visible: z.boolean(),
     steps: z.array(homeOnboardingStepResponseSchema),
+  }),
+  gaming: z.object({
+    voiceStatus: z.object({
+      microphone: z.object({
+        available: z.boolean(),
+        enabled: z.boolean(),
+        label: z.string().nullable(),
+      }),
+      output: z.object({
+        available: z.boolean(),
+        label: z.string().nullable(),
+      }),
+      pingMs: z.number().nullable(),
+      connectionQuality: z.enum(["excellent", "good", "poor", "offline"]),
+    }),
+    quickReturn: z.array(
+      gamingHomeVoiceSpaceResponseSchema.extend({
+        returnReason: z.enum([
+          "recently_left",
+          "friends_inside",
+          "screen_share",
+          "pinned",
+        ]),
+      }),
+    ),
+    activeSpaces: z.array(gamingHomeVoiceSpaceResponseSchema),
+    friendsInGame: z.array(
+      z.object({
+        userId: z.string(),
+        displayName: z.string(),
+        avatarUrl: z.string().nullable(),
+        presence: z.enum(["online", "away", "dnd"]),
+        gameName: z.string().nullable(),
+        gameDetails: z.string().nullable(),
+        voiceChannel: z
+          .object({
+            channelId: z.string(),
+            serverId: z.string(),
+            channelName: z.string(),
+            canJoin: z.boolean(),
+          })
+          .nullable(),
+      }),
+    ),
   }),
 });
 const serverAuditLogResponseSchema = z.object({
