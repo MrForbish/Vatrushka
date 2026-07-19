@@ -29,6 +29,10 @@ scrape_configs:
     static_configs:
       - targets: [loki:3100]
 
+  - job_name: loki-canary
+    static_configs:
+      - targets: [loki-canary:3500]
+
   - job_name: grafana
     static_configs:
       - targets: [grafana:3000]

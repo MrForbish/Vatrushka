@@ -6,6 +6,7 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ### Added
 
+- structured Loki dashboards now use normalized bounded log levels, query-time correlation fields and an end-to-end Loki canary instead of text-only error matching.
 - Russian infrastructure and container dashboards now cover host freshness, CPU/iowait, normalized load, swap, disks/inodes, I/O, network errors, clock skew, container limits, throttling, restarts and OOM events.
 - Russian Grafana dashboards for the application and detailed HTTP diagnostics now separate 2xx/3xx/4xx/5xx traffic, latency quantiles and bounded route/error breakdowns, with matching Prometheus recording rules and SLO alerts.
 - автор демонстрации может рисовать синхронные аннотации поверх видео, выбирать цвет и толщину, отменять последний штрих и очищать слой; координаты одинаково масштабируются у всех зрителей и сбрасываются вместе с media-сессией;
@@ -30,6 +31,7 @@ All notable changes to Vatrushka are documented here. The project follows semant
 - voice-state reads no longer synchronously poll LiveKit, preventing a transient RoomService failure from becoming an API 500;
 - Windows system-audio capture uses a compatible `restrictOwnAudio` constraint and refuses an unsafe stream when Chromium cannot exclude Vatrushka output;
 - production observability no longer sends Loki internal gRPC through the egress proxy, probes TURN with a real TLS handshake and avoids the AppArmor-incompatible systemd collector.
+- Loki health diagnostics no longer depend on obsolete BoltDB Shipper metrics while the production store uses TSDB/S3.
 - cAdvisor metrics expose a canonical bounded `container` label, and restart alerts now use changes of the start-time gauge instead of an invalid counter increase.
 
 ## [0.7.0] - 2026-07-19
