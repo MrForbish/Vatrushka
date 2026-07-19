@@ -839,6 +839,9 @@ function ServerStage({
     id: message.id,
     authorId: message.authorUserId,
     authorName: message.authorDisplayName,
+    ...(message.authorAvatarUrl === undefined
+      ? {}
+      : { authorAvatarUrl: message.authorAvatarUrl }),
     content: message.content,
     mentions: (
       message.conversationMentions ??

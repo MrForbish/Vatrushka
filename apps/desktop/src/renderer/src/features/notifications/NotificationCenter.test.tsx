@@ -5,7 +5,27 @@ import { NotificationCenter } from './NotificationCenter';
 it('filters, reads and dismisses notifications', () => {
   const onRead = vi.fn();
   const onDismiss = vi.fn();
-  render(<NotificationCenter items={[{ id: '11111111-1111-4111-8111-111111111111', type: 'mention', actorUserId: null, conversationId: null, messageId: null, payload: { preview: 'Привет' }, createdAt: new Date().toISOString(), readAt: null, dismissedAt: null }]} onDismiss={onDismiss} onMarkAllRead={vi.fn()} onOpen={vi.fn()} onRead={onRead} />);
+  render(
+    <NotificationCenter
+      items={[
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          type: 'mention',
+          actorUserId: null,
+          conversationId: null,
+          messageId: null,
+          payload: { preview: 'Привет' },
+          createdAt: new Date().toISOString(),
+          readAt: null,
+          dismissedAt: null,
+        },
+      ]}
+      onDismiss={onDismiss}
+      onMarkAllRead={vi.fn()}
+      onOpen={vi.fn()}
+      onRead={onRead}
+    />,
+  );
   fireEvent.click(screen.getByRole('button', { name: /Уведомления/u }));
   fireEvent.click(screen.getByText('Привет'));
   expect(onRead).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
@@ -20,4 +40,29 @@ it('requests the next page only when older notifications exist', () => {
   fireEvent.click(screen.getByRole('button', { name: /Уведомления/u }));
   fireEvent.click(screen.getByRole('button', { name: 'Показать более ранние' }));
   expect(onLoadMore).toHaveBeenCalledOnce();
+});
+
+it('keeps one actionable client update inside the notification center', () => {
+  const onInstallUpdate = vi.fn();
+  render(
+    <NotificationCenter
+      items={[]}
+      onDismiss={vi.fn()}
+      onInstallUpdate={onInstallUpdate}
+      onMarkAllRead={vi.fn()}
+      onOpen={vi.fn()}
+      onRead={vi.fn()}
+      updateState={{
+        status: 'ready',
+        currentVersion: '0.7.0',
+        version: '0.7.1',
+      }}
+    />,
+  );
+  expect(screen.getByRole('button', { name: /непрочитанных: 1/u })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /Уведомления/u }));
+  expect(screen.getByText('Версия 0.7.1 готова к установке.')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Перезапустить и обновить' }));
+  expect(onInstallUpdate).toHaveBeenCalledOnce();
+  expect(screen.queryByText('Установлена актуальная версия')).not.toBeInTheDocument();
 });

@@ -643,6 +643,7 @@ const textMessageResponseSchema = z.object({
   channelId: z.string(),
   authorUserId: z.string(),
   authorDisplayName: z.string(),
+  authorAvatarUrl: z.string().nullable().optional(),
   authorPlatformRole: z.enum(["member", "admin", "owner"]),
   content: z.string(),
   mentions: z.array(messageMentionResponseSchema).optional(),
@@ -669,6 +670,7 @@ const directMessageParticipantResponseSchema = z.object({
   userId: z.string(),
   displayName: z.string(),
   platformRole: z.enum(["member", "admin", "owner"]),
+  avatarUrl: z.string().nullable().optional(),
 });
 const directConversationResponseSchema = z.object({
   id: z.string(),
@@ -693,6 +695,7 @@ const directMessageResponseSchema = z.object({
   conversationId: z.string(),
   authorUserId: z.string(),
   authorDisplayName: z.string(),
+  authorAvatarUrl: z.string().nullable().optional(),
   authorPlatformRole: z.enum(["member", "admin", "owner"]),
   content: z.string(),
   replyTo: z
@@ -845,6 +848,7 @@ const internalNotificationResponseSchema = z.object({
   readAt: z.string().nullable(),
   dismissedAt: z.string().nullable(),
   actorDisplayName: z.string().nullable().optional(),
+  actorAvatarUrl: z.string().nullable().optional(),
   conversationTitle: z.string().nullable().optional(),
   serverId: z.string().nullable().optional(),
   channelId: z.string().nullable().optional(),

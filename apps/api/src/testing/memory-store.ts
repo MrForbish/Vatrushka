@@ -506,7 +506,7 @@ export class MemoryStore implements DataStore {
       .map((message) => {
         const user = this.users.get(message.authorUserId);
         if (!user) throw new Error('Message author was not found');
-        return { ...structuredClone(message), displayName: user.displayName, platformRole: user.platformRole };
+        return { ...structuredClone(message), displayName: user.displayName, platformRole: user.platformRole, avatarObjectKey: user.avatarObjectKey ?? null };
       });
   }
 
@@ -521,7 +521,7 @@ export class MemoryStore implements DataStore {
       if (!message) return [];
       const user = this.users.get(message.authorUserId);
       if (!user) return [];
-      return [{ ...structuredClone(message), displayName: user.displayName, platformRole: user.platformRole }];
+      return [{ ...structuredClone(message), displayName: user.displayName, platformRole: user.platformRole, avatarObjectKey: user.avatarObjectKey ?? null }];
     });
   }
 
@@ -672,7 +672,7 @@ export class MemoryStore implements DataStore {
         const latest = messages[0];
         return {
           conversation: structuredClone(conversation),
-          participant: { id: participant.id, displayName: participant.displayName, platformRole: participant.platformRole },
+          participant: { id: participant.id, displayName: participant.displayName, platformRole: participant.platformRole, avatarObjectKey: participant.avatarObjectKey ?? null },
           lastMessage: latest ? { authorUserId: latest.authorUserId, content: latest.content, createdAt: latest.createdAt } : null,
           unreadCount: messages.filter((message) => message.authorUserId !== userId && (message.createdAt > readAt || (message.createdAt.getTime() === readAt.getTime() && (readMessageId === null || message.id.localeCompare(readMessageId) > 0)))).length,
         };
@@ -690,7 +690,7 @@ export class MemoryStore implements DataStore {
       .reverse()
       .flatMap((message) => {
         const author = this.users.get(message.authorUserId);
-        return author ? [{ ...structuredClone(message), displayName: author.displayName, platformRole: author.platformRole }] : [];
+        return author ? [{ ...structuredClone(message), displayName: author.displayName, platformRole: author.platformRole, avatarObjectKey: author.avatarObjectKey ?? null }] : [];
       });
   }
 
@@ -698,7 +698,7 @@ export class MemoryStore implements DataStore {
     return ids.flatMap((id) => {
       const message = this.directMessages.get(id);
       const author = message ? this.users.get(message.authorUserId) : null;
-      return message && author ? [{ ...structuredClone(message), displayName: author.displayName, platformRole: author.platformRole }] : [];
+      return message && author ? [{ ...structuredClone(message), displayName: author.displayName, platformRole: author.platformRole, avatarObjectKey: author.avatarObjectKey ?? null }] : [];
     });
   }
 

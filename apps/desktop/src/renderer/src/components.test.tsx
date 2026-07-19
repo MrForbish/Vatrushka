@@ -262,6 +262,34 @@ describe('message composer', () => {
     expect(onSubmit).toHaveBeenCalledOnce();
   });
 
+  it('adds an image pasted from the clipboard as an attachment', () => {
+    const onFilesSelected = vi.fn();
+    render(<MessageComposer channelName="общий" onChange={noop} onFilesSelected={onFilesSelected} onSubmit={noop} value="" />);
+    const file = new File(['image'], 'clipboard.png', { type: 'image/png' });
+    fireEvent.paste(screen.getByRole('textbox', { name: 'Сообщение' }), {
+      clipboardData: { files: [file], items: [] },
+    });
+    expect(onFilesSelected).toHaveBeenCalledWith([file]);
+  });
+
+  it('opens the emoji picker and does not show an inactive microphone', async () => {
+    const onChange = vi.fn();
+    render(<MessageComposer channelName="общий" onChange={onChange} onSubmit={noop} value="" />);
+    expect(screen.queryByRole('button', { name: /микрофон/iu })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Выбрать emoji' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Вставить 🚀' }));
+    expect(onChange).toHaveBeenCalledWith('🚀');
+  });
+
+  it('renders safe links, emoji shortcodes and an author avatar', async () => {
+    const openExternal = vi.spyOn(window.desktop, 'openExternal').mockResolvedValue();
+    render(<MessageList channelName="общий" messages={[{ id: 'rich', authorId: 'author', authorName: 'Author', authorAvatarUrl: 'https://storage.test/avatar.webp', content: 'Ссылка https://example.com и :rocket:', createdAt: '2026-01-01T10:00:00.000Z' }]} />);
+    expect(screen.getByRole('img', { name: 'Author' }).querySelector('img')).toHaveAttribute('src', 'https://storage.test/avatar.webp');
+    expect(screen.getByRole('article')).toHaveTextContent('🚀');
+    await userEvent.click(screen.getByRole('link', { name: 'https://example.com' }));
+    expect(openExternal).toHaveBeenCalledWith('https://example.com');
+  });
+
   it('selects a structured member mention with keyboard navigation', async () => {
     const changed = vi.fn();
     function Harness(): React.JSX.Element {

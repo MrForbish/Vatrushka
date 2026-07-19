@@ -56,6 +56,7 @@ export interface DirectMessagesViewProps {
   hasOlderMessages?: boolean | undefined;
   loadingOlderMessages?: boolean | undefined;
   firstUnreadMessageId?: string | null | undefined;
+  targetMessageId?: string | null | undefined;
   onHome(): void;
   onSwitchServer(serverId: string): void;
   onConversation(conversationId: string): void;
@@ -193,6 +194,9 @@ export function DirectMessagesView(
     id: message.id,
     authorId: message.authorUserId,
     authorName: message.authorDisplayName,
+    ...(message.authorAvatarUrl === undefined
+      ? {}
+      : { authorAvatarUrl: message.authorAvatarUrl }),
     content: message.content,
     createdAt: message.createdAt,
     edited: message.editedAt !== null,
@@ -272,7 +276,13 @@ export function DirectMessagesView(
               onClick={() => props.onConversation(conversation.id)}
               type="button"
             >
-              <Avatar name={conversation.participant.displayName} size="md" />
+              <Avatar
+                name={conversation.participant.displayName}
+                size="md"
+                {...(conversation.participant.avatarUrl
+                  ? { src: conversation.participant.avatarUrl }
+                  : {})}
+              />
               <span>
                 <strong>{conversation.participant.displayName}</strong>
                 <small>{conversationPreview(conversation)}</small>
@@ -314,6 +324,9 @@ export function DirectMessagesView(
           {
             id: activeConversation.participant.userId,
             name: activeConversation.participant.displayName,
+            ...(activeConversation.participant.avatarUrl === undefined
+              ? {}
+              : { avatarUrl: activeConversation.participant.avatarUrl }),
             founder: activeConversation.participant.platformRole === "owner",
             roleLabel: "Собеседник",
           },
@@ -394,6 +407,7 @@ export function DirectMessagesView(
               emptyDescription="Отправьте первое сообщение — оно будет видно только участникам этого диалога."
               emptyTitle={`Начало диалога с ${activeConversation.participant.displayName}`}
               firstUnreadMessageId={props.firstUnreadMessageId}
+              targetMessageId={props.targetMessageId}
               hasOlder={props.hasOlderMessages}
               loadingOlder={props.loadingOlderMessages}
               messages={messageModels}

@@ -260,11 +260,14 @@ export interface DirectMessageRecord {
 }
 
 export type DirectMessageWithAuthor = DirectMessageRecord &
-  Pick<UserRecord, "displayName" | "platformRole">;
+  Pick<UserRecord, "displayName" | "platformRole" | "avatarObjectKey">;
 
 export interface DirectConversationOverviewRecord {
   conversation: DirectConversationRecord;
-  participant: Pick<UserRecord, "id" | "displayName" | "platformRole">;
+  participant: Pick<
+    UserRecord,
+    "id" | "displayName" | "platformRole" | "avatarObjectKey"
+  >;
   lastMessage: Pick<
     DirectMessageRecord,
     "authorUserId" | "content" | "createdAt"
@@ -319,7 +322,7 @@ export type ServerMemberProfile = ServerMemberRecord &
     | "updatedAt"
   >;
 export type TextMessageWithAuthor = TextMessageRecord &
-  Pick<UserRecord, "displayName" | "platformRole">;
+  Pick<UserRecord, "displayName" | "platformRole" | "avatarObjectKey">;
 
 export type RefreshRotation =
   | { status: "ok"; oldSession: SessionRecord; newSession: SessionRecord }
