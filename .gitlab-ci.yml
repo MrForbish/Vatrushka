@@ -385,12 +385,12 @@ publish-production:
     - job: windows-production-package
       artifacts: true
   variables:
-    GITLAB_TOKEN: '$CI_JOB_TOKEN'
+    GITLAB_TOKEN: '$GITLAB_RELEASE_TOKEN'
   before_script:
     - apk add --no-cache openssh-client
   script:
     - |
-      for name in PRODUCTION_SSH_PRIVATE_KEY PRODUCTION_SSH_HOST_KEY PRODUCTION_SSH_HOST PRODUCTION_SSH_USER PRODUCTION_UPDATE_PATH; do
+      for name in GITLAB_RELEASE_TOKEN PRODUCTION_SSH_PRIVATE_KEY PRODUCTION_SSH_HOST_KEY PRODUCTION_SSH_HOST PRODUCTION_SSH_USER PRODUCTION_UPDATE_PATH; do
         test -n "$(eval "printf '%s' \"\$$name\"")" || { echo "Required production setting is missing: $name" >&2; exit 1; }
       done
       echo "$PRODUCTION_UPDATE_PATH" | grep -Eq '^/[A-Za-z0-9._/-]+$' || { echo 'PRODUCTION_UPDATE_PATH has unsafe characters.' >&2; exit 1; }

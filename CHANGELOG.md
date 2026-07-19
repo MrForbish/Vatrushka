@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.6.7] - 2026-07-19
+
+### Fixed
+
+- production release publication now authenticates to the GitLab Releases and Generic Packages APIs with a dedicated protected and masked CI variable instead of the insufficient `CI_JOB_TOKEN`;
+- repository policy tests prevent the release job from silently returning to `CI_JOB_TOKEN`.
+
 ## [0.6.6] - 2026-07-19
 
 ### Fixed
