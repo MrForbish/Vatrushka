@@ -34,6 +34,17 @@
 .vui-room__video-frame { position: relative; width: 100%; height: 100%; background: #030405; }
 .vui-room__video-frame:fullscreen { display: grid; place-items: center; }
 .vui-room__video { width: 100%; height: 100%; object-fit: contain; }
+.vui-room__annotation-canvas { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
+.vui-room__annotation-canvas[data-active='true'] { pointer-events: auto; cursor: crosshair; }
+.vui-room__annotation-tools { position: absolute; z-index: 4; top: var(--space-4); left: 50%; display: flex; align-items: center; gap: var(--space-2); max-width: calc(100% - 300px); padding: var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-canvas), transparent 6%); box-shadow: var(--shadow-float); transform: translateX(-50%); }
+.vui-room__annotation-tools > button,
+.vui-room__annotation-size select { min-height: 32px; padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-2); color: var(--color-text-primary); font: var(--text-caption); cursor: pointer; }
+.vui-room__annotation-tools > button:disabled { opacity: .45; cursor: default; }
+.vui-room__annotation-toggle[aria-pressed='true'] { border-color: var(--color-cyan); color: var(--color-cyan); }
+.vui-room__annotation-colors { display: flex; gap: 5px; }
+.vui-room__annotation-colors > button { width: 24px; height: 24px; padding: 0; border: 2px solid transparent; border-radius: var(--radius-round); cursor: pointer; }
+.vui-room__annotation-colors > button[aria-pressed='true'] { border-color: var(--color-text-primary); box-shadow: 0 0 0 2px var(--color-primary); }
+.vui-room__annotation-size { display: flex; align-items: center; gap: var(--space-1); color: var(--color-text-muted); font: var(--text-caption); }
 .vui-room__fullscreen { position: absolute; right: var(--space-4); bottom: var(--space-4); opacity: .7; }
 .vui-room__fullscreen:hover { opacity: 1; }
 .vui-room__stream-label { position: absolute; top: var(--space-4); left: var(--space-4); display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-canvas), transparent 10%); font: var(--text-caption); }
@@ -83,4 +94,5 @@
 
 @media (max-width: 1080px) {
   .vui-room { padding-inline: var(--space-3); }
+  .vui-room__annotation-tools { top: auto; bottom: var(--space-4); max-width: calc(100% - 110px); overflow-x: auto; }
 }

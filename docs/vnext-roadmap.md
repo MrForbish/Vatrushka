@@ -15,6 +15,7 @@
 - authenticated WebSocket, transactional outbox и HTTP reconciliation;
 - приватные S3 attachments и durable cleanup;
 - реальные Windows audio devices, voice, screen share, системный звук и PostgreSQL lease;
+- синхронные ephemeral-аннотации поверх демонстрации с нормализованными координатами, undo и очисткой;
 - self-hosted LiveKit/TURN;
 - NSIS auto-update с self-hosted feed;
 - unit, integration PostgreSQL/Redis, Storybook interaction, Electron и visual regression CI.

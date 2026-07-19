@@ -3040,6 +3040,9 @@ export default function App(): ReactNode {
         media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)
       }
       onScreenAudioVolume={setScreenShareVolume}
+      onScreenAnnotationStroke={(stroke) => void media.addScreenAnnotationStroke(stroke)}
+      onScreenAnnotationUndo={() => void media.undoScreenAnnotation()}
+      onScreenAnnotationClear={() => void media.clearScreenAnnotations()}
       onParticipantMute={(identity, muted) =>
         media.setParticipantMuted(identity, muted)
       }

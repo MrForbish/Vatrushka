@@ -31,6 +31,7 @@ const meta = {
       hasScreenShareAudio: false,
       screenShareAudioMuted: false,
       screenShareAudioVolume: 1,
+      screenAnnotations: [],
       canPlayAudio: true,
       error: null,
     },
@@ -50,6 +51,9 @@ const meta = {
     onStartAudio: fn(),
     onScreenAudioMute: fn(),
     onScreenAudioVolume: fn(),
+    onScreenAnnotationStroke: fn(),
+    onScreenAnnotationUndo: fn(),
+    onScreenAnnotationClear: fn(),
     onParticipantMute: fn(),
     onParticipantVolume: fn(),
   },
@@ -88,5 +92,24 @@ export const ScreenShareViewer: Story = {
       hasScreenShareAudio: true,
       screenShareAudioVolume: 0.72,
     },
+  },
+};
+
+export const ScreenShareAnnotations: Story = {
+  args: {
+    snapshot: {
+      ...meta.args.snapshot,
+      isScreenSharing: true,
+      screenTrack,
+      screenSharerName: 'Илья Форбиш',
+      screenShareIsLocal: true,
+      screenAnnotations: [{ id: 'stroke-demo', color: '#facc15', size: 8, points: [{ x: 0.15, y: 0.65 }, { x: 0.35, y: 0.45 }, { x: 0.62, y: 0.58 }] }],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Рисовать' }));
+    await expect(canvas.getByRole('toolbar', { name: 'Рисование поверх демонстрации' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Очистить' })).toBeEnabled();
   },
 };
