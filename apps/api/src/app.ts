@@ -410,6 +410,7 @@ const gamingHomeVoiceSpaceResponseSchema = z.object({
   serverId: z.string(),
   serverName: z.string(),
   serverIconUrl: z.string().nullable(),
+  serverAccentColor: z.string().nullable(),
   channelName: z.string(),
   gameName: z.string().nullable(),
   coverUrl: z.string().nullable(),

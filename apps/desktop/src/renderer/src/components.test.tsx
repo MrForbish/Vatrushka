@@ -1,7 +1,7 @@
 import { ConnectionState } from 'livekit-client';
 import type { LocalTrack } from 'livekit-client';
 import { useState } from 'react';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -12,7 +12,7 @@ import { HomePage } from './features/home/index.js';
 import { ServerView } from './features/servers/index.js';
 import { RoomView } from './features/voice/index.js';
 import type { MediaSnapshot } from './media.js';
-import { MessageComposer, MessageList, Select, UserProfileDock } from './ui/index.js';
+import { Avatar, MessageComposer, MessageList, Select, UserProfileDock } from './ui/index.js';
 
 const noop = (): void => undefined;
 
@@ -125,6 +125,49 @@ describe('main screen', () => {
 });
 
 describe('profile audio controls', () => {
+  it('keeps the previous signed avatar visible until the replacement is loaded', () => {
+    const preloaders: Array<{ onload: (() => void) | null; onerror: (() => void) | null; src: string }> = [];
+    class ImagePreloader {
+      decoding = 'auto';
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      src = '';
+
+      constructor() {
+        preloaders.push(this);
+      }
+    }
+    vi.stubGlobal('Image', ImagePreloader);
+    const { rerender } = render(<Avatar name="Anna" src="https://cdn.example/old?signature=1" />);
+    rerender(<Avatar name="Anna" src="https://cdn.example/new?signature=2" />);
+    expect(screen.getByRole('img', { name: 'Anna' }).querySelector('img')).toHaveAttribute('src', 'https://cdn.example/old?signature=1');
+    act(() => preloaders[0]?.onload?.());
+    expect(screen.getByRole('img', { name: 'Anna' }).querySelector('img')).toHaveAttribute('src', 'https://cdn.example/new?signature=2');
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the avatar image inside a dedicated round mask and closes status on Escape', async () => {
+    render(
+      <UserProfileDock
+        avatarUrl="https://cdn.example/avatar.png"
+        email="anna@example.com"
+        name="Anna"
+        onLogout={noop}
+        onSecurity={noop}
+        onStatus={noop}
+      />,
+    );
+    const avatar = screen.getByRole('img', { name: 'Anna' });
+    expect(avatar.querySelector('.vui-avatar__mask > img')).toHaveAttribute(
+      'src',
+      'https://cdn.example/avatar.png',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Изменить статус' }));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
   it('mutes the microphone and all incoming voice audio from the profile dock', async () => {
     const onMicrophoneToggle = vi.fn();
     const onDeafenToggle = vi.fn();

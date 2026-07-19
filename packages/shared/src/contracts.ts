@@ -184,6 +184,7 @@ export interface GamingHomeVoiceSpace {
   serverId: string;
   serverName: string;
   serverIconUrl: string | null;
+  serverAccentColor: string | null;
   channelName: string;
   gameName: string | null;
   coverUrl: string | null;

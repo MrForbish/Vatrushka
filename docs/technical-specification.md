@@ -93,6 +93,10 @@ Redis хранит только восстанавливаемое кратко�
 
 Bucket приватный. API создает ограниченный object key, выдает короткоживущий presigned upload/download URL после permission checks и финализирует metadata. Незавершенные и удаленные объекты очищаются durable job-очередью. Access keys не попадают в desktop.
 
+Renderer не использует presigned URL как React key. Общий `StableImage` предварительно загружает новый URL и сохраняет уже показанный кадр до успешной загрузки, поэтому обновление подписи не создаёт пустую вспышку. `Avatar` отделяет круглую маску изображения от вынесенного поверх неё presence-индикатора. Перед загрузкой нового аватара desktop кадрирует ориентированное браузером изображение в квадрат 512×512; исходный файл не отправляется при отмене.
+
+Изменение server icon/banner/accent обновляет server detail и summaries, а затем явно инвалидирует Home aggregate. Gaming Home получает акцент вместе с каждой voice-space записью и применяет его только к границе карточки; banner остаётся фоном под контрастным затемняющим слоем.
+
 ## 6. Messaging и realtime
 
 Запись сообщения, mentions, read state, notification decision и outbox event фиксируются транзакционно. Worker публикует outbox в Redis Pub/Sub; каждый API instance доставляет адресованные события своим authenticated WebSocket sessions. Client сохраняет `eventId`, дедуплицирует события и после reconnect выполняет HTTP reconciliation.

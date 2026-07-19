@@ -1,4 +1,9 @@
-import type { PublicUser, ServerSummary } from "@vatrushka/shared";
+import type {
+  EffectivePresenceStatus,
+  PresencePreference,
+  PublicUser,
+  ServerSummary,
+} from "@vatrushka/shared";
 
 import {
   Badge,
@@ -19,6 +24,8 @@ export interface HomeNavigationProps {
   onOpenServer: (serverId: string) => void;
   onSecurity: () => void;
   onLogout: () => void;
+  onStatus?: ((status: PresencePreference) => void | Promise<void>) | undefined;
+  status?: EffectivePresenceStatus | undefined;
   networkAvailable?: boolean;
 }
 
@@ -30,7 +37,9 @@ export function HomeNavigation({
   onLogout,
   onOpenServer,
   onSecurity,
+  onStatus,
   servers,
+  status,
   user,
 }: HomeNavigationProps): React.JSX.Element {
   const name = user.displayName ?? user.email;
@@ -129,6 +138,8 @@ export function HomeNavigation({
         name={name}
         onLogout={onLogout}
         onSecurity={onSecurity}
+        {...(onStatus ? { onStatus } : {})}
+        {...(status ? { status } : {})}
       />
     </aside>
   );

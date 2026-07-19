@@ -5,6 +5,7 @@ import {
   useState,
   type ButtonHTMLAttributes,
   type HTMLAttributes,
+  type ImgHTMLAttributes,
   type InputHTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
@@ -557,16 +558,82 @@ export function StatusDot({ className, label, status, ...props }: StatusDotProps
 
 export interface AvatarProps extends HTMLAttributes<HTMLSpanElement> {
   name: string;
-  src?: string;
+  src?: string | null | undefined;
   size?: 'sm' | 'md' | 'lg';
   status?: StatusDotProps['status'];
+}
+
+export interface StableImageProps
+  extends Omit<ImgHTMLAttributes<HTMLImageElement>, 'src'> {
+  fallback?: ReactNode;
+  src?: string | null | undefined;
+}
+
+export function StableImage({
+  fallback = null,
+  src,
+  ...props
+}: StableImageProps): React.JSX.Element {
+  const [displayedSrc, setDisplayedSrc] = useState<string | null>(src ?? null);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const requestedSrcRef = useRef(src ?? null);
+
+  useEffect(() => {
+    const requestedSrc = src ?? null;
+    requestedSrcRef.current = requestedSrc;
+    if (requestedSrc === null) {
+      setDisplayedSrc(null);
+      setFailedSrc(null);
+      return undefined;
+    }
+    if (requestedSrc === displayedSrc || requestedSrc === failedSrc)
+      return undefined;
+
+    let active = true;
+    const image = new Image();
+    image.decoding = 'async';
+    image.onload = () => {
+      if (active && requestedSrcRef.current === requestedSrc) {
+        setFailedSrc(null);
+        setDisplayedSrc(requestedSrc);
+      }
+    };
+    image.onerror = () => {
+      if (active && requestedSrcRef.current === requestedSrc) {
+        setFailedSrc(requestedSrc);
+        setDisplayedSrc(null);
+      }
+    };
+    image.src = requestedSrc;
+    return () => {
+      active = false;
+      image.onload = null;
+      image.onerror = null;
+    };
+  }, [displayedSrc, failedSrc, src]);
+
+  if (displayedSrc === null) return <>{fallback}</>;
+  return (
+    <img
+      {...props}
+      src={displayedSrc}
+      onError={() => {
+        if (requestedSrcRef.current === displayedSrc) {
+          setFailedSrc(displayedSrc);
+          setDisplayedSrc(null);
+        }
+      }}
+    />
+  );
 }
 
 export function Avatar({ className, name, size = 'md', src, status, ...props }: AvatarProps): React.JSX.Element {
   const initials = name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
   return (
     <span {...props} aria-label={name} className={cx('vui-avatar', `vui-avatar--${size}`, className)} role="img">
-      {src === undefined ? <span aria-hidden="true">{initials}</span> : <img alt="" src={src} />}
+      <span aria-hidden="true" className="vui-avatar__mask">
+        <StableImage alt="" fallback={<span>{initials}</span>} src={src} />
+      </span>
       {status === undefined ? null : <StatusDot label={status} status={status} />}
     </span>
   );

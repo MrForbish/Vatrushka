@@ -1968,6 +1968,7 @@ export class VatrushkaService {
           serverId: runtime.server.id,
           serverName: runtime.server.name,
           serverIconUrl: runtime.server.iconUrl ?? null,
+          serverAccentColor: runtime.server.accentColor ?? null,
           channelName: channel.name,
           gameName: null,
           coverUrl: runtime.server.bannerUrl ?? null,

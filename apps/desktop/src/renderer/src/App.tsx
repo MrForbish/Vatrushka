@@ -33,6 +33,7 @@ import {
   type InternalNotification,
   type LocalSettings,
   type MessageDeliveryState,
+  type PresencePreference,
   type PublicUser,
   type RoomConnection,
   type ServerDetail,
@@ -543,7 +544,10 @@ export default function App(): ReactNode {
     .sort()
     .join("|");
   const homeServersRevision = servers
-    .map((server) => `${server.id}:${server.memberCount}`)
+    .map(
+      (server) =>
+        `${server.id}:${server.memberCount}:${server.iconUrl ?? ""}:${server.bannerUrl ?? ""}:${server.accentColor ?? ""}`,
+    )
     .join("|");
   const settingsRouteResult = parseSettingsRoute(location.pathname);
   const settingsRoute =
@@ -858,6 +862,19 @@ export default function App(): ReactNode {
     (input: Parameters<typeof apiClient.updatePresence>[0]) =>
       apiClient.updatePresence(input),
     [],
+  );
+  const updateProfilePresence = useCallback(
+    async (preference: PresencePreference): Promise<void> => {
+      const current = presence ?? (await apiClient.getPresence());
+      const next = await apiClient.updatePresence({
+        preference,
+        customText: current.customText,
+        customTextExpiresAt: current.customTextExpiresAt,
+      });
+      setPresence(next);
+      setHomeRealtimeRevision((revision) => revision + 1);
+    },
+    [presence],
   );
   const loadPrivacySettings = useCallback(
     () => apiClient.getPrivacySettings(),
@@ -3156,6 +3173,12 @@ export default function App(): ReactNode {
     ]);
     setServerDetail(detail);
     setServers(summaries);
+    if (user !== null) {
+      await queryClient.invalidateQueries({
+        queryKey: homeDashboardQueryKey(user.id),
+        refetchType: "all",
+      });
+    }
   };
   const handleSettingsServerDeleted = (): void => {
     setServerDetail(null);
@@ -3373,6 +3396,8 @@ export default function App(): ReactNode {
         onRetryDashboard={() => void homeDashboardQuery.refetch()}
         onLogout={requestLogout}
         onSecurity={openUserSettings}
+        onStatus={updateProfilePresence}
+        status={presence?.effectiveStatus}
         onAudioSettings={openAudioSettings}
         onServerName={setServerName}
         onCreateServer={createServer}
