@@ -126,3 +126,6 @@ NSIS-клиент проверяет self-hosted feed в фоне, сообща�
 ## 10. Критерий готовности функции
 
 Функция считается готовой, когда одновременно существуют рабочий backend-контракт (если нужен), permission checks, UI для happy/error/empty/loading состояний, тесты соответствующего уровня, Storybook для визуального компонента и обновленная документация. Наличие одной кнопки без рабочего действия не считается реализацией.
+# Realtime voice navigation
+
+Participants appear below their active voice channel after media connection is confirmed. Users may move themselves by drag-and-drop or the accessible “Переместить в…” action; moderators with `MOVE_MEMBERS` may move eligible members. The source row remains visible as “Перемещение…” until LiveKit confirms the target connection, and failures restore the authoritative snapshot.

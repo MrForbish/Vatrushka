@@ -53,6 +53,9 @@ import {
   type BlockedUserSettings,
   type UserAccountSettings,
   type UserProfileSettings,
+  type ServerVoiceStateDto,
+  type MoveVoiceMemberAccepted,
+  type MoveVoiceMemberRequest,
 } from "@vatrushka/shared";
 
 const apiBase = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? "http://localhost:3000").replace(/\/$/u, "")}${API_PREFIX}`;
@@ -938,9 +941,17 @@ export class ApiClient {
     });
   }
 
-  async moveVoiceMember(channelId: string, userId: string): Promise<void> {
-    await this.request(`/channels/${channelId}/members/${userId}/move`, {
+  getServerVoiceState(serverId: string): Promise<ServerVoiceStateDto> {
+    return this.request(`/servers/${serverId}/voice-state`, { auth: true });
+  }
+
+  moveVoiceMember(
+    serverId: string,
+    input: MoveVoiceMemberRequest,
+  ): Promise<MoveVoiceMemberAccepted> {
+    return this.request(`/servers/${serverId}/voice/moves`, {
       method: "POST",
+      body: input,
       auth: true,
     });
   }

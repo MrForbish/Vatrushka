@@ -77,3 +77,6 @@ Unit/CI intentionally does not send SMTP, contact LiveKit or capture microphone/
 13. send a DM between two installed clients and verify `sent → delivered → read`, retry without duplication, first-unread navigation and tombstone after deletion;
 14. verify user/server/channel mute, strict DND, quiet hours, native direct/server notification click and no stale toast after reconnect;
 15. upload/finalize an S3 attachment, abandon a second upload, then verify the cleanup worker completes its durable deletion job after the configured retention.
+# Voice presence
+
+Voice projection unit tests cover versioning, late-leave protection, move idempotency/conflicts, webhook deduplication, and renderer event reduction. `npm run test:integration` additionally executes the Redis atomic-projection scenario when `INTEGRATION_REDIS_URL` is available in GitLab CI.

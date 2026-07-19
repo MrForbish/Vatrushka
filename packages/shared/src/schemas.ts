@@ -618,6 +618,16 @@ export const realtimeClientCommandSchema = z.discriminatedUnion("type", [
       messageId: canonicalMessageIdSchema,
     })
     .strict(),
+  z
+    .object({
+      type: z.literal("voice.server.subscribe"),
+      serverId: uuidSchema,
+      knownVersion: z.number().int().nonnegative().optional(),
+    })
+    .strict(),
+  z
+    .object({ type: z.literal("voice.server.unsubscribe"), serverId: uuidSchema })
+    .strict(),
   z.object({ type: z.literal("ping") }).strict(),
 ]);
 

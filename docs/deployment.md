@@ -117,3 +117,16 @@ ssh -i C:\Users\Admin\.ssh\id_ed25519_vatrushka_server -N -L 15433:127.0.0.1:543
 - `caddy` — TLS, reverse proxy и статический desktop update feed;
 - LiveKit — отдельный Cloud-проект либо отдельный self-hosted media server;
 - Windows-клиент не запускается на VPS: это устанавливаемый артефакт для компьютеров пользователей.
+# Voice presence rollout
+
+For the current self-hosted LiveKit deployment use:
+
+```env
+VOICE_MOVE_STRATEGY=controlled-reconnect
+VOICE_MOVE_TIMEOUT_SECONDS=15
+VOICE_RECONCILE_INTERVAL_SECONDS=45
+VOICE_DND_ENABLED=true
+VOICE_MODERATOR_MOVE_ENABLED=true
+```
+
+Configure LiveKit to send signed webhooks to `https://api.myvatrushka.ru/api/v1/integrations/livekit/webhook`. Keep the previous `/api/v1/webhooks/livekit` target only during a rolling migration; both paths validate the raw body with the LiveKit server SDK.

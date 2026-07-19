@@ -142,3 +142,12 @@
 9. `feat/observability` — Prometheus/Grafana.
 
 Каждый ordinary MR направляется в `develop` и проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Production получает только стабилизированный `release/*` или hotfix; Windows update публикуется tag pipeline по правилам [release-process.md](release-process.md).
+# WEB-26 — Voice presence and drag-and-drop
+
+- [x] Audit current LiveKit, Redis, WebSocket, permission, state, and DnD flows.
+- [x] Add LiveKit-confirmed Redis projection, snapshot API, versioned events, deduplication, and late-leave protection.
+- [x] Add explicit Cloud and controlled-reconnect transport adapters.
+- [x] Add idempotent self/moderator moves with pending, confirmed, failed, and timeout states.
+- [x] Add normalized renderer state, reconnect snapshots, pending UI, drag-and-drop, and keyboard-accessible move dialog.
+- [x] Add periodic reconciliation, metrics, feature flags, unit tests, and Redis integration coverage.
+- [ ] Production rollout: verify the new webhook path, enable flags in stages, and observe reconciliation/version-gap metrics.

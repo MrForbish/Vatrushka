@@ -15,6 +15,7 @@ interface ConnectionState {
   deviceId: string | null;
   authorization: string | null;
   subscriptions: Set<string>;
+  voiceSubscriptions: Set<string>;
   alive: boolean;
 }
 
@@ -31,7 +32,7 @@ export class WebSocketGateway {
   }
 
   handle(socket: WebSocket): void {
-    const state: ConnectionState = { id: randomUUID(), socket, userId: null, deviceId: null, authorization: null, subscriptions: new Set(), alive: true };
+    const state: ConnectionState = { id: randomUUID(), socket, userId: null, deviceId: null, authorization: null, subscriptions: new Set(), voiceSubscriptions: new Set(), alive: true };
     this.connections.set(state.id, state);
     technicalMetrics.set('chat_ws_connections_active', this.connections.size);
     const authTimeout = setTimeout(() => {
@@ -91,6 +92,22 @@ export class WebSocketGateway {
       }
       if (command.type === 'unsubscribe') {
         state.subscriptions.delete(command.conversationId);
+        return;
+      }
+      if (command.type === 'voice.server.subscribe') {
+        const snapshot = await this.service.getServerVoiceState(state.authorization, command.serverId);
+        state.voiceSubscriptions.add(command.serverId);
+        if (command.knownVersion !== undefined && command.knownVersion !== snapshot.version)
+          technicalMetrics.increment('voice_websocket_version_gap_total');
+        return this.send(state, {
+          type: 'voice.server.subscribed',
+          serverId: command.serverId,
+          version: snapshot.version,
+          snapshotRequired: command.knownVersion !== undefined && command.knownVersion !== snapshot.version,
+        });
+      }
+      if (command.type === 'voice.server.unsubscribe') {
+        state.voiceSubscriptions.delete(command.serverId);
         return;
       }
       if (command.type === 'active_conversation.set') {

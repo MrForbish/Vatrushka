@@ -41,6 +41,7 @@ import {
   type UserNotificationPreferences,
   type UserPresence,
   type UserUnreadSummary,
+  type RealtimeEvent,
 } from "@vatrushka/shared";
 
 import { apiClient, ClientError } from "./api.js";
@@ -72,6 +73,11 @@ import {
   VoiceCuePlayer,
   type VoiceCue,
 } from "./features/voice/index.js";
+import {
+  applyVoiceEvent,
+  voiceStateFromSnapshot,
+  type ServerVoiceState,
+} from "./features/voice/store/voice-state.js";
 import { MediaSession } from "./media.js";
 import { RealtimeClient } from "./realtime.js";
 
@@ -188,6 +194,43 @@ function toTextMessage(
     ...(message.author.id === user.id
       ? { deliveryState: "sent" as const }
       : {}),
+  };
+}
+
+function projectServerVoiceState(
+  server: ServerDetail,
+  voiceState: ServerVoiceState | null,
+): ServerDetail {
+  if (
+    !voiceState ||
+    voiceState.serverId !== server.id ||
+    voiceState.version === 0
+  )
+    return server;
+  const memberById = new Map(server.members.map((member) => [member.userId, member]));
+  return {
+    ...server,
+    channels: server.channels.map((channel) =>
+      channel.type !== "voice"
+        ? channel
+        : {
+            ...channel,
+            voiceParticipants: (voiceState.membersByChannelId[channel.id] ?? [])
+              .map((userId) => {
+                const member = memberById.get(userId);
+                const session = voiceState.memberStateByUserId[userId];
+                if (!member || !session) return null;
+                return {
+                  identity: `voice:${session.sessionId}`,
+                  userId,
+                  displayName: member.displayName,
+                  platformRole: member.platformRole,
+                  avatarUrl: member.avatarUrl ?? null,
+                };
+              })
+              .filter((participant): participant is NonNullable<typeof participant> => participant !== null),
+          },
+    ),
   };
 }
 
@@ -383,6 +426,9 @@ export default function App(): ReactNode {
   );
   const [servers, setServers] = useState<ServerSummary[]>([]);
   const [serverDetail, setServerDetail] = useState<ServerDetail | null>(null);
+  const [serverVoiceState, setServerVoiceState] =
+    useState<ServerVoiceState | null>(null);
+  const [voiceSnapshotRevision, setVoiceSnapshotRevision] = useState(0);
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
   const [messages, setMessages] = useState<TextMessage[]>([]);
   const [messageDraft, setMessageDraft] = useState("");
@@ -521,6 +567,44 @@ export default function App(): ReactNode {
     const refresh = (): void => setRealtimeRevision((current) => current + 1);
     const unsubscribeEvent = realtime.onEvent((event) => {
       refresh();
+      if (event.type.startsWith("voice.")) {
+        if (
+          event.type === "voice.member.move.failed" &&
+          typeof event.payload.message === "string"
+        )
+          setError(event.payload.message);
+        if (
+          event.type === "voice.member.moved" &&
+          event.payload.userId === user.id &&
+          typeof event.payload.toChannelId === "string"
+        ) {
+          const targetChannelId = event.payload.toChannelId;
+          setConnection((current) =>
+            current
+              ? {
+                  ...current,
+                  roomId: targetChannelId,
+                  channelId: targetChannelId,
+                  ...(typeof event.payload.channelName === "string"
+                    ? { channelName: event.payload.channelName }
+                    : {}),
+                }
+              : current,
+          );
+          setActiveChannelId(targetChannelId);
+          if (typeof event.payload.channelName === "string")
+            setConnectedVoiceChannelName(event.payload.channelName);
+        }
+        setServerVoiceState((current) => {
+          if (!current) return current;
+          const result = applyVoiceEvent(current, event);
+          if (result.snapshotRequired)
+            window.queueMicrotask(() =>
+              setVoiceSnapshotRevision((revision) => revision + 1),
+            );
+          return result.state;
+        });
+      }
       if (
         event.type === "server.updated" ||
         event.type === "server.channel.updated"
@@ -557,7 +641,10 @@ export default function App(): ReactNode {
       typingExpiryTimersRef.current.set(key, window.setTimeout(remove, 9_000));
     });
     const unsubscribeStatus = realtime.onStatus((status) => {
-      if (status === "connected") refresh();
+      if (status === "connected") {
+        refresh();
+        setVoiceSnapshotRevision((revision) => revision + 1);
+      }
     });
     realtime.start();
     return () => {
@@ -570,6 +657,26 @@ export default function App(): ReactNode {
       setTypingUsers({});
     };
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user || screen !== "server" || !serverDetail) return;
+    let active = true;
+    const serverId = serverDetail.id;
+    void apiClient
+      .getServerVoiceState(serverId)
+      .then((snapshot) => {
+        if (!active) return;
+        setServerVoiceState(voiceStateFromSnapshot(snapshot));
+        realtime.subscribeVoiceServer(serverId, snapshot.version);
+      })
+      .catch((caught) => {
+        if (active) setError(userMessage(caught));
+      });
+    return () => {
+      active = false;
+      realtime.unsubscribeVoiceServer(serverId);
+    };
+  }, [screen, serverDetail?.id, user?.id, voiceSnapshotRevision]);
 
   useEffect(() => {
     let conversationId: string | null = null;
@@ -2362,8 +2469,35 @@ export default function App(): ReactNode {
 
   const moveVoiceMember = (channelId: string, userId: string): void => {
     void run(async () => {
-      await apiClient.moveVoiceMember(channelId, userId);
-      await refreshServer();
+      if (!serverDetail) return;
+      const sourceChannelId = serverVoiceState?.channelByUserId[userId];
+      const voiceSessionId = serverVoiceState?.memberStateByUserId[userId]?.sessionId;
+      const accepted = await apiClient.moveVoiceMember(serverDetail.id, {
+        clientRequestId: window.crypto.randomUUID(),
+        subjectUserId: userId,
+        targetChannelId: channelId,
+        ...(sourceChannelId ? { expectedSourceChannelId: sourceChannelId } : {}),
+        ...(voiceSessionId ? { expectedVoiceSessionId: voiceSessionId } : {}),
+      });
+      setServerVoiceState((current) => {
+        if (!current || !sourceChannelId) return current;
+        const synthetic: RealtimeEvent = {
+          id: `local:${accepted.movementId}`,
+          type: "voice.member.move.pending",
+          occurredAt: new Date().toISOString(),
+          conversationId: null,
+          targetUserIds: [userId],
+          payload: {
+            serverId: serverDetail.id,
+            movementId: accepted.movementId,
+            subjectUserId: userId,
+            fromChannelId: sourceChannelId,
+            toChannelId: channelId,
+            expiresAt: accepted.expiresAt,
+          },
+        };
+        return applyVoiceEvent(current, synthetic).state;
+      });
     });
   };
 
@@ -3092,7 +3226,7 @@ export default function App(): ReactNode {
       <>
         <ServerView
           user={user}
-          server={serverDetail}
+          server={projectServerVoiceState(serverDetail, serverVoiceState)}
           servers={servers}
           activeChannelId={activeChannelId}
           messages={messages}
@@ -3147,6 +3281,9 @@ export default function App(): ReactNode {
           }
           onConnectVoice={connectVoiceChannel}
           onMoveVoiceMember={moveVoiceMember}
+          pendingVoiceMemberIds={Object.keys(
+            serverVoiceState?.pendingMoveByUserId ?? {},
+          )}
           onCopyInvite={() =>
             window.desktop.copyToClipboard(serverDetail.inviteUrl)
           }
@@ -3158,7 +3295,7 @@ export default function App(): ReactNode {
           onCreateServer={createServer}
           onSecurity={openUserSettings}
           onPresenceChange={setPresence}
-          onServerSettings={() => openServerSettings("roles")}
+          onServerSettings={() => openServerSettings("overview")}
           onLogout={logout}
         />
         {sources && (

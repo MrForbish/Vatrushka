@@ -191,6 +191,7 @@ export interface ChannelNavigationItem {
         founder?: boolean;
         avatarUrl?: string | null;
         canDrag?: boolean;
+        pending?: boolean;
       }>
     | undefined;
 }
@@ -342,6 +343,8 @@ export function ChannelRow({
         <div className="vui-channel-row__participants">
           {channel.participants.map((participant) => (
             <div
+              aria-busy={participant.pending || undefined}
+              data-pending={participant.pending || undefined}
               draggable={participant.canDrag === true}
               key={participant.userId}
               onDragStart={
@@ -364,6 +367,7 @@ export function ChannelRow({
                   : {})}
               />
               <span>{participant.name}</span>
+              {participant.pending ? <small>Перемещение…</small> : null}
               {participant.founder ? (
                 <Badge tone="founder">CEO Founder</Badge>
               ) : null}
@@ -906,11 +910,8 @@ export function MemberPanel({ members }: MemberPanelProps): React.JSX.Element {
                   (member.founder ? "Владелец сервера" : "Участник")}
               </small>
             </span>
-            {member.founder ? (
-              <Badge tone="founder">CEO Founder</Badge>
-            ) : (
-              member.actions
-            )}
+            {member.founder ? <Badge tone="founder">CEO Founder</Badge> : null}
+            {member.actions}
           </div>
         ))}
       </div>

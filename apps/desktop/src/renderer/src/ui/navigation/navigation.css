@@ -421,6 +421,16 @@
 .vui-channel-row__participants > div[draggable="true"]:active {
   cursor: grabbing;
 }
+
+.vui-channel-row__participants > div[data-pending="true"] {
+  opacity: 0.58;
+  pointer-events: none;
+}
+
+.vui-channel-row__participants > div[data-pending="true"] small {
+  color: var(--color-text-muted);
+  margin-left: auto;
+}
 .vui-channel-row__participants > div:hover {
   background: var(--color-surface-1);
   color: var(--color-text-primary);
