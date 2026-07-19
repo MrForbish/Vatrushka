@@ -14,6 +14,7 @@ import { MemoryStore } from './testing/memory-store.js';
 
 interface TestContext {
   app: Awaited<ReturnType<typeof buildApp>>;
+  service: VatrushkaService;
   store: MemoryStore;
   mailer: FakeMailer;
   media: FakeMediaService;
@@ -64,6 +65,7 @@ async function makeContext(objectStorage: FakeObjectStorage | null = null): Prom
     LIVEKIT_API_SECRET: 'test-secret',
     LIVEKIT_URL: 'ws://livekit.test',
     LIVEKIT_HTTP_URL: 'http://livekit.test',
+    VOICE_MOVE_STRATEGY: 'livekit-cloud',
   });
   const realtimeEvents: RealtimeEvent[] = [];
   const realtimeBus = {
@@ -72,7 +74,7 @@ async function makeContext(objectStorage: FakeObjectStorage | null = null): Prom
   } as unknown as RedisRealtimeBus;
   const service = new VatrushkaService({ config, store, mailer, media, objectStorage, realtimeBus, clock: () => clock.now });
   const app = await buildApp({ config, service, logger: false });
-  return { app, store, mailer, media, objectStorage, clock, config, realtimeEvents };
+  return { app, service, store, mailer, media, objectStorage, clock, config, realtimeEvents };
 }
 
 async function login(email = 'anna@example.com', displayName = 'Anna'): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
@@ -952,10 +954,37 @@ describe('servers, channels, messages, and roles API', () => {
     expect(audioDenied.statusCode).toBe(204);
     const memberConnected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/connect`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(memberConnected.statusCode).toBe(200);
-    const memberConnection = memberConnected.json<{ participantIdentity: string; canStream: boolean; canStreamApplicationAudio: boolean }>();
+    const memberConnection = memberConnected.json<{ participantIdentity: string; voiceSessionId: string; canStream: boolean; canStreamApplicationAudio: boolean }>();
     expect(memberConnection).toEqual(expect.objectContaining({ canStream: true, canStreamApplicationAudio: false }));
     expect(context.media.tokens.at(-1)).toEqual(expect.objectContaining({ canPublishScreen: true, canPublishScreenAudio: false }));
     context.media.connect(channel.livekitRoomName, memberConnection.participantIdentity);
+    await context.service.handleWebhookEvent({
+      id: 'voice-member-joined-source',
+      event: 'participant_joined',
+      participant: {
+        identity: memberConnection.participantIdentity,
+        metadata: JSON.stringify({
+          serverId: server.id,
+          channelId: voice.id,
+          userId: member.userId,
+          voiceSessionId: memberConnection.voiceSessionId,
+        }),
+      },
+      room: { name: channel.livekitRoomName },
+    });
+    const initialVoiceState = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}/voice-state`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    expect(initialVoiceState.statusCode).toBe(200);
+    const initialVoiceSnapshot = initialVoiceState.json<{ version: number; channels: Array<{ channelId: string; members: Array<{ userId: string }> }> }>();
+    expect(initialVoiceSnapshot.version).toBeGreaterThanOrEqual(2);
+    expect(initialVoiceSnapshot.channels).toEqual([
+      expect.objectContaining({
+        channelId: voice.id,
+        members: expect.arrayContaining([
+          expect.objectContaining({ userId: owner.userId }),
+          expect.objectContaining({ userId: member.userId }),
+        ]),
+      }),
+    ]);
     const serverWithPresence = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${owner.accessToken}` } });
     const voiceWithPresence = serverWithPresence.json<{ channels: Array<{ id: string; voiceParticipants?: Array<{ userId: string; identity: string }> }> }>().channels.find((candidate) => candidate.id === voice.id);
     expect(voiceWithPresence?.voiceParticipants).toEqual(expect.arrayContaining([
@@ -973,13 +1002,46 @@ describe('servers, channels, messages, and roles API', () => {
     const secondVoiceResponse = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/${server.id}/channels`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Вторая голосовая', type: 'voice' } });
     expect(secondVoiceResponse.statusCode).toBe(201);
     const secondVoice = secondVoiceResponse.json<{ id: string }>();
-    const moved = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${secondVoice.id}/members/${member.userId}/move`, headers: { authorization: `Bearer ${owner.accessToken}` } });
-    expect(moved.statusCode).toBe(204);
+    const movePayload = {
+      clientRequestId: '11111111-1111-4111-8111-111111111111',
+      subjectUserId: member.userId,
+      targetChannelId: secondVoice.id,
+      expectedSourceChannelId: voice.id,
+      expectedVoiceSessionId: memberConnection.voiceSessionId,
+    };
+    const moved = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/${server.id}/voice/moves`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: movePayload });
+    expect(moved.statusCode).toBe(202);
+    const accepted = moved.json<{ movementId: string; status: string }>();
+    expect(accepted.status).toBe('pending');
+    const duplicateMove = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers/${server.id}/voice/moves`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: movePayload });
+    expect(duplicateMove.statusCode).toBe(202);
+    expect(duplicateMove.json<{ movementId: string }>().movementId).toBe(accepted.movementId);
     expect(context.media.rooms.get(channel.livekitRoomName)?.has(memberConnection.participantIdentity)).toBe(false);
     expect([...context.media.rooms.entries()].some(([roomName, participants]) => roomName !== channel.livekitRoomName && participants.has(memberConnection.participantIdentity))).toBe(true);
     const acceptedMove = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/voice/move-request`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(acceptedMove.statusCode).toBe(200);
     expect(acceptedMove.json<{ channelId: string; channelName: string; seamlesslyMoved: boolean }>()).toEqual(expect.objectContaining({ channelId: secondVoice.id, channelName: 'вторая голосовая', seamlesslyMoved: true }));
+    const targetChannel = context.store.serverChannels.get(secondVoice.id);
+    if (!targetChannel?.livekitRoomName) throw new Error('Missing target LiveKit room');
+    await context.service.handleWebhookEvent({
+      id: 'voice-member-joined-target',
+      event: 'participant_joined',
+      participant: {
+        identity: memberConnection.participantIdentity,
+        metadata: JSON.stringify({
+          serverId: server.id,
+          channelId: secondVoice.id,
+          userId: member.userId,
+          voiceSessionId: memberConnection.voiceSessionId,
+        }),
+      },
+      room: { name: targetChannel.livekitRoomName },
+    });
+    const movedVoiceState = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}/voice-state`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    expect(movedVoiceState.json<{ version: number; channels: Array<{ channelId: string; members: Array<{ userId: string }> }> }>()).toEqual(expect.objectContaining({
+      version: initialVoiceSnapshot.version + 1,
+      channels: expect.arrayContaining([expect.objectContaining({ channelId: secondVoice.id, members: [expect.objectContaining({ userId: member.userId })] })]),
+    }));
     const consumedMove = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/voice/move-request`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(consumedMove.json()).toBeNull();
   });

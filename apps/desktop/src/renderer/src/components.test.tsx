@@ -1,7 +1,7 @@
 import { ConnectionState } from 'livekit-client';
 import type { LocalTrack } from 'livekit-client';
 import { useState } from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -278,6 +278,7 @@ describe('server UI', () => {
     channels: [
       { id: 'text-1', serverId: 'server-1', name: 'общий', type: 'text', position: 0, unreadCount: 0 },
       { id: 'voice-1', serverId: 'server-1', name: 'Голосовой', type: 'voice', position: 1, unreadCount: 0, voiceParticipants: [{ identity: 'user_user-1_desktop', userId: 'user-1', displayName: 'Anna', platformRole: 'owner' }] },
+      { id: 'voice-2', serverId: 'server-1', name: 'Лобби', type: 'voice', position: 2, unreadCount: 0, voiceParticipants: [] },
     ],
     roles: [{ id: 'role-1', serverId: 'server-1', name: '@everyone', color: '#8d7a72', position: 0, isDefault: true, permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] }],
     members: [{ userId: 'user-1', displayName: 'Anna', serverDisplayName: null, privateAlias: null, platformRole: 'owner', joinedAt: '2026-01-01T00:00:00.000Z', roles: [] }],
@@ -291,7 +292,8 @@ describe('server UI', () => {
     const onCopyInvite = vi.fn(async () => undefined);
     const onServerSettings = vi.fn();
     const onRenameChannel = vi.fn();
-    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', replyTo: null, reactions: [], attachments: [], createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" busy={false} error={null} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={onMessageDraft} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={onConnectVoice} onCopyInvite={onCopyInvite} onCreateChannel={noop} onRenameChannel={onRenameChannel} onDeleteChannel={noop} onKickMember={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onServerSettings={onServerSettings} onLogout={noop} />);
+    const onMoveVoiceMember = vi.fn();
+    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[{ id: 'message-1', channelId: 'text-1', authorUserId: 'user-1', authorDisplayName: 'Anna', authorPlatformRole: 'owner', content: 'Привет, команда!', replyTo: null, reactions: [], attachments: [], createdAt: '2026-01-01T10:00:00.000Z', editedAt: null }]} messageDraft="" serverName="" busy={false} error={null} onBack={noop} onSwitchServer={noop} onChannel={onChannel} onMessageDraft={onMessageDraft} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={onMessageReaction} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={onConnectVoice} onMoveVoiceMember={onMoveVoiceMember} onCopyInvite={onCopyInvite} onCreateChannel={noop} onRenameChannel={onRenameChannel} onDeleteChannel={noop} onKickMember={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onServerSettings={onServerSettings} onLogout={noop} />);
     expect(screen.getByText('Привет, команда!')).toBeInTheDocument();
     expect(screen.getByText('Сервер команды разработки')).toBeInTheDocument();
     expect(screen.getAllByText('CEO Founder').length).toBeGreaterThan(0);
@@ -311,6 +313,9 @@ describe('server UI', () => {
     expect(onChannel).toHaveBeenCalledWith('voice-1');
     await userEvent.dblClick(screen.getByRole('button', { name: /^Голосовой/u }));
     expect(onConnectVoice).toHaveBeenCalledWith('voice-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Переместить Anna в другой голосовой канал' }));
+    await userEvent.click(within(screen.getByRole('dialog', { name: 'Переместить в…' })).getByRole('button', { name: 'Лобби' }));
+    expect(onMoveVoiceMember).toHaveBeenCalledWith('voice-2', 'user-1');
     fireEvent.contextMenu(screen.getByRole('button', { name: 'общий' }));
     await userEvent.click(screen.getByRole('menuitem', { name: 'Переименовать' }));
     const renameInput = screen.getByLabelText('Название канала');

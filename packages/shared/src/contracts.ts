@@ -659,6 +659,14 @@ export type RealtimeEventType =
   | "server.updated"
   | "server.channel.updated"
   | "voice.presence.updated"
+  | "voice.member.joined"
+  | "voice.member.left"
+  | "voice.member.moved"
+  | "voice.member.move.pending"
+  | "voice.member.move.required"
+  | "voice.member.move.failed"
+  | "voice.member.state.updated"
+  | "voice.server.snapshot.required"
   | "session.revoked"
   | "feature_flags.updated";
 
@@ -680,7 +688,58 @@ export type RealtimeClientCommand =
   | { type: "active_conversation.set"; conversationId: string | null }
   | { type: "delivery.ack"; conversationId: string; messageId: string }
   | { type: "conversation.read"; conversationId: string; messageId: string }
+  | { type: "voice.server.subscribe"; serverId: string; knownVersion?: number }
+  | { type: "voice.server.unsubscribe"; serverId: string }
   | { type: "ping" };
+
+export type VoiceMoveFailureCode =
+  | "NOT_IN_VOICE"
+  | "SOURCE_CHANGED"
+  | "TARGET_NOT_FOUND"
+  | "TARGET_NOT_VOICE"
+  | "TARGET_FULL"
+  | "MISSING_CONNECT_PERMISSION"
+  | "MISSING_MOVE_MEMBERS_PERMISSION"
+  | "ROLE_HIERARCHY_DENIED"
+  | "TARGET_CLIENT_OFFLINE"
+  | "TRANSPORT_ERROR"
+  | "JOIN_FAILED"
+  | "TIMEOUT"
+  | "CONFLICT";
+
+export interface VoiceMemberStateDto {
+  userId: string;
+  sessionId: string;
+  muted: boolean;
+  deafened: boolean;
+  speaking: boolean;
+  screenSharing: boolean;
+  connectionQuality?: "excellent" | "good" | "poor" | "unknown";
+}
+
+export interface ServerVoiceStateDto {
+  serverId: string;
+  version: number;
+  generatedAt: string;
+  channels: Array<{
+    channelId: string;
+    members: VoiceMemberStateDto[];
+  }>;
+}
+
+export interface MoveVoiceMemberRequest {
+  clientRequestId: string;
+  subjectUserId: string;
+  targetChannelId: string;
+  expectedSourceChannelId?: string;
+  expectedVoiceSessionId?: string;
+}
+
+export interface MoveVoiceMemberAccepted {
+  movementId: string;
+  status: "pending";
+  expiresAt: string;
+}
 
 export interface DesktopMessageNotification {
   id: string;
@@ -816,6 +875,7 @@ export interface RoomConnection {
   livekitUrl: string;
   livekitToken: string;
   participantIdentity: string;
+  voiceSessionId?: string;
   participantDisplayName: string;
   isOwner: boolean;
   contextType: "channel";

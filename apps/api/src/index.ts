@@ -6,6 +6,7 @@ import { LiveKitMediaService } from "./services/livekit.js";
 import { SmtpMailer } from "./services/mailer.js";
 import { createObjectStorage } from "./services/object-storage.js";
 import { createPresenceStore } from "./services/presence-store.js";
+import { createVoicePresenceStore } from "./services/voice-presence-store.js";
 import { createCanonicalMessagingStore } from "./services/canonical-messaging.js";
 import { createRealtimeBus, OutboxWorker } from "./services/realtime.js";
 import { createServerSettingsStore } from "./services/server-settings.js";
@@ -14,11 +15,13 @@ import {
   createIdentitySettingsStore,
 } from "./services/identity-settings.js";
 import { createMediaCleanupWorker } from "./services/media-cleanup.js";
+import { VoiceReconciliationWorker } from "./services/voice-reconciliation.js";
 
 const config = loadConfig();
 const database = createPostgresStore(config.DATABASE_URL);
 const objectStorage = createObjectStorage(config);
 const presenceStore = await createPresenceStore(config);
+const voicePresenceStore = await createVoicePresenceStore(config);
 const canonicalMessagingStore = createCanonicalMessagingStore(
   config.DATABASE_URL,
 );
@@ -40,6 +43,7 @@ const service = new VatrushkaService({
   media: new LiveKitMediaService(config),
   objectStorage,
   presenceStore,
+  voicePresenceStore,
   canonicalMessagingStore,
   realtimeBus,
   serverSettingsStore,
@@ -71,13 +75,21 @@ const mediaCleanupWorker = createMediaCleanupWorker(
   (details) => app.log.info(details, "Media cleanup job"),
 );
 mediaCleanupWorker?.start();
+const voiceReconciliationWorker = new VoiceReconciliationWorker(
+  service,
+  config.VOICE_RECONCILE_INTERVAL_SECONDS,
+  (error) => app.log.warn({ err: error }, "Voice presence reconciliation failed"),
+);
+voiceReconciliationWorker.start();
 
 app.addHook("onClose", async () => {
   objectStorage?.close();
   outboxWorker.stop();
   mediaCleanupWorker?.stop();
+  voiceReconciliationWorker.stop();
   await realtimeBus?.close();
   await presenceStore.close();
+  await voicePresenceStore.close();
   await canonicalMessagingStore.close();
   await serverSettingsStore.close();
   accountLifecycleWorker.stop();

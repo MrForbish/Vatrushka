@@ -32,6 +32,7 @@ export class RealtimeClient {
   private generation = 0;
   private activeConversationId: string | null = null;
   private readonly subscriptions = new Set<string>();
+  private readonly voiceSubscriptions = new Map<string, number | undefined>();
   private readonly eventListeners = new Set<EventListener>();
   private readonly statusListeners = new Set<StatusListener>();
   private readonly receivedEventIds = new Set<string>();
@@ -66,6 +67,16 @@ export class RealtimeClient {
   unsubscribe(conversationId: string): void {
     if (!this.subscriptions.delete(conversationId)) return;
     this.send({ type: 'unsubscribe', conversationId });
+  }
+
+  subscribeVoiceServer(serverId: string, knownVersion?: number): void {
+    this.voiceSubscriptions.set(serverId, knownVersion);
+    this.send({ type: 'voice.server.subscribe', serverId, ...(knownVersion === undefined ? {} : { knownVersion }) });
+  }
+
+  unsubscribeVoiceServer(serverId: string): void {
+    if (!this.voiceSubscriptions.delete(serverId)) return;
+    this.send({ type: 'voice.server.unsubscribe', serverId });
   }
 
   setActiveConversation(conversationId: string | null): void {
@@ -118,6 +129,8 @@ export class RealtimeClient {
       this.reconnectAttempt = 0;
       this.setStatus('connected');
       for (const conversationId of this.subscriptions) this.send({ type: 'subscribe', conversationId });
+      for (const [serverId, knownVersion] of this.voiceSubscriptions)
+        this.send({ type: 'voice.server.subscribe', serverId, ...(knownVersion === undefined ? {} : { knownVersion }) });
       this.send({ type: 'active_conversation.set', conversationId: this.activeConversationId });
       this.heartbeatTimer = window.setInterval(() => this.send({ type: 'ping' }), 20_000);
       return;

@@ -63,6 +63,10 @@ import {
   type ServerModerationSettings,
   type ServerOverviewSettings,
   type ServerSettingsMember,
+  type MoveVoiceMemberAccepted,
+  type MoveVoiceMemberRequest,
+  type ServerVoiceStateDto,
+  type RealtimeEventType,
   serverPermissions,
   highestRolePosition,
   resolveChannelPermissions,
@@ -106,6 +110,12 @@ import type {
 } from "./ports.js";
 import { attachmentObjectKey } from "./services/attachment-objects.js";
 import { MemoryPresenceStore } from "./services/presence-store.js";
+import {
+  MemoryVoicePresenceStore,
+  type PendingVoiceMove,
+  type VoicePresenceStore,
+  type VoiceSession,
+} from "./services/voice-presence-store.js";
 import type {
   CanonicalMentionInput,
   CanonicalMessagingStore,
@@ -118,6 +128,10 @@ import type {
 } from "./services/server-settings.js";
 import type { IdentitySettingsStore } from "./services/identity-settings.js";
 import { technicalMetrics } from "./services/metrics.js";
+import {
+  createVoiceTransportAdapter,
+  type VoiceTransportAdapter,
+} from "./services/voice-transport.js";
 import {
   hashOpaqueToken,
   hashOtp,
@@ -142,6 +156,8 @@ export interface ServiceDependencies {
   media: MediaService;
   objectStorage?: ObjectStorage | null;
   presenceStore?: PresenceStore;
+  voicePresenceStore?: VoicePresenceStore;
+  voiceTransport?: VoiceTransportAdapter;
   canonicalMessagingStore?: CanonicalMessagingStore;
   realtimeBus?: RedisRealtimeBus | null;
   serverSettingsStore?: ServerSettingsStore;
@@ -371,16 +387,15 @@ export class VatrushkaService {
   readonly media: MediaService;
   readonly objectStorage: ObjectStorage | null;
   readonly presenceStore: PresenceStore;
+  readonly voicePresenceStore: VoicePresenceStore;
+  readonly voiceTransport: VoiceTransportAdapter;
   readonly canonicalMessagingStore: CanonicalMessagingStore | null;
   readonly realtimeBus: RedisRealtimeBus | null;
   readonly serverSettingsStore: ServerSettingsStore | null;
   readonly identitySettingsStore: IdentitySettingsStore | null;
   private readonly mailer: Mailer;
   private readonly clock: () => Date;
-  private readonly pendingVoiceMoves = new Map<
-    string,
-    { channelId: string; expiresAt: Date; seamlesslyMoved: boolean }
-  >();
+  private readonly voiceMoveTimeouts = new Map<string, NodeJS.Timeout>();
 
   constructor(dependencies: ServiceDependencies) {
     this.config = dependencies.config;
@@ -390,6 +405,11 @@ export class VatrushkaService {
     this.objectStorage = dependencies.objectStorage ?? null;
     this.presenceStore =
       dependencies.presenceStore ?? new MemoryPresenceStore();
+    this.voicePresenceStore =
+      dependencies.voicePresenceStore ?? new MemoryVoicePresenceStore();
+    this.voiceTransport =
+      dependencies.voiceTransport ??
+      createVoiceTransportAdapter(dependencies.config, dependencies.media);
     this.canonicalMessagingStore = dependencies.canonicalMessagingStore ?? null;
     this.realtimeBus = dependencies.realtimeBus ?? null;
     this.serverSettingsStore = dependencies.serverSettingsStore ?? null;
@@ -1517,8 +1537,7 @@ export class VatrushkaService {
 
   private async broadcastServerUpdate(
     serverId: string,
-    type:
-      "server.updated" | "server.channel.updated" | "voice.presence.updated",
+    type: RealtimeEventType,
     payload: Record<string, unknown>,
   ): Promise<void> {
     if (!this.realtimeBus) return;
@@ -1537,6 +1556,129 @@ export class VatrushkaService {
     } catch {
       // Database updates are authoritative. A temporary Redis outage is healed
       // by the client's periodic refresh and must not roll back user changes.
+    }
+  }
+
+  private async voiceRecipients(
+    serverId: string,
+    channelIds: string[],
+    requireEveryChannel = true,
+  ): Promise<string[]> {
+    const server = await this.store.findServerById(serverId);
+    if (!server) return [];
+    const channels = (
+      await Promise.all(
+        channelIds.map((channelId) => this.store.findServerChannel(channelId)),
+      )
+    ).filter(
+      (channel): channel is ServerChannelRecord =>
+        Boolean(channel && channel.serverId === serverId),
+    );
+    if (channels.length !== channelIds.length) return [];
+    const members = await this.store.listServerMembers(serverId);
+    const recipients: string[] = [];
+    for (const member of members) {
+      const user = await this.store.findUserById(member.userId);
+      if (!user) continue;
+      const visibility = await Promise.all(
+        channels.map(async (channel) =>
+          (await this.channelPermissionsFor(server, channel, user)).has(
+            "VIEW_CHANNEL",
+          ),
+        ),
+      );
+      if (
+        requireEveryChannel
+          ? visibility.every(Boolean)
+          : visibility.some(Boolean)
+      )
+        recipients.push(user.id);
+    }
+    return recipients;
+  }
+
+  private async publishVoiceUpdate(
+    serverId: string,
+    channelIds: string[],
+    type: RealtimeEventType,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.realtimeBus) return;
+    try {
+      const targetUserIds = await this.voiceRecipients(serverId, channelIds);
+      if (targetUserIds.length === 0) return;
+      await this.realtimeBus.publish({
+        id: randomUUID(),
+        type,
+        occurredAt: this.now().toISOString(),
+        conversationId: null,
+        targetUserIds,
+        payload: { serverId, ...payload },
+      });
+    } catch {
+      // Snapshot reconciliation heals a temporary realtime fanout failure.
+    }
+  }
+
+  private async publishVoiceMoved(
+    serverId: string,
+    sourceChannelId: string,
+    targetChannelId: string,
+    payload: {
+      movementId: string;
+      userId: string;
+      sessionId: string;
+      version: number;
+      channelName: string;
+    },
+  ): Promise<void> {
+    if (!this.realtimeBus) return;
+    try {
+      const [sourceRecipients, targetRecipients] = await Promise.all([
+        this.voiceRecipients(serverId, [sourceChannelId]),
+        this.voiceRecipients(serverId, [targetChannelId]),
+      ]);
+      const source = new Set(sourceRecipients);
+      const target = new Set(targetRecipients);
+      const both = sourceRecipients.filter((userId) => target.has(userId));
+      const sourceOnly = sourceRecipients.filter((userId) => !target.has(userId));
+      const targetOnly = targetRecipients.filter((userId) => !source.has(userId));
+      const publish = (
+        type: RealtimeEventType,
+        targetUserIds: string[],
+        eventPayload: Record<string, unknown>,
+      ) =>
+        targetUserIds.length === 0
+          ? Promise.resolve(true)
+          : this.realtimeBus!.publish({
+              id: randomUUID(),
+              type,
+              occurredAt: this.now().toISOString(),
+              conversationId: null,
+              targetUserIds,
+              payload: { serverId, ...eventPayload },
+            });
+      await Promise.all([
+        publish("voice.member.moved", both, {
+          ...payload,
+          fromChannelId: sourceChannelId,
+          toChannelId: targetChannelId,
+        }),
+        publish("voice.member.left", sourceOnly, {
+          channelId: sourceChannelId,
+          userId: payload.userId,
+          sessionId: payload.sessionId,
+          version: payload.version,
+        }),
+        publish("voice.member.joined", targetOnly, {
+          channelId: targetChannelId,
+          userId: payload.userId,
+          sessionId: payload.sessionId,
+          version: payload.version,
+        }),
+      ]);
+    } catch {
+      // Snapshot reconciliation heals a temporary realtime fanout failure.
     }
   }
 
@@ -3653,6 +3795,7 @@ export class VatrushkaService {
         maxParticipants: 25,
       });
       const identity = `user_${user.id}_${randomOpaqueToken(6)}`;
+      const voiceSessionId = randomUUID();
       const token = await this.media.issueToken({
         roomName: channel.livekitRoomName,
         identity,
@@ -3660,6 +3803,8 @@ export class VatrushkaService {
         metadata: {
           serverId: server.id,
           channelId: channel.id,
+          userId: user.id,
+          voiceSessionId,
           kind: "user",
           platformRole: user.platformRole,
         },
@@ -3681,6 +3826,7 @@ export class VatrushkaService {
         livekitUrl: this.config.LIVEKIT_URL,
         livekitToken: token,
         participantIdentity: identity,
+        voiceSessionId,
         participantDisplayName,
         isOwner: permissions.has("MUTE_MEMBERS"),
         contextType: "channel",
@@ -3698,52 +3844,203 @@ export class VatrushkaService {
     }
   }
 
-  async requestVoiceMemberMove(
+  async getServerVoiceState(
     authorization: string | undefined,
-    channelId: string,
-    memberUserId: string,
-  ): Promise<void> {
+    serverId: string,
+  ): Promise<ServerVoiceStateDto> {
     const actor = await this.authenticate(authorization);
-    const channel = await this.requireVoiceChannel(channelId);
-    const server = await this.requireServer(channel.serverId);
-    await this.requireChannelPermission(server, channel, actor, "MOVE_MEMBERS");
-    if (memberUserId === actor.id || memberUserId === server.ownerUserId)
-      throw new AppError("SERVER_PERMISSION_DENIED", 403);
-    const [targetMember, targetUser, roles] = await Promise.all([
-      this.store.findServerMember(server.id, memberUserId),
-      this.store.findUserById(memberUserId),
-      this.store.listServerRoles(server.id),
-    ]);
-    if (!targetMember || !targetUser?.displayName)
+    const server = await this.requireServer(serverId);
+    if (!(await this.store.findServerMember(server.id, actor.id)))
       throw new AppError("SERVER_NOT_FOUND", 404);
-    const actorTopPosition = await this.serverRolePositionFor(
-      server,
-      actor,
-      roles,
-    );
-    const targetRoleIds = new Set(
-      await this.store.listMemberRoleIds(server.id, memberUserId),
-    );
-    const targetTopPosition = Math.max(
-      0,
-      ...roles
-        .filter((role) => targetRoleIds.has(role.id))
-        .map((role) => role.position),
-    );
-    if (targetTopPosition >= actorTopPosition)
+    const channels = await this.store.listServerChannels(server.id);
+    const visibleVoiceChannels = new Set<string>();
+    for (const channel of channels) {
+      if (channel.type !== "voice") continue;
+      const permissions = await this.channelPermissionsFor(server, channel, actor);
+      if (permissions.has("VIEW_CHANNEL")) visibleVoiceChannels.add(channel.id);
+    }
+    await this.reconcileVoicePresence(server.id);
+    const snapshot = await this.voicePresenceStore.snapshot(server.id);
+    return {
+      serverId: server.id,
+      version: snapshot.version,
+      generatedAt: snapshot.generatedAt,
+      channels: [...visibleVoiceChannels].map((channelId) => ({
+        channelId,
+        members: snapshot.sessions
+          .filter((session) => session.channelId === channelId)
+          .map((session) => ({
+            userId: session.userId,
+            sessionId: session.sessionId,
+            muted: session.muted,
+            deafened: session.deafened,
+            speaking: session.speaking,
+            screenSharing: session.screenSharing,
+            connectionQuality: session.connectionQuality,
+          })),
+      })),
+    };
+  }
+
+  async reconcileVoicePresence(serverId?: string): Promise<number> {
+    const serverIds = serverId
+      ? [serverId]
+      : await this.voicePresenceStore.activeServerIds();
+    let totalDiff = 0;
+    for (const candidateServerId of serverIds) {
+      let serverDiff = 0;
+      const server = await this.store.findServerById(candidateServerId);
+      if (!server) continue;
+      const channels = (await this.store.listServerChannels(server.id)).filter(
+        (channel) => channel.type === "voice" && channel.livekitRoomName,
+      );
+      const actualByChannel = new Map<string, Set<string>>();
+      for (const channel of channels) {
+        const actual = new Set(
+          (
+            await this.voiceTransport.listParticipants(channel.livekitRoomName!)
+          ).map((participant) => participant.identity),
+        );
+        actualByChannel.set(channel.id, actual);
+        for (const identity of actual) {
+          const userId = this.voiceUserIdFromIdentity(identity);
+          if (!userId || !(await this.store.findServerMember(server.id, userId)))
+            continue;
+          const current = await this.voicePresenceStore.getSession(userId);
+          if (
+            current?.channelId === channel.id &&
+            current.participantIdentity === identity
+          )
+            continue;
+          const now = this.now().toISOString();
+          await this.voicePresenceStore.upsertSession({
+            sessionId: current?.participantIdentity === identity
+              ? current.sessionId
+              : identity,
+            userId,
+            serverId: server.id,
+            channelId: channel.id,
+            livekitRoomName: channel.livekitRoomName!,
+            participantIdentity: identity,
+            participantSid: current?.participantIdentity === identity
+              ? current.participantSid
+              : null,
+            muted: current?.muted ?? false,
+            deafened: current?.deafened ?? false,
+            speaking: false,
+            screenSharing: current?.screenSharing ?? false,
+            connectionQuality: current?.connectionQuality ?? "unknown",
+            joinedAt: current?.joinedAt ?? now,
+            updatedAt: now,
+          });
+          totalDiff += 1;
+          serverDiff += 1;
+        }
+      }
+      const projected = await this.voicePresenceStore.snapshot(server.id);
+      for (const session of projected.sessions) {
+        if (
+          actualByChannel
+            .get(session.channelId)
+            ?.has(session.participantIdentity)
+        )
+          continue;
+        const mutation = await this.voicePresenceStore.removeSession(
+          session.userId,
+          session.sessionId,
+          session.channelId,
+        );
+        if (mutation.changed) {
+          totalDiff += 1;
+          serverDiff += 1;
+        }
+      }
+      if (serverDiff > 0) {
+        const reconciled = await this.voicePresenceStore.snapshot(server.id);
+        await this.broadcastServerUpdate(
+          server.id,
+          "voice.server.snapshot.required",
+          { version: reconciled.version },
+        );
+      }
+    }
+    if (totalDiff > 0)
+      technicalMetrics.increment(
+        "voice_presence_reconciliation_diff_total",
+        totalDiff,
+      );
+    return totalDiff;
+  }
+
+  async requestServerVoiceMove(
+    authorization: string | undefined,
+    serverId: string,
+    input: MoveVoiceMemberRequest,
+  ): Promise<MoveVoiceMemberAccepted> {
+    const startedAt = performance.now();
+    const actor = await this.authenticate(authorization);
+    const server = await this.requireServer(serverId);
+    const channel = await this.requireVoiceChannel(input.targetChannelId);
+    if (channel.serverId !== server.id)
+      throw new AppError("CHANNEL_NOT_FOUND", 404);
+    if (!this.config.VOICE_DND_ENABLED)
       throw new AppError("SERVER_PERMISSION_DENIED", 403);
+    const [subjectMember, subjectUser] = await Promise.all([
+      this.store.findServerMember(server.id, input.subjectUserId),
+      this.store.findUserById(input.subjectUserId),
+    ]);
+    if (!subjectMember || !subjectUser?.displayName)
+      throw new AppError("SERVER_NOT_FOUND", 404);
     const targetPermissions = await this.channelPermissionsFor(
       server,
       channel,
-      targetUser,
+      subjectUser,
     );
-    if (!targetPermissions.has("CONNECT_VOICE"))
+    if (!targetPermissions.has("VIEW_CHANNEL") || !targetPermissions.has("CONNECT_VOICE"))
       throw new AppError("SERVER_PERMISSION_DENIED", 403);
-    if (!channel.livekitRoomName) throw new AppError("CHANNEL_NOT_FOUND", 404);
 
-    let seamlesslyMoved = false;
-    const sourceParticipants: Array<{ roomName: string; identity: string }> =
-      [];
+    let source = await this.voicePresenceStore.getSession(input.subjectUserId);
+    if (!source || source.serverId !== server.id) {
+      source = await this.discoverVoiceSession(server, input.subjectUserId);
+      if (source) await this.voicePresenceStore.upsertSession(source);
+    }
+    if (!source) throw new AppError("PARTICIPANT_NOT_IN_VOICE", 409);
+    if (source.channelId === channel.id)
+      throw new AppError("VOICE_MOVE_CONFLICT", 409);
+    if (
+      input.expectedSourceChannelId &&
+      input.expectedSourceChannelId !== source.channelId
+    )
+      throw new AppError("VOICE_SOURCE_CHANGED", 409);
+    if (
+      input.expectedVoiceSessionId &&
+      input.expectedVoiceSessionId !== source.sessionId
+    )
+      throw new AppError("VOICE_SOURCE_CHANGED", 409);
+
+    if (actor.id !== input.subjectUserId) {
+      if (!this.config.VOICE_MODERATOR_MOVE_ENABLED)
+        throw new AppError("SERVER_PERMISSION_DENIED", 403);
+      const sourceChannel = await this.requireVoiceChannel(source.channelId);
+      await this.requireChannelPermission(server, sourceChannel, actor, "MOVE_MEMBERS");
+      await this.requireChannelPermission(server, channel, actor, "MOVE_MEMBERS");
+      if (input.subjectUserId === server.ownerUserId)
+        throw new AppError("SERVER_PERMISSION_DENIED", 403);
+      const roles = await this.store.listServerRoles(server.id);
+      const actorTopPosition = await this.serverRolePositionFor(server, actor, roles);
+      const subjectRoleIds = new Set(
+        await this.store.listMemberRoleIds(server.id, input.subjectUserId),
+      );
+      const subjectTopPosition = Math.max(
+        0,
+        ...roles
+          .filter((role) => subjectRoleIds.has(role.id))
+          .map((role) => role.position),
+      );
+      if (subjectTopPosition >= actorTopPosition)
+        throw new AppError("SERVER_PERMISSION_DENIED", 403);
+    }
+    if (!channel.livekitRoomName) throw new AppError("CHANNEL_NOT_FOUND", 404);
     try {
       await this.media.createRoom({
         id: channel.id,
@@ -3751,80 +4048,279 @@ export class VatrushkaService {
         name: channel.livekitRoomName,
         maxParticipants: 25,
       });
-      for (const candidate of await this.store.listServerChannels(server.id)) {
-        if (
-          candidate.type !== "voice" ||
-          !candidate.livekitRoomName ||
-          candidate.id === channel.id
-        )
-          continue;
-        for (const identity of (
-          await this.media.participantIdentities(candidate.livekitRoomName)
-        ).filter((value) => value.startsWith(`user_${memberUserId}_`))) {
-          sourceParticipants.push({
-            roomName: candidate.livekitRoomName,
-            identity,
-          });
-        }
-      }
     } catch {
       throw new AppError("LIVEKIT_UNAVAILABLE", 503);
     }
-    if (sourceParticipants.length === 0)
-      throw new AppError("PARTICIPANT_NOT_IN_VOICE", 409);
-    for (const source of sourceParticipants) {
-      try {
-        await this.media.moveParticipant(
-          source.roomName,
-          source.identity,
-          channel.livekitRoomName,
-          {
-            canPublishMicrophone: targetPermissions.has("SPEAK"),
-            canPublishScreen: targetPermissions.has("STREAM_SCREEN"),
-            canPublishScreenAudio: targetPermissions.has(
-              "STREAM_APPLICATION_AUDIO",
-            ),
-          },
-        );
-        seamlesslyMoved = true;
-      } catch {
-        // Self-hosted LiveKit falls back to a controlled reconnect by the target client.
-        await this.media.removeParticipant(source.roomName, source.identity);
-      }
-      await this.store.releaseChannelLeaseByParticipant(source.identity);
-    }
-    this.pendingVoiceMoves.set(memberUserId, {
-      channelId: channel.id,
-      expiresAt: new Date(this.now().getTime() + 60_000),
-      seamlesslyMoved,
-    });
-    await this.recordServerAudit(
-      server.id,
-      actor,
-      "MEMBER_VOICE_MOVED",
-      "MEMBER",
-      memberUserId,
-      null,
-      { channelId: channel.id, channelName: channel.name },
+    if ((await this.media.participantCount(channel.livekitRoomName)) >= 25)
+      throw new AppError("VOICE_TARGET_FULL", 409);
+
+    const createdAt = this.now();
+    const move: PendingVoiceMove = {
+      movementId: randomUUID(),
+      clientRequestId: input.clientRequestId,
+      actorUserId: actor.id,
+      subjectUserId: input.subjectUserId,
+      serverId: server.id,
+      fromChannelId: source.channelId,
+      toChannelId: channel.id,
+      voiceSessionId: source.sessionId,
+      status: "authorized",
+      createdAt: createdAt.toISOString(),
+      expiresAt: new Date(
+        createdAt.getTime() + this.config.VOICE_MOVE_TIMEOUT_SECONDS * 1_000,
+      ).toISOString(),
+      failureCode: null,
+    };
+    const result = await this.voicePresenceStore.createMove(
+      move,
+      this.config.VOICE_MOVE_TIMEOUT_SECONDS,
     );
+    if (result.status === "conflict")
+      throw new AppError("VOICE_MOVE_CONFLICT", 409);
+    const acceptedMove = result.move;
+    if (result.status === "created") {
+      technicalMetrics.increment("voice_move_requests_total", 1, {
+        strategy: this.config.VOICE_MOVE_STRATEGY,
+      });
+      await this.voicePresenceStore.updateMove(
+        acceptedMove.movementId,
+        "dispatching",
+      );
+      if (this.config.VOICE_MOVE_STRATEGY === "livekit-cloud") {
+        try {
+          await this.voiceTransport.moveParticipant({
+            sourceRoomName: source.livekitRoomName,
+            participantIdentity: source.participantIdentity,
+            destinationRoomName: channel.livekitRoomName,
+            permissions: {
+              canPublishMicrophone: targetPermissions.has("SPEAK"),
+              canPublishScreen: targetPermissions.has("STREAM_SCREEN"),
+              canPublishScreenAudio: targetPermissions.has(
+                "STREAM_APPLICATION_AUDIO",
+              ),
+            },
+          });
+        } catch (error) {
+          await this.failVoiceMove(acceptedMove, "TRANSPORT_ERROR");
+          throw new AppError("LIVEKIT_UNAVAILABLE", 503, undefined, {
+            operation: "move_participant",
+            reason: error instanceof Error ? error.message : "unknown",
+          });
+        }
+      }
+      await this.voicePresenceStore.updateMove(
+        acceptedMove.movementId,
+        "waiting_for_target_join",
+      );
+      if (
+        this.config.VOICE_MOVE_STRATEGY === "controlled-reconnect" &&
+        this.realtimeBus
+      )
+        await this.realtimeBus.publish({
+            id: randomUUID(),
+            type: "voice.member.move.required",
+            occurredAt: this.now().toISOString(),
+            conversationId: null,
+            targetUserIds: [acceptedMove.subjectUserId],
+            payload: {
+              movementId: acceptedMove.movementId,
+              serverId: acceptedMove.serverId,
+              fromChannelId: acceptedMove.fromChannelId,
+              toChannelId: acceptedMove.toChannelId,
+              expiresAt: acceptedMove.expiresAt,
+              connectionEndpoint: "/api/v1/voice/move-request",
+            },
+        });
+      await this.publishVoiceUpdate(server.id, [
+        acceptedMove.fromChannelId,
+        acceptedMove.toChannelId,
+      ], "voice.member.move.pending", {
+          movementId: acceptedMove.movementId,
+          subjectUserId: acceptedMove.subjectUserId,
+          fromChannelId: acceptedMove.fromChannelId,
+          toChannelId: acceptedMove.toChannelId,
+          expiresAt: acceptedMove.expiresAt,
+      });
+      this.scheduleVoiceMoveTimeout(acceptedMove);
+      if (actor.id !== input.subjectUserId)
+        await this.recordServerAudit(
+          server.id,
+          actor,
+          "MEMBER_VOICE_MOVED",
+          "MEMBER",
+          input.subjectUserId,
+          null,
+          { channelId: channel.id, channelName: channel.name },
+        );
+    }
+    technicalMetrics.observeHistogram(
+      "voice_move_duration_ms",
+      performance.now() - startedAt,
+      [10, 25, 50, 100, 250, 500, 1_000, 2_500],
+      { status: "accepted" },
+    );
+    return {
+      movementId: acceptedMove.movementId,
+      status: "pending",
+      expiresAt: acceptedMove.expiresAt,
+    };
+  }
+
+  async requestVoiceMemberMove(
+    authorization: string | undefined,
+    channelId: string,
+    memberUserId: string,
+  ): Promise<void> {
+    const channel = await this.requireVoiceChannel(channelId);
+    await this.requestServerVoiceMove(authorization, channel.serverId, {
+      clientRequestId: randomUUID(),
+      subjectUserId: memberUserId,
+      targetChannelId: channelId,
+    });
   }
 
   async pollVoiceMemberMove(
     authorization: string | undefined,
   ): Promise<RoomConnection | null> {
     const user = await this.authenticate(authorization);
-    const pending = this.pendingVoiceMoves.get(user.id);
+    const pending = await this.voicePresenceStore.getMoveForUser(user.id);
     if (!pending) return null;
-    if (pending.expiresAt.getTime() <= this.now().getTime()) {
-      this.pendingVoiceMoves.delete(user.id);
+    if (new Date(pending.expiresAt).getTime() <= this.now().getTime()) {
+      await this.failVoiceMove(pending, "TIMEOUT");
       return null;
     }
+    if (pending.status !== "waiting_for_target_join") return null;
     const connection = await this.connectVoiceChannel(
       authorization,
-      pending.channelId,
+      pending.toChannelId,
     );
-    this.pendingVoiceMoves.delete(user.id);
-    return { ...connection, seamlesslyMoved: pending.seamlesslyMoved };
+    const currentSession = await this.voicePresenceStore.getSession(user.id);
+    return {
+      ...connection,
+      ...(this.config.VOICE_MOVE_STRATEGY === "livekit-cloud" && currentSession
+        ? {
+            participantIdentity: currentSession.participantIdentity,
+            voiceSessionId: currentSession.sessionId,
+          }
+        : {}),
+      seamlesslyMoved: this.config.VOICE_MOVE_STRATEGY === "livekit-cloud",
+    };
+  }
+
+  private async discoverVoiceSession(
+    server: ServerRecord,
+    userId: string,
+  ): Promise<VoiceSession | null> {
+    for (const channel of await this.store.listServerChannels(server.id)) {
+      if (channel.type !== "voice" || !channel.livekitRoomName) continue;
+      const identity = (
+        await this.voiceTransport.listParticipants(channel.livekitRoomName)
+      ).find((candidate) => candidate.identity.startsWith(`user_${userId}_`))
+        ?.identity;
+      if (!identity) continue;
+      const now = this.now().toISOString();
+      return {
+        sessionId: identity,
+        userId,
+        serverId: server.id,
+        channelId: channel.id,
+        livekitRoomName: channel.livekitRoomName,
+        participantIdentity: identity,
+        participantSid: null,
+        muted: false,
+        deafened: false,
+        speaking: false,
+        screenSharing: false,
+        connectionQuality: "unknown",
+        joinedAt: now,
+        updatedAt: now,
+      };
+    }
+    return null;
+  }
+
+  private scheduleVoiceMoveTimeout(move: PendingVoiceMove): void {
+    const existing = this.voiceMoveTimeouts.get(move.movementId);
+    if (existing) clearTimeout(existing);
+    const delay = Math.max(
+      0,
+      new Date(move.expiresAt).getTime() - this.now().getTime(),
+    );
+    const timer = setTimeout(() => {
+      this.voiceMoveTimeouts.delete(move.movementId);
+      void this.voicePresenceStore.getMove(move.movementId).then((current) => {
+        if (
+          current &&
+          current.status !== "confirmed" &&
+          current.status !== "failed" &&
+          current.status !== "timed_out" &&
+          current.status !== "cancelled"
+        )
+          return this.failVoiceMove(current, "TIMEOUT");
+        return undefined;
+      });
+    }, delay);
+    timer.unref();
+    this.voiceMoveTimeouts.set(move.movementId, timer);
+  }
+
+  private async failVoiceMove(
+    move: PendingVoiceMove,
+    failureCode: string,
+  ): Promise<void> {
+    const timeout = this.voiceMoveTimeouts.get(move.movementId);
+    if (timeout) clearTimeout(timeout);
+    this.voiceMoveTimeouts.delete(move.movementId);
+    await this.voicePresenceStore.updateMove(
+      move.movementId,
+      failureCode === "TIMEOUT" ? "timed_out" : "failed",
+      failureCode,
+    );
+    await this.voicePresenceStore.finishMove(move.movementId);
+    const removal =
+      failureCode === "TIMEOUT"
+        ? await this.voicePresenceStore.removeSession(
+            move.subjectUserId,
+            move.voiceSessionId,
+            move.fromChannelId,
+          )
+        : {
+            changed: false,
+            version: 0,
+            previousChannelId: null,
+            previousSessionId: null,
+          };
+    technicalMetrics.increment(
+      failureCode === "TIMEOUT"
+        ? "voice_move_timeout_total"
+        : "voice_move_failure_total",
+      1,
+      { failureCode },
+    );
+    if (removal.changed)
+      await this.publishVoiceUpdate(move.serverId, [move.fromChannelId], "voice.member.left", {
+        channelId: removal.previousChannelId,
+        userId: move.subjectUserId,
+        sessionId: removal.previousSessionId,
+        version: removal.version,
+      });
+    await this.publishVoiceUpdate(move.serverId, [
+      move.fromChannelId,
+      move.toChannelId,
+    ], "voice.member.move.failed", {
+      movementId: move.movementId,
+      subjectUserId: move.subjectUserId,
+      code: failureCode,
+      message:
+        failureCode === "TIMEOUT"
+          ? "Перемещение заняло слишком много времени."
+          : "Не удалось подключить участника к новому каналу.",
+    });
+  }
+
+  private voiceUserIdFromIdentity(identity: string | undefined): string | null {
+    if (!identity) return null;
+    return /^user_([0-9a-f-]{36})_/iu.exec(identity)?.[1] ?? null;
   }
 
   async kickChannelParticipant(
@@ -3928,11 +4424,20 @@ export class VatrushkaService {
   }
 
   async handleWebhookEvent(event: {
+    id?: string;
     event?: string;
-    participant?: { identity?: string; metadata?: string };
-    room?: { metadata?: string };
-    track?: { source?: TrackSource };
+    participant?: {
+      identity?: string;
+      metadata?: string;
+      sid?: string;
+    };
+    room?: { metadata?: string; name?: string };
+    track?: { source?: TrackSource; muted?: boolean };
   }): Promise<void> {
+    if (event.id && !(await this.voicePresenceStore.acceptWebhook(event.id))) {
+      technicalMetrics.increment("voice_webhook_duplicate_total");
+      return;
+    }
     const identity = event.participant?.identity;
     if (
       (event.event === "participant_left" ||
@@ -3947,40 +4452,189 @@ export class VatrushkaService {
         const metadata = JSON.parse(event.room.metadata) as {
           appChannelId?: string;
         };
-        if (metadata.appChannelId)
+        if (metadata.appChannelId) {
           await this.store.releaseChannelLeaseByChannel(metadata.appChannelId);
+          const finishedChannel = await this.store.findServerChannel(
+            metadata.appChannelId,
+          );
+          if (finishedChannel) {
+            const snapshot = await this.voicePresenceStore.snapshot(
+              finishedChannel.serverId,
+            );
+            let changed = false;
+            for (const session of snapshot.sessions.filter(
+              (candidate) => candidate.channelId === finishedChannel.id,
+            )) {
+              const mutation = await this.voicePresenceStore.removeSession(
+                session.userId,
+                session.sessionId,
+                session.channelId,
+              );
+              changed ||= mutation.changed;
+            }
+            if (changed) {
+              const next = await this.voicePresenceStore.snapshot(
+                finishedChannel.serverId,
+              );
+              await this.broadcastServerUpdate(
+                finishedChannel.serverId,
+                "voice.server.snapshot.required",
+                { version: next.version },
+              );
+            }
+          }
+        }
       } catch {
         // LiveKit metadata is treated as untrusted input.
       }
     }
-    if (
-      (event.event === "participant_joined" ||
-        event.event === "participant_left" ||
-        event.event === "participant_connection_aborted") &&
-      event.participant?.metadata
-    ) {
-      try {
-        const metadata = JSON.parse(event.participant.metadata) as {
-          serverId?: unknown;
-          channelId?: unknown;
-        };
-        if (
-          typeof metadata.serverId === "string" &&
-          typeof metadata.channelId === "string"
-        ) {
-          await this.broadcastServerUpdate(
-            metadata.serverId,
-            "voice.presence.updated",
-            {
-              action: event.event,
-              channelId: metadata.channelId,
-              participantIdentity: identity ?? null,
-            },
-          );
-        }
-      } catch {
-        // Participant metadata is untrusted; reconciliation still refreshes the list every 30 seconds.
+    let metadata: {
+      serverId?: unknown;
+      channelId?: unknown;
+      userId?: unknown;
+      voiceSessionId?: unknown;
+    } = {};
+    try {
+      if (event.participant?.metadata)
+        metadata = JSON.parse(event.participant.metadata) as typeof metadata;
+    } catch {
+      // Participant metadata is untrusted and is validated against PostgreSQL below.
+    }
+    const serverId =
+      typeof metadata.serverId === "string" ? metadata.serverId : null;
+    const userId =
+      typeof metadata.userId === "string"
+        ? metadata.userId
+        : this.voiceUserIdFromIdentity(identity);
+    if (!serverId || !userId || !identity) return;
+    const server = await this.store.findServerById(serverId);
+    if (!server || !(await this.store.findServerMember(server.id, userId))) return;
+    const channels = await this.store.listServerChannels(server.id);
+    const roomChannel = event.room?.name
+      ? channels.find((candidate) => candidate.livekitRoomName === event.room?.name)
+      : undefined;
+    const channel =
+      roomChannel ??
+      (typeof metadata.channelId === "string"
+        ? channels.find((candidate) => candidate.id === metadata.channelId)
+        : undefined);
+    if (!channel || channel.type !== "voice" || !channel.livekitRoomName) return;
+    const sessionId =
+      typeof metadata.voiceSessionId === "string"
+        ? metadata.voiceSessionId
+        : (event.participant?.sid ?? identity);
+
+    if (event.event === "participant_joined") {
+      const now = this.now().toISOString();
+      const pending = await this.voicePresenceStore.getMoveForUser(userId);
+      const mutation = await this.voicePresenceStore.upsertSession({
+        sessionId,
+        userId,
+        serverId: server.id,
+        channelId: channel.id,
+        livekitRoomName: channel.livekitRoomName,
+        participantIdentity: identity,
+        participantSid: event.participant?.sid ?? null,
+        muted: false,
+        deafened: false,
+        speaking: false,
+        screenSharing: false,
+        connectionQuality: "unknown",
+        joinedAt: now,
+        updatedAt: now,
+      });
+      if (pending && pending.toChannelId === channel.id) {
+        const timeout = this.voiceMoveTimeouts.get(pending.movementId);
+        if (timeout) clearTimeout(timeout);
+        this.voiceMoveTimeouts.delete(pending.movementId);
+        await this.voicePresenceStore.updateMove(
+          pending.movementId,
+          "confirmed",
+        );
+        await this.voicePresenceStore.finishMove(pending.movementId);
+        technicalMetrics.increment("voice_move_success_total", 1, {
+          strategy: this.config.VOICE_MOVE_STRATEGY,
+        });
+        await this.publishVoiceMoved(
+          server.id,
+          pending.fromChannelId,
+          channel.id,
+          {
+          movementId: pending.movementId,
+          userId,
+          sessionId,
+          channelName: channel.name,
+          version: mutation.version,
+          },
+        );
+      } else if (mutation.changed) {
+        await this.publishVoiceUpdate(server.id, [channel.id], "voice.member.joined", {
+          channelId: channel.id,
+          userId,
+          sessionId,
+          version: mutation.version,
+        });
       }
+      const snapshot = await this.voicePresenceStore.snapshot(server.id);
+      technicalMetrics.set("voice_active_sessions", snapshot.sessions.length);
+      return;
+    }
+
+    if (
+      event.event === "participant_left" ||
+      event.event === "participant_connection_aborted"
+    ) {
+      const pending = await this.voicePresenceStore.getMoveForUser(userId);
+      const current = await this.voicePresenceStore.getSession(userId);
+      if (
+        pending &&
+        pending.fromChannelId === channel.id &&
+        current?.sessionId === sessionId &&
+        pending.voiceSessionId === sessionId
+      )
+        return;
+      const mutation = await this.voicePresenceStore.removeSession(
+        userId,
+        sessionId,
+        channel.id,
+      );
+      if (
+        mutation.changed &&
+        !(
+          pending &&
+          pending.fromChannelId === mutation.previousChannelId &&
+          pending.voiceSessionId === mutation.previousSessionId
+        )
+      )
+        await this.publishVoiceUpdate(server.id, [channel.id], "voice.member.left", {
+          channelId: mutation.previousChannelId,
+          userId,
+          sessionId: mutation.previousSessionId,
+          version: mutation.version,
+        });
+      const snapshot = await this.voicePresenceStore.snapshot(server.id);
+      technicalMetrics.set("voice_active_sessions", snapshot.sessions.length);
+      return;
+    }
+
+    if (
+      event.event === "track_published" ||
+      event.event === "track_unpublished"
+    ) {
+      const screenSharing = event.track?.source === TrackSource.SCREEN_SHARE;
+      if (!screenSharing) return;
+      const updated = await this.voicePresenceStore.updateSessionState(
+        userId,
+        sessionId,
+        { screenSharing: event.event === "track_published" },
+      );
+      if (updated)
+        await this.publishVoiceUpdate(server.id, [channel.id], "voice.member.state.updated", {
+          channelId: updated.channelId,
+          userId,
+          sessionId: updated.sessionId,
+          patch: { screenSharing: updated.screenSharing },
+        });
     }
   }
 

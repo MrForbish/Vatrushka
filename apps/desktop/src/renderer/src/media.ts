@@ -427,6 +427,7 @@ export class MediaSession {
     const refresh = (): void => this.refreshSnapshot();
     room
       .on(RoomEvent.ConnectionStateChanged, refresh)
+      .on(RoomEvent.Moved, refresh)
       .on(RoomEvent.ParticipantConnected, refresh)
       .on(RoomEvent.ParticipantDisconnected, (participant) => {
         this.participantVolumes.delete(participant.identity);

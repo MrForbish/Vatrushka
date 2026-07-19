@@ -213,6 +213,7 @@ const connectionSchema = z.object({
   livekitUrl: z.string(),
   livekitToken: z.string(),
   participantIdentity: z.string(),
+  voiceSessionId: z.string().optional(),
   participantDisplayName: z.string(),
   isOwner: z.boolean(),
   contextType: z.literal("channel"),
@@ -225,6 +226,42 @@ const connectionSchema = z.object({
   canStreamApplicationAudio: z.boolean().optional(),
   canMoveMembers: z.boolean().optional(),
   seamlesslyMoved: z.boolean().optional(),
+});
+const voiceMemberStateResponseSchema = z.object({
+  userId: z.uuid(),
+  sessionId: z.string(),
+  muted: z.boolean(),
+  deafened: z.boolean(),
+  speaking: z.boolean(),
+  screenSharing: z.boolean(),
+  connectionQuality: z
+    .enum(["excellent", "good", "poor", "unknown"])
+    .optional(),
+});
+const serverVoiceStateResponseSchema = z.object({
+  serverId: z.uuid(),
+  version: z.number().int().nonnegative(),
+  generatedAt: z.string(),
+  channels: z.array(
+    z.object({
+      channelId: z.uuid(),
+      members: z.array(voiceMemberStateResponseSchema),
+    }),
+  ),
+});
+const moveVoiceMemberRequestSchema = z
+  .object({
+    clientRequestId: z.uuid(),
+    subjectUserId: z.uuid(),
+    targetChannelId: z.uuid(),
+    expectedSourceChannelId: z.uuid().optional(),
+    expectedVoiceSessionId: z.string().min(1).max(200).optional(),
+  })
+  .strict();
+const moveVoiceMemberAcceptedSchema = z.object({
+  movementId: z.uuid(),
+  status: z.literal("pending"),
+  expiresAt: z.string(),
 });
 const permissionSchema = z.enum(serverPermissions);
 const serverRoleResponseSchema = z.object({
@@ -1026,6 +1063,17 @@ export async function buildApp(
           .send(
             createApiError("INTERNAL_ERROR", request.id, {
               dependency: "presence",
+            }),
+          );
+      }
+      try {
+        await service.voicePresenceStore.healthCheck();
+      } catch {
+        return reply
+          .status(503)
+          .send(
+            createApiError("INTERNAL_ERROR", request.id, {
+              dependency: "voice_presence",
             }),
           );
       }
@@ -3824,6 +3872,63 @@ export async function buildApp(
       ),
   );
 
+  api.get(
+    `${API_PREFIX}/servers/:serverId/voice-state`,
+    {
+      schema: {
+        tags: ["voice"],
+        security: [{ bearerAuth: [] }],
+        params: serverIdParams,
+        response: { 200: serverVoiceStateResponseSchema, ...routeErrors() },
+      },
+    },
+    async (request) =>
+      service.getServerVoiceState(
+        request.headers.authorization,
+        request.params.serverId,
+      ),
+  );
+
+  api.post(
+    `${API_PREFIX}/servers/:serverId/voice/moves`,
+    {
+      config: { rateLimit: { max: 12, timeWindow: "1 minute" } },
+      schema: {
+        tags: ["voice"],
+        security: [{ bearerAuth: [] }],
+        params: serverIdParams,
+        body: moveVoiceMemberRequestSchema,
+        response: { 202: moveVoiceMemberAcceptedSchema, ...routeErrors() },
+      },
+    },
+    async (request, reply) =>
+      reply
+        .status(202)
+        .send(
+          await service.requestServerVoiceMove(
+            request.headers.authorization,
+            request.params.serverId,
+            {
+              clientRequestId: request.body.clientRequestId,
+              subjectUserId: request.body.subjectUserId,
+              targetChannelId: request.body.targetChannelId,
+              ...(request.body.expectedSourceChannelId
+                ? {
+                    expectedSourceChannelId:
+                      request.body.expectedSourceChannelId,
+                  }
+                : {}),
+              ...(request.body.expectedVoiceSessionId
+                ? {
+                    expectedVoiceSessionId:
+                      request.body.expectedVoiceSessionId,
+                  }
+                : {}),
+            },
+          ),
+        ),
+  );
+
   api.post(
     `${API_PREFIX}/channels/:channelId/members/:userId/move`,
     {
@@ -3924,6 +4029,34 @@ export async function buildApp(
   );
   app.post(
     `${API_PREFIX}/webhooks/livekit`,
+    {
+      config: { rawBody: true },
+      schema: { tags: ["webhooks"] },
+    },
+    async (request, reply) => {
+      const webhookRequest = request as typeof request & {
+        rawBody?: string;
+        body?: unknown;
+      };
+      const raw =
+        typeof webhookRequest.body === "string"
+          ? webhookRequest.body
+          : webhookRequest.rawBody;
+      const authorization = request.headers.authorization;
+      if (!raw || !authorization) throw new AppError("UNAUTHORIZED", 401);
+      let event;
+      try {
+        event = await receiver.receive(raw, authorization);
+      } catch {
+        throw new AppError("UNAUTHORIZED", 401);
+      }
+      await service.handleWebhookEvent(event);
+      return reply.status(204).send();
+    },
+  );
+
+  app.post(
+    `${API_PREFIX}/integrations/livekit/webhook`,
     {
       config: { rawBody: true },
       schema: { tags: ["webhooks"] },

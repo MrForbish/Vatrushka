@@ -92,6 +92,23 @@ const envSchema = z
     LIVEKIT_HTTP_URL: z.url().default("http://localhost:7880"),
     LIVEKIT_API_KEY: z.string().min(1).default("devkey"),
     LIVEKIT_API_SECRET: z.string().min(1).default("secret"),
+    VOICE_MOVE_STRATEGY: z
+      .enum(["livekit-cloud", "controlled-reconnect"])
+      .default("controlled-reconnect"),
+    VOICE_MOVE_TIMEOUT_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(5)
+      .max(60)
+      .default(15),
+    VOICE_RECONCILE_INTERVAL_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(15)
+      .max(300)
+      .default(45),
+    VOICE_DND_ENABLED: booleanFromStringDefaultTrue,
+    VOICE_MODERATOR_MOVE_ENABLED: booleanFromStringDefaultTrue,
     MEDIA_STORAGE_DRIVER: z.enum(["database", "s3"]).default("database"),
     S3_ENDPOINT: z.string().default(""),
     S3_REGION: z.string().min(1).default("ru-1"),

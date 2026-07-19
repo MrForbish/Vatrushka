@@ -81,6 +81,7 @@ export interface ServerViewProps {
   onRetryMessage?(messageId: string): void;
   onConnectVoice(channelId: string): void;
   onMoveVoiceMember?(channelId: string, userId: string): void;
+  pendingVoiceMemberIds?: string[];
   onCopyInvite(): void | Promise<void>;
   onCreateChannel(name: string, type: "text" | "voice"): void;
   onRenameChannel(channelId: string, name: string): void;
@@ -116,6 +117,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const [renamingChannel, setRenamingChannel] =
     useState<ChannelNavigationItem | null>(null);
   const [renamedChannelName, setRenamedChannelName] = useState("");
+  const [moveMemberId, setMoveMemberId] = useState<string | null>(null);
   const [serverCreateOpen, setServerCreateOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteCopyState, setInviteCopyState] = useState<
@@ -205,6 +207,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     activeChannelPermissions.includes("MANAGE_MESSAGES");
   const canKickMembers = props.server.permissions.includes("KICK_MEMBERS");
   const canMoveMembers = props.server.permissions.includes("MOVE_MEMBERS");
+  const pendingVoiceMemberIds = new Set(props.pendingVoiceMemberIds ?? []);
 
   const channels: ChannelNavigationItem[] = props.server.channels.map(
     (channel) => ({
@@ -224,10 +227,12 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
         founder: participant.platformRole === "owner",
         avatarUrl: participant.avatarUrl ?? null,
         canDrag:
-          canMoveMembers &&
           props.onMoveVoiceMember !== undefined &&
-          participant.userId !== props.user.id &&
-          participant.userId !== props.server.ownerUserId,
+          !pendingVoiceMemberIds.has(participant.userId) &&
+          (participant.userId === props.user.id ||
+            (canMoveMembers &&
+              participant.userId !== props.server.ownerUserId)),
+        pending: pendingVoiceMemberIds.has(participant.userId),
       })),
     }),
   );
@@ -266,6 +271,21 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
           type="button"
         />
       ) : undefined;
+    const canMoveMember =
+      connectedMemberIds.has(member.userId) &&
+      props.onMoveVoiceMember !== undefined &&
+      !pendingVoiceMemberIds.has(member.userId) &&
+      (member.userId === props.user.id ||
+        (canMoveMembers && member.userId !== props.server.ownerUserId));
+    const moveAction = canMoveMember ? (
+      <IconButton
+        icon="voice"
+        label={`Переместить ${member.displayName} в другой голосовой канал`}
+        onClick={() => setMoveMemberId(member.userId)}
+        size="sm"
+        type="button"
+      />
+    ) : undefined;
     return {
       id: member.userId,
       name: member.displayName,
@@ -277,13 +297,17 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
         : connectedMemberIds.has(member.userId)
           ? { status: "online" as const }
           : {}),
-      ...(kickAction === undefined ? {} : { actions: kickAction }),
-      draggable:
-        connectedMemberIds.has(member.userId) &&
-        canMoveMembers &&
-        props.onMoveVoiceMember !== undefined &&
-        member.userId !== props.user.id &&
-        member.userId !== props.server.ownerUserId,
+      ...(kickAction === undefined && moveAction === undefined
+        ? {}
+        : {
+            actions: (
+              <>
+                {moveAction}
+                {kickAction}
+              </>
+            ),
+          }),
+      draggable: canMoveMember,
     };
   });
 
@@ -586,6 +610,40 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        description="Выберите голосовой канал. Список обновится после подтверждения медиасервера."
+        onClose={() => setMoveMemberId(null)}
+        open={moveMemberId !== null}
+        size="sm"
+        title="Переместить в…"
+      >
+        <div className="server-view__move-list">
+          {props.server.channels
+            .filter(
+              (channel) =>
+                channel.type === "voice" &&
+                !channel.voiceParticipants?.some(
+                  (participant) => participant.userId === moveMemberId,
+                ),
+            )
+            .map((channel) => (
+              <Button
+                key={channel.id}
+                onClick={() => {
+                  if (moveMemberId)
+                    props.onMoveVoiceMember?.(channel.id, moveMemberId);
+                  setMoveMemberId(null);
+                }}
+                type="button"
+                variant="secondary"
+              >
+                <Icon name="voice" size={16} />
+                {channel.name}
+              </Button>
+            ))}
+        </div>
       </Modal>
 
       <Modal
