@@ -344,11 +344,18 @@ database-upgrade:
     POSTGRES_PASSWORD: upgrade-test-password
     DATABASE_URL: postgresql://vatrushka:upgrade-test-password@postgres:5432/vatrushka_upgrade
   script:
-    - git fetch origin "$PRODUCTION_BRANCH"
-    - git worktree add ../previous-production "origin/$PRODUCTION_BRANCH"
-    - npm --prefix ../previous-production ci --prefer-offline --no-audit --no-fund
-    - npm --prefix ../previous-production run build -w @vatrushka/shared
-    - npm --prefix ../previous-production run db:migrate -w @vatrushka/api
+    - |
+      PREVIOUS_WORKTREE="../previous-production-$CI_JOB_ID"
+      cleanup_previous_worktree() {
+        git worktree remove --force "$PREVIOUS_WORKTREE" >/dev/null 2>&1 || true
+        git worktree prune
+      }
+      trap cleanup_previous_worktree EXIT
+      git fetch origin "$PRODUCTION_BRANCH"
+      git worktree add "$PREVIOUS_WORKTREE" "origin/$PRODUCTION_BRANCH"
+      npm --prefix "$PREVIOUS_WORKTREE" ci --prefer-offline --no-audit --no-fund
+      npm --prefix "$PREVIOUS_WORKTREE" run build -w @vatrushka/shared
+      npm --prefix "$PREVIOUS_WORKTREE" run db:migrate -w @vatrushka/api
     - npm run build -w @vatrushka/shared
     - npm run db:migrate -w @vatrushka/api
     - npm run db:check
