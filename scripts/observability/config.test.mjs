@@ -74,18 +74,76 @@ test('alloy agents sanitize logs and runner excludes CI job container logs', asy
   assert.doesNotMatch(runner, /loki\.source\.docker/u);
 });
 
-test('grafana provisions Prometheus, Loki and the six required dashboards', async () => {
+test('grafana provisions valid, linked and extensible dashboards', async () => {
   const datasource = await read('infra/observability/platform/grafana/provisioning/datasources/datasources.yml');
   assert.match(datasource, /uid: prometheus/u);
   assert.match(datasource, /uid: loki/u);
 
   const directory = new URL('../../infra/observability/platform/grafana/dashboards/', import.meta.url);
   const files = (await readdir(directory)).filter((file) => file.endsWith('.json'));
-  assert.equal(files.length, 6);
+  assert.ok(files.length >= 7, `expected at least 7 dashboards, got ${files.length}`);
   const dashboards = await Promise.all(files.map(async (file) => JSON.parse(await read(`infra/observability/platform/grafana/dashboards/${file}`))));
   const titles = new Set(dashboards.map((dashboard) => dashboard.title));
-  for (const title of ['Infrastructure Overview', 'Containers Overview', 'Application Overview', 'Prometheus Health', 'Loki Health', 'Logs Overview']) assert.ok(titles.has(title), title);
+  for (const title of ['Infrastructure Overview', 'Containers Overview', 'Приложение: обзор', 'API: детали HTTP', 'Prometheus Health', 'Loki Health', 'Logs Overview']) assert.ok(titles.has(title), title);
   assert.ok(dashboards.every((dashboard) => dashboard.uid && dashboard.panels.length >= 3));
+
+  const uids = dashboards.map((dashboard) => dashboard.uid);
+  assert.equal(new Set(uids).size, uids.length, 'dashboard UID values must be unique');
+  for (const dashboard of dashboards) {
+    const ids = dashboard.panels.map((panel) => panel.id);
+    assert.equal(new Set(ids).size, ids.length, `${dashboard.uid}: panel IDs must be unique`);
+    for (let left = 0; left < dashboard.panels.length; left += 1) {
+      const a = dashboard.panels[left]?.gridPos;
+      if (!a) continue;
+      for (let right = left + 1; right < dashboard.panels.length; right += 1) {
+        const b = dashboard.panels[right]?.gridPos;
+        if (!b) continue;
+        const overlaps = a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+        assert.equal(overlaps, false, `${dashboard.uid}: panels ${dashboard.panels[left].id} and ${dashboard.panels[right].id} overlap`);
+      }
+    }
+    for (const link of dashboard.links ?? []) {
+      const linkedUid = /^\/d\/([^/?]+)/u.exec(link.url)?.[1];
+      if (linkedUid) assert.ok(uids.includes(linkedUid), `${dashboard.uid}: unknown linked dashboard ${linkedUid}`);
+    }
+  }
+});
+
+test('HTTP dashboards explain panels and use adaptive bounded queries', async () => {
+  const application = JSON.parse(await read('infra/observability/platform/grafana/dashboards/application-overview.json'));
+  const details = JSON.parse(await read('infra/observability/platform/grafana/dashboards/api-http-details.json'));
+  for (const dashboard of [application, details]) {
+    assert.ok(dashboard.description, `${dashboard.uid}: missing dashboard description`);
+    assert.ok(dashboard.panels.every((panel) => panel.description), `${dashboard.uid}: every panel needs a description`);
+    const serialized = JSON.stringify(dashboard);
+    assert.doesNotMatch(serialized, /\[5m\]/u);
+    assert.doesNotMatch(serialized, /(user|server|channel|request|session)_id\s*=~/u);
+    for (const variable of ['environment', 'method', 'route', 'status_class'])
+      assert.ok(dashboard.templating.list.some((item) => item.name === variable), `${dashboard.uid}: missing $${variable}`);
+  }
+
+  const detailTitles = new Set(details.panels.map((panel) => panel.title));
+  for (const title of ['Ответы 2xx', 'Ответы 3xx', 'Ответы 4xx', 'Ответы 5xx', 'Доля 4xx', 'Доля 5xx', 'Top routes по 4xx', 'Top routes по 5xx', 'Route / method / status: сводная таблица'])
+    assert.ok(detailTitles.has(title), title);
+});
+
+test('HTTP recording rules and alerts enforce the documented initial SLOs', async () => {
+  const rules = await read('infra/observability/platform/prometheus/rules/applications.yml');
+  for (const record of [
+    'vatrushka:api_requests:rate5m',
+    'vatrushka:api_4xx_ratio:rate5m',
+    'vatrushka:api_5xx_ratio:rate5m',
+    'vatrushka:api_request_duration_seconds:p50_5m',
+    'vatrushka:api_request_duration_seconds:p95_5m',
+    'vatrushka:api_request_duration_seconds:p99_5m',
+    'vatrushka:api_route_request_duration_seconds:p95_5m',
+  ])
+    assert.match(rules, new RegExp(`record: ${record}`, 'u'));
+
+  assert.match(rules, /alert: VatrushkaApiFiveXxRatioHigh[\s\S]+vatrushka:api_5xx_ratio:rate5m > 0\.001/u);
+  assert.match(rules, /alert: VatrushkaApiFiveXxRatioCritical[\s\S]+vatrushka:api_5xx_ratio:rate5m > 0\.01/u);
+  assert.match(rules, /alert: VatrushkaApiFourXxRatioHigh[\s\S]+vatrushka:api_4xx_ratio:rate5m > 0\.1/u);
+  assert.match(rules, /alert: VatrushkaApiLatencyHigh[\s\S]+vatrushka:api_request_duration_seconds:p95_5m > 0\.5/u);
 });
 
 test('migration and recovery scripts preserve old metrics and secrets', async () => {

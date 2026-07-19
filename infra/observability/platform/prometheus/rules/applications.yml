@@ -1,4 +1,28 @@
 groups:
+  - name: vatrushka-api-recording
+    interval: 30s
+    rules:
+      - record: vatrushka:api_requests:rate5m
+        expr: sum by (environment, status_class) (rate(api_http_requests_total[5m]))
+
+      - record: vatrushka:api_4xx_ratio:rate5m
+        expr: sum by (environment) (rate(api_http_requests_total{status_class="4xx"}[5m])) / clamp_min(sum by (environment) (rate(api_http_requests_total[5m])), 0.001)
+
+      - record: vatrushka:api_5xx_ratio:rate5m
+        expr: sum by (environment) (rate(api_http_requests_total{status_class="5xx"}[5m])) / clamp_min(sum by (environment) (rate(api_http_requests_total[5m])), 0.001)
+
+      - record: vatrushka:api_request_duration_seconds:p50_5m
+        expr: histogram_quantile(0.50, sum by (environment, le) (rate(api_http_request_duration_seconds_bucket[5m])))
+
+      - record: vatrushka:api_request_duration_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (environment, le) (rate(api_http_request_duration_seconds_bucket[5m])))
+
+      - record: vatrushka:api_request_duration_seconds:p99_5m
+        expr: histogram_quantile(0.99, sum by (environment, le) (rate(api_http_request_duration_seconds_bucket[5m])))
+
+      - record: vatrushka:api_route_request_duration_seconds:p95_5m
+        expr: histogram_quantile(0.95, sum by (environment, le, method, route) (rate(api_http_request_duration_seconds_bucket[5m])))
+
   - name: vatrushka-application
     rules:
       - alert: VatrushkaApiDown
@@ -15,12 +39,32 @@ groups:
         annotations:
           summary: Public API readiness probe is failing
 
-      - alert: VatrushkaApiFiveXxBurst
-        expr: sum(rate(api_http_requests_total{status_class="5xx"}[5m])) > 0.1
-        for: 5m
+      - alert: VatrushkaApiFiveXxRatioHigh
+        expr: (vatrushka:api_5xx_ratio:rate5m > 0.001) and on (environment) (sum by (environment) (vatrushka:api_requests:rate5m) > 0.1)
+        for: 10m
         labels: { severity: warning }
         annotations:
-          summary: API 5xx rate is above baseline
+          summary: API 5xx ratio is above 0.1 percent
+          description: "5xx exceeded the 99.9% success SLO while traffic remained above the minimum volume."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#api-http"
+
+      - alert: VatrushkaApiFiveXxRatioCritical
+        expr: (vatrushka:api_5xx_ratio:rate5m > 0.01) and on (environment) (sum by (environment) (vatrushka:api_requests:rate5m) > 0.1)
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: API 5xx ratio is above 1 percent
+          description: "At least one percent of API requests are failing with 5xx responses."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#api-http"
+
+      - alert: VatrushkaApiFourXxRatioHigh
+        expr: (vatrushka:api_4xx_ratio:rate5m > 0.1) and on (environment) (sum by (environment) (vatrushka:api_requests:rate5m) > 0.2)
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: API 4xx ratio is above 10 percent
+          description: "Rejected requests are elevated; inspect route, method and bounded error codes before treating this as a server incident."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#api-http"
 
       - alert: VatrushkaApiUnhandledErrors
         expr: sum by (code, route) (increase(api_errors_total{status_class="5xx"}[5m])) > 0
@@ -37,11 +81,13 @@ groups:
           description: "Heartbeat result {{ $labels.result }} occurred {{ $value }} time(s) in 5 minutes"
 
       - alert: VatrushkaApiLatencyHigh
-        expr: histogram_quantile(0.95, sum by (le) (rate(api_http_request_duration_seconds_bucket[5m]))) > 0.5
+        expr: vatrushka:api_request_duration_seconds:p95_5m > 0.5
         for: 10m
         labels: { severity: warning }
         annotations:
           summary: API p95 latency is above 500 ms
+          description: "API p95 latency stayed above the initial 500 ms JSON-route objective for 10 minutes."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#api-http"
 
       - alert: VatrushkaOutboxFailed
         expr: chat_outbox_failed_total > 0

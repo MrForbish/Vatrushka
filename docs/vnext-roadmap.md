@@ -106,7 +106,7 @@
 
 ### P1.1 — Prometheus/Grafana
 
-Статус: отдельный production observability-контур развернут: Prometheus, Grafana, Alertmanager, Loki/S3, Alloy, Blackbox, private agents, шесть dashboards, backup/restore/rollback и config validation. Loki хранит логи в отдельном S3 bucket; Grafana доступна через выделенный домен. Остаются калибровка alerts по baseline и настройка технического receiver.
+Статус: отдельный production observability-контур развернут: Prometheus, Grafana, Alertmanager, Loki/S3, Alloy, Blackbox, private agents, расширяемый provisioned набор dashboards, backup/restore/rollback и config validation. Первый этап понятных дашбордов добавляет русский обзор приложения и отдельную диагностику HTTP 2xx/3xx/4xx/5xx с фильтрами, adaptive rate windows и recording rules. Loki хранит логи в отдельном S3 bucket; Grafana доступна через выделенный домен. Остаются следующие продуктовые dashboards, калибровка alerts по baseline и настройка технического receiver.
 
 1. Уточнить/стабилизировать API metric names и cardinality. Выполнено для HTTP/runtime/messaging.
 2. Развернуть отдельный observability VPS и перенести Prometheus/Grafana без остановки production. Выполнено; проверены private ingestion, Loki/S3 и публичный доступ к Grafana.

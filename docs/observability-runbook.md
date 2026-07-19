@@ -48,7 +48,17 @@ curl -fsS "http://${OBSERVABILITY_PRIVATE_BIND_IP}:3100/ready"
 curl -fsS "https://${GRAFANA_DOMAIN}/api/health"
 ```
 
-В Grafana должны присутствовать datasources Prometheus/Loki и шесть dashboards: Infrastructure, Containers, Application, Prometheus Health, Loki Health, Logs Overview.
+В Grafana должны присутствовать datasources Prometheus/Loki и provisioned dashboards. Базовый набор включает Infrastructure, Containers, «Приложение: обзор», «API: детали HTTP», Prometheus Health, Loki Health и Logs Overview; последующие продуктовые дашборды добавляются без жёсткого ограничения их количества.
+
+## API HTTP
+
+1. Откройте «Приложение: обзор» и проверьте readiness, количество 5xx и p95.
+2. Перейдите в «API: детали HTTP» с сохранением диапазона времени и фильтров.
+3. Если 5xx выше 0,1% десять минут или выше 1% пять минут при RPS больше 0,1, найдите `method + route` в Top 5xx и таблице.
+4. Для p95 выше 500 ms десять минут откройте список медленных routes; upload/download оценивайте отдельно от обычного JSON API.
+5. Сопоставьте `route`, bounded `error_code` и время с «Логи: обзор». Request ID ищите как поле лога, но не добавляйте в Prometheus labels.
+
+4xx не является серверной аварией само по себе. Warning включается при доле выше 10% пятнадцать минут и RPS больше 0,2; сначала проверьте auth, rate limit и клиентскую версию. `0` на stat-панели означает измеренное отсутствие событий, а «Нет данных» — отсутствие series или scrape.
 
 ## Добавление узла или target
 
