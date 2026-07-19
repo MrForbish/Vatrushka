@@ -41,6 +41,9 @@ test('production publication is tag-only and uses protected file variables', asy
   assert.match(publish, /CI_COMMIT_TAG =~ \/\^v\[0-9\]/u);
   assert.match(publish, /PRODUCTION_SSH_PRIVATE_KEY/u);
   assert.match(publish, /PRODUCTION_SSH_HOST_KEY/u);
+  assert.match(publish, /GITLAB_TOKEN: '\$GITLAB_RELEASE_TOKEN'/u);
+  assert.match(publish, /for name in GITLAB_RELEASE_TOKEN PRODUCTION_SSH_PRIVATE_KEY/u);
+  assert.doesNotMatch(publish, /GITLAB_TOKEN: '\$CI_JOB_TOKEN'/u);
   assert.match(publish, /resource_group: 'production-\$CI_COMMIT_TAG'/u);
   assert.doesNotMatch(publish, /mapfile|<\s*<\s*\(/u);
   assert.match(publish, /find apps\/desktop\/release[\s\S]+-exec glab release upload/u);
