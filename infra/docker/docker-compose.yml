@@ -42,6 +42,8 @@ services:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.api
+      args:
+        BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
     restart: unless-stopped
     network_mode: host
     env_file: ../../.env
@@ -49,6 +51,7 @@ services:
       NODE_ENV: production
       HOST: 127.0.0.1
       PORT: 3001
+      BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
       DATABASE_URL: postgresql://${POSTGRES_USER:-vatrushka}:${POSTGRES_PASSWORD}@127.0.0.1:5433/${POSTGRES_DB:-vatrushka}
       PRESENCE_STORAGE_DRIVER: redis
       REDIS_URL: redis://:${REDIS_PASSWORD}@127.0.0.1:6379/0

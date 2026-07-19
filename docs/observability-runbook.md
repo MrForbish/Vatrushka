@@ -48,7 +48,24 @@ curl -fsS "http://${OBSERVABILITY_PRIVATE_BIND_IP}:3100/ready"
 curl -fsS "https://${GRAFANA_DOMAIN}/api/health"
 ```
 
-В Grafana должны присутствовать datasources Prometheus/Loki и provisioned dashboards. Базовый набор включает «Инфраструктура: обзор», «Контейнеры: обзор», «Приложение: обзор», «API: детали HTTP», Prometheus Health, Loki Health и Logs Overview; последующие продуктовые дашборды добавляются без жёсткого ограничения их количества.
+В Grafana должны присутствовать datasources Prometheus/Loki, базовые технические dashboards и `Service Health & SLO`. Базовый набор включает «Инфраструктура: обзор», «Контейнеры: обзор», «Приложение: обзор», «API: детали HTTP», «Prometheus: состояние», «Loki: состояние» и «Логи: обзор». Provisioning расширяемый: новые JSON не требуют ручного импорта.
+
+## Service Health and SLO
+
+`Service Health & SLO` — стартовый экран владельца и on-call. Начальные 30-дневные цели:
+
+- public API availability: 99.9%;
+- API requests без 5xx: 99.9%;
+- не менее 95% обычных JSON API requests быстрее 500 ms; upload/download/attachment routes исключены и анализируются отдельно;
+- outbox failed = 0, oldest age < 60 s.
+
+Error budget показывает запас над 99.9% относительно допустимых 0.1% ошибок. Ноль означает исчерпание бюджета. Recording rules используют 30-дневное окно и 30-дневный Prometheus retention; после 7–14 дней baseline пороги пересматриваются документированным решением, но не снижаются только ради устранения alert.
+
+`vatrushka_build_info{version,commit}=1` и меняющийся без labels `vatrushka_deployment_timestamp_seconds` создают deployment/restart annotations. Если commit=`unknown`, API был собран без `BUILD_COMMIT`; production deployment должен экспортировать текущий git SHA перед Compose build.
+
+## Prometheus health
+
+Проверяйте не только число `up`, но `Targets up / total` и таблицу down targets. Scrape duration оценивается как доля timeout, rule duration — как доля evaluation interval. Series churn помогает обнаружить новый high-cardinality label. Remote-write pending должен возвращаться к нулю, failures всегда равны нулю. При config/rule failure сначала запустите `promtool check config/rules`, затем смотрите Prometheus logs; не перезапускайте TSDB и не удаляйте WAL вручную.
 
 ## Infrastructure and containers
 
