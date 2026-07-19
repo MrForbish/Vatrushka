@@ -84,6 +84,8 @@ curl -fsS https://api.myvatrushka.ru/updates/latest.yml
 
 API отдаёт технические Prometheus-метрики на `GET /metrics`. Разрешите scrape только доверенному Prometheus либо ограничьте route на уровне Caddy/firewall. Минимальные alerts: `chat_outbox_failed_total > 0`, рост `chat_outbox_oldest_age_seconds`, `chat_redis_publish_errors_total`, длительное падение `chat_ws_connections_active` и рост `chat_message_create_errors_total`.
 
+Production stack, приватный SSH-доступ, retention, dashboards, exporters и rollback описаны в [observability.md](observability.md). Публичный Caddy route `/metrics` обязан отвечать `404`; Prometheus обращается напрямую к `127.0.0.1:3001` на VPS.
+
 ## Сборка клиента для production API
 
 Desktop-клиент использует публичный адрес API во время сборки. На Windows-машине сборщика:

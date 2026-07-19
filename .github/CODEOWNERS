@@ -1,9 +1,0 @@
-# Repository owner is an existing GitHub account; do not replace with invented users.
-/.github/workflows/ @MrForbish
-/.github/CODEOWNERS @MrForbish
-/package.json @MrForbish
-/package-lock.json @MrForbish
-/apps/desktop/package.json @MrForbish
-/apps/desktop/src/main/ @MrForbish
-/apps/api/drizzle/ @MrForbish
-/infra/ @MrForbish

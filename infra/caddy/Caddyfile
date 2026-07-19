@@ -14,6 +14,8 @@
     Referrer-Policy "no-referrer"
     -Server
   }
+  @private_metrics path /metrics
+  respond @private_metrics 404
   handle_path /updates/* {
     root * /srv/updates
     header Cache-Control "no-cache, no-store, must-revalidate"
