@@ -12,6 +12,8 @@ export type IconName =
   | 'eyeOff'
   | 'edit'
   | 'emoji'
+  | 'fullscreen'
+  | 'fullscreenExit'
   | 'hash'
   | 'headphones'
   | 'home'
@@ -52,6 +54,8 @@ const paths: Record<IconName, ReactNode> = {
   eyeOff: <><path d="m4 4 16 16M10.6 6.1A10.5 10.5 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-2.1 2.8M6.1 7.3C3.8 9.1 2.5 12 2.5 12s3.5 6 9.5 6c.8 0 1.5-.1 2.2-.3" /></>,
   edit: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4L16.5 3.5Z" /></>,
   emoji: <><circle cx="12" cy="12" r="9" /><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" /></>,
+  fullscreen: <><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5" /></>,
+  fullscreenExit: <><path d="M8 8H3V3M16 8h5V3M8 16H3v5M16 16h5v5" /></>,
   hash: <><path d="M5 9h14M4 15h14M10 3 8 21M16 3l-2 18" /></>,
   headphones: <><path d="M4 14v-2a8 8 0 0 1 16 0v2" /><path d="M4 14h3v6H5a1 1 0 0 1-1-1v-5ZM20 14h-3v6h2a1 1 0 0 0 1-1v-5Z" /></>,
   home: <><path d="m3 11 9-8 9 8" /><path d="M5 10v10h14V10M9 20v-6h6v6" /></>,

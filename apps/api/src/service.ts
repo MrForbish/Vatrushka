@@ -1962,8 +1962,21 @@ export class VatrushkaService {
       })
       .slice(0, 6);
 
+    const currentVoiceSession = await this.voicePresenceStore
+      .getSession(user.id)
+      .catch(() => null);
     const quickReturn: HomeDashboardResponse["gaming"]["quickReturn"] = [];
     const quickChannelIds = new Set<string>();
+    const currentVoiceSpace = currentVoiceSession
+      ? voiceSpaceByChannel.get(currentVoiceSession.channelId)
+      : undefined;
+    if (currentVoiceSpace) {
+      quickReturn.push({
+        ...currentVoiceSpace,
+        returnReason: "current_voice",
+      });
+      quickChannelIds.add(currentVoiceSpace.channelId);
+    }
     for (const item of activity) {
       if (item.type !== "left_voice" || item.channelId === null) continue;
       const space = voiceSpaceByChannel.get(item.channelId);
@@ -1984,9 +1997,6 @@ export class VatrushkaService {
       quickChannelIds.add(space.channelId);
     }
 
-    const currentVoiceSession = await this.voicePresenceStore
-      .getSession(user.id)
-      .catch(() => null);
     const friendsInGame = (
       await Promise.all(
         contactRecords.map(async (contact) => {

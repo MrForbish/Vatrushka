@@ -1,7 +1,7 @@
 import { ConnectionState } from 'livekit-client';
 import type { LocalTrack } from 'livekit-client';
 import { useState } from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -99,8 +99,20 @@ describe('main screen', () => {
     expect(screen.queryByLabelText('Код приглашения')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Статус голоса')).toBeInTheDocument();
     expect(screen.getAllByText(/1\.2\.3/u).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Vatrushka')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Помощь и обратная связь' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Пространства' })).not.toBeInTheDocument();
     expect(document.querySelector('.vui-app-shell__server-context')).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Безопасность и настройки' }).length).toBeGreaterThan(0);
+  });
+
+  it('switches the application fullscreen mode from the shared shell', async () => {
+    const toggle = vi.spyOn(window.desktop, 'toggleFullscreen').mockResolvedValue(true);
+    render(<HomePage user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="" onLogout={noop} onSecurity={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Открыть на весь экран' }));
+    expect(toggle).toHaveBeenCalledOnce();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Выйти из полноэкранного режима' })).toBeInTheDocument());
+    toggle.mockRestore();
   });
 
   it('uses widget skeletons instead of a fullscreen loader', () => {

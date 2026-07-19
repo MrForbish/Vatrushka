@@ -50,15 +50,9 @@
   border-bottom: 1px solid var(--color-border-subtle);
   font: var(--text-heading-sm);
 }
-.home-navigation__brand > span {
-  display: grid;
+.home-navigation__brand .vui-brand-lockup > img {
   width: 34px;
   height: 34px;
-  place-items: center;
-  border-radius: var(--radius-sm);
-  background: var(--gradient-brand);
-  color: var(--color-text-on-accent);
-  font-family: var(--font-display);
 }
 .home-navigation__primary {
   display: grid;
@@ -560,14 +554,57 @@
     scroll-behavior: auto;
   }
 }
-.home-app-version {
-  position: fixed;
-  right: var(--space-3);
-  bottom: var(--space-2);
-  z-index: var(--z-base);
+.home-support-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  height: 100%;
+  padding: var(--space-4);
+  overflow-y: auto;
+  border-left: 1px solid var(--color-border-subtle);
+  background: var(--color-canvas);
+}
+.home-support-panel__version {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   color: var(--color-text-muted);
   font: var(--text-caption);
-  pointer-events: none;
+}
+.home-support-panel__version strong {
+  color: var(--color-text-secondary);
+  font: var(--text-label-sm);
+}
+.home-support-panel__card {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: auto;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-1);
+}
+.home-support-panel__card > div {
+  display: grid;
+  gap: var(--space-1);
+}
+.home-support-panel__card p {
+  color: var(--color-text-muted);
+  font: var(--text-body-sm);
+}
+.home-support-panel__icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-cyan);
+}
+.home-support-panel__card .vui-button {
+  width: 100%;
 }
 
 .home-dashboard--gaming {

@@ -595,6 +595,13 @@ describe('home dashboard API', () => {
     expect(home.gaming.activeSpaces).toEqual(expect.arrayContaining([
       expect.objectContaining({ channelId: voiceChannel.id, participantCount: 1, canJoin: true }),
     ]));
+
+    const ownerHomeResponse = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/home`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    expect(ownerHomeResponse.statusCode).toBe(200);
+    expect(ownerHomeResponse.json<{ gaming: { quickReturn: Array<{ channelId: string; returnReason: string }> } }>().gaming.quickReturn[0]).toMatchObject({
+      channelId: voiceChannel.id,
+      returnReason: 'current_voice',
+    });
   });
 });
 

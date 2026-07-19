@@ -207,31 +207,6 @@ export function UserAccountSettingsPage(props: Props): React.JSX.Element {
           <Button variant="secondary" onClick={props.onLogout}>
             Выйти из аккаунта
           </Button>
-          <hr />
-          <header>
-            <div>
-              <h2>Помощь и обратная связь</h2>
-              <p>Сообщите о проблеме или предложите улучшение.</p>
-            </div>
-          </header>
-          <Button
-            variant="secondary"
-            onClick={() =>
-              void window.desktop.openExternal("https://t.me/MaksZJ")
-            }
-          >
-            Telegram · @MaksZJ
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() =>
-              void window.desktop.openExternal(
-                "mailto:vatrushka-notify@yandex.ru",
-              )
-            }
-          >
-            vatrushka-notify@yandex.ru
-          </Button>
         </article>
       </div>
       <article className="vui-user-settings-card vui-user-account-danger">

@@ -2,6 +2,7 @@ import type { PublicUser, ServerSummary } from "@vatrushka/shared";
 
 import {
   Badge,
+  BrandLockup,
   Button,
   Icon,
   UserProfileDock,
@@ -18,7 +19,6 @@ export interface HomeNavigationProps {
   onOpenServer: (serverId: string) => void;
   onSecurity: () => void;
   onLogout: () => void;
-  onSpaces: () => void;
   networkAvailable?: boolean;
 }
 
@@ -30,7 +30,6 @@ export function HomeNavigation({
   onLogout,
   onOpenServer,
   onSecurity,
-  onSpaces,
   servers,
   user,
 }: HomeNavigationProps): React.JSX.Element {
@@ -53,18 +52,12 @@ export function HomeNavigation({
   return (
     <aside className="home-navigation" aria-label="Основная навигация">
       <div className="home-navigation__brand">
-        <span aria-hidden="true">В</span>
-        <strong>Ватрушка</strong>
+        <BrandLockup />
       </div>
       <nav className="home-navigation__primary" aria-label="Разделы приложения">
         <button aria-current="page" data-active="true" type="button">
           <Icon name="home" size={18} />
           <span>Главная</span>
-        </button>
-        <button onClick={onSpaces} type="button">
-          <Icon name="users" size={18} />
-          <span>Пространства</span>
-          <Badge>{servers.length}</Badge>
         </button>
         <button
           disabled={!networkAvailable || onDirectMessages === undefined}
