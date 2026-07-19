@@ -28,6 +28,8 @@ test('production publication is tag-only and uses protected file variables', asy
   assert.match(publish, /PRODUCTION_SSH_PRIVATE_KEY/u);
   assert.match(publish, /PRODUCTION_SSH_HOST_KEY/u);
   assert.match(publish, /resource_group: 'production-\$CI_COMMIT_TAG'/u);
+  assert.doesNotMatch(publish, /mapfile|<\s*<\s*\(/u);
+  assert.match(publish, /find apps\/desktop\/release[\s\S]+-exec glab release upload/u);
   assert.doesNotMatch(pipeline.slice(0, pipeline.indexOf('publish-production:')), /PRODUCTION_SSH_PRIVATE_KEY/u);
 });
 
