@@ -20,6 +20,7 @@ prometheus.remote_write "central" {
 prometheus.scrape "api" {
   job_name        = "vatrushka-api"
   scrape_interval = "5s"
+  scrape_timeout  = "4s"
   targets         = [{ "__address__" = "127.0.0.1:3001" }]
   forward_to      = [prometheus.remote_write.central.receiver]
 }
