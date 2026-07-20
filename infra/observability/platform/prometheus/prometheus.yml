@@ -72,6 +72,23 @@ scrape_configs:
       - target_label: __address__
         replacement: blackbox-exporter:9115
 
+  # LiveKit is deliberately probed through its public TLS endpoint. The
+  # monitoring VPS must not need access to LiveKit's private service ports.
+  - job_name: blackbox-livekit
+    metrics_path: /probe
+    scrape_interval: 30s
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets: [https://livekit.myvatrushka.ru/]
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
   - job_name: blackbox-turn
     metrics_path: /probe
     scrape_interval: 60s
