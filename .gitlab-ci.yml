@@ -426,7 +426,9 @@ prepare-production-source:
     paths: [release-source.tar.gz]
 
 .production-ssh:
-  image: alpine:3.22
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:3.22
+    pull_policy: if-not-present
   tags: [vatrushka-linux]
   interruptible: false
   before_script:

@@ -14,6 +14,10 @@ test('GitLab pipeline preserves Linux, integration and Windows quality gates', a
   assert.match(pipeline, /postgres:17-alpine/u);
   assert.match(pipeline, /redis:8-alpine/u);
   assert.match(pipeline, /CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX/u);
+  assert.match(
+    pipeline,
+    /\.production-ssh:[\s\S]*name: \$\{CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX\}\/alpine:3\.22/u,
+  );
   assert.equal(pipeline.match(/name: \$\{CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX\}\/postgres:17-alpine/gu)?.length, 2);
   assert.match(pipeline, /pull_policy: if-not-present/u);
   assert.match(pipeline, /tags: \[vatrushka-linux\]/u);
