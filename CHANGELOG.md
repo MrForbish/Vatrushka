@@ -4,6 +4,8 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-20
+
 ### Added
 
 - provisioned product dashboards for realtime messaging, voice and screen sharing, PostgreSQL, Redis, private S3, email delivery, authentication and external probes;
