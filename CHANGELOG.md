@@ -4,6 +4,12 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.5] - 2026-07-20
+
+### Fixed
+
+- observability deployment now explicitly receives the release-version artifact from tag verification, preventing an empty version from reaching the monitoring deployment script.
+
 ## [0.8.4] - 2026-07-20
 
 ### Fixed

@@ -472,6 +472,8 @@ deploy-observability-runtime:
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
   needs:
+    - job: verify-tag
+      artifacts: true
     - job: deploy-production-runtime
     - job: prepare-production-source
       artifacts: true
