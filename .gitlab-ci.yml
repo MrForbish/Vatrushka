@@ -139,7 +139,10 @@ verify:
     - .node-linux
     - .quality-rules
   stage: quality
-  timeout: 8m
+  # The complete quality bundle includes lint, typecheck, unit tests and builds.
+  # Self-hosted runners may be temporarily CPU-constrained; eight minutes causes
+  # a false timeout while lint is still making progress.
+  timeout: 20m
   script:
     - npm run repo-policy:test
     - npm run version:check

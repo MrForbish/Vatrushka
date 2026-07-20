@@ -849,4 +849,8 @@ export class MemoryStore implements DataStore {
   async releaseChannelLeaseByChannel(channelId: string): Promise<void> {
     this.channelLeases.delete(channelId);
   }
+
+  async countChannelLeases(now: Date): Promise<number> {
+    return [...this.channelLeases.values()].filter((lease) => !isExpired(lease.expiresAt, now)).length;
+  }
 }

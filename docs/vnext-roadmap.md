@@ -1,5 +1,14 @@
 # Vatrushka: roadmap
 
+## Observability 0.8.0
+
+- [x] Разделить обзорные и детальные HTTP/SLO панели.
+- [x] Добавить подробные infrastructure/container dashboards и корректные restart/OOM сигналы.
+- [x] Нормализовать structured logs и добавить отдельные Loki/Logs dashboards.
+- [x] Добавить Service Health, build/deployment information и 30-day SLO.
+- [x] Добавить продуктовые dashboards и bounded metrics для realtime, messaging, voice, screen share, PostgreSQL, Redis, S3, email и auth.
+- [ ] После релиза собрать семидневный production baseline и отдельным MR откалибровать warning thresholds.
+
 Обновлено для версии 0.7.0. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
 
 ## Состояние продукта
@@ -145,6 +154,7 @@
 9. `feat/observability` — Prometheus/Grafana.
 
 Каждый ordinary MR направляется в `develop` и проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Production получает только стабилизированный `release/*` или hotfix; Windows update публикуется tag pipeline по правилам [release-process.md](release-process.md).
+
 # WEB-26 — Voice presence and drag-and-drop
 
 - [x] Audit current LiveKit, Redis, WebSocket, permission, state, and DnD flows.

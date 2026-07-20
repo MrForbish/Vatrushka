@@ -90,11 +90,61 @@ groups:
           runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#api-http"
 
       - alert: VatrushkaOutboxFailed
-        expr: chat_outbox_failed_total > 0
+        expr: chat_outbox_failed > 0
         for: 1m
         labels: { severity: critical }
         annotations:
           summary: Messaging outbox contains failed events
+
+      - alert: VatrushkaWebSocketReconnectBurst
+        expr: sum(increase(chat_ws_connection_events_total{event=~"reconnected|error|heartbeat_timeout"}[10m])) > 20
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: WebSocket reconnect or failure rate is elevated
+          description: "More than 20 reconnect, network error or heartbeat timeout events were recorded in 10 minutes."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/main/docs/observability-runbook.md#realtime-and-messaging"
+
+      - alert: VatrushkaMessageCreateErrors
+        expr: sum(increase(chat_message_create_errors_total[10m])) > 2
+        labels: { severity: warning }
+        annotations:
+          summary: Message creation errors were recorded
+          description: "The API failed to create {{ $value }} messages in 10 minutes."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/main/docs/observability-runbook.md#realtime-and-messaging"
+
+      - alert: VatrushkaVoicePresenceDrift
+        expr: sum(increase(voice_presence_reconciliation_diff_total[15m])) > 5 or sum(increase(voice_websocket_version_gap_total[15m])) > 5
+        labels: { severity: warning }
+        annotations:
+          summary: Voice presence requires frequent reconciliation
+          description: "Voice projection drift or WebSocket version gaps exceeded the expected baseline."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/main/docs/observability-runbook.md#voice-and-screen-share"
+
+      - alert: VatrushkaScreenShareLeaseConflict
+        expr: sum(increase(screen_share_lease_events_total{result=~"busy|ownership_lost|error"}[10m])) > 3
+        labels: { severity: warning }
+        annotations:
+          summary: Screen-share lease conflicts are elevated
+          description: "Screen-share ownership conflicts or dependency errors exceeded the expected baseline."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/main/docs/observability-runbook.md#voice-and-screen-share"
+
+      - alert: VatrushkaObjectStorageErrors
+        expr: sum(increase(object_storage_requests_total{result="error"}[10m])) > 2
+        labels: { severity: warning }
+        annotations:
+          summary: Private object storage operations are failing
+          description: "S3 operations failed {{ $value }} times in 10 minutes."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/main/docs/observability-runbook.md#dependencies-and-delivery"
+
+      - alert: VatrushkaLoginFailureBurst
+        expr: sum(increase(auth_login_attempts_total{result=~"rejected|error"}[15m])) > 25
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: Login failures are elevated
+          description: "Rejected or failed login steps exceeded the expected baseline."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/main/docs/observability-runbook.md#dependencies-and-delivery"
 
       - alert: VatrushkaOutboxBacklog
         expr: chat_outbox_oldest_age_seconds > 60

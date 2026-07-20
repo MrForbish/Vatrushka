@@ -1948,6 +1948,14 @@ export class PostgresStore implements DataStore {
       .delete(schema.channelScreenShareLeases)
       .where(eq(schema.channelScreenShareLeases.channelId, channelId));
   }
+
+  async countChannelLeases(now: Date): Promise<number> {
+    const [row] = await this.db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(schema.channelScreenShareLeases)
+      .where(gt(schema.channelScreenShareLeases.expiresAt, now));
+    return row?.value ?? 0;
+  }
 }
 
 export function createPostgresStore(databaseUrl: string): {

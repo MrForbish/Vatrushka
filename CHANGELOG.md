@@ -6,6 +6,9 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ### Added
 
+- provisioned product dashboards for realtime messaging, voice and screen sharing, PostgreSQL, Redis, private S3, email delivery, authentication and external probes;
+- bounded application metrics for WebSocket lifecycle, login outcomes, LiveKit webhooks, screen-share leases, S3 operations and in-flight HTTP requests;
+- actionable alerts for realtime reconnect bursts, messaging errors, voice projection drift, screen-share conflicts, S3 failures and login failure bursts.
 - a provisioned `Service Health & SLO` dashboard now tracks public API/update/TURN availability, 30-day success and latency objectives, error budgets, dependencies, alerts and deployed build metadata.
 - Prometheus health now exposes down targets, scrape and rule budgets, series churn, TSDB/WAL, Alertmanager delivery and remote-write state.
 - structured Loki dashboards now use normalized bounded log levels, query-time correlation fields and an end-to-end Loki canary instead of text-only error matching.
