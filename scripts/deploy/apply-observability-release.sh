@@ -19,6 +19,9 @@ if [ -f docker-compose.local.yml ]; then
   set -- "$@" -f docker-compose.local.yml
 fi
 docker compose "$@" config -q
-docker compose "$@" up -d
+# Compose does not recreate a container merely because a bind-mounted config
+# file changed. Recreate the platform so Prometheus rules, Grafana dashboards,
+# Alloy, Loki and alerting configuration from this release are actually loaded.
+docker compose "$@" up -d --force-recreate
 ./scripts/healthcheck.sh
 printf 'Observability runtime is ready: version=%s\n' "$VERSION"

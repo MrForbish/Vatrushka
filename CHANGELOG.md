@@ -4,6 +4,12 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.7] - 2026-07-20
+
+### Fixed
+
+- Observability deployment now force-recreates configuration-bound services, ensuring changed Prometheus rules, Grafana dashboards, Alloy and Loki configuration are loaded during the release instead of merely copied to the VPS.
+
 ## [0.8.6] - 2026-07-20
 
 ### Fixed
