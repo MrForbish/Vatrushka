@@ -63,7 +63,7 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Клиенты, операции и память Redis.",
+      "description": "Подключённые Redis-клиенты и обработанные команды в секунду. Если здесь нет данных, сначала проверьте доступность Redis exporter.",
       "gridPos": { "h": 7, "w": 8, "x": 0, "y": 6 },
       "id": 4,
       "targets": [
@@ -83,13 +83,13 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Использование памяти Redis относительно лимита, если он задан.",
-      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "description": "Фактическая память, занятая Redis. Лимит Redis может быть не задан, поэтому панель показывает байты, а не вводящую в заблуждение долю лимита.",
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
       "gridPos": { "h": 7, "w": 8, "x": 8, "y": 6 },
       "id": 5,
       "targets": [
         {
-          "expr": "redis_memory_used_bytes / clamp_min(redis_memory_max_bytes, 1)",
+          "expr": "redis_memory_used_bytes",
           "refId": "A"
         }
       ],
@@ -98,18 +98,18 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Вытеснения ключей и отклонённые соединения Redis.",
+      "description": "Вытеснения ключей и отклонённые соединения Redis. Ноль — штатное состояние; отсутствие метрик означает, что Redis exporter недоступен.",
       "gridPos": { "h": 7, "w": 8, "x": 16, "y": 6 },
       "id": 6,
       "targets": [
         {
-          "expr": "sum(rate(redis_evicted_keys_total[$__rate_interval]))",
-          "legendFormat": "evictions",
+          "expr": "sum(rate(redis_evicted_keys_total[$__rate_interval])) or vector(0)",
+          "legendFormat": "вытеснения",
           "refId": "A"
         },
         {
-          "expr": "sum(rate(redis_rejected_connections_total[$__rate_interval]))",
-          "legendFormat": "rejected",
+          "expr": "sum(rate(redis_rejected_connections_total[$__rate_interval])) or vector(0)",
+          "legendFormat": "отклонённые соединения",
           "refId": "B"
         }
       ],

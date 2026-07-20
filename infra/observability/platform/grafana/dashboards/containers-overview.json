@@ -23,7 +23,7 @@
       "fieldConfig": { "defaults": { "noValue": "Нет данных", "unit": "short" }, "overrides": [] },
       "gridPos": { "h": 5, "w": 4, "x": 0, "y": 4 },
       "id": 2,
-      "targets": [{ "expr": "count(container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"})", "refId": "A" }],
+      "targets": [{ "expr": "count(container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"})", "refId": "A" }],
       "title": "Наблюдаемые контейнеры",
       "type": "stat"
     },
@@ -33,7 +33,7 @@
       "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 4 }] }, "unit": "short" }, "overrides": [] },
       "gridPos": { "h": 5, "w": 4, "x": 4, "y": 4 },
       "id": 3,
-      "targets": [{ "expr": "sum(changes(container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range])) or vector(0)", "refId": "A" }],
+      "targets": [{ "expr": "sum(changes(container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__range])) or vector(0)", "refId": "A" }],
       "title": "Рестарты",
       "type": "stat"
     },
@@ -43,8 +43,8 @@
       "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }, "unit": "short" }, "overrides": [] },
       "gridPos": { "h": 5, "w": 4, "x": 8, "y": 4 },
       "id": 4,
-      "targets": [{ "expr": "sum(increase(container_oom_events_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range])) or vector(0)", "refId": "A" }],
-      "title": "OOM events",
+      "targets": [{ "expr": "sum(increase(container_oom_events_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__range])) or vector(0)", "refId": "A" }],
+      "title": "События нехватки памяти",
       "type": "stat"
     },
     {
@@ -53,7 +53,7 @@
       "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 60 }, { "color": "red", "value": 120 }] }, "unit": "s" }, "overrides": [] },
       "gridPos": { "h": 5, "w": 4, "x": 12, "y": 4 },
       "id": 5,
-      "targets": [{ "expr": "max(time() - container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"})", "refId": "A" }],
+      "targets": [{ "expr": "max(time() - container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"})", "refId": "A" }],
       "title": "Свежесть метрик",
       "type": "stat"
     },
@@ -63,8 +63,8 @@
       "fieldConfig": { "defaults": { "unit": "cores" }, "overrides": [] },
       "gridPos": { "h": 5, "w": 4, "x": 16, "y": 4 },
       "id": 6,
-      "targets": [{ "expr": "sum(rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "refId": "A" }],
-      "title": "CPU cores",
+      "targets": [{ "expr": "sum(rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval]))", "refId": "A" }],
+      "title": "Занятые CPU-ядра",
       "type": "stat"
     },
     {
@@ -73,8 +73,8 @@
       "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
       "gridPos": { "h": 5, "w": 4, "x": 20, "y": 4 },
       "id": 7,
-      "targets": [{ "expr": "sum(container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"})", "refId": "A" }],
-      "title": "Working set",
+      "targets": [{ "expr": "sum(container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"})", "refId": "A" }],
+      "title": "Рабочая память",
       "type": "stat"
     },
     {
@@ -83,12 +83,12 @@
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 9 },
       "id": 8,
       "targets": [
-        { "expr": "time() - container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}", "format": "table", "instant": true, "legendFormat": "last seen, s", "refId": "A" },
-        { "expr": "time() - container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}", "format": "table", "instant": true, "legendFormat": "uptime, s", "refId": "B" },
-        { "expr": "sum by(environment,host,role,container) (rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "format": "table", "instant": true, "legendFormat": "CPU cores", "refId": "C" },
-        { "expr": "max by(environment,host,role,container) (container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"})", "format": "table", "instant": true, "legendFormat": "RAM", "refId": "D" },
-        { "expr": "sum by(environment,host,role,container) (changes(container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range]))", "format": "table", "instant": true, "legendFormat": "restarts", "refId": "E" },
-        { "expr": "sum by(environment,host,role,container) (increase(container_oom_events_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range]))", "format": "table", "instant": true, "legendFormat": "OOM", "refId": "F" }
+        { "expr": "time() - container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}", "format": "table", "instant": true, "legendFormat": "last seen, s", "refId": "A" },
+        { "expr": "time() - container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}", "format": "table", "instant": true, "legendFormat": "uptime, s", "refId": "B" },
+        { "expr": "sum by(environment,host,role,name) (rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval]))", "format": "table", "instant": true, "legendFormat": "CPU cores", "refId": "C" },
+        { "expr": "max by(environment,host,role,name) (container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"})", "format": "table", "instant": true, "legendFormat": "RAM", "refId": "D" },
+        { "expr": "sum by(environment,host,role,name) (changes(container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__range]))", "format": "table", "instant": true, "legendFormat": "restarts", "refId": "E" },
+        { "expr": "sum by(environment,host,role,name) (increase(container_oom_events_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__range]))", "format": "table", "instant": true, "legendFormat": "OOM", "refId": "F" }
       ],
       "title": "Контейнеры: состояние и события",
       "transformations": [{ "id": "labelsToFields", "options": { "mode": "columns" } }, { "id": "merge", "options": {} }],
@@ -100,7 +100,7 @@
       "fieldConfig": { "defaults": { "unit": "cores" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
       "id": 9,
-      "targets": [{ "expr": "sum by(host,container) (rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{container}}", "refId": "A" }],
+      "targets": [{ "expr": "sum by(host,name) (rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{name}}", "refId": "A" }],
       "title": "CPU по контейнерам",
       "type": "timeseries"
     },
@@ -110,7 +110,7 @@
       "fieldConfig": { "defaults": { "max": 1, "min": 0, "unit": "percentunit" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
       "id": 10,
-      "targets": [{ "expr": "sum by(host,container) (rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval])) / on(host) group_left count by(host) (node_cpu_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",mode=\"idle\"})", "legendFormat": "{{host}} {{container}}", "refId": "A" }],
+      "targets": [{ "expr": "sum by(host,name) (rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval])) / on(host) group_left count by(host) (node_cpu_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",mode=\"idle\"})", "legendFormat": "{{host}} {{name}}", "refId": "A" }],
       "title": "Доля CPU хоста",
       "type": "timeseries"
     },
@@ -120,8 +120,8 @@
       "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
       "id": 11,
-      "targets": [{ "expr": "max by(host,container) (container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"})", "legendFormat": "{{host}} {{container}}", "refId": "A" }],
-      "title": "Memory working set",
+      "targets": [{ "expr": "max by(host,name) (container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"})", "legendFormat": "{{host}} {{name}}", "refId": "A" }],
+      "title": "Рабочая память по контейнерам",
       "type": "timeseries"
     },
     {
@@ -130,8 +130,8 @@
       "fieldConfig": { "defaults": { "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.95 }] }, "unit": "percentunit" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
       "id": 12,
-      "targets": [{ "expr": "max by(host,container) (container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}) / max by(host,container) (container_spec_memory_limit_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"} > 0)", "legendFormat": "{{host}} {{container}}", "refId": "A" }],
-      "title": "Memory от limit",
+      "targets": [{ "expr": "max by(host,name) (container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}) / max by(host,name) (container_spec_memory_limit_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"} > 0)", "legendFormat": "{{host}} {{name}}", "refId": "A" }],
+      "title": "Доля лимита памяти",
       "type": "timeseries"
     },
     {
@@ -140,8 +140,8 @@
       "fieldConfig": { "defaults": { "max": 1, "min": 0, "unit": "percentunit" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
       "id": 13,
-      "targets": [{ "expr": "sum by(host,container) (rate(container_cpu_cfs_throttled_periods_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval])) / clamp_min(sum by(host,container) (rate(container_cpu_cfs_periods_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval])), 0.001)", "legendFormat": "{{host}} {{container}}", "refId": "A" }],
-      "title": "CPU throttling",
+      "targets": [{ "expr": "sum by(host,name) (rate(container_cpu_cfs_throttled_periods_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval])) / clamp_min(sum by(host,name) (rate(container_cpu_cfs_periods_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval])), 0.001)", "legendFormat": "{{host}} {{name}}", "refId": "A" }],
+      "title": "Ограничение CPU",
       "type": "timeseries"
     },
     {
@@ -151,8 +151,8 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
       "id": 14,
       "targets": [
-        { "expr": "sum by(host,container) (changes(container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range]))", "legendFormat": "{{host}} {{container}} restarts", "refId": "A" },
-        { "expr": "sum by(host,container) (increase(container_oom_events_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range]))", "legendFormat": "{{host}} {{container}} OOM", "refId": "B" }
+        { "expr": "sum by(host,name) (changes(container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__range]))", "legendFormat": "{{host}} {{name}} restarts", "refId": "A" },
+        { "expr": "sum by(host,name) (increase(container_oom_events_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__range]))", "legendFormat": "{{host}} {{name}} OOM", "refId": "B" }
       ],
       "title": "Рестарты и OOM",
       "type": "timeseries"
@@ -164,8 +164,8 @@
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 43 },
       "id": 15,
       "targets": [
-        { "expr": "sum by(host,container) (rate(container_network_receive_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{container}} receive", "refId": "A" },
-        { "expr": "sum by(host,container) (rate(container_network_transmit_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{container}} transmit", "refId": "B" }
+        { "expr": "sum by(host,name) (rate(container_network_receive_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{name}} receive", "refId": "A" },
+        { "expr": "sum by(host,name) (rate(container_network_transmit_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{name}} transmit", "refId": "B" }
       ],
       "title": "Сеть контейнеров",
       "type": "timeseries"
@@ -177,10 +177,10 @@
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 43 },
       "id": 16,
       "targets": [
-        { "expr": "sum by(host,container) (rate(container_fs_reads_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{container}} read", "refId": "A" },
-        { "expr": "sum by(host,container) (rate(container_fs_writes_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{container}} write", "refId": "B" }
+        { "expr": "sum by(host,name) (rate(container_fs_reads_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{name}} read", "refId": "A" },
+        { "expr": "sum by(host,name) (rate(container_fs_writes_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{name}} write", "refId": "B" }
       ],
-      "title": "Filesystem throughput",
+      "title": "Скорость работы с файловой системой",
       "type": "timeseries"
     },
     {
@@ -189,8 +189,8 @@
       "fieldConfig": { "defaults": { "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.9 }] }, "unit": "percentunit" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 51 },
       "id": 17,
-      "targets": [{ "expr": "max by(host,container,device) (container_fs_usage_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}) / clamp_min(max by(host,container,device) (container_fs_limit_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}), 1)", "legendFormat": "{{host}} {{container}} {{device}}", "refId": "A" }],
-      "title": "Container filesystem usage",
+      "targets": [{ "expr": "max by(host,name,device) (container_fs_usage_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}) / clamp_min(max by(host,name,device) (container_fs_limit_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}), 1)", "legendFormat": "{{host}} {{name}} {{device}}", "refId": "A" }],
+      "title": "Использование файловой системы контейнеров",
       "type": "timeseries"
     }
   ],
@@ -202,7 +202,7 @@
       { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(container_last_seen, environment)", "includeAll": true, "label": "Контур", "name": "environment", "query": { "query": "label_values(container_last_seen, environment)", "refId": "PrometheusVariableQueryEditor-Environment" }, "refresh": 1, "type": "query" },
       { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(container_last_seen{environment=~\"$environment\"}, host)", "includeAll": true, "label": "Хост", "name": "host", "query": { "query": "label_values(container_last_seen{environment=~\"$environment\"}, host)", "refId": "PrometheusVariableQueryEditor-Host" }, "refresh": 1, "type": "query" },
       { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(container_last_seen{environment=~\"$environment\",host=~\"$host\"}, role)", "includeAll": true, "label": "Роль", "name": "role", "query": { "query": "label_values(container_last_seen{environment=~\"$environment\",host=~\"$host\"}, role)", "refId": "PrometheusVariableQueryEditor-Role" }, "refresh": 1, "type": "query" },
-      { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container!=\"\"}, container)", "includeAll": true, "label": "Контейнер", "name": "container", "query": { "query": "label_values(container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container!=\"\"}, container)", "refId": "PrometheusVariableQueryEditor-Container" }, "refresh": 1, "type": "query" }
+      { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name!=\"\"}, name)", "includeAll": true, "label": "Контейнер", "name": "container", "query": { "query": "label_values(container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name!=\"\"}, name)", "refId": "PrometheusVariableQueryEditor-Container" }, "refresh": 1, "type": "query" }
     ]
   },
   "time": { "from": "now-6h", "to": "now" },
