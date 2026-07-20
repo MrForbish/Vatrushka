@@ -512,7 +512,11 @@ windows-production-package:
     CSC_KEY_PASSWORD: '$WINDOWS_CSC_KEY_PASSWORD'
     CSC_IDENTITY_AUTO_DISCOVERY: '$WINDOWS_CSC_ENABLED'
   script:
-    - test -n "$HAWK_INTEGRATION_TOKEN" || { echo 'HAWK_INTEGRATION_TOKEN must be configured as a protected CI/CD variable.' >&2; exit 1; }
+    - |
+      if ([string]::IsNullOrWhiteSpace($env:HAWK_INTEGRATION_TOKEN)) {
+        Write-Error 'HAWK_INTEGRATION_TOKEN must be configured as a protected CI/CD variable.'
+        exit 1
+      }
     - npm run release:validate
     - npm run package:win
     - |
