@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 import { z } from "zod";
 
@@ -11,6 +11,12 @@ import {
   SCREEN_SHARE_HEARTBEAT_SECONDS,
   SCREEN_SHARE_LEASE_SECONDS,
 } from "@vatrushka/shared";
+
+const packageVersion = (
+  JSON.parse(
+    readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  ) as { version: string }
+).version;
 
 const booleanFromString = z
   .enum(["true", "false"])
@@ -32,6 +38,8 @@ const envSchema = z
     PUBLIC_API_URL: z.url().default("http://localhost:3000"),
     PUBLIC_INVITE_URL: z.url().default("http://localhost:3000"),
     APP_NAME: z.string().min(1).default(APP_NAME),
+    APP_VERSION: z.string().regex(/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/).default(packageVersion),
+    BUILD_COMMIT: z.string().regex(/^(?:[0-9a-f]{7,64}|unknown)$/).default("unknown"),
     APP_PROTOCOL: z
       .string()
       .regex(/^[a-z][a-z0-9+.-]+$/)

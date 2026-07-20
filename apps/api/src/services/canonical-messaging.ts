@@ -16,6 +16,17 @@ import type {
 } from "@vatrushka/shared";
 import { technicalMetrics } from "./metrics.js";
 
+function recordMessageCreateDuration(startedAt: number, result: "duplicate" | "success" | "error"): void {
+  const durationMs = Math.max(0, Date.now() - startedAt);
+  technicalMetrics.observe("chat_message_create_duration_ms", durationMs);
+  technicalMetrics.observeHistogram(
+    "chat_message_create_duration_seconds",
+    durationMs / 1_000,
+    [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+    { result },
+  );
+}
+
 export interface CanonicalConversationRecord {
   id: string;
   type: "server_channel" | "direct" | "group_direct";
@@ -878,10 +889,7 @@ export class CanonicalMessagingStore {
       );
       if (existing.rows[0]) {
         await client.query("commit");
-        technicalMetrics.observe(
-          "chat_message_create_duration_ms",
-          Date.now() - startedAt,
-        );
+        recordMessageCreateDuration(startedAt, "duplicate");
         return {
           message: (await this.findMessage(
             existing.rows[0].id,
@@ -1153,10 +1161,7 @@ export class CanonicalMessagingStore {
         "chat_notifications_suppressed_total",
         Math.max(0, eventRecipients.size - notificationTypes.size),
       );
-      technicalMetrics.observe(
-        "chat_message_create_duration_ms",
-        Date.now() - startedAt,
-      );
+      recordMessageCreateDuration(startedAt, "success");
       return {
         message: (await this.findMessage(messageId, input.authorId))!,
         created: true,
@@ -1164,10 +1169,7 @@ export class CanonicalMessagingStore {
     } catch (error) {
       await client.query("rollback");
       technicalMetrics.increment("chat_message_create_errors_total");
-      technicalMetrics.observe(
-        "chat_message_create_duration_ms",
-        Date.now() - startedAt,
-      );
+      recordMessageCreateDuration(startedAt, "error");
       throw error;
     } finally {
       client.release();
@@ -1486,6 +1488,7 @@ export class CanonicalMessagingStore {
       read_at: Date | null;
       dismissed_at: Date | null;
       actor_display_name: string | null;
+      actor_avatar_object_key: string | null;
       conversation_title: string | null;
       server_id: string | null;
       channel_id: string | null;
@@ -1493,7 +1496,8 @@ export class CanonicalMessagingStore {
       `
       select notification.id, notification.type, notification.actor_user_id, notification.conversation_id, notification.message_id::text,
         notification.payload, notification.created_at, notification.read_at, notification.dismissed_at,
-        actor.display_name as actor_display_name, coalesce(channel.name, peer.display_name, peer.username) as conversation_title,
+        actor.display_name as actor_display_name, actor.avatar_object_key as actor_avatar_object_key,
+        coalesce(channel.name, peer.display_name, peer.username) as conversation_title,
         conversation.server_id, conversation.channel_id
       from notifications notification
       left join users actor on actor.id = notification.actor_user_id
@@ -1519,6 +1523,9 @@ export class CanonicalMessagingStore {
       readAt: row.read_at?.toISOString() ?? null,
       dismissedAt: row.dismissed_at?.toISOString() ?? null,
       actorDisplayName: row.actor_display_name,
+      actorAvatarUrl: row.actor_avatar_object_key
+        ? `/api/v1/media/${encodeURIComponent(row.actor_avatar_object_key)}`
+        : null,
       conversationTitle: row.conversation_title,
       serverId: row.server_id,
       channelId: row.channel_id,

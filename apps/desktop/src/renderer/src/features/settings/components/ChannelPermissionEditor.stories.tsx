@@ -46,8 +46,9 @@ export const RoleOverride: Story = {
 export const MemberOverride: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
+    const page = within(canvasElement.ownerDocument.body);
     await userEvent.click(canvas.getByRole('button', { name: 'Для кого', expanded: false }));
-    await userEvent.click(canvas.getByRole('option', { name: 'Участник' }));
+    await userEvent.click(page.getByRole('option', { name: 'Участник' }));
     await expect(canvas.getByText('Илья Форбиш')).toBeInTheDocument();
   },
 };

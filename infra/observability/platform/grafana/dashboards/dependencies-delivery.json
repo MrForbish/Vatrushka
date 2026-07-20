@@ -1,0 +1,239 @@
+{
+  "annotations": { "list": [] },
+  "description": "PostgreSQL, Redis, S3, почта, авторизация и внешняя доступность продукта.",
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Использование доступного пула подключений PostgreSQL.",
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum(pg_stat_activity_count) / clamp_min(max(pg_settings_max_connections), 1)",
+          "refId": "A"
+        }
+      ],
+      "title": "Подключения PostgreSQL",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Транзакции, откаты, блокировки и deadlock.",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum(rate(pg_stat_database_xact_commit[$__rate_interval]))",
+          "legendFormat": "commit",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(pg_stat_database_xact_rollback[$__rate_interval]))",
+          "legendFormat": "rollback",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(pg_stat_database_deadlocks[$__rate_interval]))",
+          "legendFormat": "deadlock",
+          "refId": "C"
+        }
+      ],
+      "title": "Транзакции PostgreSQL",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Доля чтений PostgreSQL из cache buffer.",
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "sum(rate(pg_stat_database_blks_hit[$__rate_interval])) / clamp_min(sum(rate(pg_stat_database_blks_hit[$__rate_interval]) + rate(pg_stat_database_blks_read[$__rate_interval])), 0.001)",
+          "refId": "A"
+        }
+      ],
+      "title": "Cache hit PostgreSQL",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Клиенты, операции и память Redis.",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 6 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "redis_connected_clients",
+          "legendFormat": "клиенты",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(redis_commands_processed_total[$__rate_interval])",
+          "legendFormat": "операции/с",
+          "refId": "B"
+        }
+      ],
+      "title": "Нагрузка Redis",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Использование памяти Redis относительно лимита, если он задан.",
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 6 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "redis_memory_used_bytes / clamp_min(redis_memory_max_bytes, 1)",
+          "refId": "A"
+        }
+      ],
+      "title": "Память Redis",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Вытеснения ключей и отклонённые соединения Redis.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 6 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "sum(rate(redis_evicted_keys_total[$__rate_interval]))",
+          "legendFormat": "evictions",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(redis_rejected_connections_total[$__rate_interval]))",
+          "legendFormat": "rejected",
+          "refId": "B"
+        }
+      ],
+      "title": "Ошибки Redis",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Операции и ошибки приватного S3 по типу запроса.",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 13 },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "sum by (operation, result) (rate(object_storage_requests_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{operation}} / {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Операции S3",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "p95 времени ответа операций приватного S3.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 13 },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(object_storage_request_duration_seconds_bucket{instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "{{operation}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Задержка S3 p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Отправленные и неуспешные системные письма.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 13 },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "sum by (result, type) (rate(auth_email_delivery_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{type}} / {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Доставка почты",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Успешные, отклонённые и ошибочные шаги входа по фактору.",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 20 },
+      "id": 10,
+      "targets": [
+        {
+          "expr": "sum by (factor, result) (rate(auth_login_attempts_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{factor}} / {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Попытки авторизации",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "HTTP, DNS и TCP/TLS проверки публичных зависимостей.",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 20 },
+      "id": 11,
+      "targets": [
+        {
+          "expr": "probe_success",
+          "legendFormat": "{{job}} / {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Внешняя доступность",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Число дней до окончания сертификатов проверяемых HTTPS/TLS endpoint.",
+      "fieldConfig": { "defaults": { "unit": "d" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 20 },
+      "id": 12,
+      "targets": [
+        {
+          "expr": "(probe_ssl_earliest_cert_expiry - time()) / 86400",
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Срок сертификатов",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["vatrushka", "dependencies", "delivery"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "Все", "value": ".*" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(up{job=\"vatrushka-api\"}, instance)",
+        "includeAll": true,
+        "label": "Экземпляр API",
+        "multi": true,
+        "name": "instance",
+        "query": {
+          "query": "label_values(up{job=\"vatrushka-api\"}, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "Зависимости и доставка",
+  "uid": "vatrushka-dependencies-delivery",
+  "version": 1
+}

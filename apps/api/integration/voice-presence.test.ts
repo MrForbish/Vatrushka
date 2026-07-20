@@ -26,17 +26,17 @@ describeRedis("Redis voice presence projection", () => {
   afterAll(async () => {
     if (!client.isOpen) return;
     const keys: string[] = [];
-    for await (const key of client.scanIterator({
+    for await (const batch of client.scanIterator({
       MATCH: `vatrushka:voice:*${serverId}*`,
     }))
-      keys.push(key);
+      keys.push(...batch);
     keys.push(`vatrushka:voice:user:${userId}`);
     keys.push(
       ...channelIds.map(
         (channelId) => `vatrushka:voice:channel:${channelId}:members`,
       ),
     );
-    if (keys.length > 0) await client.del(...keys);
+    if (keys.length > 0) await client.del(keys);
     await client.sRem("vatrushka:voice:servers", serverId);
     await client.quit();
   });

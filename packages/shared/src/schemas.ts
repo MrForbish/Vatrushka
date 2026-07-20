@@ -175,6 +175,15 @@ export const updatePresenceSchema = z
   })
   .strict();
 export const presenceHeartbeatSchema = z.object({ idle: z.boolean() }).strict();
+export const updateOwnVoiceStateSchema = z
+  .object({
+    sessionId: z.string().min(1).max(200),
+    muted: z.boolean(),
+    deafened: z.boolean(),
+    speaking: z.boolean(),
+    connectionQuality: z.enum(["excellent", "good", "poor", "unknown"]),
+  })
+  .strict();
 export const updatePrivacySettingsSchema = z
   .object({
     directMessages: z.enum(["shared_servers", "nobody"]),

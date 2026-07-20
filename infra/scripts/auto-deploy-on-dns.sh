@@ -40,6 +40,7 @@ if ! flock -n 9; then
 fi
 
 cd "$ROOT"
+export BUILD_COMMIT="$(git rev-parse --verify HEAD)"
 write_state "WAITING_DNS"
 log "Waiting for public DNS to resolve all Vatrushka domains to ${EXPECTED_IP}."
 

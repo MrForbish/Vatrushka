@@ -1,7 +1,7 @@
 import { ConnectionState } from 'livekit-client';
 import type { LocalTrack } from 'livekit-client';
 import { useState } from 'react';
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -12,9 +12,48 @@ import { HomePage } from './features/home/index.js';
 import { ServerView } from './features/servers/index.js';
 import { RoomView } from './features/voice/index.js';
 import type { MediaSnapshot } from './media.js';
-import { MessageComposer, MessageList, UserProfileDock } from './ui/index.js';
+import { Avatar, MessageComposer, MessageList, Select, UserProfileDock } from './ui/index.js';
 
 const noop = (): void => undefined;
+
+describe('form controls', () => {
+  it('ports a select menu to the viewport and flips it above the trigger', async () => {
+    const rect = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({
+        x: 40,
+        y: 700,
+        top: 700,
+        right: 260,
+        bottom: 742,
+        left: 40,
+        width: 220,
+        height: 42,
+        toJSON: () => ({}),
+      });
+    const onValueChange = vi.fn();
+    render(
+      <Select
+        label="Аудиоустройство"
+        onValueChange={onValueChange}
+        options={[
+          { value: 'default', label: 'Системное устройство' },
+          { value: 'usb', label: 'USB Headset' },
+        ]}
+        value="default"
+      />,
+    );
+
+    await userEvent.click(screen.getByLabelText('Аудиоустройство'));
+    const listbox = screen.getByRole('listbox', { name: 'Аудиоустройство' });
+    expect(listbox.parentElement).toBe(document.body);
+    expect(Number.parseFloat(listbox.style.top)).toBeLessThan(700);
+    fireEvent.keyDown(listbox, { key: 'ArrowDown' });
+    fireEvent.keyDown(listbox, { key: 'Enter' });
+    expect(onValueChange).toHaveBeenCalledWith('usb');
+    rect.mockRestore();
+  });
+});
 
 describe('authentication screens', () => {
   it('renders an accessible password form', async () => {
@@ -60,8 +99,20 @@ describe('main screen', () => {
     expect(screen.queryByLabelText('Код приглашения')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Статус голоса')).toBeInTheDocument();
     expect(screen.getAllByText(/1\.2\.3/u).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Vatrushka')).toBeInTheDocument();
+    expect(screen.getByRole('complementary', { name: 'Помощь и обратная связь' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Пространства' })).not.toBeInTheDocument();
     expect(document.querySelector('.vui-app-shell__server-context')).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Безопасность и настройки' }).length).toBeGreaterThan(0);
+  });
+
+  it('switches the application fullscreen mode from the shared shell', async () => {
+    const toggle = vi.spyOn(window.desktop, 'toggleFullscreen').mockResolvedValue(true);
+    render(<HomePage user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="" onLogout={noop} onSecurity={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Открыть на весь экран' }));
+    expect(toggle).toHaveBeenCalledOnce();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Выйти из полноэкранного режима' })).toBeInTheDocument());
+    toggle.mockRestore();
   });
 
   it('uses widget skeletons instead of a fullscreen loader', () => {
@@ -74,6 +125,49 @@ describe('main screen', () => {
 });
 
 describe('profile audio controls', () => {
+  it('keeps the previous signed avatar visible until the replacement is loaded', () => {
+    const preloaders: Array<{ onload: (() => void) | null; onerror: (() => void) | null; src: string }> = [];
+    class ImagePreloader {
+      decoding = 'auto';
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      src = '';
+
+      constructor() {
+        preloaders.push(this);
+      }
+    }
+    vi.stubGlobal('Image', ImagePreloader);
+    const { rerender } = render(<Avatar name="Anna" src="https://cdn.example/old?signature=1" />);
+    rerender(<Avatar name="Anna" src="https://cdn.example/new?signature=2" />);
+    expect(screen.getByRole('img', { name: 'Anna' }).querySelector('img')).toHaveAttribute('src', 'https://cdn.example/old?signature=1');
+    act(() => preloaders[0]?.onload?.());
+    expect(screen.getByRole('img', { name: 'Anna' }).querySelector('img')).toHaveAttribute('src', 'https://cdn.example/new?signature=2');
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps the avatar image inside a dedicated round mask and closes status on Escape', async () => {
+    render(
+      <UserProfileDock
+        avatarUrl="https://cdn.example/avatar.png"
+        email="anna@example.com"
+        name="Anna"
+        onLogout={noop}
+        onSecurity={noop}
+        onStatus={noop}
+      />,
+    );
+    const avatar = screen.getByRole('img', { name: 'Anna' });
+    expect(avatar.querySelector('.vui-avatar__mask > img')).toHaveAttribute(
+      'src',
+      'https://cdn.example/avatar.png',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Изменить статус' }));
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
   it('mutes the microphone and all incoming voice audio from the profile dock', async () => {
     const onMicrophoneToggle = vi.fn();
     const onDeafenToggle = vi.fn();
@@ -106,6 +200,7 @@ describe('room UI', () => {
 
   const baseSnapshot: MediaSnapshot = {
     connectionState: ConnectionState.Connected,
+    pingMs: 32,
     participants: [
       { identity: 'user_owner-1_local', displayName: 'Owner', isLocal: true, isOwner: true, isMuted: true, isSpeaking: false, audioLevel: 0, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'owner', connectionQuality: 'Отличное' },
       { identity: 'user_visitor-1_remote', displayName: 'Visitor', isLocal: false, isOwner: false, isMuted: false, isSpeaking: true, audioLevel: 0.7, isScreenSharing: false, volume: 1, locallyMuted: false, platformRole: 'member', connectionQuality: 'Хорошее' },
@@ -119,6 +214,7 @@ describe('room UI', () => {
     hasScreenShareAudio: false,
     screenShareAudioMuted: false,
     screenShareAudioVolume: 1,
+    screenAnnotations: [],
     canPlayAudio: true,
     error: null,
   };
@@ -153,6 +249,10 @@ describe('room UI', () => {
     expect(onOutput).toHaveBeenCalledWith('headphones-usb');
     await userEvent.click(screen.getByRole('button', { name: 'Обновить список аудиоустройств' }));
     expect(onRefreshDevices).toHaveBeenCalledOnce();
+    await userEvent.click(screen.getByTestId('copy-invite-control'));
+    expect(
+      await screen.findByText('Ссылка на сервер скопирована'),
+    ).toBeInTheDocument();
   });
 
   it('keeps the participant volume control mounted when the active speaker changes', () => {
@@ -203,6 +303,34 @@ describe('message composer', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Отправить сообщение' }));
     expect(onSubmit).toHaveBeenCalledOnce();
+  });
+
+  it('adds an image pasted from the clipboard as an attachment', () => {
+    const onFilesSelected = vi.fn();
+    render(<MessageComposer channelName="общий" onChange={noop} onFilesSelected={onFilesSelected} onSubmit={noop} value="" />);
+    const file = new File(['image'], 'clipboard.png', { type: 'image/png' });
+    fireEvent.paste(screen.getByRole('textbox', { name: 'Сообщение' }), {
+      clipboardData: { files: [file], items: [] },
+    });
+    expect(onFilesSelected).toHaveBeenCalledWith([file]);
+  });
+
+  it('opens the emoji picker and does not show an inactive microphone', async () => {
+    const onChange = vi.fn();
+    render(<MessageComposer channelName="общий" onChange={onChange} onSubmit={noop} value="" />);
+    expect(screen.queryByRole('button', { name: /микрофон/iu })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Выбрать emoji' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Вставить 🚀' }));
+    expect(onChange).toHaveBeenCalledWith('🚀');
+  });
+
+  it('renders safe links, emoji shortcodes and an author avatar', async () => {
+    const openExternal = vi.spyOn(window.desktop, 'openExternal').mockResolvedValue();
+    render(<MessageList channelName="общий" messages={[{ id: 'rich', authorId: 'author', authorName: 'Author', authorAvatarUrl: 'https://storage.test/avatar.webp', content: 'Ссылка https://example.com и :rocket:', createdAt: '2026-01-01T10:00:00.000Z' }]} />);
+    expect(screen.getByRole('img', { name: 'Author' }).querySelector('img')).toHaveAttribute('src', 'https://storage.test/avatar.webp');
+    expect(screen.getByRole('article')).toHaveTextContent('🚀');
+    await userEvent.click(screen.getByRole('link', { name: 'https://example.com' }));
+    expect(openExternal).toHaveBeenCalledWith('https://example.com');
   });
 
   it('selects a structured member mention with keyboard navigation', async () => {
@@ -272,7 +400,7 @@ describe('server UI', () => {
     permissions: ['VIEW_SERVER', 'VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'SEND_ATTACHMENTS', 'ADD_REACTIONS', 'MANAGE_OWN_MESSAGES', 'CONNECT_VOICE', 'MANAGE_CHANNELS', 'MANAGE_ROLES', 'MANAGE_MESSAGES'],
     channels: [
       { id: 'text-1', serverId: 'server-1', name: 'общий', type: 'text', position: 0, unreadCount: 0 },
-      { id: 'voice-1', serverId: 'server-1', name: 'Голосовой', type: 'voice', position: 1, unreadCount: 0, voiceParticipants: [{ identity: 'user_user-1_desktop', userId: 'user-1', displayName: 'Anna', platformRole: 'owner' }] },
+      { id: 'voice-1', serverId: 'server-1', name: 'Голосовой', type: 'voice', position: 1, unreadCount: 0, voiceParticipants: [{ identity: 'user_user-1_desktop', userId: 'user-1', displayName: 'Anna', platformRole: 'owner', muted: true, deafened: true, speaking: false, screenSharing: true, connectionQuality: 'good' }] },
       { id: 'voice-2', serverId: 'server-1', name: 'Лобби', type: 'voice', position: 2, unreadCount: 0, voiceParticipants: [] },
     ],
     roles: [{ id: 'role-1', serverId: 'server-1', name: '@everyone', color: '#8d7a72', position: 0, isDefault: true, permissions: ['VIEW_SERVER', 'VIEW_CHANNEL'] }],
@@ -293,6 +421,8 @@ describe('server UI', () => {
     expect(screen.getByText('Сервер команды разработки')).toBeInTheDocument();
     expect(screen.getAllByText('CEO Founder').length).toBeGreaterThan(0);
     expect(document.querySelectorAll('.vui-channel-row__participants > div')).toHaveLength(1);
+    expect(screen.getByRole('img', { name: 'Демонстрирует экран' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Входящий звук отключён' })).toBeInTheDocument();
     const upload = screen.getByLabelText('Выбрать вложения');
     await userEvent.upload(upload, new File(['preview'], 'preview.txt', { type: 'text/plain' }));
     expect(screen.getByText('preview.txt')).toBeInTheDocument();
@@ -308,6 +438,7 @@ describe('server UI', () => {
     expect(onChannel).toHaveBeenCalledWith('voice-1');
     await userEvent.dblClick(screen.getByRole('button', { name: /^Голосовой/u }));
     expect(onConnectVoice).toHaveBeenCalledWith('voice-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Действия с участником Anna' }));
     await userEvent.click(screen.getByRole('button', { name: 'Переместить Anna в другой голосовой канал' }));
     await userEvent.click(within(screen.getByRole('dialog', { name: 'Переместить в…' })).getByRole('button', { name: 'Лобби' }));
     expect(onMoveVoiceMember).toHaveBeenCalledWith('voice-2', 'user-1');

@@ -155,6 +155,8 @@ describe('health and metrics API', () => {
     expect(metrics.body).toContain('api_http_requests_total{method="GET",route="unmatched",status_class="4xx"}');
     expect(metrics.body).toContain('api_http_request_duration_seconds_bucket');
     expect(metrics.body).toContain('nodejs_event_loop_lag_seconds');
+    expect(metrics.body).toContain('vatrushka_build_info{commit="unknown",version="');
+    expect(metrics.body).toContain('vatrushka_deployment_timestamp_seconds ');
   });
 });
 
@@ -553,6 +555,9 @@ describe('home dashboard API', () => {
     const member = await login('home-member@example.com', 'Home Member');
     const created = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { name: 'Home Space' } });
     const server = created.json<{ id: string; inviteUrl: string; channels: Array<{ id: string; type: 'text' | 'voice' }> }>();
+    const serverRecord = context.store.servers.get(server.id);
+    if (!serverRecord) throw new Error('Missing server record');
+    context.store.servers.set(server.id, { ...serverRecord, accentColor: '#24c8db' });
     await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteTokenFromUrl(server.inviteUrl)}/accept`, headers: { authorization: `Bearer ${member.accessToken}` } });
     const textChannel = server.channels.find((channel) => channel.type === 'text');
     const voiceChannel = server.channels.find((channel) => channel.type === 'voice');
@@ -560,14 +565,31 @@ describe('home dashboard API', () => {
     await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/messages`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { content: 'Важное обновление' } });
     await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${textChannel.id}/activity/open`, headers: { authorization: `Bearer ${member.accessToken}` } });
     const connected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voiceChannel.id}/connect`, headers: { authorization: `Bearer ${owner.accessToken}` } });
-    const connection = connected.json<{ participantIdentity: string }>();
+    const connection = connected.json<{
+      participantIdentity: string;
+      voiceSessionId: string;
+    }>();
     const voiceRecord = context.store.serverChannels.get(voiceChannel.id);
     if (!voiceRecord?.livekitRoomName) throw new Error('Missing voice room');
     context.media.connect(voiceRecord.livekitRoomName, connection.participantIdentity);
+    await context.service.handleWebhookEvent({
+      id: 'home-owner-voice-joined',
+      event: 'participant_joined',
+      participant: {
+        identity: connection.participantIdentity,
+        metadata: JSON.stringify({
+          serverId: server.id,
+          channelId: voiceChannel.id,
+          userId: owner.userId,
+          voiceSessionId: connection.voiceSessionId,
+        }),
+      },
+      room: { name: voiceRecord.livekitRoomName },
+    });
 
     const response = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/home`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(response.statusCode).toBe(200);
-    const home = response.json<{ servers: Array<{ unreadCount: number; activeVoiceCount: number }>; activeSpaces: Array<{ type: string; id: string }>; recentActivity: Array<{ type: string }>; gaming: { voiceStatus: { connectionQuality: string }; activeSpaces: Array<{ channelId: string; participantCount: number; canJoin: boolean }>; quickReturn: unknown[] } }>();
+    const home = response.json<{ servers: Array<{ unreadCount: number; activeVoiceCount: number }>; activeSpaces: Array<{ type: string; id: string }>; recentActivity: Array<{ type: string }>; gaming: { voiceStatus: { connectionQuality: string }; activeSpaces: Array<{ channelId: string; participantCount: number; canJoin: boolean; serverAccentColor: string | null }>; quickReturn: unknown[] } }>();
     expect(home.servers[0]).toEqual(expect.objectContaining({ unreadCount: 1, activeVoiceCount: 1 }));
     expect(home.activeSpaces).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: voiceChannel.id, type: 'voice_channel' }),
@@ -576,8 +598,15 @@ describe('home dashboard API', () => {
     expect(home.recentActivity.map((item) => item.type)).toContain('opened_channel');
     expect(home.gaming.voiceStatus.connectionQuality).toBe('excellent');
     expect(home.gaming.activeSpaces).toEqual(expect.arrayContaining([
-      expect.objectContaining({ channelId: voiceChannel.id, participantCount: 1, canJoin: true }),
+      expect.objectContaining({ channelId: voiceChannel.id, participantCount: 1, canJoin: true, serverAccentColor: '#24c8db' }),
     ]));
+
+    const ownerHomeResponse = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/home`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    expect(ownerHomeResponse.statusCode).toBe(200);
+    expect(ownerHomeResponse.json<{ gaming: { quickReturn: Array<{ channelId: string; returnReason: string }> } }>().gaming.quickReturn[0]).toMatchObject({
+      channelId: voiceChannel.id,
+      returnReason: 'current_voice',
+    });
   });
 });
 
@@ -941,11 +970,25 @@ describe('servers, channels, messages, and roles API', () => {
     if (!voice) throw new Error('Missing voice channel');
     const connected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/connect`, headers: { authorization: `Bearer ${owner.accessToken}` } });
     expect(connected.statusCode).toBe(200);
-    const connection = connected.json<{ contextType: string; participantIdentity: string }>();
+    const connection = connected.json<{ contextType: string; participantIdentity: string; voiceSessionId: string }>();
     expect(connection.contextType).toBe('channel');
     const channel = context.store.serverChannels.get(voice.id);
     if (!channel?.livekitRoomName) throw new Error('Missing LiveKit channel room');
     context.media.connect(channel.livekitRoomName, connection.participantIdentity);
+    await context.service.handleWebhookEvent({
+      id: 'voice-owner-joined-source',
+      event: 'participant_joined',
+      participant: {
+        identity: connection.participantIdentity,
+        metadata: JSON.stringify({
+          serverId: server.id,
+          channelId: voice.id,
+          userId: owner.userId,
+          voiceSessionId: connection.voiceSessionId,
+        }),
+      },
+      room: { name: channel.livekitRoomName },
+    });
     const claimed = await context.app.inject({
       method: 'POST',
       url: `${API_PREFIX}/channels/${voice.id}/screen-share/claim`,
@@ -954,6 +997,17 @@ describe('servers, channels, messages, and roles API', () => {
     });
     expect(claimed.statusCode).toBe(200);
     expect(context.store.channelLeases.has(voice.id)).toBe(true);
+    context.media.available = false;
+    const heartbeatDuringMediaOutage = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/channels/${voice.id}/screen-share/heartbeat`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+      payload: { participantIdentity: connection.participantIdentity },
+    });
+    expect(heartbeatDuringMediaOutage.statusCode).toBe(200);
+    const heartbeatMetrics = await context.app.inject({ method: 'GET', url: '/metrics' });
+    expect(heartbeatMetrics.body).toContain('screen_share_lease_heartbeat_total{result="renewed"} 1');
+    context.media.available = true;
 
     const audioDenied = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/channels/${voice.id}/overwrites/MEMBER/${member.userId}`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { allow: [], deny: ['STREAM_APPLICATION_AUDIO'] } });
     expect(audioDenied.statusCode).toBe(204);
@@ -977,7 +1031,22 @@ describe('servers, channels, messages, and roles API', () => {
       },
       room: { name: channel.livekitRoomName },
     });
+    context.media.available = false;
+    const claimDuringMediaOutage = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/channels/${voice.id}/screen-share/claim`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      payload: { participantIdentity: memberConnection.participantIdentity },
+    });
+    expect(claimDuringMediaOutage.statusCode).toBe(503);
+    expect(claimDuringMediaOutage.json<{ code: string; requestId: string }>()).toEqual(expect.objectContaining({
+      code: 'LIVEKIT_UNAVAILABLE',
+      requestId: expect.any(String),
+    }));
+    const errorMetrics = await context.app.inject({ method: 'GET', url: '/metrics' });
+    expect(errorMetrics.body).toContain('api_errors_total{code="LIVEKIT_UNAVAILABLE",route="/api/v1/channels/:channelId/screen-share/claim",status_class="5xx"} 1');
     const initialVoiceState = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}/voice-state`, headers: { authorization: `Bearer ${owner.accessToken}` } });
+    context.media.available = true;
     expect(initialVoiceState.statusCode).toBe(200);
     const initialVoiceSnapshot = initialVoiceState.json<{ version: number; channels: Array<{ channelId: string; members: Array<{ userId: string }> }> }>();
     expect(initialVoiceSnapshot.version).toBeGreaterThanOrEqual(2);
@@ -990,6 +1059,55 @@ describe('servers, channels, messages, and roles API', () => {
         ]),
       }),
     ]);
+    const updateOwnVoiceState = await context.app.inject({
+      method: 'PATCH',
+      url: `${API_PREFIX}/channels/${voice.id}/voice-state`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      payload: {
+        sessionId: memberConnection.voiceSessionId,
+        muted: true,
+        deafened: true,
+        speaking: true,
+        connectionQuality: 'good',
+      },
+    });
+    expect(updateOwnVoiceState.statusCode).toBe(204);
+    const updatedOwnVoiceState = await context.app.inject({
+      method: 'GET',
+      url: `${API_PREFIX}/servers/${server.id}/voice-state`,
+      headers: { authorization: `Bearer ${owner.accessToken}` },
+    });
+    expect(
+      updatedOwnVoiceState
+        .json<{
+          channels: Array<{
+            channelId: string;
+            members: Array<{
+              userId: string;
+              muted: boolean;
+              deafened: boolean;
+            }>;
+          }>;
+        }>()
+        .channels.find((candidate) => candidate.channelId === voice.id)
+        ?.members.find((candidate) => candidate.userId === member.userId),
+    ).toEqual(expect.objectContaining({ muted: true, deafened: true }));
+    const staleOwnVoiceState = await context.app.inject({
+      method: 'PATCH',
+      url: `${API_PREFIX}/channels/${voice.id}/voice-state`,
+      headers: { authorization: `Bearer ${member.accessToken}` },
+      payload: {
+        sessionId: 'stale-session',
+        muted: false,
+        deafened: false,
+        speaking: false,
+        connectionQuality: 'unknown',
+      },
+    });
+    expect(staleOwnVoiceState.statusCode).toBe(409);
+    expect(staleOwnVoiceState.json<{ code: string }>().code).toBe(
+      'VOICE_SOURCE_CHANGED',
+    );
     const serverWithPresence = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${owner.accessToken}` } });
     const voiceWithPresence = serverWithPresence.json<{ channels: Array<{ id: string; voiceParticipants?: Array<{ userId: string; identity: string }> }> }>().channels.find((candidate) => candidate.id === voice.id);
     expect(voiceWithPresence?.voiceParticipants).toEqual(expect.arrayContaining([
@@ -1052,9 +1170,13 @@ describe('servers, channels, messages, and roles API', () => {
   });
 
   it('creates private one-to-one conversations only for users sharing a server', async () => {
+    context = await makeContext(new FakeObjectStorage());
     const anna = await login('dm-anna@example.com', 'Anna');
     const boris = await login('dm-boris@example.com', 'Boris');
     const outsider = await login('dm-outsider@example.com', 'Outsider');
+    const borisRecord = context.store.users.get(boris.userId);
+    if (!borisRecord) throw new Error('Boris was not created');
+    context.store.users.set(boris.userId, { ...borisRecord, avatarObjectKey: 'profiles/boris/avatar.webp' });
 
     const deniedWithoutSharedServer = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { userId: boris.userId } });
     expect(deniedWithoutSharedServer.statusCode).toBe(403);
@@ -1065,12 +1187,13 @@ describe('servers, channels, messages, and roles API', () => {
 
     const candidates = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-conversations/candidates`, headers: { authorization: `Bearer ${anna.accessToken}` } });
     expect(candidates.statusCode).toBe(200);
-    expect(candidates.json<Array<{ userId: string; displayName: string; sharedServerNames: string[] }>>()).toEqual([expect.objectContaining({ userId: boris.userId, displayName: 'Boris', sharedServerNames: ['DM community'] })]);
+    expect(candidates.json<Array<{ userId: string; displayName: string; avatarUrl: string; sharedServerNames: string[] }>>()).toEqual([expect.objectContaining({ userId: boris.userId, displayName: 'Boris', avatarUrl: 'https://storage.test/get/profiles%2Fboris%2Favatar.webp', sharedServerNames: ['DM community'] })]);
 
     const createdConversation = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { userId: boris.userId } });
     expect(createdConversation.statusCode).toBe(201);
-    const conversation = createdConversation.json<{ id: string; participant: { userId: string }; unreadCount: number }>();
+    const conversation = createdConversation.json<{ id: string; participant: { userId: string; avatarUrl: string }; unreadCount: number }>();
     expect(conversation.participant.userId).toBe(boris.userId);
+    expect(conversation.participant.avatarUrl).toBe('https://storage.test/get/profiles%2Fboris%2Favatar.webp');
     const sameConversation = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/direct-conversations`, headers: { authorization: `Bearer ${boris.accessToken}` }, payload: { userId: anna.userId } });
     expect(sameConversation.json<{ id: string }>().id).toBe(conversation.id);
 

@@ -41,7 +41,27 @@ prometheus.scrape "cadvisor" {
   job_name        = "cadvisor"
   scrape_interval = "30s"
   targets         = [{ "__address__" = "127.0.0.1:8080" }]
-  forward_to      = [prometheus.remote_write.central.receiver]
+  forward_to      = [prometheus.relabel.cadvisor.receiver]
+}
+
+prometheus.relabel "cadvisor" {
+  forward_to = [prometheus.remote_write.central.receiver]
+
+  // `container` is the canonical cross-dashboard label. Keep `name` during
+  // the 0.8 compatibility window so existing queries do not break.
+  rule {
+    source_labels = ["name"]
+    regex         = "(.+)"
+    target_label  = "container"
+    replacement   = "$1"
+  }
+
+  // Compose metadata is useful for discovery, but these path/hash labels
+  // multiply every cAdvisor series without helping operational queries.
+  rule {
+    action = "labeldrop"
+    regex  = "container_label_com_docker_compose_(config_hash|project_config_files|project_working_dir|version)"
+  }
 }
 
 prometheus.scrape "postgres" {
@@ -84,6 +104,23 @@ discovery.relabel "product" {
 }
 
 loki.process "sanitize" {
+  stage.json {
+    expressions = {
+      level = "level",
+    }
+  }
+
+  stage.template {
+    source   = "level"
+    template = "{{- $level := printf \"%v\" .Value -}}{{- if or (eq $level \"10\") (eq $level \"trace\") -}}trace{{- else if or (eq $level \"20\") (eq $level \"debug\") -}}debug{{- else if or (eq $level \"30\") (eq $level \"info\") -}}info{{- else if or (eq $level \"40\") (eq $level \"warn\") (eq $level \"warning\") -}}warn{{- else if or (eq $level \"50\") (eq $level \"error\") -}}error{{- else if or (eq $level \"60\") (eq $level \"fatal\") -}}fatal{{- else -}}unknown{{- end -}}"
+  }
+
+  stage.labels {
+    values = {
+      level = "",
+    }
+  }
+
   stage.drop {
     expression          = "(?i).*(GET|HEAD) /(health|ready|metrics)(/|\\s|\\?).*"
     drop_counter_reason = "routine_healthcheck"

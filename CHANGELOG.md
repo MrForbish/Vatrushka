@@ -4,6 +4,43 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-20
+
+### Added
+
+- provisioned product dashboards for realtime messaging, voice and screen sharing, PostgreSQL, Redis, private S3, email delivery, authentication and external probes;
+- bounded application metrics for WebSocket lifecycle, login outcomes, LiveKit webhooks, screen-share leases, S3 operations and in-flight HTTP requests;
+- actionable alerts for realtime reconnect bursts, messaging errors, voice projection drift, screen-share conflicts, S3 failures and login failure bursts.
+- a provisioned `Service Health & SLO` dashboard now tracks public API/update/TURN availability, 30-day success and latency objectives, error budgets, dependencies, alerts and deployed build metadata.
+- Prometheus health now exposes down targets, scrape and rule budgets, series churn, TSDB/WAL, Alertmanager delivery and remote-write state.
+- structured Loki dashboards now use normalized bounded log levels, query-time correlation fields and an end-to-end Loki canary instead of text-only error matching.
+- Russian infrastructure and container dashboards now cover host freshness, CPU/iowait, normalized load, swap, disks/inodes, I/O, network errors, clock skew, container limits, throttling, restarts and OOM events.
+- Russian Grafana dashboards for the application and detailed HTTP diagnostics now separate 2xx/3xx/4xx/5xx traffic, latency quantiles and bounded route/error breakdowns, with matching Prometheus recording rules and SLO alerts.
+- автор демонстрации может рисовать синхронные аннотации поверх видео, выбирать цвет и толщину, отменять последний штрих и очищать слой; координаты одинаково масштабируются у всех зрителей и сбрасываются вместе с media-сессией;
+
+### Fixed
+
+- avatars now use one round masked component with a stable fallback, profile media controls stay aligned, and avatar uploads include a move/zoom crop preview before upload;
+- signed S3 image URL refreshes are preloaded without blank flashes, while server icon, cover and accent changes immediately invalidate Home data and update navigation/voice cards;
+- the profile preview keeps the avatar above the cover, and the shared status menu is available from Home with outside-click and Escape dismissal;
+- messaging now keeps chronological bottom-anchored history, reports messages received below the viewport, clears canonical unread state after acknowledgement and performs a single bounded highlight when opening a notification;
+- the composer accepts pasted clipboard images, provides an accessible emoji picker and English emoji shortcodes, linkifies safe HTTP(S) URLs through validated Electron IPC and removes the inactive microphone action;
+- direct conversations, message authors and notification actors now render current profile avatars through normalized authenticated media URLs;
+- client update progress and restart actions now live in one deduplicated Notification Center entry instead of a floating bottom-right overlay;
+- the shared desktop shell now provides synchronized F11/UI fullscreen controls, a confirmation before logout, the canonical Vatrushka brand mark and a responsive Home support rail;
+- Gaming Home keeps the current confirmed voice session at the top of Quick Return, and the retired Spaces navigation action is removed;
+- Windows packaging deterministically generates a multi-resolution 32-bit application icon from the tracked brand asset;
+- voice mute/deafen/speaking state now propagates through the authenticated API, Redis projection and realtime server UI; undeafen restores the microphone only when it was enabled before deafen;
+- Gaming Home shows measured WebRTC RTT, and an active voice connection prevents false automatic idle presence;
+- voice-channel invites provide visible clipboard feedback, member moderation is hidden behind a context menu, and device selects flip/fit inside the current viewport;
+- screen sharing now tolerates transient heartbeat/network failures, keeps authoritative lease conflicts deterministic and records bounded heartbeat diagnostics;
+- remote audio tracks are reattached after a LiveKit reconnect and desktop media diagnostics include safe session/correlation context;
+- voice-state reads no longer synchronously poll LiveKit, preventing a transient RoomService failure from becoming an API 500;
+- Windows system-audio capture uses a compatible `restrictOwnAudio` constraint and refuses an unsafe stream when Chromium cannot exclude Vatrushka output;
+- production observability no longer sends Loki internal gRPC through the egress proxy, probes TURN with a real TLS handshake and avoids the AppArmor-incompatible systemd collector.
+- Loki health diagnostics no longer depend on obsolete BoltDB Shipper metrics while the production store uses TSDB/S3.
+- cAdvisor metrics expose a canonical bounded `container` label, and restart alerts now use changes of the start-time gauge instead of an invalid counter increase.
+
 ## [0.7.0] - 2026-07-19
 
 ### Added

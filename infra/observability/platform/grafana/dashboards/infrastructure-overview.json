@@ -1,24 +1,225 @@
 {
   "annotations": { "list": [] },
+  "description": "Состояние хостов Vatrushka: доступность метрик, CPU, память, диски, сеть и синхронизация времени. Пороговые цвета совпадают с infrastructure alert rules.",
   "editable": false,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    { "includeVars": true, "keepTime": true, "title": "Контейнеры этого контура", "type": "link", "url": "/d/vatrushka-containers" },
+    { "includeVars": true, "keepTime": true, "title": "Логи", "type": "link", "url": "/d/vatrushka-logs" }
+  ],
   "panels": [
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }, "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 }, "id": 1, "targets": [{ "expr": "100 - avg by (host) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100", "legendFormat": "{{host}}", "refId": "A" }], "title": "CPU", "type": "timeseries" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }, "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 }, "id": 2, "targets": [{ "expr": "(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100", "legendFormat": "{{host}}", "refId": "A" }], "title": "RAM", "type": "timeseries" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "percent" }, "overrides": [] }, "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 }, "id": 3, "targets": [{ "expr": "100 * (1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"})", "legendFormat": "{{host}} {{mountpoint}}", "refId": "A" }], "title": "Disk usage", "type": "timeseries" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 8, "x": 0, "y": 8 }, "id": 4, "targets": [{ "expr": "node_load1", "legendFormat": "{{host}}", "refId": "A" }], "title": "Load average", "type": "timeseries" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] }, "gridPos": { "h": 7, "w": 8, "x": 8, "y": 8 }, "id": 5, "targets": [{ "expr": "sum by (host) (rate(node_network_receive_bytes_total{device!~\"lo\"}[5m]))", "legendFormat": "{{host}} receive", "refId": "A" }, { "expr": "sum by (host) (rate(node_network_transmit_bytes_total{device!~\"lo\"}[5m]))", "legendFormat": "{{host}} transmit", "refId": "B" }], "title": "Network", "type": "timeseries" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }, "gridPos": { "h": 7, "w": 8, "x": 16, "y": 8 }, "id": 6, "targets": [{ "expr": "time() - node_boot_time_seconds", "legendFormat": "{{host}}", "refId": "A" }], "title": "Uptime", "type": "stat" }
+    {
+      "description": "Что показывает: правила чтения и переходы к деталям. Как считается: не применимо. Норма: зелёные stat-панели и устойчивые графики. Проблема: жёлтые/красные пороги или Нет данных. Что проверить: контейнеры, логи и runbook.",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "content": "### Как читать этот дашборд\n`0` означает измеренное нулевое значение, **Нет данных** — отсутствие подходящей series. Фильтры применяются ко всем панелям. Сначала проверьте доступность метрик и ключевые пороги, затем диски, I/O и сеть. [Runbook](https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#infrastructure-and-containers).", "mode": "markdown" },
+      "title": "Как читать этот дашборд",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: наличие node-exporter для выбранных хостов. Как считается: минимальный up. Норма: Работает. Проблема: Не работает или Нет метрик. Что проверить: target node и Alloy.",
+      "fieldConfig": { "defaults": { "mappings": [{ "options": { "0": { "color": "red", "text": "Не работает" }, "1": { "color": "green", "text": "Работает" } }, "type": "value" }], "noValue": "Нет метрик", "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 4 },
+      "id": 2,
+      "options": { "colorMode": "background", "graphMode": "none", "reduceOptions": { "calcs": ["lastNotNull"], "values": false }, "textMode": "value_and_name" },
+      "targets": [{ "expr": "min(up{job=\"node\",environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"})", "legendFormat": "node-exporter", "refId": "A" }],
+      "title": "Метрики хостов",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: долю занятого CPU за 5 минут. Как считается: 1 минус idle. Норма: ниже 85%. Проблема: warning выше 85% 15 минут. Что проверить: процессы и контейнеры хоста.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.85 }, { "color": "red", "value": 0.95 }] }, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 4 },
+      "id": 3,
+      "targets": [{ "expr": "max(vatrushka:host_cpu_utilization:ratio5m{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"})", "refId": "A" }],
+      "title": "CPU: максимум",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: максимальную долю занятой RAM. Как считается: 1 - MemAvailable/MemTotal. Норма: ниже 90%. Проблема: critical выше 90% 10 минут. Что проверить: контейнеры и swap.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.9 }] }, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 4 },
+      "id": 4,
+      "targets": [{ "expr": "max(vatrushka:host_memory_utilization:ratio{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"})", "refId": "A" }],
+      "title": "RAM: максимум",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: максимальное заполнение постоянной файловой системы. Как считается: 1 - available/size. Норма: ниже 80%. Проблема: warning 80%, critical 90%. Что проверить: mountpoint и рост данных.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.9 }] }, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 4 },
+      "id": 5,
+      "targets": [{ "expr": "max(vatrushka:host_filesystem_utilization:ratio{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"})", "refId": "A" }],
+      "title": "Диск: максимум",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: максимальную долю использованных inode. Как считается: 1 - free/files. Норма: ниже 85%. Проблема: warning выше 85%. Что проверить: filesystem с большим числом мелких файлов.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.85 }, { "color": "red", "value": 0.95 }] }, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 4 },
+      "id": 6,
+      "targets": [{ "expr": "max(vatrushka:host_inode_utilization:ratio{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"})", "refId": "A" }],
+      "title": "Inode: максимум",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: максимальное расхождение часов. Как считается: abs(node_time - Prometheus time). Норма: до 5 секунд. Проблема: warning выше 5 секунд. Что проверить: NTP/chrony.",
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 30 }] }, "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 4 },
+      "id": 7,
+      "targets": [{ "expr": "max(abs(node_time_seconds{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"} - time()))", "refId": "A" }],
+      "title": "Расхождение часов",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: CPU utilization и время ожидания диска. Как считается: rate CPU counters по адаптивному окну. Норма: utilization ниже 85%, iowait устойчиво низкий. Проблема: высокая загрузка или iowait. Что проверить: контейнеры и disk I/O.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 9 },
+      "id": 8,
+      "targets": [
+        { "expr": "vatrushka:host_cpu_utilization:ratio5m{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}", "legendFormat": "{{host}} CPU", "refId": "A" },
+        { "expr": "avg by (host) (rate(node_cpu_seconds_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\",mode=\"iowait\"}[$__rate_interval]))", "legendFormat": "{{host}} iowait", "refId": "B" }
+      ],
+      "title": "CPU и iowait",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: load1 на одно логическое CPU. Как считается: node_load1 / число CPU. Норма: универсальной нормы нет; устойчивое значение выше 1 означает очередь. Проблема: рост вместе с CPU/iowait. Что проверить: процессы хоста.",
+      "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 9 },
+      "id": 9,
+      "targets": [{ "expr": "node_load1{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"} / on(host) group_left count by(host) (node_cpu_seconds_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\",mode=\"idle\"})", "legendFormat": "{{host}}", "refId": "A" }],
+      "title": "Load1 на CPU",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: долю занятой RAM и swap. Как считается: available и free swap относительно total. Норма: RAM ниже 90%, swap близок к нулю. Проблема: рост swap и memory pressure. Что проверить: контейнеры и OOM.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 17 },
+      "id": 10,
+      "targets": [
+        { "expr": "vatrushka:host_memory_utilization:ratio{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}", "legendFormat": "{{host}} RAM", "refId": "A" },
+        { "expr": "(1 - node_memory_SwapFree_bytes{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"} / clamp_min(node_memory_SwapTotal_bytes{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}, 1)) and node_memory_SwapTotal_bytes > 0", "legendFormat": "{{host}} swap", "refId": "B" }
+      ],
+      "title": "RAM и swap",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: заполнение persistent filesystem и inode. Как считается: recorded ratios по mountpoint. Норма: disk ниже 80%, inode ниже 85%. Проблема: пересечение порогов. Что проверить: mountpoint и владельца данных.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 17 },
+      "id": 11,
+      "targets": [
+        { "expr": "vatrushka:host_filesystem_utilization:ratio{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}", "legendFormat": "{{host}} {{mountpoint}} bytes", "refId": "A" },
+        { "expr": "vatrushka:host_inode_utilization:ratio{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}", "legendFormat": "{{host}} {{mountpoint}} inode", "refId": "B" }
+      ],
+      "title": "Диски и inode",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: чтение и запись block devices. Как считается: rate bytes и completed operations по адаптивному окну. Норма: универсальной нормы нет. Проблема: saturation вместе с latency/iowait. Что проверить: device и контейнерную нагрузку.",
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 25 },
+      "id": 12,
+      "targets": [
+        { "expr": "sum by(host,device) (rate(node_disk_read_bytes_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}[$__rate_interval]))", "legendFormat": "{{host}} {{device}} read", "refId": "A" },
+        { "expr": "sum by(host,device) (rate(node_disk_written_bytes_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}[$__rate_interval]))", "legendFormat": "{{host}} {{device}} write", "refId": "B" }
+      ],
+      "title": "Disk throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: IOPS и среднюю длительность операции. Как считается: rate completed и time/completed. Норма: универсальной нормы нет. Проблема: одновременный рост очереди и latency. Что проверить: конкретный device.",
+      "fieldConfig": { "defaults": { "unit": "iops" }, "overrides": [{ "matcher": { "id": "byRegexp", "options": "/latency/" }, "properties": [{ "id": "unit", "value": "s" }] }] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 25 },
+      "id": 13,
+      "targets": [
+        { "expr": "sum by(host,device) (rate(node_disk_reads_completed_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}[$__rate_interval]) + rate(node_disk_writes_completed_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}[$__rate_interval]))", "legendFormat": "{{host}} {{device}} IOPS", "refId": "A" },
+        { "expr": "sum by(host,device) (rate(node_disk_read_time_seconds_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}[$__rate_interval]) + rate(node_disk_write_time_seconds_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}[$__rate_interval])) / clamp_min(sum by(host,device) (rate(node_disk_reads_completed_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}[$__rate_interval]) + rate(node_disk_writes_completed_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}[$__rate_interval])), 0.001)", "legendFormat": "{{host}} {{device}} latency", "refId": "B" }
+      ],
+      "title": "Disk IOPS и latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: свободное место сейчас и прогноз через 24 часа. Как считается: avail и predict_linear по 6 часам. Норма: положительный запас. Проблема: прогноз близок к нулю; это диагностический сигнал, не alert. Что проверить: устойчивость тренда.",
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 33 },
+      "id": 14,
+      "targets": [
+        { "expr": "node_filesystem_avail_bytes{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\",fstype!~\"tmpfs|overlay|squashfs\"}", "legendFormat": "{{host}} {{mountpoint}} сейчас", "refId": "A" },
+        { "expr": "clamp_min(predict_linear(node_filesystem_avail_bytes{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\",fstype!~\"tmpfs|overlay|squashfs\"}[6h], 86400), 0)", "legendFormat": "{{host}} {{mountpoint}} через 24ч", "refId": "B" }
+      ],
+      "title": "Свободное место и прогноз",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: входящий и исходящий трафик без loopback/Docker bridge/veth. Как считается: rate bytes по адаптивному окну. Норма: универсальной нормы нет. Проблема: saturation или неожиданный всплеск. Что проверить: интерфейс и сервис.",
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 33 },
+      "id": 15,
+      "targets": [
+        { "expr": "sum by(host) (rate(node_network_receive_bytes_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\",device!~\"lo|docker.*|br-.*|veth.*\"}[$__rate_interval]))", "legendFormat": "{{host}} receive", "refId": "A" },
+        { "expr": "sum by(host) (rate(node_network_transmit_bytes_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\",device!~\"lo|docker.*|br-.*|veth.*\"}[$__rate_interval]))", "legendFormat": "{{host}} transmit", "refId": "B" }
+      ],
+      "title": "Сетевой трафик",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: сетевые ошибки и отброшенные пакеты. Как считается: rate counters по адаптивному окну. Норма: 0. Проблема: устойчивое ненулевое значение. Что проверить: интерфейс, MTU и firewall.",
+      "fieldConfig": { "defaults": { "min": 0, "unit": "pps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 41 },
+      "id": 16,
+      "targets": [
+        { "expr": "sum by(host,device) (rate(node_network_receive_errs_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\",device!~\"lo|docker.*|br-.*|veth.*\"}[$__rate_interval]) + rate(node_network_transmit_errs_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\",device!~\"lo|docker.*|br-.*|veth.*\"}[$__rate_interval]))", "legendFormat": "{{host}} {{device}} errors", "refId": "A" },
+        { "expr": "sum by(host,device) (rate(node_network_receive_drop_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\",device!~\"lo|docker.*|br-.*|veth.*\"}[$__rate_interval]) + rate(node_network_transmit_drop_total{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\",device!~\"lo|docker.*|br-.*|veth.*\"}[$__rate_interval]))", "legendFormat": "{{host}} {{device}} drops", "refId": "B" }
+      ],
+      "title": "Сетевые ошибки и drops",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: uptime и clock skew каждого хоста. Как считается: time - boot и abs(time difference). Норма: стабильный uptime, skew менее 5 секунд. Проблема: неожиданный reboot или skew. Что проверить: журнал хоста и NTP.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 41 },
+      "id": 17,
+      "targets": [
+        { "expr": "time() - node_boot_time_seconds{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"}", "legendFormat": "{{host}} uptime", "refId": "A" },
+        { "expr": "abs(node_time_seconds{environment=~\"$environment\",region=~\"$region\",host=~\"$host\",role=~\"$role\"} - time())", "legendFormat": "{{host}} clock skew", "refId": "B" }
+      ],
+      "title": "Uptime и часы",
+      "type": "timeseries"
+    }
   ],
   "refresh": "30s",
   "schemaVersion": 41,
   "tags": ["vatrushka", "infrastructure"],
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(node_uname_info, environment)", "includeAll": true, "label": "Контур", "name": "environment", "query": { "query": "label_values(node_uname_info, environment)", "refId": "PrometheusVariableQueryEditor-Environment" }, "refresh": 1, "type": "query" },
+      { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(node_uname_info{environment=~\"$environment\"}, region)", "includeAll": true, "label": "Регион", "name": "region", "query": { "query": "label_values(node_uname_info{environment=~\"$environment\"}, region)", "refId": "PrometheusVariableQueryEditor-Region" }, "refresh": 1, "type": "query" },
+      { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(node_uname_info{environment=~\"$environment\",region=~\"$region\"}, host)", "includeAll": true, "label": "Хост", "name": "host", "query": { "query": "label_values(node_uname_info{environment=~\"$environment\",region=~\"$region\"}, host)", "refId": "PrometheusVariableQueryEditor-Host" }, "refresh": 1, "type": "query" },
+      { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(node_uname_info{environment=~\"$environment\",region=~\"$region\",host=~\"$host\"}, role)", "includeAll": true, "label": "Роль", "name": "role", "query": { "query": "label_values(node_uname_info{environment=~\"$environment\",region=~\"$region\",host=~\"$host\"}, role)", "refId": "PrometheusVariableQueryEditor-Role" }, "refresh": 1, "type": "query" }
+    ]
+  },
   "time": { "from": "now-6h", "to": "now" },
   "timezone": "browser",
-  "title": "Infrastructure Overview",
+  "title": "Инфраструктура: обзор",
   "uid": "vatrushka-infrastructure",
-  "version": 1
+  "version": 2
 }

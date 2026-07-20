@@ -51,7 +51,7 @@ scrape_configs:
   - job_name: blackbox-turn
     metrics_path: /probe
     params:
-      module: [tcp_connect]
+      module: [tcp_tls]
     static_configs:
       - targets: [turn.myvatrushka.ru:5349]
     relabel_configs:

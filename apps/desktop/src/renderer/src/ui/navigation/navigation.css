@@ -21,15 +21,23 @@
   padding: 0 var(--space-2) var(--space-3);
   font: var(--text-heading-sm);
 }
-.vui-workspace-library__brand > span {
-  display: grid;
+.vui-brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.vui-brand-lockup > img {
+  display: block;
   width: 32px;
   height: 32px;
-  place-items: center;
-  border-radius: var(--radius-sm);
-  background: var(--gradient-brand);
-  color: var(--color-text-on-accent);
-  font-family: var(--font-display);
+  flex: 0 0 auto;
+  object-fit: contain;
+}
+.vui-brand-lockup > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .vui-workspace-library__home,
 .vui-workspace-library__actions button {
@@ -426,6 +434,12 @@
   opacity: 0.58;
   pointer-events: none;
 }
+.vui-channel-row__participants > div[data-speaking="true"] {
+  background: color-mix(in srgb, var(--color-success) 8%, transparent);
+}
+.vui-channel-row__participants > div[data-speaking="true"] .vui-avatar {
+  box-shadow: 0 0 0 1px var(--color-success);
+}
 
 .vui-channel-row__participants > div[data-pending="true"] small {
   color: var(--color-text-muted);
@@ -439,6 +453,16 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.vui-channel-row__participant-signals {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  overflow: visible !important;
+  color: var(--color-text-muted);
+}
+.vui-channel-row__participant-signals > span {
+  display: inline-flex;
 }
 .vui-server-context__connection {
   display: flex;
@@ -615,7 +639,7 @@
 }
 .vui-member-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   align-items: center;
   gap: var(--space-3);
   min-height: 50px;
@@ -657,4 +681,57 @@
 }
 .vui-member-row[data-founder="true"] small {
   color: var(--color-founder);
+}
+.vui-member-row__menu-trigger {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  opacity: 0;
+}
+.vui-member-row:hover .vui-member-row__menu-trigger,
+.vui-member-row__menu-trigger:focus-visible {
+  opacity: 1;
+}
+.vui-member-context-menu {
+  position: fixed;
+  z-index: var(--z-popover);
+  display: grid;
+  width: 218px;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  box-shadow: var(--shadow-modal);
+}
+.vui-member-context-menu > strong {
+  overflow: hidden;
+  padding: var(--space-2);
+  color: var(--color-text-muted);
+  font: var(--text-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vui-member-context-menu > button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: var(--text-label-sm);
+  text-align: left;
+}
+.vui-member-context-menu > button:hover {
+  background: var(--color-surface-2);
+  color: var(--color-text-primary);
 }

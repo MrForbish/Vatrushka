@@ -1,23 +1,213 @@
 {
   "annotations": { "list": [] },
+  "description": "Ресурсы и жизненный цикл контейнеров Vatrushka: freshness, CPU, память, рестарты, OOM, throttling, сеть и filesystem. Наличие метрики не подменяет Docker health status.",
   "editable": false,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    { "includeVars": true, "keepTime": true, "title": "Инфраструктура", "type": "link", "url": "/d/vatrushka-infrastructure" },
+    { "includeVars": true, "keepTime": true, "title": "Логи", "type": "link", "url": "/d/vatrushka-logs" }
+  ],
   "panels": [
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }, "id": 1, "targets": [{ "expr": "sum by (host, name) (rate(container_cpu_usage_seconds_total{name!=\"\"}[5m])) * 100", "legendFormat": "{{host}} {{name}}", "refId": "A" }], "title": "Container CPU", "type": "timeseries" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] }, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }, "id": 2, "targets": [{ "expr": "container_memory_working_set_bytes{name!=\"\"}", "legendFormat": "{{host}} {{name}}", "refId": "A" }], "title": "Container RAM", "type": "timeseries" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 8, "x": 0, "y": 8 }, "id": 3, "targets": [{ "expr": "count by (host) (container_last_seen{name!=\"\"})", "legendFormat": "{{host}}", "refId": "A" }], "title": "Observed containers", "type": "stat" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 8, "x": 8, "y": 8 }, "id": 4, "targets": [{ "expr": "increase(container_oom_events_total[1h])", "legendFormat": "{{host}} {{name}}", "refId": "A" }], "title": "OOM events", "type": "timeseries" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] }, "gridPos": { "h": 7, "w": 8, "x": 16, "y": 8 }, "id": 5, "targets": [{ "expr": "sum by (host, name) (rate(container_network_receive_bytes_total[5m]) + rate(container_network_transmit_bytes_total[5m]))", "legendFormat": "{{host}} {{name}}", "refId": "A" }], "title": "Container network", "type": "timeseries" }
+    {
+      "description": "Что показывает: правила чтения контейнерных метрик. Как считается: не применимо. Норма: свежие series без рестартов/OOM. Проблема: Нет данных, stale series, рестарты или OOM. Что проверить: хост, Docker и логи контейнера.",
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "options": { "content": "### Как читать этот дашборд\n100% CPU одного контейнера соответствует **одному ядру**, поэтому CPU cores может быть больше 1. Наличие `container_last_seen` означает только свежесть метрики, а не Docker health. `0` — измеренный ноль, **Нет данных** — отсутствующая series. [Runbook](https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#infrastructure-and-containers).", "mode": "markdown" },
+      "title": "Как читать этот дашборд",
+      "type": "text"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: число контейнеров с cAdvisor series. Как считается: count container_last_seen. Норма: соответствует ожидаемому deployment. Проблема: внезапное уменьшение или Нет данных. Что проверить: cAdvisor и Docker discovery.",
+      "fieldConfig": { "defaults": { "noValue": "Нет данных", "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 4 },
+      "id": 2,
+      "targets": [{ "expr": "count(container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"})", "refId": "A" }],
+      "title": "Наблюдаемые контейнеры",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: рестарты за выбранный период. Как считается: changes start_time gauge, не increase. Норма: 0. Проблема: больше 3 за 15 минут вызывает warning. Что проверить: exit reason и логи.",
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 4 }] }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 4 },
+      "id": 3,
+      "targets": [{ "expr": "sum(changes(container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range])) or vector(0)", "refId": "A" }],
+      "title": "Рестарты",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: OOM events за выбранный период. Как считается: increase bounded counter. Норма: 0. Проблема: любое событие critical. Что проверить: memory limit и пиковое потребление.",
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] }, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 4 },
+      "id": 4,
+      "targets": [{ "expr": "sum(increase(container_oom_events_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range])) or vector(0)", "refId": "A" }],
+      "title": "OOM events",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: максимальный возраст последней container series. Как считается: time - container_last_seen. Норма: до двух scrape intervals, обычно менее 60 секунд. Проблема: больше 120 секунд. Что проверить: cAdvisor и remote write.",
+      "fieldConfig": { "defaults": { "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 60 }, { "color": "red", "value": 120 }] }, "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 4 },
+      "id": 5,
+      "targets": [{ "expr": "max(time() - container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"})", "refId": "A" }],
+      "title": "Свежесть метрик",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: суммарное потребление CPU в cores. Как считается: rate cpu_usage_seconds. Норма: зависит от нагрузки и лимита. Проблема: saturation вместе с throttling. Что проверить: CPU limit и host CPU.",
+      "fieldConfig": { "defaults": { "unit": "cores" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 4 },
+      "id": 6,
+      "targets": [{ "expr": "sum(rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "refId": "A" }],
+      "title": "CPU cores",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: суммарный working set. Как считается: сумма cgroup working_set. Норма: ниже заданных limits. Проблема: рост вместе с memory percentage/OOM. Что проверить: контейнеры с наибольшим working set.",
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 4 },
+      "id": 7,
+      "targets": [{ "expr": "sum(container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"})", "refId": "A" }],
+      "title": "Working set",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: operational table по каждому контейнеру. Как считается: instant last_seen, uptime, CPU, RAM, restarts и OOM. Норма: свежая series, стабильный uptime, нулевые restart/OOM. Проблема: stale или lifecycle events. Что проверить: выбранный контейнер и логи.",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 9 },
+      "id": 8,
+      "targets": [
+        { "expr": "time() - container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}", "format": "table", "instant": true, "legendFormat": "last seen, s", "refId": "A" },
+        { "expr": "time() - container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}", "format": "table", "instant": true, "legendFormat": "uptime, s", "refId": "B" },
+        { "expr": "sum by(environment,host,role,container) (rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "format": "table", "instant": true, "legendFormat": "CPU cores", "refId": "C" },
+        { "expr": "max by(environment,host,role,container) (container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"})", "format": "table", "instant": true, "legendFormat": "RAM", "refId": "D" },
+        { "expr": "sum by(environment,host,role,container) (changes(container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range]))", "format": "table", "instant": true, "legendFormat": "restarts", "refId": "E" },
+        { "expr": "sum by(environment,host,role,container) (increase(container_oom_events_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range]))", "format": "table", "instant": true, "legendFormat": "OOM", "refId": "F" }
+      ],
+      "title": "Контейнеры: состояние и события",
+      "transformations": [{ "id": "labelsToFields", "options": { "mode": "columns" } }, { "id": "merge", "options": {} }],
+      "type": "table"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: CPU каждого контейнера в cores. Как считается: rate cpu_usage_seconds. Норма: зависит от лимитов; 1 core = 100% одного ядра. Проблема: устойчивый рост и throttling. Что проверить: CPU quota и host CPU.",
+      "fieldConfig": { "defaults": { "unit": "cores" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "id": 9,
+      "targets": [{ "expr": "sum by(host,container) (rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{container}}", "refId": "A" }],
+      "title": "CPU по контейнерам",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: долю CPU хоста, занятую контейнером. Как считается: container cores / host logical CPUs. Норма: универсальной нормы нет. Проблема: один контейнер вытесняет остальные. Что проверить: container CPU и throttling.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "id": 10,
+      "targets": [{ "expr": "sum by(host,container) (rate(container_cpu_usage_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval])) / on(host) group_left count by(host) (node_cpu_seconds_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",mode=\"idle\"})", "legendFormat": "{{host}} {{container}}", "refId": "A" }],
+      "title": "Доля CPU хоста",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: working set каждого контейнера. Как считается: cgroup working set bytes. Норма: устойчиво ниже limit. Проблема: рост к лимиту. Что проверить: memory percentage и OOM.",
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
+      "id": 11,
+      "targets": [{ "expr": "max by(host,container) (container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"})", "legendFormat": "{{host}} {{container}}", "refId": "A" }],
+      "title": "Memory working set",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: working set относительно заданного memory limit. Как считается: working_set/limit только при limit > 0. Норма: ниже 80%. Проблема: приближение к 100% и OOM. Что проверить: memory limit и приложение.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.95 }] }, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
+      "id": 12,
+      "targets": [{ "expr": "max by(host,container) (container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}) / max by(host,container) (container_spec_memory_limit_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"} > 0)", "legendFormat": "{{host}} {{container}}", "refId": "A" }],
+      "title": "Memory от limit",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: долю throttled CPU periods. Как считается: rate throttled periods / periods. Норма: близко к 0. Проблема: устойчивый throttling. Что проверить: CPU quota и нагрузку.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
+      "id": 13,
+      "targets": [{ "expr": "sum by(host,container) (rate(container_cpu_cfs_throttled_periods_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval])) / clamp_min(sum by(host,container) (rate(container_cpu_cfs_periods_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval])), 0.001)", "legendFormat": "{{host}} {{container}}", "refId": "A" }],
+      "title": "CPU throttling",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: рестарты и OOM по контейнерам. Как считается: changes start_time и increase OOM за выбранный период. Норма: 0. Проблема: любые OOM или повторные рестарты. Что проверить: exit reason, limits и логи.",
+      "fieldConfig": { "defaults": { "min": 0, "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 35 },
+      "id": 14,
+      "targets": [
+        { "expr": "sum by(host,container) (changes(container_start_time_seconds{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range]))", "legendFormat": "{{host}} {{container}} restarts", "refId": "A" },
+        { "expr": "sum by(host,container) (increase(container_oom_events_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__range]))", "legendFormat": "{{host}} {{container}} OOM", "refId": "B" }
+      ],
+      "title": "Рестарты и OOM",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: receive и transmit раздельно. Как считается: rate network bytes по адаптивному окну. Норма: универсальной нормы нет. Проблема: неожиданный всплеск или обрыв. Что проверить: container/service logs и host network.",
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 43 },
+      "id": 15,
+      "targets": [
+        { "expr": "sum by(host,container) (rate(container_network_receive_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{container}} receive", "refId": "A" },
+        { "expr": "sum by(host,container) (rate(container_network_transmit_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{container}} transmit", "refId": "B" }
+      ],
+      "title": "Сеть контейнеров",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: filesystem read/write throughput. Как считается: rate cgroup fs bytes. Норма: универсальной нормы нет. Проблема: saturation вместе с host disk latency. Что проверить: device и workload.",
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 43 },
+      "id": 16,
+      "targets": [
+        { "expr": "sum by(host,container) (rate(container_fs_reads_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{container}} read", "refId": "A" },
+        { "expr": "sum by(host,container) (rate(container_fs_writes_bytes_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}[$__rate_interval]))", "legendFormat": "{{host}} {{container}} write", "refId": "B" }
+      ],
+      "title": "Filesystem throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Что показывает: использование writable container filesystem относительно limit. Как считается: usage/limit по device. Норма: ниже 80%. Проблема: приближение к 100%. Что проверить: логи, caches и volumes.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.9 }] }, "unit": "percentunit" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 51 },
+      "id": 17,
+      "targets": [{ "expr": "max by(host,container,device) (container_fs_usage_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}) / clamp_min(max by(host,container,device) (container_fs_limit_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container=~\"$container\",container!=\"\"}), 1)", "legendFormat": "{{host}} {{container}} {{device}}", "refId": "A" }],
+      "title": "Container filesystem usage",
+      "type": "timeseries"
+    }
   ],
   "refresh": "30s",
   "schemaVersion": 41,
   "tags": ["vatrushka", "containers"],
-  "templating": { "list": [] },
+  "templating": {
+    "list": [
+      { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(container_last_seen, environment)", "includeAll": true, "label": "Контур", "name": "environment", "query": { "query": "label_values(container_last_seen, environment)", "refId": "PrometheusVariableQueryEditor-Environment" }, "refresh": 1, "type": "query" },
+      { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(container_last_seen{environment=~\"$environment\"}, host)", "includeAll": true, "label": "Хост", "name": "host", "query": { "query": "label_values(container_last_seen{environment=~\"$environment\"}, host)", "refId": "PrometheusVariableQueryEditor-Host" }, "refresh": 1, "type": "query" },
+      { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(container_last_seen{environment=~\"$environment\",host=~\"$host\"}, role)", "includeAll": true, "label": "Роль", "name": "role", "query": { "query": "label_values(container_last_seen{environment=~\"$environment\",host=~\"$host\"}, role)", "refId": "PrometheusVariableQueryEditor-Role" }, "refresh": 1, "type": "query" },
+      { "allValue": ".*", "current": { "text": "All", "value": ".*" }, "datasource": { "type": "prometheus", "uid": "prometheus" }, "definition": "label_values(container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container!=\"\"}, container)", "includeAll": true, "label": "Контейнер", "name": "container", "query": { "query": "label_values(container_last_seen{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",container!=\"\"}, container)", "refId": "PrometheusVariableQueryEditor-Container" }, "refresh": 1, "type": "query" }
+    ]
+  },
   "time": { "from": "now-6h", "to": "now" },
   "timezone": "browser",
-  "title": "Containers Overview",
+  "title": "Контейнеры: обзор",
   "uid": "vatrushka-containers",
-  "version": 1
+  "version": 2
 }

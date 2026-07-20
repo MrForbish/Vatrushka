@@ -1,0 +1,191 @@
+{
+  "annotations": { "list": [] },
+  "description": "Состояние WebSocket, доставки сообщений, уведомлений и transactional outbox.",
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Текущее число подключённых клиентских WebSocket.",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum(chat_ws_connections_active{instance=~\"$instance\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Активные WebSocket",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Открытия, закрытия, переподключения и ошибки соединений.",
+      "gridPos": { "h": 6, "w": 9, "x": 6, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum by (event, reason) (rate(chat_ws_connection_events_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{event}} / {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "События WebSocket",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Ошибки аутентификации и таймауты heartbeat.",
+      "gridPos": { "h": 6, "w": 9, "x": 15, "y": 0 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "sum by (event, reason) (rate(chat_ws_connection_events_total{instance=~\"$instance\",event=~\"auth_failed|heartbeat_timeout|error\"}[$__rate_interval]))",
+          "legendFormat": "{{event}} / {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Проблемные соединения",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Созданные сообщения и ошибки их записи.",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 6 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "sum(rate(chat_messages_created_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "создано",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(chat_message_create_errors_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "ошибки",
+          "refId": "B"
+        }
+      ],
+      "title": "Сообщения в секунду",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Квантили времени создания сообщения на API.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 6 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(chat_message_create_duration_seconds_bucket{instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(chat_message_create_duration_seconds_bucket{instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ],
+      "title": "Задержка создания сообщения",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Созданные и подавленные пользовательскими настройками уведомления.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 6 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "sum(rate(chat_notifications_created_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "создано",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(chat_notifications_suppressed_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "подавлено",
+          "refId": "B"
+        }
+      ],
+      "title": "Уведомления",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Текущая очередь и события, исчерпавшие число повторов.",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 13 },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "sum(chat_outbox_pending{instance=~\"$instance\"})",
+          "legendFormat": "ожидают",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(chat_outbox_failed{instance=~\"$instance\"})",
+          "legendFormat": "ошибки",
+          "refId": "B"
+        }
+      ],
+      "title": "Transactional outbox",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Возраст самого старого необработанного события.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 13 },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "max(chat_outbox_oldest_age_seconds{instance=~\"$instance\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Возраст очереди",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Ошибки публикации событий через Redis между экземплярами API.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 13 },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "sum(rate(chat_redis_publish_errors_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "refId": "A"
+        }
+      ],
+      "title": "Ошибки Redis Pub/Sub",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["vatrushka", "application", "realtime"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "Все", "value": ".*" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(up{job=\"vatrushka-api\"}, instance)",
+        "includeAll": true,
+        "label": "Экземпляр API",
+        "multi": true,
+        "name": "instance",
+        "query": {
+          "query": "label_values(up{job=\"vatrushka-api\"}, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "Realtime и сообщения",
+  "uid": "vatrushka-realtime-messaging",
+  "version": 1
+}

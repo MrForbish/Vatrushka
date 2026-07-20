@@ -2,18 +2,18 @@
 .vui-message-list__virtual { position: relative; width: 100%; }
 .vui-message-list__older { display: block; margin: var(--space-3) auto var(--space-2); padding: 7px 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-round); background: var(--color-surface-0); color: var(--color-text-secondary); font: var(--text-label-sm); }
 .vui-message-list__older:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-text-primary); }
-.vui-message-list__older:disabled { opacity: .6; }
+.vui-message-list__older:disabled { opacity: 0.6; }
 .vui-message-empty { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; min-height: 100%; padding: var(--space-6); }
 .vui-message-empty > span { display: grid; width: 56px; height: 56px; place-items: center; border-radius: var(--radius-lg); background: var(--color-surface-3); color: var(--color-cyan); }
 .vui-message-empty h2 { margin: var(--space-4) 0 var(--space-1); font: var(--text-heading-lg); }
 .vui-message-empty p { margin: 0; color: var(--color-text-muted); font: var(--text-body-md); }
 .vui-message { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: var(--space-3); padding: var(--space-3); border: 1px solid transparent; border-radius: var(--radius-md); content-visibility: auto; contain-intrinsic-size: 72px; }
-.vui-message[data-virtualized='true'] { position: absolute; top: 0; left: 0; width: 100%; content-visibility: visible; }
-.vui-message[data-grouped='true'] { padding-block: var(--space-1); }
+.vui-message[data-virtualized="true"] { position: absolute; top: 0; left: 0; width: 100%; content-visibility: visible; }
+.vui-message[data-grouped="true"] { padding-block: var(--space-1); }
 .vui-message:hover { background: var(--color-surface-2); }
-.vui-message[data-targeted='true'] { border-color: color-mix(in srgb, var(--color-cyan), transparent 35%); background: color-mix(in srgb, var(--color-cyan), transparent 90%); animation: vui-message-target 2.4s ease-out; }
-.vui-message[data-author-badge='founder'] { border-left-color: color-mix(in srgb, var(--color-founder), transparent 48%); }
-.vui-message[data-author-badge='admin'] { border-left-color: color-mix(in srgb, var(--color-primary), transparent 58%); }
+.vui-message[data-targeted="true"] { border-color: color-mix(in srgb, var(--color-cyan), transparent 35%); background: color-mix(in srgb, var(--color-cyan), transparent 90%); animation: vui-message-target 1.6s ease-out 1; }
+.vui-message[data-author-badge="founder"] { border-left-color: color-mix(in srgb, var(--color-founder), transparent 48%); }
+.vui-message[data-author-badge="admin"] { border-left-color: color-mix(in srgb, var(--color-primary), transparent 58%); }
 .vui-message__avatar-space { width: 40px; }
 .vui-message__content { min-width: 0; }
 .vui-message__content > header { display: flex; align-items: center; gap: var(--space-2); }
@@ -21,15 +21,18 @@
 .vui-message__content time,
 .vui-message__content header small { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-message__content > p { margin: var(--space-1) 0 0; color: var(--color-text-secondary); font: var(--text-body-md); white-space: pre-wrap; word-break: break-word; }
+.vui-message__content > p a { color: var(--color-cyan); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--color-cyan), transparent 55%); text-underline-offset: 2px; }
+.vui-message__content > p a:hover { color: var(--color-text-primary); text-decoration-color: currentColor; }
 .vui-message__mention { display: inline; padding: 1px 3px; border: 0; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-primary), transparent 76%); color: var(--color-primary-hover); font: inherit; font-weight: 650; }
 button.vui-message__mention { cursor: pointer; }
 button.vui-message__mention:hover { background: color-mix(in srgb, var(--color-primary), transparent 62%); color: var(--color-text-primary); }
 .vui-message__delivery { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); color: var(--color-text-muted); font: var(--text-caption); }
-.vui-message__delivery[data-state='failed'] { color: var(--color-danger); }
-.vui-message__delivery[data-state='read'] { color: var(--color-cyan); }
+.vui-message__delivery[data-state="failed"] { color: var(--color-danger); }
+.vui-message__delivery[data-state="read"] { color: var(--color-cyan); }
 .vui-message__tombstone { color: var(--color-text-muted); font-style: italic; }
 .vui-message > .vui-unread-divider { grid-column: 1 / -1; }
 .vui-message-list__jump-unread { position: sticky; z-index: 4; top: var(--space-2); align-self: center; margin: 0 auto var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); color: var(--color-cyan); font: var(--text-label-sm); box-shadow: var(--shadow-md); cursor: pointer; }
+.vui-message-list__jump-latest { position: sticky; z-index: 5; bottom: var(--space-2); display: block; margin: 0 auto; padding: var(--space-2) var(--space-4); border: 1px solid var(--color-primary); border-radius: var(--radius-round); background: var(--color-surface-elevated); color: var(--color-text-primary); font: var(--text-label-sm); box-shadow: var(--shadow-float); cursor: pointer; }
 .vui-message__delivery button { padding: 0; border: 0; background: transparent; color: inherit; font: var(--text-label-sm); text-decoration: underline; }
 .vui-message__reply { display: flex; align-items: center; gap: var(--space-2); min-width: 0; margin-bottom: var(--space-1); color: var(--color-text-muted); font: var(--text-caption); }
 .vui-message__reply strong { color: var(--color-text-secondary); }
@@ -39,28 +42,27 @@ button.vui-message__mention:hover { background: color-mix(in srgb, var(--color-p
 .vui-message:focus-within .vui-message__actions { opacity: 1; }
 .vui-message__reactions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-2); }
 .vui-message__reactions button { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-round); background: var(--color-surface-2); color: var(--color-text-secondary); font: var(--text-caption); }
-.vui-message__reactions button[aria-pressed='true'] { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-text-primary); }
+.vui-message__reactions button[aria-pressed="true"] { border-color: var(--color-primary); background: var(--color-primary-soft); color: var(--color-text-primary); }
 .vui-reaction-picker { position: relative; }
 .vui-reaction-picker__menu { position: fixed; z-index: 180; display: grid; grid-template-columns: repeat(8, 34px); gap: var(--space-1); width: max-content; max-width: calc(100vw - 32px); max-height: min(310px, calc(100vh - 32px)); overflow-y: auto; padding: var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-elevated); box-shadow: var(--shadow-modal); }
 .vui-reaction-picker__menu button { display: grid; width: 34px; height: 34px; padding: 0; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; font-size: 19px; }
 .vui-reaction-picker__menu button:hover { background: var(--color-surface-2); transform: scale(1.08); }
-.vui-image-lightbox { position: fixed; z-index: 220; inset: 0; display: grid; place-items: center; padding: 64px; background: rgba(1, 5, 12, .92); backdrop-filter: blur(12px); }
+.vui-image-lightbox { position: fixed; z-index: 220; inset: 0; display: grid; place-items: center; padding: 64px; background: rgba(1, 5, 12, 0.92); backdrop-filter: blur(12px); }
 .vui-image-lightbox > img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-sm); box-shadow: var(--shadow-modal); }
 .vui-image-lightbox > .vui-icon-button { position: absolute; top: var(--space-4); right: var(--space-4); }
 .vui-image-lightbox > .vui-icon-button:last-child:not(:first-child) { right: 68px; }
 .vui-message__attachments { display: grid; max-width: 520px; gap: var(--space-2); margin-top: var(--space-2); }
 .vui-message-attachment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-2); min-height: 52px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-1); }
-.vui-message-attachment[data-image='true'] { grid-template-columns: minmax(0, 1fr) auto auto; overflow: hidden; }
+.vui-message-attachment[data-image="true"] { grid-template-columns: minmax(0, 1fr) auto auto; overflow: hidden; }
 .vui-message-attachment__preview { display: block; grid-column: 1 / -1; width: 100%; max-height: 380px; padding: 0; overflow: hidden; border: 0; border-radius: var(--radius-sm); background: #030405; }
 .vui-message-attachment__preview img { display: block; width: 100%; max-height: 380px; object-fit: contain; }
-.vui-message-attachment[data-image='true'] > span:first-of-type { min-width: 0; }
+.vui-message-attachment[data-image="true"] > span:first-of-type { min-width: 0; }
 .vui-message-attachment > span:first-child { display: grid; width: 32px; height: 32px; place-items: center; border-radius: var(--radius-sm); background: var(--color-primary-soft); color: var(--color-primary-hover); }
 .vui-message-attachment > span:nth-child(2) { display: grid; min-width: 0; }
 .vui-message-attachment strong,
 .vui-message-attachment small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vui-message-attachment strong { color: var(--color-text-primary); font: var(--text-label-md); }
 .vui-message-attachment small { color: var(--color-text-muted); font: var(--text-caption); }
-
 .vui-message-composer { display: grid; margin: var(--space-3) var(--space-6) var(--space-5); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-2); }
 .vui-message-composer:focus-within { border-color: var(--color-focus); box-shadow: var(--shadow-focus); }
 .vui-message-composer__context { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border-subtle); color: var(--color-primary-hover); }
@@ -76,20 +78,25 @@ button.vui-message__mention:hover { background: color-mix(in srgb, var(--color-p
 .vui-message-composer__attachments small { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-message-composer__body { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; gap: var(--space-2); padding: var(--space-2); }
 .vui-message-composer__tools { display: flex; align-items: center; }
+.vui-message-composer__emoji { position: relative; }
+.vui-message-composer__emoji-menu { position: absolute; z-index: 180; bottom: calc(100% + var(--space-3)); left: 0; display: grid; grid-template-columns: repeat(8, 34px); gap: var(--space-1); width: max-content; max-width: min(340px, calc(100vw - 32px)); max-height: min(270px, calc(100vh - 160px)); overflow-y: auto; padding: var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-elevated); box-shadow: var(--shadow-modal); }
+.vui-message-composer__emoji-menu button { display: grid; width: 34px; height: 34px; padding: 0; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; font-size: 19px; }
+.vui-message-composer__emoji-menu button:hover,
+.vui-message-composer__emoji-menu button:focus-visible { background: var(--color-surface-3); outline: 0; transform: scale(1.06); }
 .vui-message-composer__editor { position: relative; min-width: 0; }
 .vui-message-composer textarea { width: 100%; min-height: 36px; max-height: 144px; padding: var(--space-2); resize: vertical; border: 0; outline: 0; background: transparent; color: var(--color-text-primary); font: var(--text-body-md); }
 .vui-message-composer textarea::placeholder { color: var(--color-text-muted); }
 .vui-message-composer__mentions { position: absolute; z-index: 35; bottom: calc(100% + var(--space-2)); left: 0; display: grid; width: min(360px, 80vw); max-height: 280px; padding: var(--space-2); overflow-y: auto; border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-0); box-shadow: var(--shadow-float); }
 .vui-message-composer__mentions button { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-primary); text-align: left; }
 .vui-message-composer__mentions button:hover,
-.vui-message-composer__mentions button[aria-selected='true'] { background: var(--color-primary-soft); }
+.vui-message-composer__mentions button[aria-selected="true"] { background: var(--color-primary-soft); }
 .vui-message-composer__mentions button > span:last-child { display: grid; }
 .vui-message-composer__mentions strong { font: var(--text-label-md); }
 .vui-message-composer__mentions small { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-message-composer__permission { display: flex; align-items: center; gap: var(--space-2); padding: 0 var(--space-3) var(--space-2); color: var(--color-warning); font: var(--text-caption); }
 .vui-unread-divider { display: flex; align-items: center; gap: var(--space-3); margin: var(--space-3) 0; color: var(--color-danger); font: var(--text-label-md); }
 .vui-unread-divider::before,
-.vui-unread-divider::after { height: 1px; flex: 1; background: var(--color-danger); content: ''; }
+.vui-unread-divider::after { height: 1px; flex: 1; background: var(--color-danger); content: ""; }
 .vui-system-message { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-1); }
 .vui-system-message > span:first-child { display: grid; width: 38px; height: 38px; place-items: center; border-radius: var(--radius-sm); background: var(--color-surface-3); color: var(--color-text-secondary); }
 .vui-system-message strong { font: var(--text-label-md); }
@@ -97,12 +104,6 @@ button.vui-message__mention:hover { background: color-mix(in srgb, var(--color-p
 .vui-system-message--primary { border-color: var(--color-primary); background: var(--color-primary-soft); }
 .vui-system-message--warning { border-color: var(--color-warning); background: var(--color-warning-soft); }
 .vui-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; clip-path: inset(50%); }
-
-@keyframes vui-message-target {
-  0%, 35% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-cyan), transparent 35%); }
-  100% { box-shadow: none; }
-}
-
-@media (max-width: 1179px) {
-  .vui-message-composer__tools > button:nth-of-type(n+2) { display: none; }
-}
+@keyframes vui-message-target { 0%,
+  35% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-cyan), transparent 35%); } 100% { box-shadow: none; } }
+@media (max-width: 1179px) { .vui-message-composer__tools > button:nth-of-type(n + 2) { display: none; } }

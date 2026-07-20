@@ -95,6 +95,8 @@ services:
       LOKI_S3_ENDPOINT: ${LOKI_S3_ENDPOINT:?LOKI_S3_ENDPOINT is required}
       LOKI_S3_REGION: ${LOKI_S3_REGION:?LOKI_S3_REGION is required}
       LOKI_S3_BUCKET: ${LOKI_S3_BUCKET:?LOKI_S3_BUCKET is required}
+      NO_PROXY: 0.0.0.0,127.0.0.1,localhost,loki,prometheus,alertmanager,grafana,blackbox-exporter
+      no_proxy: 0.0.0.0,127.0.0.1,localhost,loki,prometheus,alertmanager,grafana,blackbox-exporter
     ports:
       - "${OBSERVABILITY_PRIVATE_BIND_IP:?OBSERVABILITY_PRIVATE_BIND_IP is required}:3100:3100"
     secrets: [loki_aws_credentials]
@@ -102,6 +104,18 @@ services:
       - ./loki/loki.yml:/etc/loki/loki.yml:ro
       - loki_data:/loki
     networks: [monitoring, egress]
+    logging: *logging
+
+  loki-canary:
+    image: grafana/loki-canary:3.5.5
+    restart: unless-stopped
+    command:
+      - -addr=loki:3100
+      - -labelname=service
+      - -labelvalue=loki-canary
+      - -user=self-monitoring
+    networks: [monitoring]
+    depends_on: [loki]
     logging: *logging
 
   blackbox-exporter:
@@ -120,10 +134,8 @@ services:
     pid: host
     command:
       - --path.rootfs=/host
-      - --collector.systemd
     volumes:
       - /:/host:ro,rslave
-      - /run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
     networks: [monitoring]
     logging: *logging
 

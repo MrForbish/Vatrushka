@@ -26,6 +26,7 @@ const connection: RoomConnection = {
 
 const snapshot: MediaSnapshot = {
   connectionState: ConnectionState.Connected,
+  pingMs: 28,
   participants: [
     {
       identity: "owner-local",
@@ -79,6 +80,7 @@ const snapshot: MediaSnapshot = {
   hasScreenShareAudio: false,
   screenShareAudioMuted: false,
   screenShareAudioVolume: 1,
+  screenAnnotations: [],
   canPlayAudio: true,
   error: null,
 };
