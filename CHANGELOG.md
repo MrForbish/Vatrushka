@@ -4,6 +4,12 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-07-20
+
+### Fixed
+
+- production and observability deployment scripts now execute on the VPS through non-interactive sudo, allowing the deployment user to update the root-owned runtime tree safely.
+
 ## [0.8.3] - 2026-07-20
 
 ### Fixed
