@@ -220,7 +220,7 @@ export function SourcePicker({
             onValueChange={(value) => setQuality(value as ScreenShareQuality)}
             options={[
               { value: "1080p60", label: "1080p · 60 FPS — рекомендуется" },
-              { value: "1440p60", label: "1440p · 60 FPS — высокий битрейт" },
+              { value: "1440p60", label: "2560 × 1440 · 60 FPS — высокое качество" },
             ]}
             value={quality}
           />

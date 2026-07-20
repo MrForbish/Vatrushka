@@ -1011,9 +1011,6 @@ export interface DesktopMediaDiagnostic {
 
 export interface DesktopBridge {
   getAppVersion(): Promise<string>;
-  getFullscreen(): Promise<boolean>;
-  toggleFullscreen(): Promise<boolean>;
-  onFullscreenChange(callback: (fullscreen: boolean) => void): () => void;
   getUpdateState(): Promise<DesktopUpdateState>;
   checkForUpdates(): Promise<void>;
   installUpdate(): Promise<void>;

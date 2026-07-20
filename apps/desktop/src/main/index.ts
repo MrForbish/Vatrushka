@@ -323,16 +323,6 @@ async function createWindow(): Promise<void> {
   mainWindow.webContents.on("will-attach-webview", (event) =>
     event.preventDefault(),
   );
-  mainWindow.webContents.on("before-input-event", (event, input) => {
-    if (input.type !== "keyDown") return;
-    if (input.key === "F11") {
-      event.preventDefault();
-      mainWindow?.setFullScreen(!(mainWindow?.isFullScreen() ?? false));
-    } else if (input.key === "Escape" && mainWindow?.isFullScreen()) {
-      event.preventDefault();
-      mainWindow.setFullScreen(false);
-    }
-  });
   mainWindow.once("ready-to-show", () => mainWindow?.show());
   mainWindow.webContents.on("did-finish-load", () => {
     if (!pendingDeepLink || !mainWindow || mainWindow.isDestroyed()) return;
@@ -362,15 +352,6 @@ async function createWindow(): Promise<void> {
   };
   mainWindow.on("resize", scheduleBoundsSave);
   mainWindow.on("move", scheduleBoundsSave);
-  const publishFullscreen = (): void => {
-    if (!mainWindow || mainWindow.isDestroyed()) return;
-    mainWindow.webContents.send(
-      IPC_CHANNELS.windowFullscreenState,
-      mainWindow.isFullScreen(),
-    );
-  };
-  mainWindow.on("enter-full-screen", publishFullscreen);
-  mainWindow.on("leave-full-screen", publishFullscreen);
   mainWindow.on("close", (event) => {
     if (isQuitting) return;
     event.preventDefault();
@@ -428,7 +409,6 @@ if (!hasLock) {
       mainWindow.webContents.send(IPC_CHANNELS.updateState, state);
     });
     removeIpcHandlers = registerIpc({
-      getFullscreen: () => mainWindow?.isFullScreen() ?? false,
       isTrustedSender,
       storage,
       setSelectedSource(selection) {
@@ -440,12 +420,6 @@ if (!hasLock) {
         tray?.setToolTip(
           count > 0 ? `${APP_NAME} · непрочитанных: ${count}` : APP_NAME,
         );
-      },
-      toggleFullscreen() {
-        if (!mainWindow || mainWindow.isDestroyed()) return false;
-        const next = !mainWindow.isFullScreen();
-        mainWindow.setFullScreen(next);
-        return next;
       },
       updater: desktopUpdater,
     });
