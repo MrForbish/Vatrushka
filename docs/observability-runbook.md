@@ -71,7 +71,7 @@ Error budget показывает запас над 99.9% относительн
 
 ## Infrastructure and containers
 
-Дашборды `Инфраструктура: обзор` и `Контейнеры: обзор` используют фильтры contour/region/host/role/container и сохраняют время при переходе в соседние dashboards. `Нет данных` означает отсутствие series, а не нулевую нагрузку. `Наблюдаемые контейнеры` показывает только свежесть cAdvisor, не Docker health.
+Дашборды `Инфраструктура: обзор` и `Контейнеры: обзор` используют фильтры contour/region/host/role/container и сохраняют время при переходе в соседние dashboards. Контейнерный дашборд использует нативный label cAdvisor `name`: он стабильно присутствует на product-узле. `Нет данных` означает отсутствие series, а не нулевую нагрузку. `Наблюдаемые контейнеры` показывает только свежесть cAdvisor, не Docker health.
 
 Пороговые значения синхронизированы с rules:
 
@@ -82,7 +82,7 @@ Error budget показывает запас над 99.9% относительн
 - container restarts: warning, если `container_start_time_seconds` изменился более трёх раз за 15 минут;
 - container OOM: critical при любом событии за 15 минут.
 
-При срабатывании сначала сузьте host/container, сопоставьте время с `Рестарты и OOM`, CPU throttling, host iowait и disk latency, затем перейдите в логи. Прогноз свободного места на 24 часа — диагностический сигнал по шестичасовому тренду, не самостоятельный alert. После rollout убедитесь, что cAdvisor публикует `container`; прежний `name` сохранён на один release для совместимости.
+При срабатывании сначала сузьте host/container, сопоставьте время с `Рестарты и OOM`, ограничением CPU, host iowait и disk latency, затем перейдите в логи. Прогноз свободного места на 24 часа — диагностический сигнал по шестичасовому тренду, не самостоятельный alert.
 
 ## API HTTP
 
@@ -112,7 +112,7 @@ Error budget показывает запас над 99.9% относительн
 
 Alloy разбирает JSON `level` и нормализует только закрытый набор `trace/debug/info/warn/error/fatal/unknown`. Pino numeric levels 10–60 преобразуются в те же значения. `request_id`, `error_code`, `exception_type` и message остаются полями строки: ищите их через query-time `| json`, не превращайте в labels. Неструктурированные journald/Docker строки доступны в явно обозначенной fallback-панели.
 
-`Loki: состояние` использует только TSDB/S3-совместимые и общие request metrics; BoltDB Shipper метрики запрещены. Отсутствие конкретной vendor series отображается как `Нет данных`, а не зелёный ноль. `loki-canary` — end-to-end проверка: он пишет тестовые строки, читает их обратно и экспортирует latency/missing entries.
+`Loki: состояние` использует только TSDB/S3-совместимые и общие request metrics; BoltDB Shipper метрики запрещены. Панели ошибок, для которых Loki не создаёт series до первой ошибки, показывают измеренный ноль; отсутствие readiness/canary series остаётся `Нет данных` и требует диагностики. `loki-canary` — end-to-end проверка: он пишет тестовые строки, читает их обратно и экспортирует latency/missing entries.
 
 При инциденте:
 
@@ -139,11 +139,11 @@ Alloy разбирает JSON `level` и нормализует только з�
 
 Откройте дашборд `Голос и демонстрация экрана` (`vatrushka-voice-screen-share`). Расхождение reconciliation или version gap проверяйте вместе с LiveKit webhook, Redis и WebSocket. Для конфликтов screen-share lease сравните `acquire`, `renew`, `release`, результат и доступность LiveKit; не очищайте lease напрямую до проверки фактического participant/track state.
 
-Панели `Участники в голосе` и `Активные демонстрации` обновляются каждым внутренним scrape API: первый gauge считается по текущей Redis projection, второй — по неистёкшим lease в PostgreSQL. Поэтому после рестарта API они не зависят от нового join/leave события. Для проверки подключите тестового пользователя к voice-каналу, дождитесь одного scrape (обычно до 15 секунд) и сопоставьте значение с `GET /api/v1/servers/:serverId/voice-state`; при расхождении сначала проверяйте Redis projection и LiveKit webhook, а не Grafana cache.
+Панели `Участники в голосе` и `Активные демонстрации` обновляются каждым внутренним scrape API: первый gauge считается по текущей Redis projection, второй — по неистёкшим lease в PostgreSQL. API опрашивается каждые 5 секунд, а Alloy отправляет метрики не позднее чем через секунду, поэтому обычная задержка отображения — около 1–6 секунд. Для проверки подключите тестового пользователя к voice-каналу и сопоставьте значение с `GET /api/v1/servers/:serverId/voice-state`; при устойчивом расхождении сначала проверяйте Redis projection и LiveKit webhook, а не Grafana cache.
 
 ## Dependencies and delivery
 
-Откройте дашборд `Зависимости и доставка` (`vatrushka-dependencies-delivery`). Для PostgreSQL проверьте подключения, rollback/deadlock и cache hit. Для Redis — память, evictions и rejected connections. Для S3 — операцию, result и p95; затем endpoint, DNS/TLS, credentials и bucket policy. Для почты и входа сопоставьте delivery result и login factor, не добавляя email или user ID в labels и логи.
+Откройте дашборд `Зависимости и доставка` (`vatrushka-dependencies-delivery`). Для PostgreSQL проверьте подключения, rollback/deadlock и cache hit. Для Redis — число клиентов, занятые байты памяти, evictions и rejected connections. Ноль в панели ошибок Redis штатен; отсутствие всех Redis-панелей означает проблему Redis exporter, а не автоматически «нулевую нагрузку». Для S3 — операцию, result и p95; затем endpoint, DNS/TLS, credentials и bucket policy. Для почты и входа сопоставьте delivery result и login factor, не добавляя email или user ID в labels и логи.
 
 После развёртывания 0.8.0 накопите минимум семь дней production baseline. До этого пороги новых warning alerts считаются стартовыми и корректируются отдельным MR на основании фактических p95/p99 и частоты событий.
 

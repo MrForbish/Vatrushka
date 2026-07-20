@@ -489,7 +489,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Что показывает: долю 5xx. Как считается: 5xx RPS / общий RPS по $__rate_interval. Норма: менее 0,1%. Проблема: warning выше 0,1% десять минут, critical выше 1% пять минут при достаточном трафике. Что проверить: Top 5xx routes и логи.",
+      "description": "Что показывает: долю серверных ошибок среди всех HTTP-запросов. Как считается: 5xx RPS / общий RPS по $__rate_interval; при отсутствии 5xx выводится измеренный ноль. Норма: менее 0,1%. Проблема: warning выше 0,1% десять минут, critical выше 1% пять минут при достаточном трафике. Что проверить: «Маршруты с 5xx» и логи.",
       "fieldConfig": {
         "defaults": {
           "max": 1,
@@ -532,7 +532,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=\"5xx\"}[$__rate_interval])) / clamp_min(sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\"}[$__rate_interval])), 0.001)",
+          "expr": "(sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=\"5xx\"}[$__rate_interval])) or vector(0)) / clamp_min((sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\"}[$__rate_interval])) or vector(0)), 0.001)",
           "legendFormat": "5xx",
           "refId": "A"
         }
@@ -760,7 +760,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "Что показывает: подключённые Redis-клиенты. Как считается: redis_connected_clients. Норма: универсальной нормы нет. Проблема: рост вместе с rejected connections или memory pressure. Что проверить: Dependencies & Delivery и Redis exporter.",
+      "description": "Что показывает: число клиентов, подключённых к Redis сейчас. Как считается: redis_connected_clients из Redis exporter. Норма: зависит от нагрузки; при работающем приложении значение обычно больше нуля. Проблема: нет данных означает, что exporter не смог подключиться; рост вместе с rejected connections или memory pressure требует проверки. Что проверить: «Зависимости и доставка» и Redis exporter.",
       "fieldConfig": {
         "defaults": {
           "unit": "short"

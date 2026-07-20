@@ -101,6 +101,8 @@ test("alloy agents sanitize logs and runner excludes CI job container logs", asy
     );
   }
   assert.match(product, /values = \["vatrushka-\*"\]/u);
+  assert.match(product, /scrape_interval\s*=\s*"5s"/u);
+  assert.match(product, /batch_send_deadline\s*=\s*"1s"/u);
   assert.match(runner, /_SYSTEMD_UNIT=gitlab-runner\.service/u);
   assert.doesNotMatch(runner, /loki\.source\.docker/u);
 });
@@ -217,7 +219,7 @@ test('infrastructure dashboards cover required diagnostics without fixed rate wi
   const infrastructureTitles = new Set(infrastructure.panels.map((panel) => panel.title));
   for (const title of ['CPU и iowait', 'Load1 на CPU', 'RAM и swap', 'Диски и inode', 'Disk throughput', 'Disk IOPS и latency', 'Сетевые ошибки и drops', 'Uptime и часы']) assert.ok(infrastructureTitles.has(title), title);
   const containerTitles = new Set(containers.panels.map((panel) => panel.title));
-  for (const title of ['Контейнеры: состояние и события', 'CPU throttling', 'Рестарты и OOM', 'Сеть контейнеров', 'Filesystem throughput', 'Container filesystem usage']) assert.ok(containerTitles.has(title), title);
+  for (const title of ['Контейнеры: состояние и события', 'Ограничение CPU', 'Рестарты и OOM', 'Сеть контейнеров', 'Скорость работы с файловой системой', 'Использование файловой системы контейнеров']) assert.ok(containerTitles.has(title), title);
 });
 
 test('cAdvisor labels and restart alerts use bounded container semantics', async () => {
@@ -265,12 +267,15 @@ test('logs and Loki dashboards use structured levels and TSDB-compatible diagnos
       /source=~"\.\+"/u,
       `LogQL selector must retain a non-empty matcher: ${expression}`,
     );
+  assert.doesNotMatch(logsText, /clamp_min/u);
   for (const variable of ['environment', 'service', 'host', 'container', 'level', 'search']) assert.ok(logs.templating.list.some((item) => item.name === variable));
 
   const lokiText = JSON.stringify(loki);
   assert.match(lokiText, /loki_canary_missing_entries_total/u);
   assert.match(lokiText, /loki_ingester_wal_/u);
   assert.match(lokiText, /loki_compactor_/u);
+  assert.match(lokiText, /source=~\\"\.\+\\"/u);
+  assert.doesNotMatch(lokiText, /loki_request_duration_seconds_count\{environment=/u);
   assert.doesNotMatch(lokiText, /loki_boltdb/iu);
   const rules = await read('infra/observability/platform/prometheus/rules/observability.yml');
   assert.doesNotMatch(rules, /loki_boltdb/iu);
@@ -289,7 +294,10 @@ test('Prometheus and Service Health dashboards expose operational and SLO diagno
   }
 
   const prometheusTitles = new Set(prometheus.panels.map((panel) => panel.title));
-  for (const title of ['Targets up / total', 'Down targets: job / instance / host / role', 'Scrape duration / timeout', 'Scrape samples', 'Series churn', 'TSDB blocks и WAL', 'Rule duration / interval', 'Rule evaluation failures', 'Alertmanager delivery failures', 'Remote write agents']) assert.ok(prometheusTitles.has(title), title);
+  for (const title of ['Работающие цели / всего', 'Недоступные цели: задача / адрес / хост / роль', 'Доля времени опроса от лимита', 'Метрики, полученные при опросе', 'Создание и удаление рядов', 'Блоки TSDB и журнал записи', 'Время вычисления правил', 'Ошибки вычисления правил', 'Ошибки доставки оповещений', 'Очередь отправки метрик']) assert.ok(prometheusTitles.has(title), title);
+  const scrapeBudget = prometheus.panels.find((panel) => panel.id === 9);
+  assert.equal(scrapeBudget?.targets?.[0]?.expr, 'scrape_duration_seconds{job=~"$job"} / 10');
+  assert.doesNotMatch(JSON.stringify(prometheus), /scrape_timeout_seconds/u);
   const serviceText = JSON.stringify(service);
   for (const metric of ['vatrushka:slo_public_api_availability:ratio30d', 'vatrushka:slo_api_success:ratio30d', 'vatrushka:slo_api_under_500ms:ratio30d', 'vatrushka_build_info']) assert.match(serviceText, new RegExp(metric, 'u'));
 
