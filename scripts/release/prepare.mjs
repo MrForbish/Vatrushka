@@ -18,16 +18,13 @@ export function buildReleasePlan(version, prod = productionBranch()) {
     productionBranch: prod,
     developRef: 'origin/develop',
     productionRef: `origin/${prod}`,
-    assembleBranch: `assemble/${version}`,
-    releaseBranch: `release/${version}`,
   };
 }
 
 function printPlan(plan) {
   console.log(`Release preparation plan for ${plan.version}:`);
-  console.log(`- ${plan.assembleBranch} from ${plan.developRef}`);
-  console.log(`- ${plan.releaseBranch} from ${plan.productionRef}`);
-  console.log(`- assembly PR: ${plan.assembleBranch} -> ${plan.releaseBranch}`);
+  console.log(`- release MR: develop -> ${plan.productionBranch}`);
+  console.log(`- version ${plan.version} must already be committed on develop`);
 }
 
 function main() {
@@ -44,20 +41,12 @@ function main() {
   for (const ref of [plan.developRef, plan.productionRef]) {
     if (!branchExists(`refs/remotes/${ref}`)) throw new Error(`Missing remote branch ${ref}`);
   }
-  for (const branch of [plan.assembleBranch, plan.releaseBranch]) {
-    if (branchExists(`refs/heads/${branch}`) || branchExists(`refs/remotes/origin/${branch}`)) throw new Error(`Branch already exists: ${branch}`);
-  }
-
   printPlan(plan);
   if (!execute) {
-    console.log('Dry run only. Re-run with --execute to create and push both immutable branches.');
+    console.log('Dry run only. Open one [RELEASE] MR from develop to the production branch after local validation.');
     return;
   }
-
-  git(['branch', plan.assembleBranch, plan.developRef], { stdio: 'inherit' });
-  git(['branch', plan.releaseBranch, plan.productionRef], { stdio: 'inherit' });
-  git(['push', 'origin', plan.assembleBranch, plan.releaseBranch], { stdio: 'inherit' });
-  console.log(`Open draft PR: ${plan.assembleBranch} -> ${plan.releaseBranch}`);
+  console.log(`No branches were created. Open [RELEASE] Vatrushka v${version}: develop -> ${plan.productionBranch}.`);
 }
 
 if (fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

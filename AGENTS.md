@@ -12,14 +12,12 @@ These rules apply to every change in this repository.
 
 - Ticketed work: `feat/WEB-<number>-<description>` or `fix/WEB-<number>-<description>` → `develop`, squash.
 - Unticketed work: `chore/*`, `refactor/*`, `test/*`, or `docs/*` → `develop`, squash.
-- Assembly: `assemble/X.Y.Z` → `release/X.Y.Z`, merge commit.
-- Release fixes: `release-fix/X.Y.Z-*` → `release/X.Y.Z`, squash.
-- Release: `release/X.Y.Z` → `main`, merge commit.
+- Release: `develop` → `main` with `[RELEASE]` title, merge commit.
 - Hotfix: `hotfix/X.Y.Z-*` → `main`, merge commit.
-- Sync: `main` → `develop` and active `release/*`, merge commit.
+- Sync: `main` → `develop` only after a hotfix, merge commit.
 - Never create an unticketed `feat/*` or `fix/*`. Never merge a task branch directly to `main`.
 - Do not create a new branch/MR for a failed pre-merge pipeline; fix the existing source branch. Increment the patch version only after an immutable tag has already been pushed.
-- Immediately set and read back `squash=false` through the GitLab API for assembly, release, hotfix, and sync MRs. Never rely on the UI default. Merge with the full source SHA and verify `squash_commit_sha` is absent.
+- Immediately set and read back `squash=false` through the GitLab API for release, hotfix, and sync MRs. Never rely on the UI default. Merge with the full source SHA and verify `squash_commit_sha` is absent.
 
 ## GitLab delivery safety
 
@@ -30,7 +28,7 @@ These rules apply to every change in this repository.
 - Never print or commit secrets, runner tokens, CI variable values, credential-store data, production `.env`, or temporary auth files.
 - Validate `npm run version:check`, `npm run repo-policy:test`, lint, typecheck, GitLab CI lint, and `git diff --check` before merge.
 - Verify UTF-8 MR text, required migration/rollback/release evidence, target branch, title prefix, and squash setting.
-- Do not overwrite tags or Releases. After successful production publication, verify updater assets and perform `[SYNC] main → develop` without squash.
+- Do not overwrite tags or Releases. After successful production publication, verify API readiness, monitoring health and updater assets. Perform `[SYNC] main → develop` only after a hotfix.
 
 ## Workspace safety
 

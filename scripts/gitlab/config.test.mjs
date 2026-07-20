@@ -64,20 +64,21 @@ test('observability validation runs only for observability changes with pinned t
 test('production publication is tag-only and uses protected file variables', async () => {
   const pipeline = await read('.gitlab-ci.yml');
   const publish = pipeline.slice(pipeline.indexOf('publish-production:'));
-  const authSmoke = pipeline.slice(pipeline.indexOf('release-auth-smoke:'), pipeline.indexOf('windows-rc:'));
+  const authSmoke = pipeline.slice(pipeline.indexOf('release-auth-smoke:'), pipeline.indexOf('prepare-production-source:'));
   assert.match(authSmoke, /CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"/u);
   assert.match(authSmoke, /GLAB_ENABLE_CI_AUTOLOGIN: 'true'/u);
   assert.match(authSmoke, /glab release view v0\.6\.6/u);
   assert.match(publish, /CI_COMMIT_TAG =~ \/\^v\[0-9\]/u);
-  assert.match(publish, /PRODUCTION_SSH_PRIVATE_KEY/u);
-  assert.match(publish, /PRODUCTION_SSH_HOST_KEY/u);
+  assert.match(pipeline, /^deploy-production-runtime:[\s\S]*PRODUCTION_SSH_PRIVATE_KEY/mu);
+  assert.match(pipeline, /^deploy-observability-runtime:[\s\S]*apply-observability-release/mu);
   assert.match(publish, /GLAB_ENABLE_CI_AUTOLOGIN: 'true'/u);
   assert.doesNotMatch(publish, /GITLAB_TOKEN:/u);
   assert.doesNotMatch(publish, /GITLAB_RELEASE_TOKEN/u);
   assert.match(publish, /resource_group: 'production-\$CI_COMMIT_TAG'/u);
   assert.doesNotMatch(publish, /mapfile|<\s*<\s*\(/u);
   assert.match(publish, /find apps\/desktop\/release[\s\S]+-exec glab release upload/u);
-  assert.doesNotMatch(pipeline.slice(0, pipeline.indexOf('publish-production:')), /PRODUCTION_SSH_PRIVATE_KEY/u);
+  assert.match(pipeline, /deploy-observability-runtime:[\s\S]*deploy-production-runtime/u);
+  assert.match(pipeline, /windows-production-package:[\s\S]*deploy-observability-runtime/u);
 });
 
 test('GitLab repository metadata replaces GitHub automation', async () => {
@@ -90,11 +91,11 @@ test('GitLab repository metadata replaces GitHub automation', async () => {
   assert.match(agentRules, /Do not create a new branch\/MR for a failed pre-merge pipeline/u);
   assert.match(agentRules, /Immediately set and read back `squash=false`/u);
   assert.match(releaseProcess, /release-auth-smoke/u);
-  assert.match(releaseProcess, /GITLAB_TOKEN=\$CI_JOB_TOKEN/u);
+  assert.match(releaseProcess, /latest\.yml.*готового API/u);
   assert.match(hotfixTemplate, /^## Release evidence$/mu);
   assert.match(hotfixTemplate, /^## Rollback$/mu);
   assert.match(hotfixTemplate, /^## Миграции и совместимость$/mu);
-  for (const template of ['feature', 'release-assemble', 'release', 'hotfix', 'sync']) await access(rootFile(`.gitlab/merge_request_templates/${template}.md`));
+  for (const template of ['feature', 'release', 'hotfix', 'sync']) await access(rootFile(`.gitlab/merge_request_templates/${template}.md`));
   await assert.rejects(access(rootFile('.github/workflows/pr-checks.yml')));
   await assert.rejects(access(rootFile('.github/scripts/pr-policy.mjs')));
 });

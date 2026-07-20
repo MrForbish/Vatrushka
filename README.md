@@ -246,7 +246,7 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 
 ## Документация
 
-- [Architecture](docs/architecture.md)
+- [Technical specification](docs/technical-specification.md)
 - [Messaging and realtime](docs/messaging.md)
 - [Architecture decisions](docs/adr/README.md)
 - [Auth](docs/auth.md)

@@ -123,7 +123,7 @@ Renderer нормализует относительные authenticated media U
 
 Каноническая рабочая копия VPS — `/opt/vatrushka`. Docker Compose запускает Caddy, API, PostgreSQL и Redis; LiveKit/TURN развернуты self-hosted по отдельному runbook. API доступен наружу только через Caddy. PostgreSQL и Redis проброшены только на loopback. Media хранится в приватном Timeweb S3 bucket `media-vatrushka`.
 
-Канонический release flow описан в [release-process.md](release-process.md): task MR squash-merge в `develop`, immutable `assemble/<version>` собирает `release/<version>`, release MR merge-commit попадает в `main`, а production publish запускается только annotated SemVer tag в GitLab. После выпуска `main` синхронизируется обратно в `develop`. Runtime deployment сохраняет PostgreSQL backup, readiness checks и атомарную публикацию update feed (`setup`/`blockmap` раньше `latest.yml`). Schema rollback требует отдельного плана.
+Канонический release flow описан в [release-process.md](release-process.md): task MR squash-merge в `develop`, затем единый release MR `develop → main` создаёт production commit. Только annotated SemVer tag запускает production delivery. Tag pipeline сначала разворачивает API/Compose и проверяет readiness, затем обновляет monitoring VPS, собирает Windows installer и лишь после этого атомарно публикует update feed (`setup`/`blockmap` раньше `latest.yml`). Поэтому клиент не получает несовместимую версию раньше backend. Schema rollback требует отдельного плана и backup перед destructive migration.
 
 ## 9. Тестовая стратегия
 
@@ -170,6 +170,6 @@ Alerts должны покрывать readiness failure, 5xx/latency surge, Red
 
 # Voice presence and movement
 
-Voice membership is confirmed by LiveKit webhooks, projected atomically into Redis, versioned per server, and delivered through the application WebSocket. `docs/adr/0005-livekit-confirmed-voice-presence.md` defines source-of-truth boundaries, Redis keys, adapters, reconciliation, and migration behavior. PostgreSQL does not store ephemeral voice membership.
+Voice membership is confirmed by LiveKit webhooks, projected atomically into Redis, versioned per server, and delivered through the application WebSocket. `docs/adr/0006-livekit-confirmed-voice-presence.md` defines source-of-truth boundaries, Redis keys, adapters, reconciliation, and migration behavior. PostgreSQL does not store ephemeral voice membership.
 
 Клиент отправляет собственные bounded state transitions (`muted`, `deafened`, throttled `speaking`, `connectionQuality`) через `PATCH /api/v1/channels/:channelId/voice-state`. Backend сверяет authenticated user, channel и exact voice `sessionId`, обновляет Redis и публикует `voice.member.state.updated`; stale session получает `409 VOICE_SOURCE_CHANGED`. WebRTC RTT измеряется renderer через active ICE candidate pair и не записывается в PostgreSQL.
