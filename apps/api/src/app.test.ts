@@ -157,6 +157,8 @@ describe('health and metrics API', () => {
     expect(metrics.body).toContain('nodejs_event_loop_lag_seconds');
     expect(metrics.body).toContain('vatrushka_build_info{commit="unknown",version="');
     expect(metrics.body).toContain('vatrushka_deployment_timestamp_seconds ');
+    expect(metrics.body).toContain('voice_active_sessions 0');
+    expect(metrics.body).toContain('screen_share_active_sessions 0');
   });
 });
 
@@ -1007,6 +1009,8 @@ describe('servers, channels, messages, and roles API', () => {
     expect(heartbeatDuringMediaOutage.statusCode).toBe(200);
     const heartbeatMetrics = await context.app.inject({ method: 'GET', url: '/metrics' });
     expect(heartbeatMetrics.body).toContain('screen_share_lease_heartbeat_total{result="renewed"} 1');
+    expect(heartbeatMetrics.body).toContain('voice_active_sessions 1');
+    expect(heartbeatMetrics.body).toContain('screen_share_active_sessions 1');
     context.media.available = true;
 
     const audioDenied = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/channels/${voice.id}/overwrites/MEMBER/${member.userId}`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { allow: [], deny: ['STREAM_APPLICATION_AUDIO'] } });

@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.6] - 2026-07-20
+
+### Fixed
+
+- Voice and screen-share gauges are refreshed from their authoritative operational stores on every internal metrics scrape, so an API restart no longer leaves the dashboards at a stale zero until the next media event.
+- Central Prometheus now alerts when product telemetry disappears from the cross-VPS ingestion path even while the public API remains reachable.
+
 ## [0.8.5] - 2026-07-20
 
 ### Fixed

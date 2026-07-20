@@ -32,6 +32,15 @@ groups:
         annotations:
           summary: Vatrushka API metrics are unavailable
 
+      - alert: VatrushkaProductTelemetryMissing
+        expr: absent_over_time(vatrushka_build_info{environment="production",role="product"}[5m]) == 1
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Product telemetry has not reached central Prometheus
+          description: "No product API metrics were received for five minutes; check the WireGuard path and Alloy remote write."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/main/docs/observability-runbook.md#prometheus-health"
+
       - alert: VatrushkaPublicReadinessDown
         expr: probe_success{job="blackbox-http",instance="https://api.myvatrushka.ru/health/ready"} == 0
         for: 2m

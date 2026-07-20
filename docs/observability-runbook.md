@@ -67,6 +67,8 @@ Error budget показывает запас над 99.9% относительн
 
 Проверяйте не только число `up`, но `Targets up / total` и таблицу down targets. Scrape duration оценивается как доля timeout, rule duration — как доля evaluation interval. Series churn помогает обнаружить новый high-cardinality label. Remote-write pending должен возвращаться к нулю, failures всегда равны нулю. При config/rule failure сначала запустите `promtool check config/rules`, затем смотрите Prometheus logs; не перезапускайте TSDB и не удаляйте WAL вручную.
 
+`VatrushkaProductTelemetryMissing` означает, что за пять минут центральный Prometheus не получил ни одной product-метрики. Это отличается от `VatrushkaApiDown`: при разрыве WireGuard или Alloy remote write API может оставаться доступным, но его series вообще не попадают в Prometheus. Проверьте handshake WireGuard на обеих VPS, затем Alloy WAL и remote-write errors; после восстановления не пытайтесь вручную переигрывать устаревшие samples.
+
 ## Infrastructure and containers
 
 Дашборды `Инфраструктура: обзор` и `Контейнеры: обзор` используют фильтры contour/region/host/role/container и сохраняют время при переходе в соседние dashboards. `Нет данных` означает отсутствие series, а не нулевую нагрузку. `Наблюдаемые контейнеры` показывает только свежесть cAdvisor, не Docker health.
@@ -136,6 +138,8 @@ Alloy разбирает JSON `level` и нормализует только з�
 ## Voice and screen share
 
 Откройте дашборд `Голос и демонстрация экрана` (`vatrushka-voice-screen-share`). Расхождение reconciliation или version gap проверяйте вместе с LiveKit webhook, Redis и WebSocket. Для конфликтов screen-share lease сравните `acquire`, `renew`, `release`, результат и доступность LiveKit; не очищайте lease напрямую до проверки фактического participant/track state.
+
+Панели `Участники в голосе` и `Активные демонстрации` обновляются каждым внутренним scrape API: первый gauge считается по текущей Redis projection, второй — по неистёкшим lease в PostgreSQL. Поэтому после рестарта API они не зависят от нового join/leave события. Для проверки подключите тестового пользователя к voice-каналу, дождитесь одного scrape (обычно до 15 секунд) и сопоставьте значение с `GET /api/v1/servers/:serverId/voice-state`; при расхождении сначала проверяйте Redis projection и LiveKit webhook, а не Grafana cache.
 
 ## Dependencies and delivery
 
