@@ -12,6 +12,7 @@ These rules apply to every change in this repository.
 
 - Ticketed work: `feat/WEB-<number>-<description>` or `fix/WEB-<number>-<description>` → `develop`, squash.
 - Unticketed work: `chore/*`, `refactor/*`, `test/*`, or `docs/*` → `develop`, squash.
+- Release preparation: `chore/release-X.Y.Z-preparation` → `develop`, squash. This is the only `chore/*` format that permits SemVer dots.
 - Release: `develop` → `main` with `[RELEASE]` title, merge commit.
 - Hotfix: `hotfix/X.Y.Z-*` → `main`, merge commit.
 - Sync: `main` → `develop` only after a hotfix, merge commit.
