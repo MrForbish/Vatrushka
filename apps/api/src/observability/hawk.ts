@@ -23,12 +23,13 @@ function scrub(value: unknown, key = ""): unknown {
 }
 
 export interface HawkReporter {
-  capture(error: unknown, context: Record<string, string>, userId?: string): void;
+  readonly enabled: boolean;
+  capture(error: unknown, context: Record<string, string>, userId?: string): boolean;
 }
 
 export function createHawkReporter(config: AppConfig): HawkReporter {
   if (!config.HAWK_ENABLED || !config.HAWK_INTEGRATION_TOKEN)
-    return { capture: () => undefined };
+    return { enabled: false, capture: () => false };
 
   HawkCatcher.init({
     token: config.HAWK_INTEGRATION_TOKEN,
@@ -38,6 +39,7 @@ export function createHawkReporter(config: AppConfig): HawkReporter {
   });
 
   return {
+    enabled: true,
     capture(error, context, userId) {
       const normalized = error instanceof Error ? error : new Error("Unexpected API failure");
       const safeUser =
@@ -46,8 +48,10 @@ export function createHawkReporter(config: AppConfig): HawkReporter {
           : undefined;
       try {
         HawkCatcher.send(normalized, scrub(context) as Record<string, string>, safeUser);
+        return true;
       } catch {
         // Error reporting must never alter API behaviour.
+        return false;
       }
     },
   };

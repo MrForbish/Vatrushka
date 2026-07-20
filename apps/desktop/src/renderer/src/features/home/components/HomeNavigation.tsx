@@ -53,6 +53,7 @@ export function HomeNavigation({
       name: server.name,
       memberCount: server.memberCount,
       iconUrl: server.iconUrl ?? null,
+      bannerUrl: server.bannerUrl ?? null,
       accentColor: server.accentColor ?? null,
       unread: (dashboardServer.unreadCount ?? 0) > 0,
       activeVoice: (dashboardServer.activeVoiceCount ?? 0) > 0,

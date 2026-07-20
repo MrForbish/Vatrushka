@@ -353,7 +353,7 @@
       },
       "targets": [
         {
-          "expr": "sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=\"5xx\"}[$__rate_interval])) / clamp_min(sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\"}[$__rate_interval])), 0.001)",
+          "expr": "(sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=\"5xx\"}[$__rate_interval])) / clamp_min(sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\"}[$__rate_interval])), 0.001)) or vector(0)",
           "refId": "A"
         }
       ],
@@ -752,7 +752,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (code, route) (increase(api_errors_total{environment=~\"$environment\",route=~\"$route\",status_class=\"5xx\"}[$__range]))",
+          "expr": "sum by (code, route) (increase(api_errors_total{environment=~\"$environment\",route=~\"$route\",status_class=\"5xx\"}[$__range])) or vector(0)",
           "format": "table",
           "instant": true,
           "refId": "A"

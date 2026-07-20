@@ -9,6 +9,8 @@
 }
 
 .vui-settings-navigation__identity {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
@@ -16,18 +18,18 @@
   min-height: 72px;
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border-subtle);
+  overflow: hidden;
 }
 
-.vui-settings-navigation__identity > span:first-child {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: var(--radius-md);
-  background: var(--gradient-brand);
-  color: var(--color-text-on-accent);
-  font: var(--text-heading-md);
+.vui-settings-navigation__identity > :not(.vui-settings-navigation__cover) { position: relative; z-index: 1; }
+.vui-settings-navigation__identity[data-has-banner='true']::after {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--color-surface-0) 91%, transparent), color-mix(in srgb, var(--color-surface-0) 72%, transparent));
+  content: '';
 }
+.vui-settings-navigation__cover { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .38; }
 
 .vui-settings-navigation__identity div { min-width: 0; }
 .vui-settings-navigation__identity strong,

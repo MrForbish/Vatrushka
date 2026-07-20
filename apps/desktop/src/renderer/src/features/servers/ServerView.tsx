@@ -245,6 +245,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     name: server.name,
     memberCount: server.memberCount,
     iconUrl: server.iconUrl ?? null,
+    bannerUrl: server.bannerUrl ?? null,
     accentColor: server.accentColor ?? null,
     activeVoice: server.id === props.connectedVoiceServerId,
   }));
