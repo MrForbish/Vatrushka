@@ -1,6 +1,6 @@
 import type { ParticipantView } from '../../media';
 
-export type VoiceCue = 'join' | 'leave' | 'message';
+export type VoiceCue = 'join' | 'leave' | 'message' | 'stream-start' | 'stream-stop' | 'update';
 
 export interface RemoteParticipantChanges {
   current: Set<string>;
@@ -26,14 +26,19 @@ const cueNotes: Record<VoiceCue, ReadonlyArray<{ frequency: number; offset: numb
   join: [{ frequency: 587.33, offset: 0 }, { frequency: 783.99, offset: 0.075 }],
   leave: [{ frequency: 659.25, offset: 0 }, { frequency: 493.88, offset: 0.075 }],
   message: [{ frequency: 698.46, offset: 0 }, { frequency: 880, offset: 0.055 }],
+  'stream-start': [{ frequency: 523.25, offset: 0 }, { frequency: 659.25, offset: 0.07 }, { frequency: 783.99, offset: 0.14 }],
+  'stream-stop': [{ frequency: 783.99, offset: 0 }, { frequency: 659.25, offset: 0.07 }, { frequency: 523.25, offset: 0.14 }],
+  update: [{ frequency: 880, offset: 0 }, { frequency: 1046.5, offset: 0.08 }],
 };
 
 export class VoiceCuePlayer {
   private context: SinkAudioContext | null = null;
   private sinkId: string | null = null;
 
-  play(cue: VoiceCue, outputDeviceId?: string): void {
+  play(cue: VoiceCue, outputDeviceId?: string, volume = 1): void {
     if (typeof AudioContext === 'undefined') return;
+    const normalizedVolume = Math.max(0, Math.min(1, volume));
+    if (normalizedVolume === 0) return;
     if (this.context === null) this.context = new AudioContext({ latencyHint: 'interactive' });
     const context = this.context;
     if (context.state === 'suspended') void context.resume().catch(() => undefined);
@@ -52,7 +57,7 @@ export class VoiceCuePlayer {
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(note.frequency, noteStart);
       gain.gain.setValueAtTime(0.0001, noteStart);
-      gain.gain.exponentialRampToValueAtTime(0.038, noteStart + 0.014);
+      gain.gain.exponentialRampToValueAtTime(0.038 * normalizedVolume, noteStart + 0.014);
       gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.145);
       oscillator.connect(gain);
       gain.connect(context.destination);

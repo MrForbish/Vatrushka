@@ -239,6 +239,7 @@ const voiceMemberStateResponseSchema = z.object({
   connectionQuality: z
     .enum(["excellent", "good", "poor", "unknown"])
     .optional(),
+  presence: z.enum(["online", "idle", "dnd", "offline"]).optional(),
 });
 const serverVoiceStateResponseSchema = z.object({
   serverId: z.uuid(),

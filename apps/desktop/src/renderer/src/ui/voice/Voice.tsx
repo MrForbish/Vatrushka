@@ -29,6 +29,7 @@ export interface VoiceParticipantViewModel {
   volume?: number;
   audioLevel?: number;
   statusLabel?: string;
+  presence?: "online" | "idle" | "dnd" | "offline";
   badge?: "admin" | "founder";
   avatarUrl?: string | null;
 }
@@ -95,7 +96,7 @@ export function VoiceParticipantTile({
           name={participant.name}
           size="lg"
           {...(participant.avatarUrl ? { src: participant.avatarUrl } : {})}
-          status={participant.isSpeaking === true ? "online" : "offline"}
+          status={participant.presence ?? "online"}
         />
         <span aria-hidden="true" className="vui-voice-participant__pulse" />
       </div>

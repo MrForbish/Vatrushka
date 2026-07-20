@@ -18,6 +18,8 @@ import {
 import type { IconName } from "../primitives";
 import "./navigation.css";
 
+const voiceMemberDragMime = "application/x-vatrushka-voice-member";
+
 export function BrandLockup(): React.JSX.Element {
   return (
     <div className="vui-brand-lockup" aria-label="Vatrushka">
@@ -272,6 +274,8 @@ export function ChannelRow({
       onDragOver={
         channel.type === "voice" && onMoveMember !== undefined
           ? (event) => {
+              if (!event.dataTransfer.types.includes(voiceMemberDragMime))
+                return;
               event.preventDefault();
               event.dataTransfer.dropEffect = "move";
               event.currentTarget.dataset.dropTarget = "true";
@@ -284,10 +288,12 @@ export function ChannelRow({
       onDrop={
         channel.type === "voice" && onMoveMember !== undefined
           ? (event) => {
+              if (!event.dataTransfer.types.includes(voiceMemberDragMime))
+                return;
               event.preventDefault();
               delete event.currentTarget.dataset.dropTarget;
               const userId = event.dataTransfer.getData(
-                "application/x-vatrushka-user",
+                voiceMemberDragMime,
               );
               if (userId) onMoveMember(channel.id, userId);
             }
@@ -363,7 +369,7 @@ export function ChannelRow({
                   ? (event) => {
                       event.dataTransfer.effectAllowed = "move";
                       event.dataTransfer.setData(
-                        "application/x-vatrushka-user",
+                        voiceMemberDragMime,
                         participant.userId,
                       );
                     }
@@ -869,7 +875,6 @@ export interface MemberNavigationItem {
   founder?: boolean;
   status?: "online" | "idle" | "dnd" | "offline" | "streaming";
   actions?: ReactNode;
-  draggable?: boolean;
   avatarUrl?: string | null;
 }
 
@@ -904,29 +909,12 @@ function MemberRow({ member }: { member: MemberNavigationItem }): React.JSX.Elem
     <div
       className="vui-member-row"
       data-founder={member.founder || undefined}
-      draggable={member.draggable === true}
       onContextMenu={
         member.actions
           ? (event) => {
               event.preventDefault();
               openMenu(event.clientX, event.clientY);
             }
-          : undefined
-      }
-      onDragStart={
-        member.draggable === true
-          ? (event) => {
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData(
-                "application/x-vatrushka-user",
-                member.id,
-              );
-            }
-          : undefined
-      }
-      title={
-        member.draggable === true
-          ? "Перетащите участника в голосовой канал"
           : undefined
       }
     >

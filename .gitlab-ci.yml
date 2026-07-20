@@ -271,6 +271,7 @@ desktop-behavior:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: [apps/desktop/**/*, packages/shared/**/*, packages/config/**/*, package.json, package-lock.json]
   script:
+    - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/prepare-windows-browser-tests.ps1
     - npx playwright install chromium
     - npm run build -w @vatrushka/shared
     - node scripts/ci/run-with-budget.mjs --name "Storybook interaction" --budget-seconds 180 -- npm run test:storybook
@@ -292,12 +293,7 @@ visual-regression:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: [apps/desktop/**/*, packages/shared/**/*, packages/config/**/*, package.json, package-lock.json]
   script:
-    - |
-      $storybookListeners = @(Get-NetTCPConnection -LocalPort 6006 -State Listen -ErrorAction SilentlyContinue)
-      $storybookListeners |
-        Select-Object -ExpandProperty OwningProcess -Unique |
-        ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
-      Write-Output "Storybook port preflight complete."
+    - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/ci/prepare-windows-browser-tests.ps1
     - npx playwright install chromium
     - npm run build -w @vatrushka/shared
     - node scripts/ci/run-with-budget.mjs --name "Static Storybook visual" --budget-seconds 180 -- npm run test:visual

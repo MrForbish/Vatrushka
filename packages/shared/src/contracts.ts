@@ -310,6 +310,7 @@ export interface VoiceChannelParticipant {
   speaking?: boolean;
   screenSharing?: boolean;
   connectionQuality?: "excellent" | "good" | "poor" | "unknown";
+  presence?: EffectivePresenceStatus;
 }
 
 export interface ServerRole {
@@ -859,6 +860,8 @@ export interface DesktopUpdateState {
   version?: string;
   percent?: number;
   message?: string;
+  /** Distinguishes a local connection issue from a Vatrushka update service failure. */
+  failureKind?: "network" | "infrastructure" | "unknown";
 }
 
 export interface PublicUser {

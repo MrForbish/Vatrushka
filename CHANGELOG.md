@@ -4,6 +4,18 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+### Added
+
+- configurable local volume for Vatrushka cues: voice join/leave, screen-share start/stop, message and ready-to-install update notifications;
+- a manual update check in the Notification Center.
+
+### Fixed
+
+- screen-share source selection no longer rejects a valid first selection because a second desktop-source enumeration raced with window lifecycle;
+- only participants already present in a voice channel can be dragged between voice channels; regular/offline member rows are no longer drag sources;
+- presence on the central voice stage now uses the same realtime status as member lists and profile surfaces.
+- background update checks stay quiet during a local network outage and distinguish it from an update-service outage when the user runs a manual check.
+
 ## [0.8.8] - 2026-07-20
 
 ### Fixed

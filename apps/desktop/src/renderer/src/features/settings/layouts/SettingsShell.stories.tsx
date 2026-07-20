@@ -97,7 +97,7 @@ export const ServerRoles: Story = {
 
 export const UserAudioDevices: Story = {
   args: { scope: 'user' },
-  render: (args) => <SettingsShell activeSection="audio" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserAudioSettingsPage busy={false} devices={audioDevices} inputLevel={0.34} microphoneId="studio-mic" onMicrophone={() => undefined} onOutput={() => undefined} onRefresh={() => undefined} onTestOutput={() => undefined} outputId="headphones" voiceConnected /></SettingsShell>,
+  render: (args) => <SettingsShell activeSection="audio" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserAudioSettingsPage appSoundVolume={1} busy={false} devices={audioDevices} inputLevel={0.34} microphoneId="studio-mic" onAppSoundVolume={() => undefined} onMicrophone={() => undefined} onOutput={() => undefined} onRefresh={() => undefined} onTestOutput={() => undefined} outputId="headphones" voiceConnected /></SettingsShell>,
 };
 
 export const UserPresenceDnd: Story = {

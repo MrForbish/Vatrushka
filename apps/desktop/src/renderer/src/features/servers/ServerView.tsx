@@ -316,7 +316,6 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
               </>
             ),
           }),
-      draggable: canMoveMember,
     };
   });
 

@@ -7180,6 +7180,7 @@ export class VatrushkaService {
           speaking: session.speaking,
           screenSharing: session.screenSharing,
           connectionQuality: session.connectionQuality,
+          ...(member.presence ? { presence: member.presence } : {}),
         });
       }
       voiceParticipantsByChannel.set(channel.id, participants);

@@ -7,6 +7,9 @@ export default defineConfig({
   reporter: 'list',
   use: {
     baseURL: 'http://127.0.0.1:6006',
+    launchOptions: {
+      args: ['--no-proxy-server', '--proxy-bypass-list=<-loopback>'],
+    },
     colorScheme: 'dark',
     locale: 'ru-RU',
     timezoneId: 'Europe/Moscow',

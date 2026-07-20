@@ -46,7 +46,7 @@ Gaming Home получает единый агрегат `GET /api/v1/home`. Bac
 
 ### 3.2. Electron main/preload
 
-Main process владеет single-instance/deep-link обработкой, safeStorage, updater, desktopCapturer, native notifications и window lifecycle. Screen source передается renderer только через одноразовый allowlist. Updater работает с generic feed `/updates`, portable-сборка не автообновляется.
+Main process владеет single-instance/deep-link обработкой, safeStorage, updater, desktopCapturer, native notifications и window lifecycle. Screen source передается renderer только через одноразовый allowlist без повторной проверки списка источников между выбором пользователя и Chromium request: окончательное отсутствие источника безопасно отклоняется самим display-media handler. Updater работает с generic feed `/updates`, классифицирует ошибки проверки как локальную сеть, инфраструктуру обновлений или неизвестную ошибку; portable-сборка не автообновляется.
 
 Windows-окно использует безопасный `titleBarOverlay`: сохраняются системные minimize/maximize/close, Snap и double-click maximize, а renderer резервирует drag-region и размещает единственный центр уведомлений перед системными кнопками. Внешние контакты открываются только через typed IPC allowlist (`https://t.me/MaksZJ`, `mailto:vatrushka-notify@yandex.ru`).
 
@@ -54,7 +54,7 @@ Windows-окно использует безопасный `titleBarOverlay`: с
 
 ### 3.3. Media
 
-LiveKit управляет WebRTC. API выпускает краткоживущий participant token с grants по вычисленным permissions. Client media controller отвечает за connect/reconnect, устройства, participant volume, screen audio, track cleanup и повторную публикацию. PostgreSQL lease сериализует право показа экрана; heartbeat/expiry восстанавливают состояние после аварии.
+LiveKit управляет WebRTC. API выпускает краткоживущий participant token с grants по вычисленным permissions. Client media controller отвечает за connect/reconnect, устройства, participant volume, screen audio, track cleanup и повторную публикацию. PostgreSQL lease сериализует право показа экрана; heartbeat/expiry восстанавливают состояние после аварии. Voice participant DTO включает effective presence, а renderer применяет `presence.updated` непосредственно к списку участников и voice stage, поэтому индикаторы не зависят от speaking state или 30-секундного reconciliation refresh.
 
 ## 4. API и фоновые процессы
 
