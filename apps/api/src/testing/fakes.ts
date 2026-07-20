@@ -77,6 +77,7 @@ export class FakeMediaService implements MediaService {
   }
 
   async participantExists(roomName: string, identity: string): Promise<boolean> {
+    if (!this.available) throw new Error('LiveKit unavailable');
     return this.rooms.get(roomName)?.has(identity) ?? false;
   }
 
@@ -93,6 +94,7 @@ export class FakeMediaService implements MediaService {
   }
 
   async participantIdentities(roomName: string): Promise<string[]> {
+    if (!this.available) throw new Error('LiveKit unavailable');
     return [...(this.rooms.get(roomName) ?? [])];
   }
 

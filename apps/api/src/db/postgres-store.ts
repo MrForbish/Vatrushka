@@ -976,6 +976,7 @@ export class PostgresStore implements DataStore {
         message: schema.textMessages,
         displayName: schema.users.displayName,
         platformRole: schema.users.platformRole,
+        avatarObjectKey: schema.users.avatarObjectKey,
       })
       .from(schema.textMessages)
       .innerJoin(
@@ -987,10 +988,11 @@ export class PostgresStore implements DataStore {
       .limit(limit);
     return rows
       .reverse()
-      .map(({ message, displayName, platformRole }) => ({
+      .map(({ message, displayName, platformRole, avatarObjectKey }) => ({
         ...message,
         displayName,
         platformRole,
+        avatarObjectKey,
       }));
   }
 
@@ -1012,6 +1014,7 @@ export class PostgresStore implements DataStore {
         message: schema.textMessages,
         displayName: schema.users.displayName,
         platformRole: schema.users.platformRole,
+        avatarObjectKey: schema.users.avatarObjectKey,
       })
       .from(schema.textMessages)
       .innerJoin(
@@ -1019,10 +1022,11 @@ export class PostgresStore implements DataStore {
         eq(schema.users.id, schema.textMessages.authorUserId),
       )
       .where(inArray(schema.textMessages.id, ids));
-    return rows.map(({ message, displayName, platformRole }) => ({
+    return rows.map(({ message, displayName, platformRole, avatarObjectKey }) => ({
       ...message,
       displayName,
       platformRole,
+      avatarObjectKey,
     }));
   }
 
@@ -1490,6 +1494,7 @@ export class PostgresStore implements DataStore {
               id: schema.users.id,
               displayName: schema.users.displayName,
               platformRole: schema.users.platformRole,
+              avatarObjectKey: schema.users.avatarObjectKey,
             })
             .from(schema.users)
             .where(eq(schema.users.id, participantId))
@@ -1562,6 +1567,7 @@ export class PostgresStore implements DataStore {
         message: schema.directMessages,
         displayName: schema.users.displayName,
         platformRole: schema.users.platformRole,
+        avatarObjectKey: schema.users.avatarObjectKey,
       })
       .from(schema.directMessages)
       .innerJoin(
@@ -1576,10 +1582,11 @@ export class PostgresStore implements DataStore {
       .limit(limit);
     return rows
       .reverse()
-      .map(({ message, displayName, platformRole }) => ({
+      .map(({ message, displayName, platformRole, avatarObjectKey }) => ({
         ...message,
         displayName,
         platformRole,
+        avatarObjectKey,
       }));
   }
 
@@ -1592,6 +1599,7 @@ export class PostgresStore implements DataStore {
         message: schema.directMessages,
         displayName: schema.users.displayName,
         platformRole: schema.users.platformRole,
+        avatarObjectKey: schema.users.avatarObjectKey,
       })
       .from(schema.directMessages)
       .innerJoin(
@@ -1599,10 +1607,11 @@ export class PostgresStore implements DataStore {
         eq(schema.users.id, schema.directMessages.authorUserId),
       )
       .where(inArray(schema.directMessages.id, ids));
-    return rows.map(({ message, displayName, platformRole }) => ({
+    return rows.map(({ message, displayName, platformRole, avatarObjectKey }) => ({
       ...message,
       displayName,
       platformRole,
+      avatarObjectKey,
     }));
   }
 
@@ -1938,6 +1947,14 @@ export class PostgresStore implements DataStore {
     await this.db
       .delete(schema.channelScreenShareLeases)
       .where(eq(schema.channelScreenShareLeases.channelId, channelId));
+  }
+
+  async countChannelLeases(now: Date): Promise<number> {
+    const [row] = await this.db
+      .select({ value: sql<number>`count(*)::int` })
+      .from(schema.channelScreenShareLeases)
+      .where(gt(schema.channelScreenShareLeases.expiresAt, now));
+    return row?.value ?? 0;
   }
 }
 

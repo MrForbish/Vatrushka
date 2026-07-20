@@ -29,6 +29,9 @@ import type { DesktopStorage } from "./storage.js";
 
 export const IPC_CHANNELS = {
   appVersion: "app:get-version",
+  windowFullscreenGet: "window:get-fullscreen",
+  windowFullscreenToggle: "window:toggle-fullscreen",
+  windowFullscreenState: "window:fullscreen-state",
   updateStateGet: "update:get-state",
   updateCheck: "update:check",
   updateInstall: "update:install",
@@ -40,6 +43,7 @@ export const IPC_CHANNELS = {
   sourcesList: "desktop:list-sources",
   sourceSelect: "desktop:select-source",
   sourceClear: "desktop:clear-source",
+  mediaDiagnostic: "media:diagnostic",
   clipboardCopy: "clipboard:copy",
   externalOpen: "external:open-allowlisted",
   badgeCountSet: "app:set-badge-count",
@@ -59,6 +63,8 @@ interface IpcOptions {
   ): void;
   showMessageNotification(notification: DesktopMessageNotification): void;
   setBadgeCount(count: number): void;
+  getFullscreen(): boolean;
+  toggleFullscreen(): boolean;
   updater: {
     getState(): DesktopUpdateState;
     check(): Promise<void>;
@@ -84,6 +90,27 @@ const desktopMessageNotificationSchema = z
     "A notification target is required",
   );
 
+const desktopMediaDiagnosticSchema = z
+  .object({
+    event: z.enum([
+      "voice_reconnecting",
+      "voice_reconnected",
+      "voice_audio_restored",
+      "voice_audio_restore_failed",
+      "voice_track_subscription_failed",
+      "screen_share_heartbeat_failed",
+      "screen_share_heartbeat_recovered",
+      "screen_share_lease_lost",
+    ]),
+    occurredAt: z.iso.datetime(),
+    serverId: z.uuid(),
+    channelId: z.uuid(),
+    voiceSessionId: z.string().min(1).max(200).optional(),
+    reason: z.string().min(1).max(100).optional(),
+    attempt: z.number().int().min(1).max(100).optional(),
+  })
+  .strict();
+
 const apiBaseUrlSchema = z.url().refine((value) => {
   const url = new URL(value);
   return (
@@ -94,11 +121,22 @@ const apiBaseUrlSchema = z.url().refine((value) => {
 }, "API URL must use HTTPS");
 const externalUrlSchema = z
   .string()
+  .max(2_048)
   .refine(
-    (value) =>
-      value === "https://t.me/MaksZJ" ||
-      value === "mailto:vatrushka-notify@yandex.ru",
-    "External URL is not allowlisted",
+    (value) => {
+      if (value === "mailto:vatrushka-notify@yandex.ru") return true;
+      try {
+        const url = new URL(value);
+        return (
+          (url.protocol === "https:" || url.protocol === "http:") &&
+          url.username === "" &&
+          url.password === ""
+        );
+      } catch {
+        return false;
+      }
+    },
+    "External URL must use HTTP or HTTPS without embedded credentials",
   );
 const refreshTokenSchema = z.string().min(32).max(512);
 const desktopAuthSessionSchema = z.object({
@@ -249,6 +287,7 @@ export function registerIpc(options: IpcOptions): () => void {
     IPC_CHANNELS.deepLink,
     IPC_CHANNELS.notificationClick,
     IPC_CHANNELS.updateState,
+    IPC_CHANNELS.windowFullscreenState,
   ]);
   const channels = Object.values(IPC_CHANNELS).filter(
     (channel) => !outgoingChannels.has(channel),
@@ -275,6 +314,8 @@ export function registerIpc(options: IpcOptions): () => void {
   };
 
   handle(IPC_CHANNELS.appVersion, () => app.getVersion());
+  handle(IPC_CHANNELS.windowFullscreenGet, () => options.getFullscreen());
+  handle(IPC_CHANNELS.windowFullscreenToggle, () => options.toggleFullscreen());
   handle(IPC_CHANNELS.updateStateGet, () => options.updater.getState());
   handle(IPC_CHANNELS.updateCheck, () => options.updater.check());
   handle(IPC_CHANNELS.updateInstall, () => options.updater.install());
@@ -311,6 +352,10 @@ export function registerIpc(options: IpcOptions): () => void {
     options.setSelectedSource(selection);
   });
   handle(IPC_CHANNELS.sourceClear, () => options.setSelectedSource(null));
+  handle(IPC_CHANNELS.mediaDiagnostic, (_event, value: unknown) => {
+    const diagnostic = desktopMediaDiagnosticSchema.parse(value);
+    log.info("Media diagnostic", { media: diagnostic });
+  });
   handle(IPC_CHANNELS.clipboardCopy, (_event, value: unknown) =>
     clipboard.writeText(z.string().max(20_000).parse(value)),
   );

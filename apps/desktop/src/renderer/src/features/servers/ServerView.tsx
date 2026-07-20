@@ -233,6 +233,10 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
             (canMoveMembers &&
               participant.userId !== props.server.ownerUserId)),
         pending: pendingVoiceMemberIds.has(participant.userId),
+        muted: participant.muted ?? false,
+        deafened: participant.deafened ?? false,
+        speaking: participant.speaking ?? false,
+        screenSharing: participant.screenSharing ?? false,
       })),
     }),
   );
@@ -263,13 +267,17 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       canKickMembers &&
       member.userId !== props.user.id &&
       member.userId !== props.server.ownerUserId ? (
-        <IconButton
-          icon="close"
-          label={`Исключить ${member.displayName}`}
-          onClick={() => props.onKickMember(member.userId)}
-          size="sm"
+        <button
+          aria-label={`Исключить ${member.displayName}`}
+          onClick={() => {
+            if (window.confirm(`Исключить ${member.displayName} с сервера?`))
+              props.onKickMember(member.userId);
+          }}
           type="button"
-        />
+        >
+          <Icon name="close" size={16} />
+          Исключить с сервера
+        </button>
       ) : undefined;
     const canMoveMember =
       connectedMemberIds.has(member.userId) &&
@@ -278,13 +286,14 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       (member.userId === props.user.id ||
         (canMoveMembers && member.userId !== props.server.ownerUserId));
     const moveAction = canMoveMember ? (
-      <IconButton
-        icon="voice"
-        label={`Переместить ${member.displayName} в другой голосовой канал`}
+      <button
+        aria-label={`Переместить ${member.displayName} в другой голосовой канал`}
         onClick={() => setMoveMemberId(member.userId)}
-        size="sm"
         type="button"
-      />
+      >
+        <Icon name="voice" size={16} />
+        Переместить в…
+      </button>
     ) : undefined;
     return {
       id: member.userId,
@@ -830,6 +839,9 @@ function ServerStage({
     id: message.id,
     authorId: message.authorUserId,
     authorName: message.authorDisplayName,
+    ...(message.authorAvatarUrl === undefined
+      ? {}
+      : { authorAvatarUrl: message.authorAvatarUrl }),
     content: message.content,
     mentions: (
       message.conversationMentions ??

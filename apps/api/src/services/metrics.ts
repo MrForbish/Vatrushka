@@ -72,6 +72,17 @@ export class TechnicalMetrics {
     this.gauges.set(seriesKey(name, labels), { name, labels: normalizedLabels(labels), value: Number.isFinite(value) ? value : 0 });
   }
 
+  addGauge(name: string, amount: number, labels: MetricLabels = {}): void {
+    this.assertMetric(name, 'gauge', labels);
+    const key = seriesKey(name, labels);
+    const current = this.gauges.get(key)?.value ?? 0;
+    this.gauges.set(key, {
+      name,
+      labels: normalizedLabels(labels),
+      value: Math.max(0, current + (Number.isFinite(amount) ? amount : 0)),
+    });
+  }
+
   observe(name: string, value: number, labels: MetricLabels = {}): void {
     this.assertMetric(name, 'summary', labels);
     const key = seriesKey(name, labels);

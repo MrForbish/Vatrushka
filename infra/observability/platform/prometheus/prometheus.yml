@@ -29,6 +29,10 @@ scrape_configs:
     static_configs:
       - targets: [loki:3100]
 
+  - job_name: loki-canary
+    static_configs:
+      - targets: [loki-canary:3500]
+
   - job_name: grafana
     static_configs:
       - targets: [grafana:3000]
@@ -42,12 +46,14 @@ scrape_configs:
       - targets: [node-exporter:9100]
         labels:
           host: observability
+          role: observability
 
   - job_name: observability-alloy
     static_configs:
       - targets: [alloy:12345]
         labels:
           host: observability
+          role: observability
 
   - job_name: blackbox-http
     metrics_path: /probe
@@ -70,7 +76,7 @@ scrape_configs:
     metrics_path: /probe
     scrape_interval: 60s
     params:
-      module: [tcp_connect]
+      module: [tcp_tls]
     static_configs:
       - targets: [turn.myvatrushka.ru:5349]
     relabel_configs:

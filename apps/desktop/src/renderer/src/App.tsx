@@ -33,6 +33,7 @@ import {
   type InternalNotification,
   type LocalSettings,
   type MessageDeliveryState,
+  type PresencePreference,
   type PublicUser,
   type RoomConnection,
   type ServerDetail,
@@ -65,7 +66,6 @@ import {
   type ScreenShareQuality,
 } from "./features/screen-share/index.js";
 import { ServerView } from "./features/servers/index.js";
-import { UpdateStatus } from "./features/update/index.js";
 import {
   diffRemoteParticipants,
   RoomView,
@@ -80,6 +80,7 @@ import {
 } from "./features/voice/store/voice-state.js";
 import { MediaSession } from "./media.js";
 import { RealtimeClient } from "./realtime.js";
+import { ConfirmDialog } from "./ui";
 
 type Screen = "boot" | "auth" | "profile" | "home" | "server" | "direct";
 const media = new MediaSession(apiClient);
@@ -104,6 +105,7 @@ function toTextMessage(
     channelId: message.conversationId,
     authorUserId: message.author.id,
     authorDisplayName: author?.displayName ?? message.author.displayName,
+    authorAvatarUrl: message.author.avatarUrl,
     authorPlatformRole:
       author?.platformRole ??
       (message.author.id === user.id ? user.platformRole : "member"),
@@ -226,6 +228,13 @@ function projectServerVoiceState(
                   displayName: member.displayName,
                   platformRole: member.platformRole,
                   avatarUrl: member.avatarUrl ?? null,
+                  muted: session.muted,
+                  deafened: session.deafened,
+                  speaking: session.speaking,
+                  screenSharing: session.screenSharing,
+                  ...(session.connectionQuality
+                    ? { connectionQuality: session.connectionQuality }
+                    : {}),
                 };
               })
               .filter((participant): participant is NonNullable<typeof participant> => participant !== null),
@@ -274,6 +283,7 @@ function toDirectMessage(
     conversationId: message.conversationId,
     authorUserId: message.author.id,
     authorDisplayName: message.author.displayName,
+    authorAvatarUrl: message.author.avatarUrl,
     authorPlatformRole:
       message.author.id === user.id
         ? user.platformRole
@@ -418,6 +428,7 @@ export default function App(): ReactNode {
   const [platform, setPlatform] = useState("win32");
   const [retrySeconds, setRetrySeconds] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
   const [sources, setSources] = useState<DesktopSourceInfo[] | null>(null);
@@ -498,12 +509,18 @@ export default function App(): ReactNode {
   const typingExpiryTimersRef = useRef(new Map<string, number>());
   const typingStopTimerRef = useRef<number | null>(null);
   const lastUserActivityRef = useRef(Date.now());
+  const activeVoiceRef = useRef(false);
   const settingsReturnScreenRef = useRef<Screen>("home");
   const mediaSnapshot = useSyncExternalStore(
     media.subscribe,
     media.getSnapshot,
     media.getSnapshot,
   );
+
+  useEffect(() => {
+    activeVoiceRef.current = connection !== null;
+    if (connection !== null) lastUserActivityRef.current = Date.now();
+  }, [connection]);
 
   useEffect(() => {
     if (!presence || !user) return;
@@ -527,7 +544,10 @@ export default function App(): ReactNode {
     .sort()
     .join("|");
   const homeServersRevision = servers
-    .map((server) => `${server.id}:${server.memberCount}`)
+    .map(
+      (server) =>
+        `${server.id}:${server.memberCount}:${server.iconUrl ?? ""}:${server.bannerUrl ?? ""}:${server.accentColor ?? ""}`,
+    )
     .join("|");
   const settingsRouteResult = parseSettingsRoute(location.pathname);
   const settingsRoute =
@@ -843,6 +863,19 @@ export default function App(): ReactNode {
       apiClient.updatePresence(input),
     [],
   );
+  const updateProfilePresence = useCallback(
+    async (preference: PresencePreference): Promise<void> => {
+      const current = presence ?? (await apiClient.getPresence());
+      const next = await apiClient.updatePresence({
+        preference,
+        customText: current.customText,
+        customTextExpiresAt: current.customTextExpiresAt,
+      });
+      setPresence(next);
+      setHomeRealtimeRevision((revision) => revision + 1);
+    },
+    [presence],
+  );
   const loadPrivacySettings = useCallback(
     () => apiClient.getPrivacySettings(),
     [],
@@ -888,7 +921,9 @@ export default function App(): ReactNode {
     const heartbeat = (): void => {
       if (inFlight) return;
       inFlight = true;
-      const idle = Date.now() - lastUserActivityRef.current >= 5 * 60 * 1_000;
+      const idle =
+        !activeVoiceRef.current &&
+        Date.now() - lastUserActivityRef.current >= 5 * 60 * 1_000;
       void apiClient
         .heartbeatPresence(idle)
         .then((next) => {
@@ -1366,26 +1401,39 @@ export default function App(): ReactNode {
       (screen !== "server" && screen !== "direct")
     )
       return;
-    let secondFrame = 0;
-    const firstFrame = window.requestAnimationFrame(() => {
-      secondFrame = window.requestAnimationFrame(() => {
-        const element = document.querySelector<HTMLElement>(
-          `[data-message-id="${targetMessageId}"]`,
-        );
-        if (!element) return;
-        element.dataset.targeted = "true";
-        element.scrollIntoView({ block: "center" });
-        element.focus({ preventScroll: true });
-      });
-    });
+    const startedAt = Date.now();
+    let timer = 0;
+    let highlightTimer = 0;
+    const findTarget = (): void => {
+      const element = document.querySelector<HTMLElement>(
+        `[data-message-id="${targetMessageId}"]`,
+      );
+      if (!element) {
+        if (Date.now() - startedAt < 3_000) {
+          timer = window.setTimeout(findTarget, 100);
+          return;
+        }
+        setTargetMessageId(null);
+        setError("Сообщение удалено или больше недоступно");
+        return;
+      }
+      element.dataset.targeted = "true";
+      element.scrollIntoView({ block: "center" });
+      element.focus({ preventScroll: true });
+      highlightTimer = window.setTimeout(() => {
+        element.removeAttribute("data-targeted");
+        setTargetMessageId(null);
+      }, 1_700);
+    };
+    timer = window.setTimeout(findTarget, 0);
     return () => {
-      window.cancelAnimationFrame(firstFrame);
-      window.cancelAnimationFrame(secondFrame);
+      window.clearTimeout(timer);
+      window.clearTimeout(highlightTimer);
       document
         .querySelector<HTMLElement>(`[data-message-id="${targetMessageId}"]`)
         ?.removeAttribute("data-targeted");
     };
-  }, [directMessages, messages, screen, targetMessageId]);
+  }, [screen, targetMessageId]);
 
   useEffect(
     () =>
@@ -1527,16 +1575,36 @@ export default function App(): ReactNode {
                     lastDeliveredMessageId: latest.id,
                     lastReadMessageId: latest.id,
                   })
+                  .then(() => {
+                    if (!active) return;
+                    setDirectConversations((current) =>
+                      current.map((conversation) =>
+                        conversation.id === conversationId
+                          ? { ...conversation, unreadCount: 0 }
+                          : conversation,
+                      ),
+                    );
+                    setUnreadSummary((current) => {
+                      if (current === null) return current;
+                      const conversation = current.conversations.find(
+                        (item) => item.conversationId === conversationId,
+                      );
+                      return {
+                        ...current,
+                        conversations: current.conversations.filter(
+                          (item) => item.conversationId !== conversationId,
+                        ),
+                        totalDirectUnread: Math.max(
+                          0,
+                          current.totalDirectUnread -
+                            (conversation?.unreadCount ?? 0),
+                        ),
+                      };
+                    });
+                  })
                   .catch((caught) => {
                     if (active) setError(userMessage(caught));
                   });
-                setDirectConversations((current) =>
-                  current.map((conversation) =>
-                    conversation.id === conversationId
-                      ? { ...conversation, unreadCount: 0 }
-                      : conversation,
-                  ),
-                );
               }, 500);
           }
         })
@@ -1599,21 +1667,41 @@ export default function App(): ReactNode {
                 .updateConversationReadState(channel.id, {
                   lastReadMessageId: latest.id,
                 })
+                .then(() => {
+                  if (!active) return;
+                  setServerDetail((current) =>
+                    current === null
+                      ? current
+                      : {
+                          ...current,
+                          channels: current.channels.map((item) =>
+                            item.id === channel.id
+                              ? { ...item, unreadCount: 0, mentionCount: 0 }
+                              : item,
+                          ),
+                        },
+                  );
+                  setUnreadSummary((current) => {
+                    if (current === null) return current;
+                    const conversation = current.conversations.find(
+                      (item) => item.conversationId === channel.id,
+                    );
+                    return {
+                      ...current,
+                      conversations: current.conversations.filter(
+                        (item) => item.conversationId !== channel.id,
+                      ),
+                      totalMentionUnread: Math.max(
+                        0,
+                        current.totalMentionUnread -
+                          (conversation?.mentionCount ?? 0),
+                      ),
+                    };
+                  });
+                })
                 .catch((caught) => {
                   if (active) setError(userMessage(caught));
                 });
-              setServerDetail((current) =>
-                current === null
-                  ? current
-                  : {
-                      ...current,
-                      channels: current.channels.map((item) =>
-                        item.id === channel.id
-                          ? { ...item, unreadCount: 0, mentionCount: 0 }
-                          : item,
-                      ),
-                    },
-              );
             }, 500);
           }
         })
@@ -2549,7 +2637,7 @@ export default function App(): ReactNode {
     });
   };
 
-  const logout = (): void => {
+  const performLogout = (): void => {
     void run(async () => {
       if (connection !== null) playVoiceCue("leave");
       participantConnectionRef.current = null;
@@ -2571,6 +2659,7 @@ export default function App(): ReactNode {
       setScreen("auth");
     });
   };
+  const requestLogout = (): void => setLogoutConfirmOpen(true);
 
   const persistDevice = (
     key: "microphoneDeviceId" | "outputDeviceId",
@@ -2657,10 +2746,15 @@ export default function App(): ReactNode {
     });
   };
 
-  const copyInvite = (): void => {
-    if (!connection || !serverDetail) return;
-    const text = `Присоединяйтесь к серверу «${serverDetail.name}»\n${serverDetail.inviteUrl}`;
-    void window.desktop.copyToClipboard(text);
+  const copyInvite = async (): Promise<void> => {
+    if (!connection)
+      throw new Error("Сервер голосового канала недоступен");
+    const inviteServer =
+      serverDetail?.id === connection.serverId
+        ? serverDetail
+        : await apiClient.getServer(connection.serverId);
+    const text = `Присоединяйтесь к серверу «${inviteServer.name}»\n${inviteServer.inviteUrl}`;
+    await window.desktop.copyToClipboard(text);
   };
 
   const updateNotificationSettings = (
@@ -2860,7 +2954,7 @@ export default function App(): ReactNode {
         setError(userMessage(caught));
       });
   };
-  const withUpdateStatus = (content: ReactNode): ReactNode => (
+  const withNotifications = (content: ReactNode): ReactNode => (
     <>
       {content}
       {user ? (
@@ -2873,16 +2967,32 @@ export default function App(): ReactNode {
           onMarkAllRead={markAllNotificationsRead}
           onOpen={openNotification}
           onRead={markNotificationRead}
+          updateInstallBlocked={connection !== null}
+          updateState={updateState}
+          onInstallUpdate={() =>
+            void window.desktop
+              .installUpdate()
+              .catch((caught) => setError(userMessage(caught)))
+          }
+          onRetryUpdate={() =>
+            void window.desktop
+              .checkForUpdates()
+              .catch((caught) => setError(userMessage(caught)))
+          }
         />
       ) : null}
-      <UpdateStatus
-        installBlocked={connection !== null}
-        state={updateState}
-        onInstall={() =>
-          void window.desktop
-            .installUpdate()
-            .catch((caught) => setError(userMessage(caught)))
-        }
+      <ConfirmDialog
+        confirmLabel="Выйти"
+        danger
+        description="Текущая сессия будет завершена. Для следующего входа снова понадобятся пароль и второй фактор."
+        loading={busy}
+        onClose={() => setLogoutConfirmOpen(false)}
+        onConfirm={() => {
+          setLogoutConfirmOpen(false);
+          performLogout();
+        }}
+        open={logoutConfirmOpen}
+        title="Выйти из аккаунта?"
       />
     </>
   );
@@ -2974,6 +3084,13 @@ export default function App(): ReactNode {
             )
           : undefined
       }
+      voiceParticipants={
+        serverDetail?.id === connection.serverId
+          ? serverDetail.channels.find(
+              (channel) => channel.id === connection.channelId,
+            )?.voiceParticipants
+          : undefined
+      }
       devices={devices}
       microphoneId={settings.microphoneDeviceId}
       outputId={settings.outputDeviceId}
@@ -2997,6 +3114,9 @@ export default function App(): ReactNode {
         media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)
       }
       onScreenAudioVolume={setScreenShareVolume}
+      onScreenAnnotationStroke={(stroke) => void media.addScreenAnnotationStroke(stroke)}
+      onScreenAnnotationUndo={() => void media.undoScreenAnnotation()}
+      onScreenAnnotationClear={() => void media.clearScreenAnnotations()}
       onParticipantMute={(identity, muted) =>
         media.setParticipantMuted(identity, muted)
       }
@@ -3053,6 +3173,12 @@ export default function App(): ReactNode {
     ]);
     setServerDetail(detail);
     setServers(summaries);
+    if (user !== null) {
+      await queryClient.invalidateQueries({
+        queryKey: homeDashboardQueryKey(user.id),
+        refetchType: "all",
+      });
+    }
   };
   const handleSettingsServerDeleted = (): void => {
     setServerDetail(null);
@@ -3094,7 +3220,7 @@ export default function App(): ReactNode {
   };
 
   if (screen === "boot")
-    return withUpdateStatus(
+    return withNotifications(
       <main className="bootScreen">
         <div className="pulseLogo">
           <span />
@@ -3103,7 +3229,7 @@ export default function App(): ReactNode {
       </main>,
     );
   if (screen === "auth")
-    return withUpdateStatus(
+    return withNotifications(
       <AuthPanel
         mode={authMode}
         stage={authStage}
@@ -3152,7 +3278,7 @@ export default function App(): ReactNode {
       />,
     );
   if (screen === "profile")
-    return withUpdateStatus(
+    return withNotifications(
       <ProfilePanel
         value={displayName}
         busy={busy}
@@ -3162,7 +3288,7 @@ export default function App(): ReactNode {
       />,
     );
   if (settingsRoute !== null && user !== null)
-    return withUpdateStatus(
+    return withNotifications(
       <Suspense
         fallback={
           <main className="bootScreen">
@@ -3213,9 +3339,7 @@ export default function App(): ReactNode {
           onUpdatePresence={updatePresenceSettings}
           onUpdatePrivacy={updatePrivacySettings}
           onUpdateNotificationPreferences={updateServerNotificationPreferences}
-          onLogout={() => {
-            void logout();
-          }}
+          onLogout={requestLogout}
           onUserChange={updateUser}
           outputId={settings.outputDeviceId}
           presence={presence}
@@ -3236,7 +3360,7 @@ export default function App(): ReactNode {
       </Suspense>,
     );
   if (screen === "home" && user)
-    return withUpdateStatus(
+    return withNotifications(
       <HomePage
         user={user}
         version={version}
@@ -3244,6 +3368,7 @@ export default function App(): ReactNode {
         microphoneId={settings.microphoneDeviceId}
         outputId={settings.outputDeviceId}
         microphoneMuted={mediaSnapshot.isMuted}
+        voicePingMs={mediaSnapshot.pingMs}
         voiceConnectionQuality={
           mediaSnapshot.connectionState === ConnectionState.Connected
             ? localParticipant?.connectionQuality === "Отличное"
@@ -3269,8 +3394,10 @@ export default function App(): ReactNode {
             : null
         }
         onRetryDashboard={() => void homeDashboardQuery.refetch()}
-        onLogout={logout}
+        onLogout={requestLogout}
         onSecurity={openUserSettings}
+        onStatus={updateProfilePresence}
+        status={presence?.effectiveStatus}
         onAudioSettings={openAudioSettings}
         onServerName={setServerName}
         onCreateServer={createServer}
@@ -3282,7 +3409,7 @@ export default function App(): ReactNode {
       />,
     );
   if (screen === "server" && user && serverDetail)
-    return withUpdateStatus(
+    return withNotifications(
       <>
         <ServerView
           user={user}
@@ -3297,6 +3424,7 @@ export default function App(): ReactNode {
           directUnreadCount={directUnreadCount}
           typingText={serverTypingText}
           firstUnreadMessageId={serverFirstUnreadMessageId}
+          targetMessageId={targetMessageId}
           hasOlderMessages={
             serverMessageHistory.conversationId === activeChannelId &&
             serverMessageHistory.hasMore
@@ -3356,7 +3484,7 @@ export default function App(): ReactNode {
           onSecurity={openUserSettings}
           onPresenceChange={setPresence}
           onServerSettings={() => openServerSettings("overview")}
-          onLogout={logout}
+          onLogout={requestLogout}
         />
         {sources && (
           <SourcePicker
@@ -3372,7 +3500,7 @@ export default function App(): ReactNode {
       </>,
     );
   if (screen === "direct" && user)
-    return withUpdateStatus(
+    return withNotifications(
       <DirectMessagesView
         user={user}
         servers={servers}
@@ -3387,6 +3515,7 @@ export default function App(): ReactNode {
         typingText={directTypingText}
         blockedParticipantIds={blockedDirectUserIds}
         firstUnreadMessageId={directFirstUnreadMessageId}
+        targetMessageId={targetMessageId}
         hasOlderMessages={
           directMessageHistory.conversationId === activeDirectConversationId &&
           directMessageHistory.hasMore
@@ -3413,10 +3542,10 @@ export default function App(): ReactNode {
         onServerName={setServerName}
         onCreateServer={createServer}
         onSecurity={openUserSettings}
-        onLogout={logout}
+        onLogout={requestLogout}
       />,
     );
-  return withUpdateStatus(
+  return withNotifications(
     <main className="bootScreen">
       <span>Не удалось открыть экран</span>
       <button

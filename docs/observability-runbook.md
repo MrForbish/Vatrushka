@@ -48,7 +48,49 @@ curl -fsS "http://${OBSERVABILITY_PRIVATE_BIND_IP}:3100/ready"
 curl -fsS "https://${GRAFANA_DOMAIN}/api/health"
 ```
 
-В Grafana должны присутствовать datasources Prometheus/Loki и шесть dashboards: Infrastructure, Containers, Application, Prometheus Health, Loki Health, Logs Overview.
+В Grafana должны присутствовать datasources Prometheus/Loki, базовые технические dashboards и `Service Health & SLO`. Базовый набор включает «Инфраструктура: обзор», «Контейнеры: обзор», «Приложение: обзор», «API: детали HTTP», «Prometheus: состояние», «Loki: состояние» и «Логи: обзор». Provisioning расширяемый: новые JSON не требуют ручного импорта.
+
+## Service Health and SLO
+
+`Service Health & SLO` — стартовый экран владельца и on-call. Начальные 30-дневные цели:
+
+- public API availability: 99.9%;
+- API requests без 5xx: 99.9%;
+- не менее 95% обычных JSON API requests быстрее 500 ms; upload/download/attachment routes исключены и анализируются отдельно;
+- outbox failed = 0, oldest age < 60 s.
+
+Error budget показывает запас над 99.9% относительно допустимых 0.1% ошибок. Ноль означает исчерпание бюджета. Recording rules используют 30-дневное окно и 30-дневный Prometheus retention; после 7–14 дней baseline пороги пересматриваются документированным решением, но не снижаются только ради устранения alert.
+
+`vatrushka_build_info{version,commit}=1` и меняющийся без labels `vatrushka_deployment_timestamp_seconds` создают deployment/restart annotations. Если commit=`unknown`, API был собран без `BUILD_COMMIT`; production deployment должен экспортировать текущий git SHA перед Compose build.
+
+## Prometheus health
+
+Проверяйте не только число `up`, но `Targets up / total` и таблицу down targets. Scrape duration оценивается как доля timeout, rule duration — как доля evaluation interval. Series churn помогает обнаружить новый high-cardinality label. Remote-write pending должен возвращаться к нулю, failures всегда равны нулю. При config/rule failure сначала запустите `promtool check config/rules`, затем смотрите Prometheus logs; не перезапускайте TSDB и не удаляйте WAL вручную.
+
+## Infrastructure and containers
+
+Дашборды `Инфраструктура: обзор` и `Контейнеры: обзор` используют фильтры contour/region/host/role/container и сохраняют время при переходе в соседние dashboards. `Нет данных` означает отсутствие series, а не нулевую нагрузку. `Наблюдаемые контейнеры` показывает только свежесть cAdvisor, не Docker health.
+
+Пороговые значения синхронизированы с rules:
+
+- CPU host: warning выше 85% в течение 15 минут;
+- RAM host: critical выше 90% в течение 10 минут;
+- filesystem: warning 80%, critical 90%; inode warning 85%;
+- clock skew: warning выше 5 секунд;
+- container restarts: warning, если `container_start_time_seconds` изменился более трёх раз за 15 минут;
+- container OOM: critical при любом событии за 15 минут.
+
+При срабатывании сначала сузьте host/container, сопоставьте время с `Рестарты и OOM`, CPU throttling, host iowait и disk latency, затем перейдите в логи. Прогноз свободного места на 24 часа — диагностический сигнал по шестичасовому тренду, не самостоятельный alert. После rollout убедитесь, что cAdvisor публикует `container`; прежний `name` сохранён на один release для совместимости.
+
+## API HTTP
+
+1. Откройте «Приложение: обзор» и проверьте readiness, количество 5xx и p95.
+2. Перейдите в «API: детали HTTP» с сохранением диапазона времени и фильтров.
+3. Если 5xx выше 0,1% десять минут или выше 1% пять минут при RPS больше 0,1, найдите `method + route` в Top 5xx и таблице.
+4. Для p95 выше 500 ms десять минут откройте список медленных routes; upload/download оценивайте отдельно от обычного JSON API.
+5. Сопоставьте `route`, bounded `error_code` и время с «Логи: обзор». Request ID ищите как поле лога, но не добавляйте в Prometheus labels.
+
+4xx не является серверной аварией само по себе. Warning включается при доле выше 10% пятнадцать минут и RPS больше 0,2; сначала проверьте auth, rate limit и клиентскую версию. `0` на stat-панели означает измеренное отсутствие событий, а «Нет данных» — отсутствие series или scrape.
 
 ## Добавление узла или target
 
@@ -64,6 +106,20 @@ curl -fsS "https://${GRAFANA_DOMAIN}/api/health"
 
 При росте cardinality проверьте `labelValueCountByLabelName` в Prometheus и active streams/discarded lines Loki. Сначала остановите источник новых labels, затем уменьшайте retention/очищайте данные только по отдельному плану.
 
+## Logs and Loki
+
+Alloy разбирает JSON `level` и нормализует только закрытый набор `trace/debug/info/warn/error/fatal/unknown`. Pino numeric levels 10–60 преобразуются в те же значения. `request_id`, `error_code`, `exception_type` и message остаются полями строки: ищите их через query-time `| json`, не превращайте в labels. Неструктурированные journald/Docker строки доступны в явно обозначенной fallback-панели.
+
+`Loki: состояние` использует только TSDB/S3-совместимые и общие request metrics; BoltDB Shipper метрики запрещены. Отсутствие конкретной vendor series отображается как `Нет данных`, а не зелёный ноль. `loki-canary` — end-to-end проверка: он пишет тестовые строки, читает их обратно и экспортирует latency/missing entries.
+
+При инциденте:
+
+1. Проверьте `Loki up` и `End-to-end canary`.
+2. Если canary missing > 0, сопоставьте время с discarded reasons, request 5xx, WAL и compactor.
+3. Проверьте Loki container logs, private route и S3 credentials/policy, не выводя secret.
+4. Выполните контролируемый LogQL smoke: JSON error line должна появиться по `level=error` и request ID.
+5. Если пропал один service, проверьте соответствующий Alloy agent и его remote endpoint; не перезапускайте весь контур без необходимости.
+
 ## Инциденты
 
 - Disk >80%: определить TSDB/WAL/cache, проверить retention и noisy source; не удалять active TSDB вручную.
@@ -72,6 +128,20 @@ curl -fsS "https://${GRAFANA_DOMAIN}/api/health"
 - Prometheus down: проверить volume, WAL/corruption и config; при необходимости запустить чистый TSDB, старый не копировать обычным `cp`.
 - Grafana down: проверить SQLite/volume/provisioning; восстановить последний проверенный backup.
 - Alert delivery down: проверить `alertmanager_notifications_failed_total` и secret webhook file, отправить controlled test alert.
+
+## Realtime and messaging
+
+Откройте дашборд `Realtime и сообщения` (`vatrushka-realtime-messaging`). Для всплеска переподключений сначала проверьте разбивку `event/reason`, затем доступность Redis и логи API. При росте outbox сначала устраните зависимость или ошибку публикации; вручную удалять durable-события запрещено. Значение `chat_outbox_failed` выше нуля требует проверки последней ошибки worker и повторной доставки после устранения причины.
+
+## Voice and screen share
+
+Откройте дашборд `Голос и демонстрация экрана` (`vatrushka-voice-screen-share`). Расхождение reconciliation или version gap проверяйте вместе с LiveKit webhook, Redis и WebSocket. Для конфликтов screen-share lease сравните `acquire`, `renew`, `release`, результат и доступность LiveKit; не очищайте lease напрямую до проверки фактического participant/track state.
+
+## Dependencies and delivery
+
+Откройте дашборд `Зависимости и доставка` (`vatrushka-dependencies-delivery`). Для PostgreSQL проверьте подключения, rollback/deadlock и cache hit. Для Redis — память, evictions и rejected connections. Для S3 — операцию, result и p95; затем endpoint, DNS/TLS, credentials и bucket policy. Для почты и входа сопоставьте delivery result и login factor, не добавляя email или user ID в labels и логи.
+
+После развёртывания 0.8.0 накопите минимум семь дней production baseline. До этого пороги новых warning alerts считаются стартовыми и корректируются отдельным MR на основании фактических p95/p99 и частоты событий.
 
 ## Backup, restore, update, rollback
 

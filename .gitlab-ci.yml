@@ -139,7 +139,10 @@ verify:
     - .node-linux
     - .quality-rules
   stage: quality
-  timeout: 8m
+  # The complete quality bundle includes lint, typecheck, unit tests and builds.
+  # Self-hosted runners may be temporarily CPU-constrained; eight minutes causes
+  # a false timeout while lint is still making progress.
+  timeout: 20m
   script:
     - npm run repo-policy:test
     - npm run version:check
@@ -294,9 +297,22 @@ visual-regression:
   stage: quality
   timeout: 10m
   script:
+    - |
+      $storybookListeners = @(Get-NetTCPConnection -LocalPort 6006 -State Listen -ErrorAction SilentlyContinue)
+      $storybookListeners |
+        Select-Object -ExpandProperty OwningProcess -Unique |
+        ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+      Write-Output "Storybook port preflight complete."
     - npx playwright install chromium
     - npm run build -w @vatrushka/shared
     - node scripts/ci/run-with-budget.mjs --name "Static Storybook visual" --budget-seconds 180 -- npm run test:visual
+  after_script:
+    - |
+      $storybookListeners = @(Get-NetTCPConnection -LocalPort 6006 -State Listen -ErrorAction SilentlyContinue)
+      $storybookListeners |
+        Select-Object -ExpandProperty OwningProcess -Unique |
+        ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+      Write-Output "Storybook port cleanup complete."
   artifacts:
     when: on_failure
     expire_in: 14 days

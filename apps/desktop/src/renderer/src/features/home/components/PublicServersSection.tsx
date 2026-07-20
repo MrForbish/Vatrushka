@@ -1,8 +1,8 @@
-import React from "react";
+import type React from "react";
 
 import type { PublicServerSummary } from "@vatrushka/shared";
 
-import { Button, Icon, Input } from "../../../ui";
+import { Button, Icon, Input, StableImage } from "../../../ui";
 
 interface PublicServersSectionProps {
   busyServerId: string | null;
@@ -21,13 +21,16 @@ function ServerImage({
 }: {
   server: PublicServerSummary;
 }): React.JSX.Element {
-  const [failed, setFailed] = React.useState(false);
-  if (server.iconUrl && !failed)
-    return <img alt="" onError={() => setFailed(true)} src={server.iconUrl} />;
   return (
-    <span aria-hidden="true">
-      {server.name.trim().slice(0, 2).toUpperCase()}
-    </span>
+    <StableImage
+      alt=""
+      fallback={
+        <span aria-hidden="true">
+          {server.name.trim().slice(0, 2).toUpperCase()}
+        </span>
+      }
+      src={server.iconUrl}
+    />
   );
 }
 
@@ -85,13 +88,11 @@ export function PublicServersSection(
                 } as React.CSSProperties
               }
             >
-              {server.bannerUrl ? (
-                <img
-                  className="home-public-server__banner"
-                  alt=""
-                  src={server.bannerUrl}
-                />
-              ) : null}
+              <StableImage
+                className="home-public-server__banner"
+                alt=""
+                src={server.bannerUrl}
+              />
               <div className="home-public-server__overlay" />
               <div className="home-public-server__body">
                 <div className="home-public-server__icon">

@@ -360,6 +360,7 @@ export interface DataStore {
   ): Promise<boolean>;
   releaseChannelLeaseByParticipant(participantIdentity: string): Promise<void>;
   releaseChannelLeaseByChannel(channelId: string): Promise<void>;
+  countChannelLeases(now: Date): Promise<number>;
 }
 
 export interface ObjectStoragePutInput {

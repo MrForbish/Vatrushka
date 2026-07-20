@@ -4,6 +4,9 @@ import type { DesktopBridge } from "@vatrushka/shared";
 
 const desktop: DesktopBridge = {
   getAppVersion: async () => "0.1.0-test",
+  getFullscreen: async () => false,
+  toggleFullscreen: async () => false,
+  onFullscreenChange: () => () => undefined,
   getUpdateState: async () => ({
     status: "unsupported",
     currentVersion: "0.1.0-test",
@@ -18,6 +21,7 @@ const desktop: DesktopBridge = {
   listDesktopSources: async () => [],
   selectDesktopSource: async () => undefined,
   clearSelectedDesktopSource: async () => undefined,
+  logMediaDiagnostic: async () => undefined,
   copyToClipboard: async () => undefined,
   openExternal: async () => undefined,
   setBadgeCount: async () => undefined,

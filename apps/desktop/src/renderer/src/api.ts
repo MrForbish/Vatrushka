@@ -56,10 +56,17 @@ import {
   type ServerVoiceStateDto,
   type MoveVoiceMemberAccepted,
   type MoveVoiceMemberRequest,
+  type UpdateOwnVoiceStateRequest,
 } from "@vatrushka/shared";
 
-const apiBase = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? "http://localhost:3000").replace(/\/$/u, "")}${API_PREFIX}`;
+const apiOrigin = (import.meta.env.VITE_PUBLIC_API_BASE_URL ?? "http://localhost:3000").replace(/\/$/u, "");
+const apiBase = `${apiOrigin}${API_PREFIX}`;
 const realtimeUrl = `${(import.meta.env.VITE_PUBLIC_API_BASE_URL ?? "http://localhost:3000").replace(/\/$/u, "").replace(/^http/u, "ws")}/ws`;
+
+function absoluteResourceUrl(url: string | null | undefined): string | null {
+  if (!url) return null;
+  return url.startsWith("/") ? `${apiOrigin}${url}` : url;
+}
 
 export class ClientError extends Error {
   constructor(
@@ -67,8 +74,13 @@ export class ClientError extends Error {
     message: string,
     readonly status: number,
     readonly details: unknown = null,
+    readonly requestId: string | null = null,
   ) {
-    super(message);
+    super(
+      status >= 500 && requestId
+        ? `${message} · код поддержки ${requestId}`
+        : message,
+    );
     this.name = "ClientError";
   }
 }
@@ -946,6 +958,17 @@ export class ApiClient {
     return this.request(`/servers/${serverId}/voice-state`, { auth: true });
   }
 
+  async updateOwnVoiceState(
+    channelId: string,
+    input: UpdateOwnVoiceStateRequest,
+  ): Promise<void> {
+    await this.request(`/channels/${channelId}/voice-state`, {
+      method: "PATCH",
+      body: input,
+      auth: true,
+    });
+  }
+
   moveVoiceMember(
     serverId: string,
     input: MoveVoiceMemberRequest,
@@ -973,10 +996,19 @@ export class ApiClient {
     if (options.before) query.set("before", options.before);
     if (options.after) query.set("after", options.after);
     query.set("limit", String(options.limit ?? 100));
-    return this.request(
+    return this.request<ConversationMessagePage>(
       `/conversations/${conversationId}/messages?${query.toString()}`,
       { auth: true },
-    );
+    ).then((page) => ({
+      ...page,
+      items: page.items.map((message) => ({
+        ...message,
+        author: {
+          ...message.author,
+          avatarUrl: absoluteResourceUrl(message.author.avatarUrl),
+        },
+      })),
+    }));
   }
 
   createConversationMessage(
@@ -1129,7 +1161,15 @@ export class ApiClient {
       unreadOnly: String(unreadOnly),
     });
     if (before) query.set("before", before);
-    return this.request(`/notifications?${query.toString()}`, { auth: true });
+    return this.request<InternalNotification[]>(
+      `/notifications?${query.toString()}`,
+      { auth: true },
+    ).then((notifications) =>
+      notifications.map((notification) => ({
+        ...notification,
+        actorAvatarUrl: absoluteResourceUrl(notification.actorAvatarUrl),
+      })),
+    );
   }
 
   async markNotificationRead(notificationId: string): Promise<void> {
@@ -1312,21 +1352,45 @@ export class ApiClient {
   }
 
   listDirectConversations(): Promise<DirectConversationSummary[]> {
-    return this.request("/direct-conversations", { auth: true });
+    return this.request<DirectConversationSummary[]>("/direct-conversations", {
+      auth: true,
+    }).then((conversations) =>
+      conversations.map((conversation) => ({
+        ...conversation,
+        participant: {
+          ...conversation.participant,
+          avatarUrl: absoluteResourceUrl(conversation.participant.avatarUrl),
+        },
+      })),
+    );
   }
 
   listDirectMessageCandidates(): Promise<DirectMessageCandidate[]> {
-    return this.request("/direct-conversations/candidates", { auth: true });
+    return this.request<DirectMessageCandidate[]>(
+      "/direct-conversations/candidates",
+      { auth: true },
+    ).then((candidates) =>
+      candidates.map((candidate) => ({
+        ...candidate,
+        avatarUrl: absoluteResourceUrl(candidate.avatarUrl),
+      })),
+    );
   }
 
   createDirectConversation(
     participantUserId: string,
   ): Promise<DirectConversationSummary> {
-    return this.request("/direct-conversations", {
+    return this.request<DirectConversationSummary>("/direct-conversations", {
       method: "POST",
       body: { userId: participantUserId },
       auth: true,
-    });
+    }).then((conversation) => ({
+      ...conversation,
+      participant: {
+        ...conversation.participant,
+        avatarUrl: absoluteResourceUrl(conversation.participant.avatarUrl),
+      },
+    }));
   }
 
   listDirectMessages(conversationId: string): Promise<DirectMessage[]> {
@@ -1574,6 +1638,7 @@ export class ApiClient {
         error?.message ?? "Неизвестная ошибка сервера",
         response.status,
         error?.details,
+        error?.requestId ?? response.headers.get("x-request-id"),
       );
     }
     if (response.status === 204) return undefined as T;

@@ -2,6 +2,9 @@ import type { DesktopBridge } from "@vatrushka/shared";
 
 export const desktopMock: DesktopBridge = {
   getAppVersion: async () => "0.2.0-storybook",
+  getFullscreen: async () => false,
+  toggleFullscreen: async () => false,
+  onFullscreenChange: () => () => undefined,
   getUpdateState: async () => ({
     status: "unsupported",
     currentVersion: "0.2.0-storybook",
@@ -16,6 +19,7 @@ export const desktopMock: DesktopBridge = {
   listDesktopSources: async () => [],
   selectDesktopSource: async () => undefined,
   clearSelectedDesktopSource: async () => undefined,
+  logMediaDiagnostic: async () => undefined,
   copyToClipboard: async () => undefined,
   openExternal: async () => undefined,
   setBadgeCount: async () => undefined,

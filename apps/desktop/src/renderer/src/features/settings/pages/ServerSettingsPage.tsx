@@ -17,7 +17,14 @@ import {
 } from "@vatrushka/shared";
 
 import { apiClient } from "../../../api";
-import { Button, Checkbox, FilePicker, Input, Select } from "../../../ui";
+import {
+  Button,
+  Checkbox,
+  FilePicker,
+  Input,
+  Select,
+  StableImage,
+} from "../../../ui";
 import type { ServerSettingsSection } from "../../../app/routes/route-paths";
 import { ChannelPermissionEditor } from "../components/ChannelPermissionEditor";
 import { SettingsPageState } from "../components/SettingsPageState";
@@ -314,15 +321,13 @@ function Appearance({
             className="vui-server-appearance-preview"
             style={{ backgroundColor: value.accentColor ?? "#635bff" }}
           >
-            {value.bannerUrl ? (
-              <img alt="Обложка сервера" src={value.bannerUrl} />
-            ) : null}
+            <StableImage alt="Обложка сервера" src={value.bannerUrl} />
             <div>
-              {value.iconUrl ? (
-                <img alt="Иконка сервера" src={value.iconUrl} />
-              ) : (
-                server.name.slice(0, 2).toUpperCase()
-              )}
+              <StableImage
+                alt="Иконка сервера"
+                fallback={server.name.slice(0, 2).toUpperCase()}
+                src={value.iconUrl}
+              />
               <strong>{server.name}</strong>
             </div>
           </div>
@@ -352,6 +357,11 @@ function Appearance({
           />
           <div className="vui-server-settings-row">
             <Button
+              disabled={
+                busy ||
+                objects.iconObjectKey === null ||
+                (!value.iconUrl && objects.iconObjectKey === undefined)
+              }
               variant="secondary"
               onClick={() => {
                 setObjects((current) => ({ ...current, iconObjectKey: null }));
@@ -361,6 +371,11 @@ function Appearance({
               Сбросить иконку
             </Button>
             <Button
+              disabled={
+                busy ||
+                objects.bannerObjectKey === null ||
+                (!value.bannerUrl && objects.bannerObjectKey === undefined)
+              }
               variant="secondary"
               onClick={() => {
                 setObjects((current) => ({

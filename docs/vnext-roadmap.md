@@ -1,6 +1,15 @@
 # Vatrushka: roadmap
 
-Обновлено для версии 0.7.0. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
+## Observability 0.8.0
+
+- [x] Разделить обзорные и детальные HTTP/SLO панели.
+- [x] Добавить подробные infrastructure/container dashboards и корректные restart/OOM сигналы.
+- [x] Нормализовать structured logs и добавить отдельные Loki/Logs dashboards.
+- [x] Добавить Service Health, build/deployment information и 30-day SLO.
+- [x] Добавить продуктовые dashboards и bounded metrics для realtime, messaging, voice, screen share, PostgreSQL, Redis, S3, email и auth.
+- [ ] После релиза собрать семидневный production baseline и отдельным MR откалибровать warning thresholds.
+
+Обновлено для версии 0.8.0. Приоритеты: `P0` блокирует эксплуатационное качество, `P1` дает существенную продуктовую ценность, `P2` расширяет платформу.
 
 ## Состояние продукта
 
@@ -15,6 +24,7 @@
 - authenticated WebSocket, transactional outbox и HTTP reconciliation;
 - приватные S3 attachments и durable cleanup;
 - реальные Windows audio devices, voice, screen share, системный звук и PostgreSQL lease;
+- синхронные ephemeral-аннотации поверх демонстрации с нормализованными координатами, undo и очисткой;
 - self-hosted LiveKit/TURN;
 - NSIS auto-update с self-hosted feed;
 - unit, integration PostgreSQL/Redis, Storybook interaction, Electron и visual regression CI.
@@ -27,7 +37,7 @@
 - Storybook покрывает основные компоненты, но не все production edge states и viewport;
 - canonical messaging все еще содержит legacy compatibility reads/tables;
 - крупные orchestration-файлы затрудняют безопасные изменения;
-- `/metrics` реализован, но не собирается production Prometheus;
+- production Prometheus собирает API/runtime/messaging/media metrics; требуется накопить baseline и откалибровать alert thresholds;
 - installer не подписан code-signing сертификатом;
 
 ## План выполнения
@@ -68,11 +78,11 @@
 
 ### P0.3 — профильная voice-плашка
 
-Статус: выполнено в `feat/ROADMAP-3-profile-audio-controls`. Кнопки используют фактический media snapshot, deafen fail-safe выключает микрофон и все входящие LiveKit-аудиоисточники, а undeafen не включает микрофон автоматически. Unit, Storybook, Electron E2E и visual regression покрывают поведение и двухстрочную адаптивную компоновку.
+Статус: выполнено и укреплено в WEB-30. Кнопки используют фактический media snapshot, deafen fail-safe выключает микрофон и все входящие LiveKit-аудиоисточники, а undeafen восстанавливает микрофон только если он был включён до deafen. Состояние синхронизируется через API/Redis/realtime; unit, Storybook, Electron E2E и visual regression покрывают поведение и двухстрочную адаптивную компоновку.
 
 1. Добавить рядом с настройками две icon buttons: микрофон и входящий звук.
 2. Синхронизировать их с фактическим LiveKit/media snapshot, а не локальной иллюзией состояния.
-3. Deafen выключает входящий звук и микрофон; undeafen не включает микрофон неожиданно.
+3. Deafen выключает входящий звук и микрофон; undeafen восстанавливает только прежнее состояние микрофона.
 4. Добавить tooltip, aria-label, disabled/reconnecting состояния и unit/Storybook/E2E tests.
 
 ### P0.4 — server shell usability
@@ -105,12 +115,12 @@
 
 ### P1.1 — Prometheus/Grafana
 
-Статус: legacy single-VPS stack работает, аудит зафиксирован в `docs/observability-audit.md`. Подготовлен отдельный воспроизводимый observability-контур: Prometheus, Grafana, Alertmanager, Loki/S3, Alloy, Blackbox, agents, шесть dashboards, backup/restore/rollback и config validation. Production cutover ожидает отдельный VPS, Grafana DNS, private WireGuard addresses, отдельный Loki bucket и технический webhook.
+Статус: отдельный production observability-контур развернут: Prometheus, Grafana, Alertmanager, Loki/S3, Alloy, Blackbox, private agents, расширяемый provisioned набор dashboards, backup/restore/rollback и config validation. Русские обзоры приложения и HTTP разделяют 2xx/3xx/4xx/5xx и используют adaptive rate windows и recording rules. Infrastructure/Containers покрывают freshness, swap, inode, disk I/O, network errors, clock skew, container limits, throttling, restarts и OOM; `container` нормализован без удаления совместимого `name`. Логи получили bounded normalized level, query-time correlation search и Loki end-to-end canary; Loki Health переведён с BoltDB-семантики на TSDB/S3. Service Health & SLO показывает 30-day availability/success/latency/error budget и build annotations; Prometheus Health закрывает targets/scrape/rules/TSDB/Alertmanager/remote write. Остаются product details, production baseline и настройка технического receiver.
 
 1. Уточнить/стабилизировать API metric names и cardinality. Выполнено для HTTP/runtime/messaging.
-2. Развернуть отдельный observability VPS и перенести Prometheus/Grafana без остановки production. Конфигурация и migration plan готовы; инфраструктурный rollout заблокирован отсутствующими реквизитами нового VPS/S3/DNS.
+2. Развернуть отдельный observability VPS и перенести Prometheus/Grafana без остановки production. Выполнено; проверены private ingestion, Loki/S3 и публичный доступ к Grafana.
 3. Настроить private ingestion, 30d/55GB Prometheus retention, 30d Loki retention, versioned dashboards и disk budget. Выполнено в конфигурации; требуется production smoke/load verification.
-4. Собрать Infrastructure, Containers, Application, Prometheus Health, Loki Health и Logs Overview dashboards. Выполнено; детальные LiveKit/S3 collectors остаются следующим срезом.
+4. Собрать Infrastructure, Containers, Application, Prometheus Health, Loki Health и Logs Overview dashboards. Базовый набор выполнен; Infrastructure/Containers, Logs/Loki, Prometheus и Service Health/SLO доведены до эксплуатационного стандарта, product details идут следующим MR.
 5. Включить infrastructure/application/self-monitoring alerts и Alertmanager routing. Rules и routing готовы; фактический receiver и корректировка thresholds — после 72 часов параллельной работы и недельного baseline.
 6. После 72 часов стабильности остановить legacy Grafana/Prometheus без удаления volumes, затем отдельным подтверждённым этапом удалить старые данные.
 
@@ -144,6 +154,7 @@
 9. `feat/observability` — Prometheus/Grafana.
 
 Каждый ordinary MR направляется в `develop` и проходит lint, typecheck, релевантные unit/integration, Storybook/Electron/visual проверки. Production получает только стабилизированный `release/*` или hotfix; Windows update публикуется tag pipeline по правилам [release-process.md](release-process.md).
+
 # WEB-26 — Voice presence and drag-and-drop
 
 - [x] Audit current LiveKit, Redis, WebSocket, permission, state, and DnD flows.

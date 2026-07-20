@@ -66,6 +66,7 @@ import {
   type MoveVoiceMemberAccepted,
   type MoveVoiceMemberRequest,
   type ServerVoiceStateDto,
+  type UpdateOwnVoiceStateRequest,
   type RealtimeEventType,
   serverPermissions,
   highestRolePosition,
@@ -166,6 +167,18 @@ export interface ServiceDependencies {
 }
 
 const RECOVERY_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const LIVEKIT_METRIC_EVENTS = new Set([
+  "participant_joined",
+  "participant_left",
+  "participant_connection_aborted",
+  "track_published",
+  "track_unpublished",
+  "room_finished",
+]);
+
+function liveKitMetricEvent(event: string | undefined): string {
+  return event && LIVEKIT_METRIC_EVENTS.has(event) ? event : "other";
+}
 
 function randomRecoveryCode(): string {
   const bytes = randomBytes(12);
@@ -265,6 +278,12 @@ function safeAttachmentName(fileName: string): string {
   return printable || "attachment";
 }
 
+function mediaUrl(objectKey: string | null | undefined): string | null {
+  return objectKey
+    ? `/api/v1/media/${encodeURIComponent(objectKey)}`
+    : null;
+}
+
 function publicTextMessage(
   message: TextMessageWithAuthor,
   replyTo: TextMessageWithAuthor | null,
@@ -277,6 +296,7 @@ function publicTextMessage(
     channelId: message.channelId,
     authorUserId: message.authorUserId,
     authorDisplayName: message.displayName ?? "Участник",
+    authorAvatarUrl: mediaUrl(message.avatarObjectKey),
     authorPlatformRole: message.platformRole,
     content: message.content,
     mentions: mentions.map(
@@ -327,6 +347,7 @@ function publicDirectMessage(
     conversationId: message.conversationId,
     authorUserId: message.authorUserId,
     authorDisplayName: message.displayName ?? "Участник",
+    authorAvatarUrl: mediaUrl(message.avatarObjectKey),
     authorPlatformRole: message.platformRole,
     content: message.content,
     replyTo:
@@ -367,6 +388,7 @@ function publicDirectConversation(
       userId: overview.participant.id,
       displayName: overview.participant.displayName ?? "Участник",
       platformRole: overview.participant.platformRole,
+      avatarUrl: mediaUrl(overview.participant.avatarObjectKey),
     },
     lastMessage:
       overview.lastMessage === null
@@ -419,6 +441,36 @@ export class VatrushkaService {
 
   now(): Date {
     return this.clock();
+  }
+
+  private async publicMediaUrl(
+    objectKey: string | null | undefined,
+  ): Promise<string | null> {
+    if (!objectKey) return null;
+    return this.objectStorage
+      ? this.objectStorage.createGetUrl(objectKey, 900)
+      : mediaUrl(objectKey);
+  }
+
+  private async resolveMediaUrl(
+    url: string | null | undefined,
+  ): Promise<string | null> {
+    if (!url || !url.startsWith("/api/v1/media/")) return url ?? null;
+    return this.publicMediaUrl(
+      decodeURIComponent(url.slice("/api/v1/media/".length)),
+    );
+  }
+
+  private async resolveConversationMessage(
+    message: ConversationMessage,
+  ): Promise<ConversationMessage> {
+    return {
+      ...message,
+      author: {
+        ...message.author,
+        avatarUrl: await this.resolveMediaUrl(message.author.avatarUrl),
+      },
+    };
   }
 
   inviteUrl(inviteToken: string): string {
@@ -1928,6 +1980,7 @@ export class VatrushkaService {
           serverId: runtime.server.id,
           serverName: runtime.server.name,
           serverIconUrl: runtime.server.iconUrl ?? null,
+          serverAccentColor: runtime.server.accentColor ?? null,
           channelName: channel.name,
           gameName: null,
           coverUrl: runtime.server.bannerUrl ?? null,
@@ -1961,8 +2014,21 @@ export class VatrushkaService {
       })
       .slice(0, 6);
 
+    const currentVoiceSession = await this.voicePresenceStore
+      .getSession(user.id)
+      .catch(() => null);
     const quickReturn: HomeDashboardResponse["gaming"]["quickReturn"] = [];
     const quickChannelIds = new Set<string>();
+    const currentVoiceSpace = currentVoiceSession
+      ? voiceSpaceByChannel.get(currentVoiceSession.channelId)
+      : undefined;
+    if (currentVoiceSpace) {
+      quickReturn.push({
+        ...currentVoiceSpace,
+        returnReason: "current_voice",
+      });
+      quickChannelIds.add(currentVoiceSpace.channelId);
+    }
     for (const item of activity) {
       if (item.type !== "left_voice" || item.channelId === null) continue;
       const space = voiceSpaceByChannel.get(item.channelId);
@@ -1983,9 +2049,6 @@ export class VatrushkaService {
       quickChannelIds.add(space.channelId);
     }
 
-    const currentVoiceSession = await this.voicePresenceStore
-      .getSession(user.id)
-      .catch(() => null);
     const friendsInGame = (
       await Promise.all(
         contactRecords.map(async (contact) => {
@@ -3462,6 +3525,9 @@ export class VatrushkaService {
             userId: member.userId,
             displayName: member.displayName,
             platformRole: member.platformRole,
+            avatarUrl: await this.publicMediaUrl(
+              candidate?.avatarObjectKey ?? null,
+            ),
             sharedServerNames: [server.name],
           });
       }
@@ -3480,8 +3546,16 @@ export class VatrushkaService {
     authorization: string | undefined,
   ): Promise<DirectConversationSummary[]> {
     const user = await this.authenticate(authorization);
-    return (await this.store.listDirectConversationOverviews(user.id)).map(
-      publicDirectConversation,
+    return Promise.all(
+      (await this.store.listDirectConversationOverviews(user.id)).map(
+        async (overview) => {
+          const result = publicDirectConversation(overview);
+          result.participant.avatarUrl = await this.publicMediaUrl(
+            overview.participant.avatarObjectKey,
+          );
+          return result;
+        },
+      ),
     );
   }
 
@@ -3531,7 +3605,11 @@ export class VatrushkaService {
       await this.store.listDirectConversationOverviews(user.id)
     ).find((candidate) => candidate.conversation.id === conversation.id);
     if (!overview) throw new AppError("DIRECT_CONVERSATION_NOT_FOUND", 404);
-    return publicDirectConversation(overview);
+    const result = publicDirectConversation(overview);
+    result.participant.avatarUrl = await this.publicMediaUrl(
+      overview.participant.avatarObjectKey,
+    );
+    return result;
   }
 
   async listDirectMessages(
@@ -3927,15 +4005,21 @@ export class VatrushkaService {
         ...(attachmentsByMessage.get(attachment.messageId) ?? []),
         attachment,
       ]);
-    return messages.map((message) =>
-      publicDirectMessage(
+    return Promise.all(
+      messages.map(async (message) => {
+        const result = publicDirectMessage(
         message,
         message.replyToMessageId === null
           ? null
           : (replies.get(message.replyToMessageId) ?? null),
         reactionsByMessage.get(message.id) ?? [],
-        attachmentsByMessage.get(message.id) ?? [],
-      ),
+          attachmentsByMessage.get(message.id) ?? [],
+        );
+        result.authorAvatarUrl = await this.publicMediaUrl(
+          message.avatarObjectKey,
+        );
+        return result;
+      }),
     );
   }
 
@@ -3979,16 +4063,22 @@ export class VatrushkaService {
         ...(mentionsByMessage.get(mention.messageId) ?? []),
         mention,
       ]);
-    return messages.map((message) =>
-      publicTextMessage(
+    return Promise.all(
+      messages.map(async (message) => {
+        const result = publicTextMessage(
         message,
         message.replyToMessageId === null
           ? null
           : (replies.get(message.replyToMessageId) ?? null),
         byMessage.get(message.id) ?? [],
         attachmentsByMessage.get(message.id) ?? [],
-        mentionsByMessage.get(message.id) ?? [],
-      ),
+          mentionsByMessage.get(message.id) ?? [],
+        );
+        result.authorAvatarUrl = await this.publicMediaUrl(
+          message.avatarObjectKey,
+        );
+        return result;
+      }),
     );
   }
 
@@ -4081,7 +4171,6 @@ export class VatrushkaService {
       const permissions = await this.channelPermissionsFor(server, channel, actor);
       if (permissions.has("VIEW_CHANNEL")) visibleVoiceChannels.add(channel.id);
     }
-    await this.reconcileVoicePresence(server.id);
     const snapshot = await this.voicePresenceStore.snapshot(server.id);
     return {
       serverId: server.id,
@@ -4102,6 +4191,65 @@ export class VatrushkaService {
           })),
       })),
     };
+  }
+
+  async updateOwnVoiceState(
+    authorization: string | undefined,
+    channelId: string,
+    input: UpdateOwnVoiceStateRequest,
+  ): Promise<void> {
+    const actor = await this.authenticate(authorization);
+    const channel = await this.requireVoiceChannel(channelId);
+    const server = await this.requireServer(channel.serverId);
+    if (!(await this.store.findServerMember(server.id, actor.id)))
+      throw new AppError("SERVER_NOT_FOUND", 404);
+    const current = await this.voicePresenceStore.getSession(actor.id);
+    if (
+      !current ||
+      current.serverId !== server.id ||
+      current.channelId !== channel.id ||
+      current.sessionId !== input.sessionId
+    ) {
+      technicalMetrics.increment("voice_state_updates_total", 1, {
+        result: "stale_session",
+      });
+      throw new AppError("VOICE_SOURCE_CHANGED", 409);
+    }
+    const updated = await this.voicePresenceStore.updateSessionState(
+      actor.id,
+      input.sessionId,
+      {
+        muted: input.muted,
+        deafened: input.deafened,
+        speaking: input.speaking,
+        connectionQuality: input.connectionQuality,
+      },
+    );
+    if (!updated) {
+      technicalMetrics.increment("voice_state_updates_total", 1, {
+        result: "conflict",
+      });
+      throw new AppError("VOICE_SOURCE_CHANGED", 409);
+    }
+    technicalMetrics.increment("voice_state_updates_total", 1, {
+      result: "updated",
+    });
+    await this.publishVoiceUpdate(
+      server.id,
+      [channel.id],
+      "voice.member.state.updated",
+      {
+        channelId: channel.id,
+        userId: actor.id,
+        sessionId: updated.sessionId,
+        patch: {
+          muted: updated.muted,
+          deafened: updated.deafened,
+          speaking: updated.speaking,
+          connectionQuality: updated.connectionQuality,
+        },
+      },
+    );
   }
 
   async reconcileVoicePresence(serverId?: string): Promise<number> {
@@ -4381,6 +4529,12 @@ export class VatrushkaService {
       [10, 25, 50, 100, 250, 500, 1_000, 2_500],
       { status: "accepted" },
     );
+    technicalMetrics.observeHistogram(
+      "voice_move_duration_seconds",
+      Math.max(0, performance.now() - startedAt) / 1_000,
+      [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+      { status: "accepted" },
+    );
     return {
       movementId: acceptedMove.movementId,
       status: "pending",
@@ -4570,6 +4724,7 @@ export class VatrushkaService {
         participantIdentity,
       );
       await this.store.releaseChannelLeaseByParticipant(participantIdentity);
+      await this.updateScreenShareActiveMetric();
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError("LIVEKIT_UNAVAILABLE", 503);
@@ -4587,18 +4742,31 @@ export class VatrushkaService {
       participantIdentity,
       "STREAM_SCREEN",
     );
-    const result = await this.store.claimChannelLease(
-      channel.id,
-      participantIdentity,
-      displayName,
-      this.now(),
-      this.config.SCREEN_SHARE_LEASE_SECONDS,
-    );
-    if (result.status === "busy")
-      throw new AppError("SCREEN_SHARE_BUSY", 409, undefined, {
-        participantDisplayName: result.lease.participantDisplayName,
+    try {
+      const result = await this.store.claimChannelLease(
+        channel.id,
+        participantIdentity,
+        displayName,
+        this.now(),
+        this.config.SCREEN_SHARE_LEASE_SECONDS,
+      );
+      if (result.status === "busy")
+        throw new AppError("SCREEN_SHARE_BUSY", 409, undefined, {
+          participantDisplayName: result.lease.participantDisplayName,
+        });
+      technicalMetrics.increment("screen_share_lease_events_total", 1, {
+        event: "acquire",
+        result: "success",
       });
-    return { expiresAt: result.lease.expiresAt.toISOString() };
+      await this.updateScreenShareActiveMetric();
+      return { expiresAt: result.lease.expiresAt.toISOString() };
+    } catch (error) {
+      technicalMetrics.increment("screen_share_lease_events_total", 1, {
+        event: "acquire",
+        result: error instanceof AppError && error.statusCode === 409 ? "busy" : "error",
+      });
+      throw error;
+    }
   }
 
   async heartbeatChannelScreenShare(
@@ -4606,25 +4774,53 @@ export class VatrushkaService {
     channelId: string,
     participantIdentity: string,
   ): Promise<{ expiresAt: string }> {
-    await this.validateChannelMediaParticipant(
-      authorization,
-      channelId,
-      participantIdentity,
-      "STREAM_SCREEN",
-    );
-    const lease = await this.store.heartbeatChannelLease(
-      channelId,
-      participantIdentity,
-      this.now(),
-      this.config.SCREEN_SHARE_LEASE_SECONDS,
-    );
-    if (!lease)
-      throw new AppError(
-        "SCREEN_SHARE_BUSY",
-        409,
-        "Право на демонстрацию экрана утрачено",
+    try {
+      // The claim verifies LiveKit presence. Heartbeats only renew that exact
+      // owner; participant_left/track_unpublished webhooks release the lease.
+      // Avoid coupling every renewal to a transient RoomService HTTP call.
+      await this.validateChannelMediaParticipant(
+        authorization,
+        channelId,
+        participantIdentity,
+        "STREAM_SCREEN",
+        false,
       );
-    return { expiresAt: lease.expiresAt.toISOString() };
+      const lease = await this.store.heartbeatChannelLease(
+        channelId,
+        participantIdentity,
+        this.now(),
+        this.config.SCREEN_SHARE_LEASE_SECONDS,
+      );
+      if (!lease)
+        throw new AppError(
+          "SCREEN_SHARE_BUSY",
+          409,
+          "Право на демонстрацию экрана утрачено",
+        );
+      technicalMetrics.increment("screen_share_lease_heartbeat_total", 1, {
+        result: "renewed",
+      });
+      technicalMetrics.increment("screen_share_lease_events_total", 1, { event: "renew", result: "success" });
+      return { expiresAt: lease.expiresAt.toISOString() };
+    } catch (error) {
+      technicalMetrics.increment("screen_share_lease_heartbeat_total", 1, {
+        result:
+          error instanceof AppError && error.statusCode === 409
+            ? "ownership_lost"
+            : error instanceof AppError && error.statusCode < 500
+              ? "rejected"
+              : "dependency_error",
+      });
+      technicalMetrics.increment("screen_share_lease_events_total", 1, {
+        event: "renew",
+        result: error instanceof AppError && error.statusCode === 409
+          ? "ownership_lost"
+          : error instanceof AppError && error.statusCode < 500
+            ? "rejected"
+            : "error",
+      });
+      throw error;
+    }
   }
 
   async releaseChannelScreenShare(
@@ -4642,7 +4838,12 @@ export class VatrushkaService {
     );
     if (!participantIdentity.startsWith(`user_${user.id}_`))
       throw new AppError("UNAUTHORIZED", 401);
-    await this.store.releaseChannelLease(channelId, participantIdentity);
+    const released = await this.store.releaseChannelLease(channelId, participantIdentity);
+    technicalMetrics.increment("screen_share_lease_events_total", 1, {
+      event: "release",
+      result: released ? "success" : "not_found",
+    });
+    await this.updateScreenShareActiveMetric();
   }
 
   async handleWebhookEvent(event: {
@@ -4658,8 +4859,16 @@ export class VatrushkaService {
   }): Promise<void> {
     if (event.id && !(await this.voicePresenceStore.acceptWebhook(event.id))) {
       technicalMetrics.increment("voice_webhook_duplicate_total");
+      technicalMetrics.increment("livekit_webhook_events_total", 1, {
+        event: liveKitMetricEvent(event.event),
+        result: "duplicate",
+      });
       return;
     }
+    technicalMetrics.increment("livekit_webhook_events_total", 1, {
+      event: liveKitMetricEvent(event.event),
+      result: "accepted",
+    });
     const identity = event.participant?.identity;
     if (
       (event.event === "participant_left" ||
@@ -4668,6 +4877,7 @@ export class VatrushkaService {
       identity
     ) {
       await this.store.releaseChannelLeaseByParticipant(identity);
+      await this.updateScreenShareActiveMetric();
     }
     if (event.event === "room_finished" && event.room?.metadata) {
       try {
@@ -4676,6 +4886,7 @@ export class VatrushkaService {
         };
         if (metadata.appChannelId) {
           await this.store.releaseChannelLeaseByChannel(metadata.appChannelId);
+          await this.updateScreenShareActiveMetric();
           const finishedChannel = await this.store.findServerChannel(
             metadata.appChannelId,
           );
@@ -4797,8 +5008,7 @@ export class VatrushkaService {
           version: mutation.version,
         });
       }
-      const snapshot = await this.voicePresenceStore.snapshot(server.id);
-      technicalMetrics.set("voice_active_sessions", snapshot.sessions.length);
+      technicalMetrics.set("voice_active_sessions", await this.voicePresenceStore.activeSessionCount());
       return;
     }
 
@@ -4834,8 +5044,7 @@ export class VatrushkaService {
           sessionId: mutation.previousSessionId,
           version: mutation.version,
         });
-      const snapshot = await this.voicePresenceStore.snapshot(server.id);
-      technicalMetrics.set("voice_active_sessions", snapshot.sessions.length);
+      technicalMetrics.set("voice_active_sessions", await this.voicePresenceStore.activeSessionCount());
       return;
     }
 
@@ -4858,6 +5067,10 @@ export class VatrushkaService {
           patch: { screenSharing: updated.screenSharing },
         });
     }
+  }
+
+  private async updateScreenShareActiveMetric(): Promise<void> {
+    technicalMetrics.set("screen_share_active_sessions", await this.store.countChannelLeases(this.now()));
   }
 
   private async issueEmailCode(
@@ -5791,13 +6004,19 @@ export class VatrushkaService {
       user,
       "READ_MESSAGE_HISTORY",
     );
-    return this.messaging().listMessages(
+    const page = await this.messaging().listMessages(
       conversationId,
       user.id,
       before ?? null,
       after ?? null,
       limit,
     );
+    return {
+      ...page,
+      items: await Promise.all(
+        page.items.map((message) => this.resolveConversationMessage(message)),
+      ),
+    };
   }
 
   async createCanonicalMessage(
@@ -5853,7 +6072,7 @@ export class VatrushkaService {
       );
     await this.validateCanonicalMentions(access, user, input.mentions);
     try {
-      return await this.messaging().createMessage({
+      const result = await this.messaging().createMessage({
         conversationId,
         authorId: user.id,
         clientMessageId: input.clientMessageId,
@@ -5863,6 +6082,10 @@ export class VatrushkaService {
         mentions: input.mentions,
         now: this.now(),
       });
+      return {
+        ...result,
+        message: await this.resolveConversationMessage(result.message),
+      };
     } catch (error) {
       if (
         error instanceof Error &&
@@ -5897,7 +6120,7 @@ export class VatrushkaService {
       this.now(),
     );
     if (!updated) throw new AppError("MESSAGE_NOT_FOUND", 404);
-    return updated;
+    return this.resolveConversationMessage(updated);
   }
 
   async deleteCanonicalMessage(
@@ -5951,7 +6174,7 @@ export class VatrushkaService {
       this.now(),
     );
     if (!updated) throw new AppError("MESSAGE_NOT_FOUND", 404);
-    return updated;
+    return this.resolveConversationMessage(updated);
   }
 
   async updateCanonicalReadState(
@@ -6111,11 +6334,19 @@ export class VatrushkaService {
     unreadOnly: boolean,
   ): Promise<InternalNotification[]> {
     const user = await this.authenticate(authorization);
-    return this.messaging().listNotifications(
+    const notifications = await this.messaging().listNotifications(
       user.id,
       before ? new Date(before) : null,
       limit,
       unreadOnly,
+    );
+    return Promise.all(
+      notifications.map(async (notification) => ({
+        ...notification,
+        actorAvatarUrl: await this.resolveMediaUrl(
+          notification.actorAvatarUrl,
+        ),
+      })),
     );
   }
 
@@ -6347,7 +6578,7 @@ export class VatrushkaService {
       user.id,
     );
     if (!updated) throw new AppError("MESSAGE_NOT_FOUND", 404);
-    return updated;
+    return this.resolveConversationMessage(updated);
   }
 
   private messaging(): CanonicalMessagingStore {
@@ -6916,39 +7147,34 @@ export class VatrushkaService {
       string,
       VoiceChannelParticipant[]
     >();
-    await Promise.all(
-      visibleChannels
-        .filter(
-          (channel) => channel.type === "voice" && channel.livekitRoomName,
-        )
-        .map(async (channel) => {
-          let identities: string[] = [];
-          try {
-            identities = await this.media.participantIdentities(
-              channel.livekitRoomName!,
-            );
-          } catch {
-            // Server navigation remains available while LiveKit is temporarily unavailable.
-          }
-          const participants = new Map<string, VoiceChannelParticipant>();
-          for (const identity of identities) {
-            const member = publicMembers.find((candidate) =>
-              identity.startsWith(`user_${candidate.userId}_`),
-            );
-            if (member && !participants.has(member.userId))
-              participants.set(member.userId, {
-                identity,
-                userId: member.userId,
-                displayName: member.displayName,
-                platformRole: member.platformRole,
-                avatarUrl: member.avatarUrl ?? null,
-              });
-          }
-          voiceParticipantsByChannel.set(channel.id, [
-            ...participants.values(),
-          ]);
-        }),
-    );
+    const voiceProjection = await this.voicePresenceStore
+      .snapshot(server.id)
+      .catch(() => null);
+    for (const channel of visibleChannels.filter(
+      (candidate) => candidate.type === "voice",
+    )) {
+      const participants: VoiceChannelParticipant[] = [];
+      for (const session of voiceProjection?.sessions ?? []) {
+        if (session.channelId !== channel.id) continue;
+        const member = publicMembers.find(
+          (candidate) => candidate.userId === session.userId,
+        );
+        if (!member) continue;
+        participants.push({
+          identity: session.participantIdentity,
+          userId: member.userId,
+          displayName: member.displayName,
+          platformRole: member.platformRole,
+          avatarUrl: member.avatarUrl ?? null,
+          muted: session.muted,
+          deafened: session.deafened,
+          speaking: session.speaking,
+          screenSharing: session.screenSharing,
+          connectionQuality: session.connectionQuality,
+        });
+      }
+      voiceParticipantsByChannel.set(channel.id, participants);
+    }
     return {
       id: server.id,
       name: server.name,
@@ -7000,6 +7226,7 @@ export class VatrushkaService {
     channelId: string,
     participantIdentity: string,
     permission: ServerPermission,
+    verifyLiveKitPresence = true,
   ): Promise<{
     channel: ServerChannelRecord;
     displayName: string;
@@ -7016,6 +7243,8 @@ export class VatrushkaService {
     );
     if (!participantIdentity.startsWith(`user_${user.id}_`))
       throw new AppError("UNAUTHORIZED", 401);
+    if (!verifyLiveKitPresence)
+      return { channel, displayName: user.displayName, user };
     try {
       if (
         !channel.livekitRoomName ||
@@ -7027,7 +7256,7 @@ export class VatrushkaService {
         throw new AppError("PARTICIPANT_NOT_FOUND", 404);
     } catch (error) {
       if (error instanceof AppError) throw error;
-      throw new AppError("LIVEKIT_UNAVAILABLE", 503);
+      throw new AppError("LIVEKIT_UNAVAILABLE", 503, undefined, null, error);
     }
     return { channel, displayName: user.displayName, user };
   }

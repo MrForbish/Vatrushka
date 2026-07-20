@@ -45,6 +45,7 @@ import {
   updateProfileSchema,
   updatePresenceSchema,
   presenceHeartbeatSchema,
+  updateOwnVoiceStateSchema,
   updatePrivacySettingsSchema,
   updateMessageSchema,
   updateRoleSchema,
@@ -287,6 +288,13 @@ const voiceChannelParticipantResponseSchema = z.object({
   displayName: z.string(),
   platformRole: z.enum(["member", "admin", "owner"]),
   avatarUrl: z.string().nullable().optional(),
+  muted: z.boolean().optional(),
+  deafened: z.boolean().optional(),
+  speaking: z.boolean().optional(),
+  screenSharing: z.boolean().optional(),
+  connectionQuality: z
+    .enum(["excellent", "good", "poor", "unknown"])
+    .optional(),
 });
 const serverChannelResponseSchema = z.object({
   id: z.string(),
@@ -402,6 +410,7 @@ const gamingHomeVoiceSpaceResponseSchema = z.object({
   serverId: z.string(),
   serverName: z.string(),
   serverIconUrl: z.string().nullable(),
+  serverAccentColor: z.string().nullable(),
   channelName: z.string(),
   gameName: z.string().nullable(),
   coverUrl: z.string().nullable(),
@@ -452,6 +461,7 @@ const homeDashboardResponseSchema = z.object({
     quickReturn: z.array(
       gamingHomeVoiceSpaceResponseSchema.extend({
         returnReason: z.enum([
+          "current_voice",
           "recently_left",
           "friends_inside",
           "screen_share",
@@ -634,6 +644,7 @@ const textMessageResponseSchema = z.object({
   channelId: z.string(),
   authorUserId: z.string(),
   authorDisplayName: z.string(),
+  authorAvatarUrl: z.string().nullable().optional(),
   authorPlatformRole: z.enum(["member", "admin", "owner"]),
   content: z.string(),
   mentions: z.array(messageMentionResponseSchema).optional(),
@@ -660,6 +671,7 @@ const directMessageParticipantResponseSchema = z.object({
   userId: z.string(),
   displayName: z.string(),
   platformRole: z.enum(["member", "admin", "owner"]),
+  avatarUrl: z.string().nullable().optional(),
 });
 const directConversationResponseSchema = z.object({
   id: z.string(),
@@ -684,6 +696,7 @@ const directMessageResponseSchema = z.object({
   conversationId: z.string(),
   authorUserId: z.string(),
   authorDisplayName: z.string(),
+  authorAvatarUrl: z.string().nullable().optional(),
   authorPlatformRole: z.enum(["member", "admin", "owner"]),
   content: z.string(),
   replyTo: z
@@ -836,6 +849,7 @@ const internalNotificationResponseSchema = z.object({
   readAt: z.string().nullable(),
   dismissedAt: z.string().nullable(),
   actorDisplayName: z.string().nullable().optional(),
+  actorAvatarUrl: z.string().nullable().optional(),
   conversationTitle: z.string().nullable().optional(),
   serverId: z.string().nullable().optional(),
   channelId: z.string().nullable().optional(),
@@ -895,7 +909,16 @@ export async function buildApp(
   options: BuildAppOptions,
 ): Promise<FastifyInstance> {
   const { config, service } = options;
+  technicalMetrics.set("vatrushka_build_info", 1, {
+    version: config.APP_VERSION,
+    commit: config.BUILD_COMMIT,
+  });
+  technicalMetrics.set(
+    "vatrushka_deployment_timestamp_seconds",
+    Math.floor(Date.now() / 1_000),
+  );
   const requestStartedAt = new WeakMap<object, number>();
+  const requestInFlightLabels = new WeakMap<object, { method: string; route: string }>();
   const app = Fastify({
     logger:
       options.logger === false
@@ -916,6 +939,9 @@ export async function buildApp(
   app.setSerializerCompiler(serializerCompiler);
   app.addHook("onRequest", (request, _reply, done) => {
     requestStartedAt.set(request, performance.now());
+    const labels = { method: request.method, route: request.routeOptions.url || "unmatched" };
+    requestInFlightLabels.set(request, labels);
+    technicalMetrics.addGauge("api_http_requests_in_flight", 1, labels);
     done();
   });
   app.addHook("onResponse", (request, reply, done) => {
@@ -933,6 +959,20 @@ export async function buildApp(
       [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
       labels,
     );
+    if (route === `${API_PREFIX}/auth/password/begin` || route === `${API_PREFIX}/auth/password/complete`) {
+      const requestedFactor = (request.body as { factor?: unknown } | null)?.factor;
+      const factor = route.endsWith("/begin")
+        ? "password"
+        : requestedFactor === "email" || requestedFactor === "totp" || requestedFactor === "recovery"
+          ? requestedFactor
+          : "unknown";
+      technicalMetrics.increment("auth_login_attempts_total", 1, {
+        factor,
+        result: reply.statusCode < 400 ? "success" : reply.statusCode < 500 ? "rejected" : "error",
+      });
+    }
+    const inFlightLabels = requestInFlightLabels.get(request);
+    if (inFlightLabels) technicalMetrics.addGauge("api_http_requests_in_flight", -1, inFlightLabels);
     done();
   });
   app.addContentTypeParser(
@@ -1000,6 +1040,22 @@ export async function buildApp(
 
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AppError) {
+      technicalMetrics.increment("api_error_responses_total", 1, {
+        error_code: error.code,
+        route: request.routeOptions.url || "unmatched",
+        status_class: `${Math.floor(error.statusCode / 100)}xx`,
+      });
+      if (error.statusCode >= 500) {
+        technicalMetrics.increment("api_errors_total", 1, {
+          code: error.code,
+          route: request.routeOptions.url || "unmatched",
+          status_class: `${Math.floor(error.statusCode / 100)}xx`,
+        });
+        request.log.error(
+          { err: error.cause ?? error, code: error.code },
+          "API dependency error",
+        );
+      }
       void reply
         .status(error.statusCode)
         .send(
@@ -1013,6 +1069,7 @@ export async function buildApp(
       return;
     }
     if (error instanceof ZodError) {
+      technicalMetrics.increment("api_error_responses_total", 1, { error_code: "VALIDATION_ERROR", route: request.routeOptions.url || "unmatched", status_class: "4xx" });
       const details = error.issues.map((issue) => ({
         field: issue.path.join("."),
         message: issue.message,
@@ -1023,6 +1080,7 @@ export async function buildApp(
       return;
     }
     if (hasZodFastifySchemaValidationErrors(error)) {
+      technicalMetrics.increment("api_error_responses_total", 1, { error_code: "VALIDATION_ERROR", route: request.routeOptions.url || "unmatched", status_class: "4xx" });
       const details = error.validation.map((issue) => ({
         field: issue.instancePath.replace(/^\//u, "").replaceAll("/", "."),
         message: issue.message ?? "Некорректное значение",
@@ -1065,6 +1123,11 @@ export async function buildApp(
       return;
     }
     request.log.error({ err: error }, "Unhandled API error");
+    technicalMetrics.increment("api_errors_total", 1, {
+      code: "INTERNAL_ERROR",
+      route: request.routeOptions.url || "unmatched",
+      status_class: "5xx",
+    });
     void reply.status(500).send(createApiError("INTERNAL_ERROR", request.id));
   });
 
@@ -2958,6 +3021,8 @@ export async function buildApp(
         const outbox = await service.canonicalMessagingStore.outboxMetrics(
           new Date(),
         );
+        technicalMetrics.set("chat_outbox_pending", outbox.pending);
+        technicalMetrics.set("chat_outbox_failed", outbox.failed);
         technicalMetrics.set("chat_outbox_pending_total", outbox.pending);
         technicalMetrics.set("chat_outbox_failed_total", outbox.failed);
         technicalMetrics.set(
@@ -3950,6 +4015,27 @@ export async function buildApp(
       ),
   );
 
+  api.patch(
+    `${API_PREFIX}/channels/:channelId/voice-state`,
+    {
+      schema: {
+        tags: ["voice"],
+        security: [{ bearerAuth: [] }],
+        params: channelIdParams,
+        body: updateOwnVoiceStateSchema,
+        response: { 204: z.null(), ...routeErrors() },
+      },
+    },
+    async (request, reply) => {
+      await service.updateOwnVoiceState(
+        request.headers.authorization,
+        request.params.channelId,
+        request.body,
+      );
+      return reply.status(204).send(null);
+    },
+  );
+
   api.post(
     `${API_PREFIX}/servers/:serverId/voice/moves`,
     {
@@ -4109,9 +4195,15 @@ export async function buildApp(
       try {
         event = await receiver.receive(raw, authorization);
       } catch {
+        technicalMetrics.increment("livekit_webhook_events_total", 1, { event: "unknown", result: "invalid_signature" });
         throw new AppError("UNAUTHORIZED", 401);
       }
-      await service.handleWebhookEvent(event);
+      try {
+        await service.handleWebhookEvent(event);
+      } catch (error) {
+        technicalMetrics.increment("livekit_webhook_events_total", 1, { event: "unknown", result: "processing_error" });
+        throw error;
+      }
       return reply.status(204).send();
     },
   );
@@ -4137,9 +4229,15 @@ export async function buildApp(
       try {
         event = await receiver.receive(raw, authorization);
       } catch {
+        technicalMetrics.increment("livekit_webhook_events_total", 1, { event: "unknown", result: "invalid_signature" });
         throw new AppError("UNAUTHORIZED", 401);
       }
-      await service.handleWebhookEvent(event);
+      try {
+        await service.handleWebhookEvent(event);
+      } catch (error) {
+        technicalMetrics.increment("livekit_webhook_events_total", 1, { event: "unknown", result: "processing_error" });
+        throw error;
+      }
       return reply.status(204).send();
     },
   );

@@ -184,6 +184,7 @@ export interface GamingHomeVoiceSpace {
   serverId: string;
   serverName: string;
   serverIconUrl: string | null;
+  serverAccentColor: string | null;
   channelName: string;
   gameName: string | null;
   coverUrl: string | null;
@@ -199,6 +200,7 @@ export interface GamingHomeVoiceSpace {
 
 export interface GamingHomeQuickReturnItem extends GamingHomeVoiceSpace {
   returnReason:
+    | "current_voice"
     | "recently_left"
     | "friends_inside"
     | "screen_share"
@@ -303,6 +305,11 @@ export interface VoiceChannelParticipant {
   displayName: string;
   platformRole: PlatformRole;
   avatarUrl?: string | null;
+  muted?: boolean;
+  deafened?: boolean;
+  speaking?: boolean;
+  screenSharing?: boolean;
+  connectionQuality?: "excellent" | "good" | "poor" | "unknown";
 }
 
 export interface ServerRole {
@@ -455,6 +462,7 @@ export interface TextMessage {
   channelId: string;
   authorUserId: string;
   authorDisplayName: string;
+  authorAvatarUrl?: string | null;
   authorPlatformRole: PlatformRole;
   content: string;
   mentions?: MessageMention[];
@@ -508,6 +516,7 @@ export interface DirectMessageParticipant {
   userId: string;
   displayName: string;
   platformRole: PlatformRole;
+  avatarUrl?: string | null;
 }
 
 export interface DirectConversationSummary {
@@ -532,6 +541,7 @@ export interface DirectMessage {
   conversationId: string;
   authorUserId: string;
   authorDisplayName: string;
+  authorAvatarUrl?: string | null;
   authorPlatformRole: PlatformRole;
   content: string;
   replyTo: {
@@ -707,6 +717,7 @@ export interface InternalNotification {
   readAt: string | null;
   dismissedAt: string | null;
   actorDisplayName?: string | null;
+  actorAvatarUrl?: string | null;
   conversationTitle?: string | null;
   serverId?: string | null;
   channelId?: string | null;
@@ -792,6 +803,14 @@ export interface ServerVoiceStateDto {
     channelId: string;
     members: VoiceMemberStateDto[];
   }>;
+}
+
+export interface UpdateOwnVoiceStateRequest {
+  sessionId: string;
+  muted: boolean;
+  deafened: boolean;
+  speaking: boolean;
+  connectionQuality: "excellent" | "good" | "poor" | "unknown";
 }
 
 export interface MoveVoiceMemberRequest {
@@ -969,8 +988,29 @@ export interface DesktopSourceInfo {
   audioAvailable: boolean;
 }
 
+export interface DesktopMediaDiagnostic {
+  event:
+    | "voice_reconnecting"
+    | "voice_reconnected"
+    | "voice_audio_restored"
+    | "voice_audio_restore_failed"
+    | "voice_track_subscription_failed"
+    | "screen_share_heartbeat_failed"
+    | "screen_share_heartbeat_recovered"
+    | "screen_share_lease_lost";
+  occurredAt: string;
+  serverId: string;
+  channelId: string;
+  voiceSessionId?: string;
+  reason?: string;
+  attempt?: number;
+}
+
 export interface DesktopBridge {
   getAppVersion(): Promise<string>;
+  getFullscreen(): Promise<boolean>;
+  toggleFullscreen(): Promise<boolean>;
+  onFullscreenChange(callback: (fullscreen: boolean) => void): () => void;
   getUpdateState(): Promise<DesktopUpdateState>;
   checkForUpdates(): Promise<void>;
   installUpdate(): Promise<void>;
@@ -987,10 +1027,9 @@ export interface DesktopBridge {
   listDesktopSources(): Promise<DesktopSourceInfo[]>;
   selectDesktopSource(sourceId: string, includeAudio: boolean): Promise<void>;
   clearSelectedDesktopSource(): Promise<void>;
+  logMediaDiagnostic(event: DesktopMediaDiagnostic): Promise<void>;
   copyToClipboard(text: string): Promise<void>;
-  openExternal(
-    url: "https://t.me/MaksZJ" | "mailto:vatrushka-notify@yandex.ru",
-  ): Promise<void>;
+  openExternal(url: string): Promise<void>;
   setBadgeCount(count: number): Promise<void>;
   showMessageNotification(
     notification: DesktopMessageNotification,

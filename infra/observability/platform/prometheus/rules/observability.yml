@@ -27,13 +27,26 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: Loki is discarding log lines
+          description: "Loki rejected or discarded at least one line; inspect the reason and ingestion limits."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#logs-and-loki"
 
-      - alert: LokiS3Errors
-        expr: sum(rate(loki_boltdb_shipper_request_duration_seconds_count{status_code!~"2.."}[5m])) > 0
+      - alert: LokiRequestErrors
+        expr: sum(rate(loki_request_duration_seconds_count{status_code=~"5.."}[5m])) > 0
         for: 5m
         labels: { severity: critical }
         annotations:
-          summary: Loki object storage requests are failing
+          summary: Loki requests are returning server errors
+          description: "Loki returned 5xx responses. Use route/status diagnostics; do not infer an S3 incident from an absent vendor series."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#logs-and-loki"
+
+      - alert: LokiCanaryMissingEntries
+        expr: increase(loki_canary_missing_entries_total[10m]) > 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: Loki end-to-end canary cannot read written log entries
+          description: "The canary wrote entries that were not returned by Loki, covering ingestion, storage and read path together."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#logs-and-loki"
 
       - alert: BlackboxProbeSlow
         expr: probe_duration_seconds{job="blackbox-http"} > 2

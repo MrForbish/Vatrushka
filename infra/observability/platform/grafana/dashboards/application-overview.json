@@ -1,25 +1,897 @@
 {
-  "annotations": { "list": [] },
+  "annotations": {
+    "list": []
+  },
+  "description": "Стартовый технический обзор Vatrushka: готовность API, ответы 2xx–5xx, задержки, realtime, outbox и ключевые зависимости.",
   "editable": false,
   "graphTooltip": 1,
   "id": null,
-  "links": [],
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "API: детали HTTP",
+      "type": "link",
+      "url": "/d/vatrushka-api-http-details"
+    },
+    {
+      "asDropdown": false,
+      "icon": "external link",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "Логи: обзор",
+      "type": "link",
+      "url": "/d/vatrushka-logs"
+    }
+  ],
   "panels": [
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 }, "id": 1, "targets": [{ "expr": "sum(rate(api_http_requests_total[5m]))", "legendFormat": "requests/s", "refId": "A" }], "title": "Requests per second", "type": "timeseries" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "percentunit" }, "overrides": [] }, "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 }, "id": 2, "targets": [{ "expr": "sum(rate(api_http_requests_total{status_class=\"5xx\"}[5m])) / clamp_min(sum(rate(api_http_requests_total[5m])), 0.001)", "legendFormat": "5xx", "refId": "A" }], "title": "Error rate", "type": "timeseries" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }, "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 }, "id": 3, "targets": [{ "expr": "histogram_quantile(0.50, sum by (le) (rate(api_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "A" }, { "expr": "histogram_quantile(0.95, sum by (le) (rate(api_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p95", "refId": "B" }, { "expr": "histogram_quantile(0.99, sum by (le) (rate(api_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p99", "refId": "C" }], "title": "HTTP latency", "type": "timeseries" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 6, "x": 0, "y": 8 }, "id": 4, "targets": [{ "expr": "api_readiness", "refId": "A" }], "title": "Readiness", "type": "stat" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 6, "x": 6, "y": 8 }, "id": 5, "targets": [{ "expr": "chat_ws_connections_active", "refId": "A" }], "title": "WebSocket connections", "type": "stat" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 6, "x": 12, "y": 8 }, "id": 6, "targets": [{ "expr": "chat_outbox_pending_total", "refId": "A" }], "title": "Outbox pending", "type": "stat" },
-    { "datasource": { "type": "prometheus", "uid": "prometheus" }, "gridPos": { "h": 7, "w": 6, "x": 18, "y": 8 }, "id": 7, "targets": [{ "expr": "sum(pg_stat_activity_count)", "legendFormat": "PostgreSQL", "refId": "A" }, { "expr": "redis_connected_clients", "legendFormat": "Redis", "refId": "B" }], "title": "Dependency connections", "type": "timeseries" }
+    {
+      "description": "Что показывает: как пользоваться обзором. Как считается: сводка по выбранному периоду и фильтрам. Норма: зелёный — штатно, жёлтый — отклонённый запрос, красный — серверная ошибка. Проблема: серый «Нет данных» означает неизвестное состояние, а не ноль. Что проверить: откройте «API: детали HTTP» или «Логи: обзор».",
+      "gridPos": {
+        "h": 4,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "content": "### Как читать этот дашборд\nСначала проверьте готовность и 5xx, затем RPS и задержки. **0** означает измеренное отсутствие событий; **Нет данных** — метрика не получена. Фильтры и выбранное время сохраняются при переходе в детальный HTTP-дашборд.",
+        "mode": "markdown"
+      },
+      "title": "Как читать этот дашборд",
+      "type": "text"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: может ли API обслуживать запросы. Как считается: минимальное последнее значение readiness. Норма: 1 — работает. Проблема: 0 или отсутствие метрики. Что проверить: readiness API, PostgreSQL, Redis и логи.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [
+            {
+              "options": {
+                "0": {
+                  "color": "red",
+                  "index": 0,
+                  "text": "Не работает"
+                },
+                "1": {
+                  "color": "green",
+                  "index": 1,
+                  "text": "Работает"
+                }
+              },
+              "type": "value"
+            }
+          ],
+          "noValue": "Нет метрик",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 4
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "min(api_readiness{environment=~\"$environment\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Готовность API",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: успешные ответы за период. Как считается: increase counter за $__range. Норма: универсальной нормы по объёму нет. Проблема: резкое падение при стабильном трафике. Что проверить: RPS, readiness и 5xx.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixedColor",
+            "fixedColor": "green"
+          },
+          "noValue": "Нет данных",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 4
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=\"2xx\"}[$__range])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Ответы 2xx",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: перенаправления за период. Как считается: increase counter за $__range. Норма: отдельный 3xx не является ошибкой. Проблема: неожиданный рост относительно обычного трафика. Что проверить: детальный HTTP по route/method.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixedColor",
+            "fixedColor": "blue"
+          },
+          "noValue": "Нет данных",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 8,
+        "y": 4
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=\"3xx\"}[$__range])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Ответы 3xx",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: отклонённые клиентские запросы за период. Как считается: increase counter за $__range. Норма: единичные 4xx допустимы. Проблема: рост доли 4xx или 429. Что проверить: детальный HTTP и auth/messaging логи.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixedColor",
+            "fixedColor": "yellow"
+          },
+          "noValue": "Нет данных",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 12,
+        "y": 4
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=\"4xx\"}[$__range])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Ответы 4xx",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: серверные ошибки за период. Как считается: increase counter за $__range. Норма: 0. Проблема: любое значение требует проверки; alert учитывает объём и длительность. Что проверить: api_errors_total и Логи: обзор.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixedColor",
+            "fixedColor": "red"
+          },
+          "noValue": "Нет данных",
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 16,
+        "y": 4
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(increase(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=\"5xx\"}[$__range])) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Ответы 5xx",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: текущие realtime-соединения. Как считается: сумма gauge по выбранному окружению. Норма: универсальной нормы нет. Проблема: резкое падение при активных клиентах. Что проверить: Realtime & Messaging и Redis.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixedColor",
+            "fixedColor": "purple"
+          },
+          "noValue": "Нет данных",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 4
+      },
+      "id": 7,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(chat_ws_connections_active{environment=~\"$environment\"}) or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Активные WebSocket",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: RPS по классам ответа. Как считается: rate по $__rate_interval с группировкой status_class. Норма: 2xx обычно доминирует. Проблема: рост 4xx/5xx. Что проверить: API: детали HTTP.",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "lineWidth": 2,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            }
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "2xx"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "3xx"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "4xx"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "5xx"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 9
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (status_class) (rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=~\"$status_class\"}[$__rate_interval]))",
+          "legendFormat": "{{status_class}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Запросы в секунду по классам",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: долю 5xx. Как считается: 5xx RPS / общий RPS по $__rate_interval. Норма: менее 0,1%. Проблема: warning выше 0,1% десять минут, critical выше 1% пять минут при достаточном трафике. Что проверить: Top 5xx routes и логи.",
+      "fieldConfig": {
+        "defaults": {
+          "max": 1,
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.001
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 12,
+        "y": 9
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "hidden"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=\"5xx\"}[$__rate_interval])) / clamp_min(sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\"}[$__rate_interval])), 0.001)",
+          "legendFormat": "5xx",
+          "refId": "A"
+        }
+      ],
+      "title": "Доля 5xx",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: p50/p95/p99 HTTP. Как считается: histogram_quantile по $__rate_interval. Норма: p95 обычных JSON route менее 500 ms. Проблема: warning p95 выше 500 ms 10 минут. Что проверить: API: детали HTTP и медленные route.",
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.5
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 18,
+        "y": 9
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(api_http_request_duration_seconds_bucket{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=~\"$status_class\"}[$__rate_interval])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(api_http_request_duration_seconds_bucket{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=~\"$status_class\"}[$__rate_interval])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(api_http_request_duration_seconds_bucket{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=~\"$status_class\"}[$__rate_interval])))",
+          "legendFormat": "p99",
+          "refId": "C"
+        }
+      ],
+      "title": "Задержка HTTP",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: события messaging, ожидающие доставки. Как считается: последнее значение совместимого gauge. Норма: 0 или краткий небольшой backlog. Проблема: рост и oldest age более 60 s. Что проверить: Realtime & Messaging и Redis.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixedColor",
+            "fixedColor": "orange"
+          },
+          "noValue": "Нет данных",
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 0,
+        "y": 17
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "chat_outbox_pending_total{environment=~\"$environment\"} or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Outbox в ожидании",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: необработанные ошибки outbox. Как считается: последнее значение совместимого gauge. Норма: 0. Проблема: любое значение. Что проверить: логи API и состояние PostgreSQL.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixedColor",
+            "fixedColor": "red"
+          },
+          "noValue": "Нет данных",
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 4,
+        "y": 17
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "chat_outbox_failed_total{environment=~\"$environment\"} or vector(0)",
+          "refId": "A"
+        }
+      ],
+      "title": "Ошибки outbox",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: подключения PostgreSQL. Как считается: сумма pg_stat_activity_count. Норма: ниже 80% max_connections. Проблема: выше 80% 10 минут. Что проверить: Dependencies & Delivery и PostgreSQL exporter.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 8,
+        "y": 17
+      },
+      "id": 13,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum(pg_stat_activity_count{environment=~\"$environment\"})",
+          "legendFormat": "Подключения",
+          "refId": "A"
+        }
+      ],
+      "title": "PostgreSQL: подключения",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "description": "Что показывает: подключённые Redis-клиенты. Как считается: redis_connected_clients. Норма: универсальной нормы нет. Проблема: рост вместе с rejected connections или memory pressure. Что проверить: Dependencies & Delivery и Redis exporter.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 8,
+        "x": 16,
+        "y": 17
+      },
+      "id": 14,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ]
+        }
+      },
+      "targets": [
+        {
+          "expr": "redis_connected_clients{environment=~\"$environment\"}",
+          "legendFormat": "Клиенты",
+          "refId": "A"
+        }
+      ],
+      "title": "Redis: клиенты",
+      "type": "timeseries"
+    }
   ],
   "refresh": "30s",
   "schemaVersion": 41,
-  "tags": ["vatrushka", "application"],
-  "templating": { "list": [] },
-  "time": { "from": "now-6h", "to": "now" },
+  "tags": [
+    "vatrushka",
+    "application",
+    "http"
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "environment",
+        "label": "Окружение",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(environment)",
+        "query": {
+          "query": "label_values(environment)",
+          "refId": "var-environment"
+        },
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": false,
+        "refresh": 2,
+        "current": {
+          "text": "Все",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "method",
+        "label": "Метод",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(api_http_requests_total, method)",
+        "query": {
+          "query": "label_values(api_http_requests_total, method)",
+          "refId": "var-method"
+        },
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "refresh": 2,
+        "current": {
+          "text": "Все",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "route",
+        "label": "Маршрут",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(api_http_requests_total, route)",
+        "query": {
+          "query": "label_values(api_http_requests_total, route)",
+          "refId": "var-route"
+        },
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "refresh": 2,
+        "current": {
+          "text": "Все",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "status_class",
+        "label": "Класс ответа",
+        "type": "custom",
+        "query": "2xx,3xx,4xx,5xx",
+        "options": [],
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "current": {
+          "text": "Все",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "timezone": "browser",
-  "title": "Application Overview",
+  "title": "Приложение: обзор",
   "uid": "vatrushka-application",
-  "version": 1
+  "version": 2
 }

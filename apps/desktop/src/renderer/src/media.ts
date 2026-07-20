@@ -9,6 +9,7 @@ import {
   type Participant,
   type RemoteParticipant,
   type RemoteTrack,
+  type RemoteTrackPublication,
   type RoomOptions,
 } from "livekit-client";
 
@@ -18,8 +19,18 @@ import type {
   PlatformRole,
   RoomConnection,
 } from "@vatrushka/shared";
+import { SCREEN_SHARE_HEARTBEAT_SECONDS } from "@vatrushka/shared";
 
-import type { ApiClient } from "./api.js";
+import { ClientError, type ApiClient } from "./api.js";
+import {
+  applyScreenAnnotationMessage,
+  encodeScreenAnnotationMessage,
+  parseScreenAnnotationMessage,
+  sanitizeScreenAnnotationStroke,
+  SCREEN_ANNOTATION_TOPIC,
+  type ScreenAnnotationMessage,
+  type ScreenAnnotationStroke,
+} from "./features/screen-share/annotations.js";
 
 export interface ParticipantView {
   identity: string;
@@ -38,6 +49,7 @@ export interface ParticipantView {
 
 export interface MediaSnapshot {
   connectionState: ConnectionState;
+  pingMs: number | null;
   participants: ParticipantView[];
   isMuted: boolean;
   isDeafened: boolean;
@@ -48,12 +60,14 @@ export interface MediaSnapshot {
   hasScreenShareAudio: boolean;
   screenShareAudioMuted: boolean;
   screenShareAudioVolume: number;
+  screenAnnotations: ScreenAnnotationStroke[];
   canPlayAudio: boolean;
   error: string | null;
 }
 
 const initialSnapshot: MediaSnapshot = {
   connectionState: ConnectionState.Disconnected,
+  pingMs: null,
   participants: [],
   isMuted: true,
   isDeafened: false,
@@ -64,6 +78,7 @@ const initialSnapshot: MediaSnapshot = {
   hasScreenShareAudio: false,
   screenShareAudioMuted: false,
   screenShareAudioVolume: 1,
+  screenAnnotations: [],
   canPlayAudio: true,
   error: null,
 };
@@ -75,21 +90,36 @@ const defaultScreenShareEncoding = {
   priority: "high" as const,
 };
 const publishingReadyTimeoutMs = 20_000;
+const screenShareHeartbeatIntervalMs = SCREEN_SHARE_HEARTBEAT_SECONDS * 1_000;
+const screenShareHeartbeatRetryMs = 2_500;
+const screenShareHeartbeatGraceMs = 25_000;
+const latencySampleIntervalMs = 3_000;
 
 class UserFacingMediaError extends Error {}
 
 export class MediaSession {
   private room: Room | null = null;
   private connection: RoomConnection | null = null;
-  private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private heartbeat: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatLastSuccessAt = 0;
+  private heartbeatFailureCount = 0;
+  private heartbeatGeneration = 0;
+  private heartbeatInFlightGeneration: number | null = null;
+  private latencyTimer: ReturnType<typeof setInterval> | null = null;
+  private voiceStateSyncTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastSyncedVoiceState: string | null = null;
   private snapshot: MediaSnapshot = initialSnapshot;
   private screenShareAudioVolume = 1;
   private screenShareAudioMuted = false;
+  private screenAnnotations: ScreenAnnotationStroke[] = [];
+  private annotationScreenSharerIdentity: string | null = null;
   private isDeafened = false;
+  private microphoneEnabledBeforeDeafen = false;
   private stoppingScreenShare = false;
   private screenShareTransition: Promise<void> = Promise.resolve();
   private readonly participantVolumes = new Map<string, number>();
   private readonly locallyMutedParticipants = new Set<string>();
+  private readonly audioElements = new Map<string, HTMLMediaElement>();
   private readonly listeners = new Set<() => void>();
   private readonly terminationListeners = new Set<(reason: unknown) => void>();
 
@@ -116,6 +146,8 @@ export class MediaSession {
     this.isDeafened = false;
     this.screenShareAudioVolume = settings.volume;
     this.screenShareAudioMuted = false;
+    this.screenAnnotations = [];
+    this.annotationScreenSharerIdentity = null;
     const options: RoomOptions = {
       adaptiveStream: false,
       dynacast: false,
@@ -145,7 +177,9 @@ export class MediaSession {
       await room.connect(connection.livekitUrl, connection.livekitToken, {
         autoSubscribe: true,
       });
+      this.startLatencySampling();
       this.refreshSnapshot();
+      this.scheduleOwnVoiceStateSync();
       try {
         if (connection.canSpeak === false) {
           this.refreshSnapshot();
@@ -178,17 +212,30 @@ export class MediaSession {
     if (!this.room) return;
     if (this.isDeafened && !muted) return;
     await this.room.localParticipant.setMicrophoneEnabled(!muted);
+    this.microphoneEnabledBeforeDeafen = !muted;
     this.refreshSnapshot();
+    await this.syncOwnVoiceState();
   }
 
   async setDeafened(deafened: boolean): Promise<void> {
     if (!this.room) return;
-    if (deafened) await this.room.localParticipant.setMicrophoneEnabled(false);
+    if (deafened === this.isDeafened) return;
+    if (deafened) {
+      this.microphoneEnabledBeforeDeafen =
+        this.room.localParticipant.isMicrophoneEnabled;
+      await this.room.localParticipant.setMicrophoneEnabled(false);
+    } else if (
+      this.microphoneEnabledBeforeDeafen &&
+      this.connection?.canSpeak !== false
+    ) {
+      await this.room.localParticipant.setMicrophoneEnabled(true);
+    }
     this.isDeafened = deafened;
     for (const participant of this.room.remoteParticipants.values())
       this.applyParticipantAudioPreferences(participant);
     this.applyScreenShareAudioPreferences();
     this.refreshSnapshot();
+    await this.syncOwnVoiceState();
   }
 
   async switchMicrophone(deviceId: string): Promise<void> {
@@ -252,6 +299,26 @@ export class MediaSession {
     this.screenShareAudioMuted = muted;
     this.applyScreenShareAudioPreferences();
     this.patch({ screenShareAudioMuted: muted });
+  }
+
+  async addScreenAnnotationStroke(
+    stroke: ScreenAnnotationStroke,
+  ): Promise<void> {
+    const sanitized = sanitizeScreenAnnotationStroke(stroke);
+    if (!sanitized || !this.room?.localParticipant.isScreenShareEnabled) return;
+    await this.publishScreenAnnotation({ type: "stroke", stroke: sanitized }).catch(
+      () => undefined,
+    );
+  }
+
+  async undoScreenAnnotation(): Promise<void> {
+    if (!this.room?.localParticipant.isScreenShareEnabled) return;
+    await this.publishScreenAnnotation({ type: "undo" }).catch(() => undefined);
+  }
+
+  async clearScreenAnnotations(): Promise<void> {
+    if (!this.room?.localParticipant.isScreenShareEnabled) return;
+    await this.publishScreenAnnotation({ type: "clear" }).catch(() => undefined);
   }
 
   async waitForPublishingReady(
@@ -335,7 +402,10 @@ export class MediaSession {
         {
           audio: includeAudio
             ? {
-                restrictOwnAudio: { exact: true },
+                // getDisplayMedia treats this boolean as an ideal constraint.
+                // Using `{ exact: true }` can reject an otherwise valid Windows
+                // loopback stream with OverconstrainedError.
+                restrictOwnAudio: true,
                 echoCancellation: false,
                 noiseSuppression: false,
                 autoGainControl: false,
@@ -351,6 +421,11 @@ export class MediaSession {
           screenShareEncoding: encoding,
           simulcast: false,
         },
+      );
+      this.screenAnnotations = [];
+      this.annotationScreenSharerIdentity = this.room.localParticipant.identity;
+      await this.publishScreenAnnotation({ type: "clear" }).catch(
+        () => undefined,
       );
       if (includeAudio && !this.isOwnAudioRestricted()) {
         await this.stopScreenShareInternal(false);
@@ -377,6 +452,9 @@ export class MediaSession {
     this.stopHeartbeat();
     const room = this.room;
     if (room?.localParticipant.isScreenShareEnabled) {
+      await this.publishScreenAnnotation({ type: "clear" }).catch(
+        () => undefined,
+      );
       this.stoppingScreenShare = true;
       try {
         await room.localParticipant.setScreenShareEnabled(false);
@@ -402,6 +480,8 @@ export class MediaSession {
 
   async disconnect(release = true): Promise<void> {
     this.stopHeartbeat();
+    this.stopLatencySampling();
+    this.stopOwnVoiceStateSync();
     if (this.room) {
       if (this.room.localParticipant.isScreenShareEnabled)
         await this.stopScreenShare(release);
@@ -416,8 +496,12 @@ export class MediaSession {
     this.room = null;
     this.connection = null;
     this.isDeafened = false;
+    this.microphoneEnabledBeforeDeafen = false;
     this.participantVolumes.clear();
     this.locallyMutedParticipants.clear();
+    this.screenAnnotations = [];
+    this.annotationScreenSharerIdentity = null;
+    this.removeRemoteAudioElements();
     this.snapshot.screenTrack?.detach().forEach((element) => element.remove());
     this.snapshot = initialSnapshot;
     this.emit();
@@ -427,14 +511,47 @@ export class MediaSession {
     const refresh = (): void => this.refreshSnapshot();
     room
       .on(RoomEvent.ConnectionStateChanged, refresh)
+      .on(RoomEvent.Reconnecting, () => {
+        this.reportDiagnostic("voice_reconnecting");
+        refresh();
+      })
+      .on(RoomEvent.Reconnected, () => {
+        this.reportDiagnostic("voice_reconnected");
+        void this.restoreIncomingAudio("reconnected");
+        void this.sampleLatency();
+        refresh();
+      })
       .on(RoomEvent.Moved, refresh)
       .on(RoomEvent.ParticipantConnected, refresh)
       .on(RoomEvent.ParticipantDisconnected, (participant) => {
         this.participantVolumes.delete(participant.identity);
         this.locallyMutedParticipants.delete(participant.identity);
+        for (const [trackSid, element] of this.audioElements) {
+          if (element.dataset.vatrushkaParticipant !== participant.identity)
+            continue;
+          element.remove();
+          this.audioElements.delete(trackSid);
+        }
         refresh();
       })
-      .on(RoomEvent.ActiveSpeakersChanged, refresh)
+      .on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
+        if (topic !== SCREEN_ANNOTATION_TOPIC || !participant) return;
+        const screenSharer = this.currentScreenSharerIdentity();
+        if (participant.identity !== screenSharer) return;
+        const message = parseScreenAnnotationMessage(payload);
+        if (!message) return;
+        this.screenAnnotations = applyScreenAnnotationMessage(this.screenAnnotations, message);
+        this.patch({ screenAnnotations: this.screenAnnotations });
+      })
+      .on(RoomEvent.ActiveSpeakersChanged, () => {
+        refresh();
+        this.scheduleOwnVoiceStateSync();
+      })
+      .on(RoomEvent.ConnectionQualityChanged, (_quality, participant) => {
+        refresh();
+        if (participant === room.localParticipant)
+          this.scheduleOwnVoiceStateSync();
+      })
       .on(RoomEvent.TrackMuted, refresh)
       .on(RoomEvent.TrackUnmuted, refresh)
       .on(RoomEvent.TrackPublished, refresh)
@@ -454,14 +571,7 @@ export class MediaSession {
       })
       .on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
         if (track.kind === Track.Kind.Audio) {
-          const element = track.attach();
-          element.dataset.vatrushkaAudio = publication.trackSid;
-          element.dataset.vatrushkaAudioSource = publication.source;
-          document.body.appendChild(element);
-          if (publication.source === Track.Source.ScreenShareAudio)
-            this.applyScreenShareAudioPreferences();
-          if (publication.source === Track.Source.Microphone)
-            this.applyParticipantAudioPreferences(participant);
+          this.attachRemoteAudioTrack(track, publication, participant);
         }
         if (
           publication.source === Track.Source.ScreenShare &&
@@ -476,8 +586,14 @@ export class MediaSession {
         }
         refresh();
       })
-      .on(RoomEvent.TrackUnsubscribed, (track) => {
+      .on(RoomEvent.TrackSubscriptionFailed, (trackSid) => {
+        this.reportDiagnostic("voice_track_subscription_failed", {
+          reason: trackSid ? "track_subscription_failed" : "unknown_track",
+        });
+      })
+      .on(RoomEvent.TrackUnsubscribed, (track, publication) => {
         track.detach().forEach((element) => element.remove());
+        this.audioElements.delete(publication.trackSid);
         refresh();
       })
       .on(RoomEvent.AudioPlaybackStatusChanged, refresh)
@@ -542,6 +658,11 @@ export class MediaSession {
     );
     const screenShareIsLocal =
       firstScreen?.participant === room.localParticipant;
+    const screenSharerIdentity = firstScreen?.participant.identity ?? null;
+    if (screenSharerIdentity !== this.annotationScreenSharerIdentity) {
+      this.annotationScreenSharerIdentity = screenSharerIdentity;
+      this.screenAnnotations = [];
+    }
     this.snapshot = {
       ...this.snapshot,
       connectionState: room.state,
@@ -557,28 +678,249 @@ export class MediaSession {
       ),
       screenShareAudioMuted: this.screenShareAudioMuted,
       screenShareAudioVolume: this.screenShareAudioVolume,
+      screenAnnotations: this.screenAnnotations,
       canPlayAudio: room.canPlaybackAudio,
     };
     this.emit();
   }
 
+  private currentScreenSharerIdentity(): string | null {
+    const room = this.room;
+    if (!room) return null;
+    return [room.localParticipant, ...room.remoteParticipants.values()].find(
+      (participant) => participant.isScreenShareEnabled,
+    )?.identity ?? null;
+  }
+
+  private async publishScreenAnnotation(
+    message: ScreenAnnotationMessage,
+  ): Promise<void> {
+    const room = this.room;
+    if (!room?.localParticipant.isScreenShareEnabled) return;
+    this.screenAnnotations = applyScreenAnnotationMessage(
+      this.screenAnnotations,
+      message,
+    );
+    this.patch({ screenAnnotations: this.screenAnnotations });
+    if (typeof room.localParticipant.publishData !== "function") return;
+    await room.localParticipant.publishData(
+      encodeScreenAnnotationMessage(message),
+      {
+        reliable: true,
+        topic: SCREEN_ANNOTATION_TOPIC,
+      },
+    );
+  }
+
+  private async syncOwnVoiceState(): Promise<void> {
+    const connection = this.connection;
+    const room = this.room;
+    if (!connection?.voiceSessionId || !room) return;
+    const state = {
+      sessionId: connection.voiceSessionId,
+      muted: !room.localParticipant.isMicrophoneEnabled,
+      deafened: this.isDeafened,
+      speaking: room.localParticipant.isSpeaking,
+      connectionQuality: connectionQualityValue(
+        room.localParticipant.connectionQuality,
+      ),
+    } as const;
+    const serialized = JSON.stringify(state);
+    if (serialized === this.lastSyncedVoiceState) return;
+    await this.api.updateOwnVoiceState(connection.channelId, state);
+    this.lastSyncedVoiceState = serialized;
+  }
+
+  private scheduleOwnVoiceStateSync(): void {
+    if (this.voiceStateSyncTimer) return;
+    this.voiceStateSyncTimer = setTimeout(() => {
+      this.voiceStateSyncTimer = null;
+      void this.syncOwnVoiceState().catch(() => undefined);
+    }, 300);
+  }
+
+  private stopOwnVoiceStateSync(): void {
+    if (this.voiceStateSyncTimer) clearTimeout(this.voiceStateSyncTimer);
+    this.voiceStateSyncTimer = null;
+    this.lastSyncedVoiceState = null;
+  }
+
+  private startLatencySampling(): void {
+    this.stopLatencySampling();
+    void this.sampleLatency();
+    this.latencyTimer = setInterval(
+      () => void this.sampleLatency(),
+      latencySampleIntervalMs,
+    );
+  }
+
+  private stopLatencySampling(): void {
+    if (this.latencyTimer) clearInterval(this.latencyTimer);
+    this.latencyTimer = null;
+  }
+
+  private sampleLatency(): void {
+    const room = this.room;
+    const measured =
+      room?.state === ConnectionState.Connected ? room.engine.client.rtt : NaN;
+    this.patch({
+      pingMs:
+        Number.isFinite(measured) && measured >= 0 ? Math.round(measured) : null,
+    });
+  }
+
   private startHeartbeat(): void {
     this.stopHeartbeat();
-    this.heartbeat = setInterval(() => {
-      const connection = this.connection;
-      if (!connection) return;
-      void this.api.heartbeatScreenShare(connection).catch(() => {
+    this.heartbeatLastSuccessAt = Date.now();
+    this.heartbeatFailureCount = 0;
+    this.scheduleHeartbeat(
+      screenShareHeartbeatIntervalMs,
+      this.heartbeatGeneration,
+    );
+  }
+
+  private scheduleHeartbeat(delayMs: number, generation: number): void {
+    if (this.heartbeat) clearTimeout(this.heartbeat);
+    this.heartbeat = setTimeout(
+      () => void this.runHeartbeat(generation),
+      delayMs,
+    );
+  }
+
+  private async runHeartbeat(
+    generation = this.heartbeatGeneration,
+  ): Promise<void> {
+    const connection = this.connection;
+    const room = this.room;
+    if (
+      generation !== this.heartbeatGeneration ||
+      !connection ||
+      !room?.localParticipant.isScreenShareEnabled ||
+      this.heartbeatInFlightGeneration === generation
+    )
+      return;
+    this.heartbeatInFlightGeneration = generation;
+    try {
+      await this.api.heartbeatScreenShare(connection);
+      if (generation !== this.heartbeatGeneration) return;
+      if (this.heartbeatFailureCount > 0)
+        this.reportDiagnostic("screen_share_heartbeat_recovered", {
+          attempt: this.heartbeatFailureCount + 1,
+        });
+      this.heartbeatLastSuccessAt = Date.now();
+      this.heartbeatFailureCount = 0;
+      this.scheduleHeartbeat(screenShareHeartbeatIntervalMs, generation);
+    } catch (error) {
+      if (generation !== this.heartbeatGeneration) return;
+      this.heartbeatFailureCount += 1;
+      const confirmedLoss = isConfirmedScreenShareLeaseLoss(error);
+      const graceExpired =
+        Date.now() - this.heartbeatLastSuccessAt >= screenShareHeartbeatGraceMs;
+      this.reportDiagnostic(
+        confirmedLoss
+          ? "screen_share_lease_lost"
+          : "screen_share_heartbeat_failed",
+        {
+          attempt: this.heartbeatFailureCount,
+          reason: mediaFailureReason(error),
+        },
+      );
+      if (confirmedLoss || graceExpired) {
         this.patch({
-          error: "Право на демонстрацию потеряно — показ экрана остановлен",
+          error: confirmedLoss
+            ? "Право на демонстрацию занято или отозвано — запустите показ повторно"
+            : "Сервер не подтвердил демонстрацию после восстановления сети — запустите показ повторно",
         });
         void this.stopScreenShare(false);
-      });
-    }, 10_000);
+      } else {
+        this.scheduleHeartbeat(screenShareHeartbeatRetryMs, generation);
+      }
+    } finally {
+      if (this.heartbeatInFlightGeneration === generation)
+        this.heartbeatInFlightGeneration = null;
+    }
   }
 
   private stopHeartbeat(): void {
-    if (this.heartbeat) clearInterval(this.heartbeat);
+    this.heartbeatGeneration += 1;
+    if (this.heartbeat) clearTimeout(this.heartbeat);
     this.heartbeat = null;
+    this.heartbeatInFlightGeneration = null;
+    this.heartbeatFailureCount = 0;
+  }
+
+  private attachRemoteAudioTrack(
+    track: RemoteTrack,
+    publication: RemoteTrackPublication,
+    participant: RemoteParticipant,
+    forceReplace = false,
+  ): void {
+    const existing = this.audioElements.get(publication.trackSid);
+    if (existing && !forceReplace && existing.isConnected) return;
+    if (forceReplace) track.detach().forEach((element) => element.remove());
+    existing?.remove();
+    const element = track.attach();
+    element.dataset.vatrushkaAudio = publication.trackSid;
+    element.dataset.vatrushkaAudioSource = publication.source;
+    element.dataset.vatrushkaParticipant = participant.identity;
+    document.body.appendChild(element);
+    this.audioElements.set(publication.trackSid, element);
+    if (publication.source === Track.Source.ScreenShareAudio)
+      this.applyScreenShareAudioPreferences();
+    if (publication.source === Track.Source.Microphone)
+      this.applyParticipantAudioPreferences(participant);
+  }
+
+  private async restoreIncomingAudio(reason: string): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    try {
+      for (const participant of room.remoteParticipants.values()) {
+        for (const publication of participant.trackPublications.values()) {
+          const track = publication.track;
+          if (!track || track.kind !== Track.Kind.Audio) continue;
+          this.attachRemoteAudioTrack(
+            track,
+            publication,
+            participant,
+            true,
+          );
+        }
+      }
+      await room.startAudio();
+      this.reportDiagnostic("voice_audio_restored", { reason });
+    } catch (error) {
+      this.reportDiagnostic("voice_audio_restore_failed", {
+        reason: mediaFailureReason(error),
+      });
+    } finally {
+      this.refreshSnapshot();
+    }
+  }
+
+  private removeRemoteAudioElements(): void {
+    for (const element of this.audioElements.values()) element.remove();
+    this.audioElements.clear();
+  }
+
+  private reportDiagnostic(
+    event: Parameters<typeof window.desktop.logMediaDiagnostic>[0]["event"],
+    details: { reason?: string; attempt?: number } = {},
+  ): void {
+    const connection = this.connection;
+    if (!connection) return;
+    void window.desktop
+      .logMediaDiagnostic({
+        event,
+        occurredAt: new Date().toISOString(),
+        serverId: connection.serverId,
+        channelId: connection.channelId,
+        ...(connection.voiceSessionId
+          ? { voiceSessionId: connection.voiceSessionId }
+          : {}),
+        ...details,
+      })
+      .catch(() => undefined);
   }
 
   private applyScreenShareAudioPreferences(): void {
@@ -629,6 +971,15 @@ function connectionQualityLabel(quality: ConnectionQuality): string {
   return "Определяется";
 }
 
+function connectionQualityValue(
+  quality: ConnectionQuality,
+): "excellent" | "good" | "poor" | "unknown" {
+  if (quality === ConnectionQuality.Excellent) return "excellent";
+  if (quality === ConnectionQuality.Good) return "good";
+  if (quality === ConnectionQuality.Poor) return "poor";
+  return "unknown";
+}
+
 function participantPlatformRole(participant: Participant): PlatformRole {
   try {
     const value = JSON.parse(participant.metadata || "{}") as {
@@ -650,6 +1001,26 @@ function deviceErrorMessage(error: unknown): string {
   if (error instanceof DOMException && error.name === "NotReadableError")
     return "Микрофон используется другим приложением";
   return "Не удалось включить микрофон";
+}
+
+function isConfirmedScreenShareLeaseLoss(error: unknown): boolean {
+  return (
+    error instanceof ClientError &&
+    (error.status === 401 ||
+      error.status === 403 ||
+      error.status === 404 ||
+      error.status === 409 ||
+      error.code === "SCREEN_SHARE_BUSY" ||
+      error.code === "PARTICIPANT_NOT_FOUND")
+  );
+}
+
+function mediaFailureReason(error: unknown): string {
+  if (error instanceof ClientError)
+    return `${error.code.toLowerCase()}:${error.status}`.slice(0, 100);
+  if (error instanceof DOMException) return error.name.slice(0, 100);
+  if (error instanceof Error) return error.name.slice(0, 100);
+  return "unknown";
 }
 
 function screenShareErrorMessage(error: unknown): string {

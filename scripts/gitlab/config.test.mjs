@@ -18,6 +18,10 @@ test('GitLab pipeline preserves Linux, integration and Windows quality gates', a
   assert.match(pipeline, /pull_policy: if-not-present/u);
   assert.match(pipeline, /tags: \[vatrushka-linux\]/u);
   assert.match(pipeline, /tags: \[vatrushka-windows\]/u);
+  assert.match(
+    pipeline,
+    /visual-regression:[\s\S]*Get-NetTCPConnection -LocalPort 6006[\s\S]*Stop-Process -Id \$_ -Force[\s\S]*after_script:[\s\S]*Get-NetTCPConnection -LocalPort 6006/u,
+  );
   assert.match(pipeline, /CI_PIPELINE_SOURCE == "merge_request_event"/u);
   assert.match(pipeline, /ELECTRON_BUILDER_CACHE: '\$CI_PROJECT_DIR\/\.cache\/electron-builder'/u);
   assert.match(pipeline, /\.cache\/electron-dist\//u);

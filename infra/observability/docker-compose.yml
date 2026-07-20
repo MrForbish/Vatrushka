@@ -49,10 +49,8 @@ services:
     command:
       - --path.rootfs=/host
       - --web.listen-address=127.0.0.1:9100
-      - --collector.systemd
     volumes:
       - /:/host:ro,rslave
-      - /run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
     logging: *logging
 
   cadvisor:

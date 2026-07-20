@@ -1,8 +1,10 @@
 import { useState } from "react";
 import type {
+  EffectivePresenceStatus,
   GamingHomeConnectionQuality,
   HomeDashboardResponse,
   HomeDestination,
+  PresencePreference,
   PublicUser,
   RoomConnection,
   ServerSummary,
@@ -28,6 +30,7 @@ export interface HomePageProps {
   microphoneId: string | undefined;
   outputId: string | undefined;
   microphoneMuted?: boolean;
+  voicePingMs?: number | null;
   voiceConnectionQuality?: GamingHomeConnectionQuality | undefined;
   busy: boolean;
   error: string | null;
@@ -40,6 +43,8 @@ export interface HomePageProps {
   dashboardError?: string | null;
   onRetryDashboard?: (() => void) | undefined;
   onLogout: () => void;
+  onStatus?: ((status: PresencePreference) => void | Promise<void>) | undefined;
+  status?: EffectivePresenceStatus | undefined;
   onSecurity: () => void;
   onAudioSettings?: (() => void) | undefined;
   onServerName: (value: string) => void;
@@ -70,11 +75,17 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
       available: output !== undefined,
       label: output?.label || null,
     },
-    pingMs: gaming?.voiceStatus.pingMs ?? null,
+    pingMs: props.voicePingMs ?? gaming?.voiceStatus.pingMs ?? null,
     connectionQuality,
   } as const;
   const openDestination = (serverId: string, channelId: string): void => {
-    if (props.onJoinVoice) props.onJoinVoice(serverId, channelId);
+    if (
+      props.connection?.serverId === serverId &&
+      props.connection.channelId === channelId &&
+      props.onOpenDestination
+    )
+      props.onOpenDestination({ type: "voice_channel", serverId, channelId });
+    else if (props.onJoinVoice) props.onJoinVoice(serverId, channelId);
     else if (props.onOpenDestination) props.onOpenDestination({ type: "voice_channel", serverId, channelId });
     else props.onOpenServer(serverId);
   };
@@ -86,6 +97,36 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
   return (
     <>
       <AppShell
+        members={
+          <aside className="home-support-panel" aria-label="Помощь и обратная связь">
+            <div className="home-support-panel__version">
+              <span>Версия приложения</span>
+              <strong>v{props.version}</strong>
+            </div>
+            <div className="home-support-panel__card">
+              <span className="home-support-panel__icon"><Icon name="message" size={20} /></span>
+              <div>
+                <strong>Помощь и обратная связь</strong>
+                <p>Сообщите о проблеме, предложении или благодарности.</p>
+              </div>
+              <Button
+                onClick={() => void window.desktop.openExternal("https://t.me/MaksZJ")}
+                size="sm"
+                variant="secondary"
+              >
+                Telegram · @MaksZJ
+              </Button>
+              <Button
+                onClick={() => void window.desktop.openExternal("mailto:vatrushka-notify@yandex.ru")}
+                size="sm"
+                variant="quiet"
+              >
+                Написать на email
+              </Button>
+            </div>
+          </aside>
+        }
+        membersDrawerTitle="Помощь"
         topBar={
           <div className="home-header">
             <Icon name="home" size={19} />
@@ -102,8 +143,9 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
             onLogout={props.onLogout}
             onOpenServer={props.onOpenServer}
             onSecurity={props.onSecurity}
-            onSpaces={openSpaces}
+            onStatus={props.onStatus}
             servers={effectiveServers}
+            status={props.status ?? props.dashboard?.user.presence}
             user={props.user}
           />
         }
@@ -137,7 +179,6 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
             )}
           </div>
         </div>
-        <span className="home-app-version">v{props.version}</span>
       </AppShell>
       <Modal
         footer={

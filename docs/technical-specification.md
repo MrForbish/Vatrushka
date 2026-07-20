@@ -1,18 +1,18 @@
 # Vatrushka: техническая спецификация
 
-Статус документа: канонический, версия продукта 0.7.0.
+Статус документа: канонический, версия продукта 0.8.0.
 
 ## 1. Состав системы
 
 Vatrushka — npm workspaces monorepo:
 
-| Пакет | Ответственность |
-|---|---|
-| `apps/desktop` | Electron main/preload, React renderer, LiveKit client, auto-update, Windows packaging |
-| `apps/api` | Fastify API, WebSocket gateway, PostgreSQL stores, Redis, SMTP, S3, LiveKit server integration |
-| `packages/shared` | Zod-контракты, доменные типы, permissions и общие helpers |
-| `packages/config` | общие TypeScript-настройки |
-| `infra` | Docker, Caddy, LiveKit и операционные scripts |
+| Пакет             | Ответственность                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
+| `apps/desktop`    | Electron main/preload, React renderer, LiveKit client, auto-update, Windows packaging          |
+| `apps/api`        | Fastify API, WebSocket gateway, PostgreSQL stores, Redis, SMTP, S3, LiveKit server integration |
+| `packages/shared` | Zod-контракты, доменные типы, permissions и общие helpers                                      |
+| `packages/config` | общие TypeScript-настройки                                                                     |
+| `infra`           | Docker, Caddy, LiveKit и операционные scripts                                                  |
 
 Ключевой поток:
 
@@ -68,7 +68,7 @@ API построен на Fastify 5. `app.ts` регистрирует transport
 - screen-share lease heartbeat;
 - updater feed обслуживается Caddy из versioned artifacts.
 
-Health endpoints различают liveness и readiness. `/metrics` отдает технические метрики API/messaging; production observability stack пока не подключен.
+Health endpoints различают liveness и readiness. `/metrics` отдает технические метрики API/messaging/media. Production Prometheus, Grafana, Loki/S3, Alertmanager, Blackbox и private Alloy agents подключены; ошибки API имеют bounded labels `code`, `route`, `status_class`, а heartbeat демонстрации — `result` без пользовательских данных.
 
 ## 5. Данные
 
@@ -93,6 +93,10 @@ Redis хранит только восстанавливаемое кратко�
 
 Bucket приватный. API создает ограниченный object key, выдает короткоживущий presigned upload/download URL после permission checks и финализирует metadata. Незавершенные и удаленные объекты очищаются durable job-очередью. Access keys не попадают в desktop.
 
+Renderer не использует presigned URL как React key. Общий `StableImage` предварительно загружает новый URL и сохраняет уже показанный кадр до успешной загрузки, поэтому обновление подписи не создаёт пустую вспышку. `Avatar` отделяет круглую маску изображения от вынесенного поверх неё presence-индикатора. Перед загрузкой нового аватара desktop кадрирует ориентированное браузером изображение в квадрат 512×512; исходный файл не отправляется при отмене.
+
+Изменение server icon/banner/accent обновляет server detail и summaries, а затем явно инвалидирует Home aggregate. Gaming Home получает акцент вместе с каждой voice-space записью и применяет его только к границе карточки; banner остаётся фоном под контрастным затемняющим слоем.
+
 ## 6. Messaging и realtime
 
 Запись сообщения, mentions, read state, notification decision и outbox event фиксируются транзакционно. Worker публикует outbox в Redis Pub/Sub; каждый API instance доставляет адресованные события своим authenticated WebSocket sessions. Client сохраняет `eventId`, дедуплицирует события и после reconnect выполняет HTTP reconciliation.
@@ -100,6 +104,8 @@ Bucket приватный. API создает ограниченный object ke
 Изменения server overview и каналов публикуются отдельными адресными событиями `server.updated` и `server.channel.updated`. Получатели вычисляются по актуальному членству; renderer инвалидирует server detail и только связанные server-settings snapshots. Ошибка Redis не откатывает уже подтверждённую PostgreSQL-транзакцию: периодическое HTTP reconciliation восстанавливает состояние.
 
 Идемпотентность отправки строится на `(authorId, clientMessageId)`. Cursor истории — стабильный numeric message id. Read/delivered хранятся отдельно по пользователю и conversation. DND/mute/quiet-hours влияют на внешнее уведомление, но не удаляют durable notification.
+
+Renderer нормализует относительные authenticated media URL относительно production API origin. HTTP(S)-ссылки из сообщений открываются только через main-process IPC с проверкой протокола и запретом embedded credentials. Read acknowledgement обновляет серверный cursor до очистки локального счётчика и разделителя. Update state отображается как единственная локальная запись Notification Center и не создаёт отдельный плавающий overlay.
 
 ## 7. Auth lifecycle
 
@@ -121,17 +127,17 @@ Bucket приватный. API создает ограниченный object ke
 
 ## 9. Тестовая стратегия
 
-| Уровень | Назначение |
-|---|---|
-| shared unit | Zod, helpers, permissions |
-| API unit/inject | auth, business rules, routes, fakes |
-| integration | настоящие PostgreSQL 17 и Redis 8, миграции и cross-instance semantics |
-| renderer unit/component | media helpers, realtime reducers, UI behavior |
-| Storybook interaction/a11y | состояния переиспользуемых компонентов |
-| Electron E2E | preload/main/auth/navigation/media contracts |
-| visual Playwright | эталонные stories в фиксированном viewport |
-| manual two-machine | WebRTC, Windows devices, scaling и native updater |
-| capacity harness | opt-in API/WebSocket/PostgreSQL/Redis/S3/LiveKit-control baseline и JSON evidence |
+| Уровень                    | Назначение                                                                        |
+| -------------------------- | --------------------------------------------------------------------------------- |
+| shared unit                | Zod, helpers, permissions                                                         |
+| API unit/inject            | auth, business rules, routes, fakes                                               |
+| integration                | настоящие PostgreSQL 17 и Redis 8, миграции и cross-instance semantics            |
+| renderer unit/component    | media helpers, realtime reducers, UI behavior                                     |
+| Storybook interaction/a11y | состояния переиспользуемых компонентов                                            |
+| Electron E2E               | preload/main/auth/navigation/media contracts                                      |
+| visual Playwright          | эталонные stories в фиксированном viewport                                        |
+| manual two-machine         | WebRTC, Windows devices, scaling и native updater                                 |
+| capacity harness           | opt-in API/WebSocket/PostgreSQL/Redis/S3/LiveKit-control baseline и JSON evidence |
 
 CI изолированно поднимает PostgreSQL/Redis services. Coverage оценивается по рискам, а не по проценту: auth, permissions, message idempotency, reconnect, media cleanup и migrations являются блокирующими зонами.
 
@@ -161,6 +167,9 @@ Alerts должны покрывать readiness failure, 5xx/latency surge, Red
 ## 12. Управление изменениями
 
 Изменения выполняются маленькими MR с одним назначением. Обычные task MR squash-merge в `develop`; assembly, production release, hotfix и обратная синхронизация используют merge commit, чтобы сохранить границы версии и позволить revert целого изменения. Generated outputs, reference-pack и секреты не коммитятся. Мертвый код удаляется только после доказательства отсутствия imports/runtime calls, теста заменяющего контракт и, для БД, завершенной expand/contract migration.
+
 # Voice presence and movement
 
 Voice membership is confirmed by LiveKit webhooks, projected atomically into Redis, versioned per server, and delivered through the application WebSocket. `docs/adr/0005-livekit-confirmed-voice-presence.md` defines source-of-truth boundaries, Redis keys, adapters, reconciliation, and migration behavior. PostgreSQL does not store ephemeral voice membership.
+
+Клиент отправляет собственные bounded state transitions (`muted`, `deafened`, throttled `speaking`, `connectionQuality`) через `PATCH /api/v1/channels/:channelId/voice-state`. Backend сверяет authenticated user, channel и exact voice `sessionId`, обновляет Redis и публикует `voice.member.state.updated`; stale session получает `409 VOICE_SOURCE_CHANGED`. WebRTC RTT измеряется renderer через active ICE candidate pair и не записывается в PostgreSQL.

@@ -1,0 +1,47 @@
+groups:
+  - name: vatrushka-service-slo
+    interval: 5m
+    rules:
+      - record: vatrushka:slo_public_api_availability:ratio30d
+        expr: avg_over_time(probe_success{job="blackbox-http",instance="https://api.myvatrushka.ru/health/ready"}[30d])
+
+      - record: vatrushka:slo_api_success:ratio30d
+        expr: 1 - (sum(increase(api_http_requests_total{status_class="5xx"}[30d])) / clamp_min(sum(increase(api_http_requests_total[30d])), 1))
+
+      - record: vatrushka:slo_api_under_500ms:ratio30d
+        expr: sum(increase(api_http_request_duration_seconds_bucket{le="0.5",route!~".*(upload|download|attachments).*"}[30d])) / clamp_min(sum(increase(api_http_request_duration_seconds_count{route!~".*(upload|download|attachments).*"}[30d])), 1)
+
+      - record: vatrushka:slo_public_api_error_budget_remaining:ratio30d
+        expr: clamp_max(clamp_min((vatrushka:slo_public_api_availability:ratio30d - 0.999) / 0.001, 0), 1)
+
+      - record: vatrushka:slo_api_error_budget_remaining:ratio30d
+        expr: clamp_max(clamp_min((vatrushka:slo_api_success:ratio30d - 0.999) / 0.001, 0), 1)
+
+  - name: vatrushka-service-slo-alerts
+    rules:
+      - alert: VatrushkaPublicApiSloAtRisk
+        expr: vatrushka:slo_public_api_availability:ratio30d < 0.999
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: Public API 30-day availability is below 99.9 percent
+          description: "The initial public API availability SLO is consuming all remaining error budget."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#service-health-and-slo"
+
+      - alert: VatrushkaApiSuccessSloAtRisk
+        expr: vatrushka:slo_api_success:ratio30d < 0.999
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: API 30-day success rate is below 99.9 percent
+          description: "Server-side failures exhausted the initial API success error budget."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#service-health-and-slo"
+
+      - alert: VatrushkaApiLatencyObjectiveAtRisk
+        expr: vatrushka:slo_api_under_500ms:ratio30d < 0.95
+        for: 30m
+        labels: { severity: warning }
+        annotations:
+          summary: Fewer than 95 percent of regular API requests finish within 500 ms
+          description: "Upload, download and attachment routes are excluded from this initial JSON API objective."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#service-health-and-slo"

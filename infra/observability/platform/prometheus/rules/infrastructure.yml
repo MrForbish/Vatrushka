@@ -1,4 +1,19 @@
 groups:
+  - name: vatrushka-infrastructure-recording
+    interval: 30s
+    rules:
+      - record: vatrushka:host_cpu_utilization:ratio5m
+        expr: 1 - avg by (environment, region, host, role) (rate(node_cpu_seconds_total{mode="idle"}[5m]))
+
+      - record: vatrushka:host_memory_utilization:ratio
+        expr: 1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)
+
+      - record: vatrushka:host_filesystem_utilization:ratio
+        expr: 1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"})
+
+      - record: vatrushka:host_inode_utilization:ratio
+        expr: 1 - (node_filesystem_files_free{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_files{fstype!~"tmpfs|overlay|squashfs"})
+
   - name: infrastructure
     rules:
       - alert: InstanceMetricsMissing
@@ -7,41 +22,53 @@ groups:
         labels: { severity: critical }
         annotations:
           summary: Host metrics have disappeared
+          description: "The expected node or Alloy target has stopped producing metrics for five minutes."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#infrastructure-and-containers"
 
       - alert: HostCpuHigh
-        expr: 100 - avg by (host) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100 > 85
+        expr: vatrushka:host_cpu_utilization:ratio5m > 0.85
         for: 15m
         labels: { severity: warning }
         annotations:
           summary: Host CPU is above 85 percent
+          description: "CPU utilization stayed above the dashboard warning threshold for 15 minutes."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#infrastructure-and-containers"
 
       - alert: HostMemoryCritical
-        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 90
+        expr: vatrushka:host_memory_utilization:ratio > 0.90
         for: 10m
         labels: { severity: critical }
         annotations:
           summary: Host memory is above 90 percent
+          description: "Host memory utilization stayed above the critical dashboard threshold for 10 minutes."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#infrastructure-and-containers"
 
       - alert: HostDiskWarning
-        expr: 100 * (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) > 80
+        expr: vatrushka:host_filesystem_utilization:ratio > 0.80
         for: 15m
         labels: { severity: warning }
         annotations:
           summary: Filesystem is above 80 percent
+          description: "A persistent filesystem crossed the warning threshold."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#infrastructure-and-containers"
 
       - alert: HostDiskCritical
-        expr: 100 * (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}) > 90
+        expr: vatrushka:host_filesystem_utilization:ratio > 0.90
         for: 5m
         labels: { severity: critical }
         annotations:
           summary: Filesystem is above 90 percent
+          description: "A persistent filesystem crossed the critical threshold."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#infrastructure-and-containers"
 
       - alert: HostInodesHigh
-        expr: 100 * (1 - node_filesystem_files_free{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_files{fstype!~"tmpfs|overlay|squashfs"}) > 85
+        expr: vatrushka:host_inode_utilization:ratio > 0.85
         for: 15m
         labels: { severity: warning }
         annotations:
           summary: Filesystem inode usage is above 85 percent
+          description: "A filesystem can stop accepting files even when byte capacity remains."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#infrastructure-and-containers"
 
       - alert: HostClockSkew
         expr: abs(node_time_seconds - time()) > 5
@@ -49,9 +76,22 @@ groups:
         labels: { severity: warning }
         annotations:
           summary: Host clock differs by more than five seconds
+          description: "Clock skew can invalidate TLS, authentication and event ordering."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#infrastructure-and-containers"
 
       - alert: ContainerRestarting
-        expr: increase(container_start_time_seconds{name!=""}[15m]) > 3
+        expr: changes(container_start_time_seconds{container!=""}[15m]) > 3
+        for: 1m
         labels: { severity: warning }
         annotations:
           summary: Container restarted repeatedly
+          description: "The container start-time gauge changed more than three times in 15 minutes."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#infrastructure-and-containers"
+
+      - alert: ContainerOomDetected
+        expr: increase(container_oom_events_total{container!=""}[15m]) > 0
+        labels: { severity: critical }
+        annotations:
+          summary: Container was terminated by an out-of-memory event
+          description: "At least one cgroup OOM event occurred during the last 15 minutes."
+          runbook_url: "https://gitlab.com/vatrushka-group/Vatrushka/-/blob/develop/docs/observability-runbook.md#infrastructure-and-containers"
