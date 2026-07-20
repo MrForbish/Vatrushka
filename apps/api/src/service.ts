@@ -5069,6 +5069,15 @@ export class VatrushkaService {
     }
   }
 
+  async refreshOperationalMetrics(): Promise<void> {
+    const [voiceSessions, screenShareSessions] = await Promise.all([
+      this.voicePresenceStore.activeSessionCount(),
+      this.store.countChannelLeases(this.now()),
+    ]);
+    technicalMetrics.set("voice_active_sessions", voiceSessions);
+    technicalMetrics.set("screen_share_active_sessions", screenShareSessions);
+  }
+
   private async updateScreenShareActiveMetric(): Promise<void> {
     technicalMetrics.set("screen_share_active_sessions", await this.store.countChannelLeases(this.now()));
   }
