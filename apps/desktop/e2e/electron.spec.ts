@@ -82,7 +82,6 @@ test("launches the secure auth shell with an allowlisted preload API", async () 
       "openExternal",
       "setBadgeCount",
       "getAppVersion",
-      "getFullscreen",
       "getUpdateState",
       "checkForUpdates",
       "installUpdate",
@@ -92,7 +91,6 @@ test("launches the secure auth shell with an allowlisted preload API", async () 
       "listDesktopSources",
       "logMediaDiagnostic",
       "onDeepLink",
-      "onFullscreenChange",
       "onMessageNotificationClick",
       "selectDesktopSource",
       "showMessageNotification",
@@ -100,7 +98,6 @@ test("launches the secure auth shell with an allowlisted preload API", async () 
       "refreshAuthSession",
       "completeAuthSession",
       "updateLocalSettings",
-      "toggleFullscreen",
     ].sort(),
   );
 });
@@ -129,24 +126,6 @@ test("supports keyboard-only authentication with a visible focus indicator", asy
   await window.keyboard.press("Enter");
   await expect(registrationTab).toHaveAttribute("aria-pressed", "true");
   await expect(window.getByLabel("Повторите пароль")).toBeVisible();
-});
-
-test("keeps F11, Escape, and the renderer fullscreen state synchronized", async () => {
-  application = await launchElectron();
-  const window = await application.firstWindow();
-
-  await application.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0]?.webContents.sendInputEvent({ type: "keyDown", keyCode: "F11" });
-  });
-  await expect.poll(() => window.evaluate(() =>
-    (window as unknown as { desktop: { getFullscreen(): Promise<boolean> } }).desktop.getFullscreen(),
-  )).toBe(true);
-  await application.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0]?.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
-  });
-  await expect.poll(() => window.evaluate(() =>
-    (window as unknown as { desktop: { getFullscreen(): Promise<boolean> } }).desktop.getFullscreen(),
-  )).toBe(false);
 });
 
 test("completes password reset and returns to login with a confirmation", async () => {

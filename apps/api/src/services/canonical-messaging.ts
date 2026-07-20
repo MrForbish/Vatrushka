@@ -1430,7 +1430,7 @@ export class CanonicalMessagingStore {
             and (mention.mentioned_user_id = $1
               or (mention.mention_type = 'everyone' and not coalesce(server_preferences.suppress_everyone, false))
               or (mention.mention_type = 'role' and not coalesce(server_preferences.suppress_roles, false) and exists(select 1 from server_member_roles assignment where assignment.server_id = c.server_id and assignment.user_id = $1 and assignment.role_id = mention.mentioned_role_id)))) as mention_count,
-        min(m.id)::text as first_unread_message_id
+        (min(m.id) filter (where m.author_id <> $1 and m.deleted_at is null))::text as first_unread_message_id
       from conversations c
       left join conversation_read_states state on state.conversation_id = c.id and state.user_id = $1
       left join messages m on m.conversation_id = c.id and m.id > coalesce(state.last_read_message_id, 0)

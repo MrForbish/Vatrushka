@@ -4,9 +4,6 @@ import type { DesktopBridge } from "@vatrushka/shared";
 
 const desktop: DesktopBridge = {
   getAppVersion: async () => "0.1.0-test",
-  getFullscreen: async () => false,
-  toggleFullscreen: async () => false,
-  onFullscreenChange: () => () => undefined,
   getUpdateState: async () => ({
     status: "unsupported",
     currentVersion: "0.1.0-test",

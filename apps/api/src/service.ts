@@ -2183,10 +2183,15 @@ export class VatrushkaService {
     const servers: HomeDashboardResponse["servers"] = details.map((server) => ({
       id: server.id,
       name: server.name,
+      description: server.description,
       inviteUrl: server.inviteUrl,
       ownerUserId: server.ownerUserId,
       memberCount: server.memberCount,
       createdAt: server.createdAt,
+      iconUrl: server.iconUrl ?? null,
+      bannerUrl: server.bannerUrl ?? null,
+      accentColor: server.accentColor ?? null,
+      visibility: server.visibility ?? "private",
       unreadCount: server.channels.reduce(
         (total, channel) => total + channel.unreadCount,
         0,

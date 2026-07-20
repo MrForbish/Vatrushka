@@ -3085,18 +3085,11 @@ export default function App(): ReactNode {
       (count, conversation) => count + conversation.unreadCount,
       0,
     );
-  const serverFirstUnreadMessageId =
-    activeChannelId === null
-      ? null
-      : (unreadSummary?.conversations.find(
-          (item) => item.conversationId === activeChannelId,
-        )?.firstUnreadMessageId ?? null);
-  const directFirstUnreadMessageId =
-    activeDirectConversationId === null
-      ? null
-      : (unreadSummary?.conversations.find(
-          (item) => item.conversationId === activeDirectConversationId,
-        )?.firstUnreadMessageId ?? null);
+  // The currently open conversation is marked read immediately. A divider in
+  // that view is misleading during the short acknowledgement window and after
+  // the current user sends a message.
+  const serverFirstUnreadMessageId = null;
+  const directFirstUnreadMessageId = null;
   const serverTypingText = activeChannelId
     ? (typingUsers[activeChannelId] ?? [])
         .map(

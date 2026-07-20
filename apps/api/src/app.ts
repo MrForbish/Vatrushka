@@ -938,6 +938,15 @@ export async function buildApp(
     trustProxy: config.NODE_ENV === "production",
   });
 
+  if (config.HAWK_STARTUP_SMOKE_TEST) {
+    hawk.capture(new Error("Hawk startup smoke test"), {
+      operation: "startup-smoke-test",
+      runtime: "api",
+      release: config.HAWK_RELEASE,
+    });
+    app.log.info("Hawk startup smoke test submitted");
+  }
+
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   app.addHook("onRequest", (request, _reply, done) => {

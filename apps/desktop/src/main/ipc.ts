@@ -29,9 +29,6 @@ import type { DesktopStorage } from "./storage.js";
 
 export const IPC_CHANNELS = {
   appVersion: "app:get-version",
-  windowFullscreenGet: "window:get-fullscreen",
-  windowFullscreenToggle: "window:toggle-fullscreen",
-  windowFullscreenState: "window:fullscreen-state",
   updateStateGet: "update:get-state",
   updateCheck: "update:check",
   updateInstall: "update:install",
@@ -63,8 +60,6 @@ interface IpcOptions {
   ): void;
   showMessageNotification(notification: DesktopMessageNotification): void;
   setBadgeCount(count: number): void;
-  getFullscreen(): boolean;
-  toggleFullscreen(): boolean;
   updater: {
     getState(): DesktopUpdateState;
     check(): Promise<void>;
@@ -287,7 +282,6 @@ export function registerIpc(options: IpcOptions): () => void {
     IPC_CHANNELS.deepLink,
     IPC_CHANNELS.notificationClick,
     IPC_CHANNELS.updateState,
-    IPC_CHANNELS.windowFullscreenState,
   ]);
   const channels = Object.values(IPC_CHANNELS).filter(
     (channel) => !outgoingChannels.has(channel),
@@ -314,8 +308,6 @@ export function registerIpc(options: IpcOptions): () => void {
   };
 
   handle(IPC_CHANNELS.appVersion, () => app.getVersion());
-  handle(IPC_CHANNELS.windowFullscreenGet, () => options.getFullscreen());
-  handle(IPC_CHANNELS.windowFullscreenToggle, () => options.toggleFullscreen());
   handle(IPC_CHANNELS.updateStateGet, () => options.updater.getState());
   handle(IPC_CHANNELS.updateCheck, () => options.updater.check());
   handle(IPC_CHANNELS.updateInstall, () => options.updater.install());
