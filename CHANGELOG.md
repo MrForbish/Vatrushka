@@ -4,6 +4,12 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.10] - 2026-07-20
+
+### Fixed
+
+- fixes the Hawk-token preflight in Windows release packaging: it now runs with PowerShell syntax before the package build.
+
 ## [0.8.9] - 2026-07-20
 
 ### Fixed
