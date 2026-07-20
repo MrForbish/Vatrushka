@@ -16,7 +16,7 @@ Dashboard/provisioning и alert rules находятся в `infra/observability
 - `node_exporter`: host CPU, memory, disks, network and systemd;
 - cAdvisor: per-container CPU, memory, filesystem and network;
 - PostgreSQL/Redis exporters: connection, lock, transaction, memory, client, command and eviction signals;
-- blackbox exporter: public API/update-feed TLS and TURN TCP probes;
+- blackbox exporter: public API/update-feed and LiveKit HTTPS probes, plus a TURN TLS probe;
 - Prometheus: 15-second scrape/evaluation, 15-day/5-GB default retention and provisioned alert rules;
 - Grafana: provisioned Prometheus datasource and `Vatrushka Production Overview` dashboard.
 
@@ -71,7 +71,7 @@ curl -fsS http://127.0.0.1:9121/metrics >/dev/null
 curl -fsS https://api.myvatrushka.ru/metrics -o /dev/null -w '%{http_code}\n' # must be 404
 ```
 
-In Prometheus, `up` must be `1` for all local jobs and `probe_success` must be `1` for HTTP/TURN probes. The initial 0.6.3 capacity baseline recorded API/WebSocket/Redis/S3/LiveKit p95 comfortably inside budget; PostgreSQL p95 was `99.8 ms` against the initial `100 ms` budget, so connection/query/disk panels need particular attention.
+In Prometheus, `up` must be `1` for all local jobs and `probe_success` must be `1` for HTTP, LiveKit and TURN probes. The deployment healthcheck requires the LiveKit and TURN probe series to exist, so a dashboard cannot silently degrade to `Нет метрик` because a blackbox module or target disappeared. The initial 0.6.3 capacity baseline recorded API/WebSocket/Redis/S3/LiveKit p95 comfortably inside budget; PostgreSQL p95 was `99.8 ms` against the initial `100 ms` budget, so connection/query/disk panels need particular attention.
 
 ## Alerts and delivery
 

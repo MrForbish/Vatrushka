@@ -11,11 +11,18 @@ UPDATE_PATH=${4:?update feed path is required}
 case "$VERSION" in *[!0-9.]*|*..*|'') exit 2 ;; esac
 case "$UPDATE_PATH" in /*) ;; *) exit 2 ;; esac
 
-compose_dir=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' vatrushka-api-1 2>/dev/null || true)
-if [ -n "$compose_dir" ] && [ -d "$compose_dir/../.." ]; then
-  APP_DIR=$(CDPATH= cd -- "$compose_dir/../.." && pwd)
-else
-  APP_DIR=${VATRUSHKA_APP_DIR:-/opt/vatrushka}
+# Prefer the declared canonical root.  Looking up a currently running
+# container here used to keep deployments pinned to a historical release
+# directory, while operators quite reasonably updated /opt/vatrushka/.env.
+# Fall back only for an older installation that has not yet created the
+# canonical root; its next successful deployment can then be migrated by the
+# operator without a forced data move.
+APP_DIR=${VATRUSHKA_APP_DIR:-/opt/vatrushka}
+if [ ! -f "$APP_DIR/.env" ]; then
+  compose_dir=$(docker inspect -f '{{ index .Config.Labels "com.docker.compose.project.working_dir" }}' vatrushka-api-1 2>/dev/null || true)
+  if [ -n "$compose_dir" ] && [ -f "$compose_dir/../../.env" ]; then
+    APP_DIR=$(CDPATH= cd -- "$compose_dir/../.." && pwd)
+  fi
 fi
 
 test -f "$ARCHIVE"
@@ -42,6 +49,15 @@ until curl -fsS http://127.0.0.1:3001/health/ready >/dev/null; do
   test "$attempt" -lt 30 || { docker compose --env-file .env -f infra/docker/docker-compose.yml ps; exit 1; }
   sleep 2
 done
+
+# Do not report a successful release when the operator enabled Hawk in this
+# runtime's .env but that configuration did not reach the API container.
+if grep -qx 'HAWK_ENABLED=true' "$APP_DIR/.env"; then
+  curl -fsS http://127.0.0.1:3001/metrics | grep -Eq '^hawk_reporter_enabled(\{[^}]*\})? 1$' || {
+    printf '%s\n' 'Hawk is enabled in the runtime .env but the API reporter is not active' >&2
+    exit 1
+  }
+fi
 
 # Keep the production telemetry agent on the same immutable source revision as
 # the API. Its operator-owned .env.agent contains only endpoint and secret
