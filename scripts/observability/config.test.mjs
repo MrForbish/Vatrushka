@@ -254,6 +254,17 @@ test('logs and Loki dashboards use structured levels and TSDB-compatible diagnos
   assert.match(logsText, /level=~\\"warn\|error\|fatal/u);
   assert.match(logsText, /request_id/u);
   assert.match(logsText, /__error__/u);
+  const logExpressions = logs.panels
+    .flatMap((panel) => panel.targets ?? [])
+    .map((target) => target.expr)
+    .filter(Boolean);
+  assert.ok(logExpressions.length > 0);
+  for (const expression of logExpressions)
+    assert.match(
+      expression,
+      /source=~"\.\+"/u,
+      `LogQL selector must retain a non-empty matcher: ${expression}`,
+    );
   for (const variable of ['environment', 'service', 'host', 'container', 'level', 'search']) assert.ok(logs.templating.list.some((item) => item.name === variable));
 
   const lokiText = JSON.stringify(loki);
