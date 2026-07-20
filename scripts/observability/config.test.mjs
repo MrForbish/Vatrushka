@@ -338,10 +338,16 @@ test("migration and recovery scripts preserve old metrics and secrets", async ()
   const rollback = await read(
     "infra/observability/platform/scripts/rollback.sh",
   );
+  const releaseApply = await read("scripts/deploy/apply-observability-release.sh");
   assert.match(backup, /--exclude='\.\/secrets'/u);
   assert.match(backup, /--dry-run/u);
   assert.match(restore, /--dry-run/u);
   assert.doesNotMatch(rollback, /down\s+-v|volume\s+rm|s3.*delete/iu);
+  assert.match(releaseApply, /up -d --force-recreate/u);
+  const healthcheck = await read("infra/observability/platform/scripts/healthcheck.sh");
+  assert.match(healthcheck, /OBSERVABILITY_HEALTHCHECK_ATTEMPTS:-30/u);
+  assert.match(healthcheck, /wait_for_url/u);
+  assert.match(healthcheck, /wait_for_healthy_targets/u);
 });
 
 test("public product Caddy endpoint does not proxy Prometheus metrics", async () => {

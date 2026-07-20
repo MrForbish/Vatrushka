@@ -28,7 +28,7 @@ Release MR всегда проходит полный набор качеств�
 
 1. CI создаёт immutable git archive tagged commit.
 2. На production VPS архив обновляет runtime in-place, не затрагивая `.env`, Docker volumes и уже опубликованные updater artifacts. Compose пересобирает API, применяет migrations и ждёт `/health/ready`.
-3. Через production VPS обновляется observability VPS; secrets и local compose overrides сохраняются, затем проходят Prometheus/Loki/Grafana health checks.
+3. Через production VPS обновляется observability VPS; secrets и local compose overrides сохраняются. Конфигурационные контейнеры принудительно пересоздаются, потому что Compose сам по себе не применяет изменившиеся bind-mounted rules и dashboards. Healthcheck ожидает готовность Prometheus/Loki/Grafana и active targets до 60 секунд, затем проходит или возвращает диагностическую ошибку.
 4. Только после обоих readiness gate собирается Windows installer.
 5. Installer и blockmap копируются в update feed; `latest.yml` заменяется последним атомарно. Поэтому клиент не увидит новую версию раньше готового API.
 6. Создаются GitLab Release и immutable package assets.

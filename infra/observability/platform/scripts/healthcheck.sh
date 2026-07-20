@@ -17,6 +17,41 @@ compose() {
   docker compose --env-file "$ENV_FILE" -f "$BASE_DIR/docker-compose.yml" "$@"
 }
 
+HEALTHCHECK_ATTEMPTS=${OBSERVABILITY_HEALTHCHECK_ATTEMPTS:-30}
+HEALTHCHECK_INTERVAL_SECONDS=${OBSERVABILITY_HEALTHCHECK_INTERVAL_SECONDS:-2}
+
+wait_for_url() {
+  name=$1
+  url=$2
+  attempt=1
+  while ! curl -fsS "$url" >/dev/null 2>&1; do
+    if [ "$attempt" -ge "$HEALTHCHECK_ATTEMPTS" ]; then
+      echo "Timed out waiting for $name: $url" >&2
+      return 1
+    fi
+    attempt=$((attempt + 1))
+    sleep "$HEALTHCHECK_INTERVAL_SECONDS"
+  done
+}
+
+wait_for_healthy_targets() {
+  url="http://${OBSERVABILITY_PRIVATE_BIND_IP}:9090/api/v1/targets?state=active"
+  attempt=1
+  while ! healthy_targets "$url"; do
+    if [ "$attempt" -ge "$HEALTHCHECK_ATTEMPTS" ]; then
+      echo "Prometheus has no healthy active targets" >&2
+      return 1
+    fi
+    attempt=$((attempt + 1))
+    sleep "$HEALTHCHECK_INTERVAL_SECONDS"
+  done
+}
+
+healthy_targets() {
+  targets=$(curl -fsS "$1" 2>/dev/null) || return 1
+  printf '%s' "$targets" | grep -q '"health":"up"'
+}
+
 expected="alertmanager alloy blackbox-exporter caddy grafana loki node-exporter prometheus"
 running=$(compose ps --status running --services | sort | tr '\n' ' ')
 
@@ -27,14 +62,9 @@ for service in $expected; do
   }
 done
 
-curl -fsS "http://${OBSERVABILITY_PRIVATE_BIND_IP}:9090/-/ready" >/dev/null
-curl -fsS "http://${OBSERVABILITY_PRIVATE_BIND_IP}:3100/ready" >/dev/null
-curl -fsS "https://${GRAFANA_DOMAIN}/api/health" >/dev/null
-
-targets=$(curl -fsS "http://${OBSERVABILITY_PRIVATE_BIND_IP}:9090/api/v1/targets?state=active")
-printf '%s' "$targets" | grep -q '"health":"up"' || {
-  echo "Prometheus has no healthy active targets" >&2
-  exit 1
-}
+wait_for_url "Prometheus" "http://${OBSERVABILITY_PRIVATE_BIND_IP}:9090/-/ready"
+wait_for_url "Loki" "http://${OBSERVABILITY_PRIVATE_BIND_IP}:3100/ready"
+wait_for_url "Grafana" "https://${GRAFANA_DOMAIN}/api/health"
+wait_for_healthy_targets
 
 echo "Observability healthcheck passed"
