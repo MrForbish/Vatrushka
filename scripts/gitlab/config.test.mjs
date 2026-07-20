@@ -79,6 +79,9 @@ test('production publication is tag-only and uses protected file variables', asy
   assert.match(publish, /CI_COMMIT_TAG =~ \/\^v\[0-9\]/u);
   assert.match(pipeline, /^deploy-production-runtime:[\s\S]*PRODUCTION_SSH_PRIVATE_KEY/mu);
   assert.match(pipeline, /^deploy-observability-runtime:[\s\S]*apply-observability-release/mu);
+  assert.match(pipeline, /OBSERVABILITY_SSH_HOST: "201\.51\.4\.24"/u);
+  assert.match(pipeline, /root@\$OBSERVABILITY_SSH_HOST/u);
+  assert.doesNotMatch(pipeline, /5\.42\.107\.9/u);
   assert.match(publish, /GLAB_ENABLE_CI_AUTOLOGIN: 'true'/u);
   assert.doesNotMatch(publish, /GITLAB_TOKEN:/u);
   assert.doesNotMatch(publish, /GITLAB_RELEASE_TOKEN/u);
