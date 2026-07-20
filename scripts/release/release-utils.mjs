@@ -14,10 +14,3 @@ export function productionBranch() {
 export function assertVersion(version) {
   if (!SEMVER.test(version)) throw new Error(`Invalid production SemVer: ${version}`);
 }
-
-export function rcArtifactName(version, runNumber, shortSha) {
-  assertVersion(version);
-  if (!/^\d+$/.test(String(runNumber))) throw new Error('Run number must be numeric');
-  if (!/^[a-f0-9]{7,40}$/i.test(shortSha)) throw new Error('Commit SHA is invalid');
-  return `Vatrushka-${version}-rc.${runNumber}-${shortSha.slice(0, 7)}.exe`;
-}

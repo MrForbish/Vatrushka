@@ -1,14 +1,14 @@
 # Production observability
 
-Текущий single-VPS контур остаётся legacy rollback-системой до завершения безопасной миграции на отдельный observability VPS. Актуальные документы:
+Канонический production-контур работает на отдельной monitoring VPS: Prometheus,
+Grafana, Loki с S3 storage, Alloy, Alertmanager, Blackbox и exporters. Grafana
+доступна только через `https://grafana.myvatrushka.ru`; Prometheus, Loki и
+exporters принимают ingestion на private bind address. Публичный `/metrics` API
+route закрыт.
 
-- [аудит](observability-audit.md);
-- [целевая архитектура](observability-architecture.md);
-- [runbook](observability-runbook.md);
-- [план миграции](observability-migration.md);
-- [disaster recovery](observability-disaster-recovery.md).
-
-Vatrushka uses a private single-VPS monitoring stack. Prometheus, Grafana and every exporter listen only on `127.0.0.1`; Caddy returns `404` for the public `/metrics` path. Open Grafana through an SSH tunnel instead of publishing another Internet-facing admin surface.
+Операционные действия описаны в [runbook](observability-runbook.md), backup и
+восстановление — в [disaster recovery](observability-disaster-recovery.md).
+Dashboard/provisioning и alert rules находятся в `infra/observability/platform`.
 
 ## Components and data
 

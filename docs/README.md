@@ -1,43 +1,38 @@
 # Документация Vatrushka
 
-Эта директория — каноническая документация проекта. Исходные макеты и большие prompt/spec-файлы используются как входные требования, но не описывают состояние production сами по себе.
+Канонические документы проекта находятся только в `docs/`. Внешние макеты и исходные ТЗ не являются частью runtime, CI или release-процесса.
 
-## С чего начать
+## Основные документы
 
-- [Бизнес-спецификация](product-specification.md) — продукт, пользовательские сценарии, функциональные границы и критерии качества.
-- [Техническая спецификация](technical-specification.md) — архитектура, данные, безопасность, realtime, медиа, поставка и ограничения совместимости.
-- [Roadmap](vnext-roadmap.md) — что готово, что требует улучшения и в каком порядке выполняется дальнейшая работа.
+- [Бизнес-спецификация](product-specification.md) — пользовательские сценарии и границы продукта.
+- [Техническая спецификация](technical-specification.md) — компоненты, данные, безопасность и интеграции.
+- [Roadmap](vnext-roadmap.md) — готовое, риски и приоритеты следующих работ.
+- [Delivery и релизы](release-process.md) — ветки, Merge Request, tag и автоматический production deploy.
+- [Развёртывание](deployment.md) — topology, переменные окружения и аварийная диагностика.
+- [Observability](observability.md) и [runbook](observability-runbook.md) — Grafana, Prometheus, Loki, alerting и восстановление.
 
-## Поддерживающие документы
+## Спецификации по областям
 
 | Область | Документ |
-|---|---|
-| Архитектура | [architecture.md](architecture.md) |
-| Аутентификация | [auth.md](auth.md) |
-| Home | [home.md](home.md) |
-| Messaging и realtime | [messaging.md](messaging.md) |
+| --- | --- |
+| Аутентификация и сессии | [auth.md](auth.md) |
+| Главная и Home | [home.md](home.md) |
+| Сообщения и realtime | [messaging.md](messaging.md) |
 | Voice и screen share | [media.md](media.md) |
-| Приватное S3-хранилище | [object-storage.md](object-storage.md) |
+| S3-вложения | [object-storage.md](object-storage.md) |
 | Безопасность | [security.md](security.md) |
-| Развертывание | [deployment.md](deployment.md) |
-| Production observability | [observability.md](observability.md) |
+| Тестирование | [testing.md](testing.md), [test-coverage-matrix.md](test-coverage-matrix.md) |
+| Производительность | [performance.md](performance.md), [capacity-testing.md](capacity-testing.md) |
 | Self-hosted LiveKit | [self-hosted-livekit.md](self-hosted-livekit.md) |
-| Тестирование | [testing.md](testing.md) |
-| Производительность | [performance.md](performance.md) |
-| Архитектурные решения | [adr/README.md](adr/README.md) |
-| Инвентаризация кода и данных | [code-inventory.md](code-inventory.md) |
-| Git branching и релизы | [release-process.md](release-process.md) |
-| История релизов | [releases](releases) и корневой `CHANGELOG.md` |
+| ADR | [adr/README.md](adr/README.md) |
+| История выпусков | [releases](releases), [CHANGELOG](../CHANGELOG.md) |
 
-## Иерархия источников
+## Приоритет источников
 
-При расхождении документов приоритет имеют:
+1. Фактическое production-состояние, безопасность данных и ограничения инфраструктуры.
+2. Бизнес- и техническая спецификации.
+3. Принятые ADR, runbook и release process.
+4. Roadmap.
+5. Исторические release notes.
 
-1. безопасность данных и фактические ограничения production;
-2. эта каноническая бизнес- и техническая спецификация;
-3. принятые ADR;
-4. актуальные runbook развертывания и тестирования;
-5. feature-spec и макеты;
-6. исторические release notes.
-
-Изменение поведения считается завершенным только после одновременного обновления кода, тестов и соответствующего канонического документа. Секреты, реальные пароли и private keys в документацию не добавляются.
+Изменение поведения считается завершённым только вместе с тестами и обновлением соответствующего канонического документа. Секреты, private keys, production `.env`, installers и reference assets в репозиторий не добавляются.
