@@ -920,6 +920,9 @@ export async function buildApp(
     "vatrushka_deployment_timestamp_seconds",
     Math.floor(Date.now() / 1_000),
   );
+  technicalMetrics.set("hawk_reporter_enabled", hawk.enabled ? 1 : 0, {
+    runtime: "api",
+  });
   const requestStartedAt = new WeakMap<object, number>();
   const requestInFlightLabels = new WeakMap<object, { method: string; route: string }>();
   const app = Fastify({
@@ -939,12 +942,16 @@ export async function buildApp(
   });
 
   if (config.HAWK_STARTUP_SMOKE_TEST) {
-    hawk.capture(new Error("Hawk startup smoke test"), {
+    const submitted = hawk.capture(new Error("Hawk startup smoke test"), {
       operation: "startup-smoke-test",
       runtime: "api",
       release: config.HAWK_RELEASE,
     });
-    app.log.info("Hawk startup smoke test submitted");
+    technicalMetrics.increment("hawk_events_submit_attempts_total", 1, {
+      runtime: "api",
+      result: submitted ? "submitted" : "not_configured_or_rejected",
+    });
+    app.log.info({ hawkEnabled: hawk.enabled, submitted }, "Hawk startup smoke test processed");
   }
 
   app.setValidatorCompiler(validatorCompiler);

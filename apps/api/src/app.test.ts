@@ -157,6 +157,7 @@ describe('health and metrics API', () => {
     expect(metrics.body).toContain('nodejs_event_loop_lag_seconds');
     expect(metrics.body).toContain('vatrushka_build_info{commit="unknown",version="');
     expect(metrics.body).toContain('vatrushka_deployment_timestamp_seconds ');
+    expect(metrics.body).toContain('hawk_reporter_enabled{runtime="api"} 0');
     expect(metrics.body).toContain('voice_active_sessions 0');
     expect(metrics.body).toContain('screen_share_active_sessions 0');
   });

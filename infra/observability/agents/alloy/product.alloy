@@ -14,12 +14,6 @@ prometheus.remote_write "central" {
   endpoint {
     url = sys.env("PROMETHEUS_REMOTE_WRITE_URL")
 
-    // Voice/screen-share gauges are operator-facing realtime signals. A short
-    // queue deadline keeps their end-to-end freshness close to the 5 s scrape
-    // interval without changing the batching behaviour for normal bursts.
-    queue_config {
-      batch_send_deadline = "1s"
-    }
   }
 }
 

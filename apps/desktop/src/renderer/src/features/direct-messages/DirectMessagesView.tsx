@@ -184,6 +184,7 @@ export function DirectMessagesView(
     name: server.name,
     memberCount: server.memberCount,
     iconUrl: server.iconUrl ?? null,
+    bannerUrl: server.bannerUrl ?? null,
     accentColor: server.accentColor ?? null,
   }));
   const totalUnread = props.conversations.reduce(

@@ -4,6 +4,16 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.11] - 2026-07-20
+
+### Fixed
+
+- fixes Grafana LogQL selectors for the "All" filter value and removes the invalid Loki compactor pseudo-timestamp;
+- clarifies container, Redis and HTTP observability panels and refreshes the product metrics agent as part of a production deployment;
+- restores uploaded profile and server media across settings, navigation and workspace cards;
+- makes the initial text-channel scroll position reliably land on the latest messages and refines Help and application scrollbars;
+- adds safe Hawk reporter enabled/attempt diagnostics without exposing telemetry secrets.
+
 ## [0.8.10] - 2026-07-20
 
 ### Fixed

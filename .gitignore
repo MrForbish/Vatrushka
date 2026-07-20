@@ -17,6 +17,7 @@ apps/desktop/build/icon.png
 apps/desktop/.e2e-user-data*/
 .DS_Store
 Thumbs.db
+vatrushka_codex_package/
 
 *storybook.log
 storybook-static
