@@ -9,6 +9,7 @@ import '@fontsource/ibm-plex-mono/400.css';
 
 import App from './App.js';
 import { AppRouter } from './app/routes';
+import { HawkErrorBoundary, initializeRendererHawk } from './observability/hawk';
 import './ui/foundations/tokens.css';
 import './styles.css';
 
@@ -26,13 +27,14 @@ const queryClient = new QueryClient({
 });
 
 async function bootstrap(container: HTMLElement): Promise<void> {
+  initializeRendererHawk();
   try {
     if ((await window.desktop.getPlatform()) === 'win32')
       document.body.classList.add('desktopTitlebarOverlay');
   } catch {
     /* The renderer remains usable if platform detection is unavailable. */
   }
-  createRoot(container).render(<StrictMode><QueryClientProvider client={queryClient}><AppRouter><App /></AppRouter></QueryClientProvider></StrictMode>);
+  createRoot(container).render(<StrictMode><HawkErrorBoundary><QueryClientProvider client={queryClient}><AppRouter><App /></AppRouter></QueryClientProvider></HawkErrorBoundary></StrictMode>);
 }
 
 void bootstrap(root);

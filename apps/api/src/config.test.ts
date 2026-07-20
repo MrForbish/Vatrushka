@@ -27,3 +27,19 @@ describe('media storage configuration', () => {
     })).toEqual(expect.objectContaining({ MEDIA_STORAGE_DRIVER: 's3', S3_REGION: 'ru-1', S3_FORCE_PATH_STYLE: true, S3_KEY_PREFIX: 'prod' }));
   });
 });
+
+describe('Hawk configuration', () => {
+  it('is disabled by default', () => {
+    expect(loadConfig({ NODE_ENV: 'test' }).HAWK_ENABLED).toBe(false);
+  });
+
+  it('requires a token only when enabled', () => {
+    expect(() => loadConfig({ NODE_ENV: 'test', HAWK_ENABLED: 'true' })).toThrow(/HAWK_INTEGRATION_TOKEN/);
+    expect(loadConfig({
+      NODE_ENV: 'test',
+      HAWK_ENABLED: 'true',
+      HAWK_INTEGRATION_TOKEN: 'test-token',
+      HAWK_RELEASE: '0.8.0-test',
+    })).toEqual(expect.objectContaining({ HAWK_ENABLED: true }));
+  });
+});
