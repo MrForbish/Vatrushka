@@ -4,6 +4,12 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.8] - 2026-07-20
+
+### Fixed
+
+- Observability deployment health checks now wait for recreated Prometheus, Loki, Grafana and active targets instead of failing on their expected short startup window.
+
 ## [0.8.7] - 2026-07-20
 
 ### Fixed
