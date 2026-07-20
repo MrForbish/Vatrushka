@@ -9,9 +9,6 @@ import type {
 
 const channels = {
   appVersion: "app:get-version",
-  windowFullscreenGet: "window:get-fullscreen",
-  windowFullscreenToggle: "window:toggle-fullscreen",
-  windowFullscreenState: "window:fullscreen-state",
   updateStateGet: "update:get-state",
   updateCheck: "update:check",
   updateInstall: "update:install",
@@ -40,7 +37,6 @@ const notificationClickCallbacks = new Set<
   (target: DesktopMessageNotificationTarget) => void
 >();
 const updateStateCallbacks = new Set<(state: DesktopUpdateState) => void>();
-const fullscreenCallbacks = new Set<(fullscreen: boolean) => void>();
 let pendingDeepLink: string | null = null;
 
 ipcRenderer.on(channels.deepLink, (_event, inviteToken: unknown) => {
@@ -81,11 +77,6 @@ ipcRenderer.on(channels.updateState, (_event, state: unknown) => {
   for (const callback of updateStateCallbacks) callback(state);
 });
 
-ipcRenderer.on(channels.windowFullscreenState, (_event, state: unknown) => {
-  if (typeof state !== "boolean") return;
-  for (const callback of fullscreenCallbacks) callback(state);
-});
-
 function isUpdateState(value: unknown): value is DesktopUpdateState {
   if (
     !value ||
@@ -114,14 +105,6 @@ function isUpdateState(value: unknown): value is DesktopUpdateState {
 const bridge: DesktopBridge = {
   getAppVersion: () =>
     ipcRenderer.invoke(channels.appVersion) as Promise<string>,
-  getFullscreen: () =>
-    ipcRenderer.invoke(channels.windowFullscreenGet) as Promise<boolean>,
-  toggleFullscreen: () =>
-    ipcRenderer.invoke(channels.windowFullscreenToggle) as Promise<boolean>,
-  onFullscreenChange: (callback) => {
-    fullscreenCallbacks.add(callback);
-    return () => fullscreenCallbacks.delete(callback);
-  },
   getUpdateState: () =>
     ipcRenderer.invoke(channels.updateStateGet) as Promise<DesktopUpdateState>,
   checkForUpdates: () =>

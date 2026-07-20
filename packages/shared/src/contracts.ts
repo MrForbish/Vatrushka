@@ -310,6 +310,7 @@ export interface VoiceChannelParticipant {
   speaking?: boolean;
   screenSharing?: boolean;
   connectionQuality?: "excellent" | "good" | "poor" | "unknown";
+  presence?: EffectivePresenceStatus;
 }
 
 export interface ServerRole {
@@ -859,6 +860,8 @@ export interface DesktopUpdateState {
   version?: string;
   percent?: number;
   message?: string;
+  /** Distinguishes a local connection issue from a Vatrushka update service failure. */
+  failureKind?: "network" | "infrastructure" | "unknown";
 }
 
 export interface PublicUser {
@@ -1008,9 +1011,6 @@ export interface DesktopMediaDiagnostic {
 
 export interface DesktopBridge {
   getAppVersion(): Promise<string>;
-  getFullscreen(): Promise<boolean>;
-  toggleFullscreen(): Promise<boolean>;
-  onFullscreenChange(callback: (fullscreen: boolean) => void): () => void;
   getUpdateState(): Promise<DesktopUpdateState>;
   checkForUpdates(): Promise<void>;
   installUpdate(): Promise<void>;

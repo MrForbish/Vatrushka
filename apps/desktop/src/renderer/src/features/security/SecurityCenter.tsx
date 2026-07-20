@@ -64,7 +64,7 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Не удалось выполнить действие';
 }
 
-export function SecurityCenter({ client = apiClient, dndActive = false, onClose, onCurrentSessionRevoked, onSectionChange, onSettingsChange = () => undefined, onUserChange, open, presentation = 'modal', section, settings = { volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }, user }: SecurityCenterProps): React.JSX.Element {
+export function SecurityCenter({ client = apiClient, dndActive = false, onClose, onCurrentSessionRevoked, onSectionChange, onSettingsChange = () => undefined, onUserChange, open, presentation = 'modal', section, settings = { volume: 1, appSoundVolume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }, user }: SecurityCenterProps): React.JSX.Element {
   const [tab, setTab] = useState<SecurityTab>('protection');
   const [flow, setFlow] = useState<ProtectionFlow>('overview');
   const [sessions, setSessions] = useState<UserSession[]>([]);

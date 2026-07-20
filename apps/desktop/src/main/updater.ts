@@ -27,6 +27,7 @@ export class DesktopUpdater {
   private retryTimer: NodeJS.Timeout | null = null;
   private started = false;
   private lastCheckStartedAt: number | null = null;
+  private lastCheckWasManual = false;
 
   constructor(private readonly publish: (state: DesktopUpdateState) => void) {}
 
@@ -74,16 +75,16 @@ export class DesktopUpdater {
 
   async check(): Promise<void> {
     if (!this.started) this.start();
-    await this.runCheck();
+    await this.runCheck(true);
   }
 
   async checkIfDue(): Promise<void> {
     if (!this.started) this.start();
     if (!isUpdateCheckDue(this.lastCheckStartedAt)) return;
-    await this.runCheck();
+    await this.runCheck(false);
   }
 
-  private async runCheck(): Promise<void> {
+  private async runCheck(manual: boolean): Promise<void> {
     if (
       this.state.status === "unsupported" ||
       this.state.status === "checking" ||
@@ -91,6 +92,7 @@ export class DesktopUpdater {
       this.state.status === "ready"
     )
       return;
+    this.lastCheckWasManual = manual;
     this.lastCheckStartedAt = Date.now();
     try {
       await withTimeout(autoUpdater.checkForUpdates(), UPDATE_CHECK_TIMEOUT_MS);
@@ -160,26 +162,52 @@ export class DesktopUpdater {
   };
 
   private readonly onError = (error: Error): void => {
-    log.error("Automatic update failed", { error });
+    const failureKind = updateFailureKind(error);
+    log.warn("Update check failed", { failureKind, manual: this.lastCheckWasManual, error });
+    // Background checks are deliberately quiet when the device itself is
+    // offline. A red updater notification in that case duplicates the global
+    // connection state and tells the user nothing actionable.
+    if (failureKind === "network" && !this.lastCheckWasManual) {
+      this.setState({ status: "idle", currentVersion: app.getVersion() });
+      this.scheduleRetry();
+      return;
+    }
     this.setState({
       status: "error",
       currentVersion: app.getVersion(),
-      message:
-        "Не удалось проверить или загрузить обновление. Повторите попытку позже.",
+      failureKind,
+      message: updateFailureMessage(failureKind),
     });
+    this.scheduleRetry();
+  };
+
+  private scheduleRetry(): void {
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.retryTimer = setTimeout(() => {
       this.retryTimer = null;
-      void this.runCheck();
+      void this.runCheck(false);
     }, UPDATE_RETRY_DELAY_MS);
     this.retryTimer.unref();
-  };
+  }
 
   private setState(state: DesktopUpdateState): void {
     if (JSON.stringify(this.state) === JSON.stringify(state)) return;
     this.state = state;
     this.publish({ ...state });
   }
+}
+
+function updateFailureKind(error: Error): "network" | "infrastructure" | "unknown" {
+  const message = `${error.name} ${error.message}`.toLowerCase();
+  if (/err_internet_disconnected|err_network_changed|err_name_not_resolved|err_connection|network|offline|timed out|timeout/u.test(message)) return "network";
+  if (/\b(5\d\d|503|502|500)\b|update server|latest\.yml/u.test(message)) return "infrastructure";
+  return "unknown";
+}
+
+function updateFailureMessage(kind: "network" | "infrastructure" | "unknown"): string {
+  if (kind === "network") return "Нет подключения к интернету. Проверка обновлений возобновится автоматически.";
+  if (kind === "infrastructure") return "Сервис обновлений Vatrushka временно недоступен. Повторите попытку позже.";
+  return "Не удалось проверить или загрузить обновление. Повторите попытку позже.";
 }
 
 async function withTimeout<T>(

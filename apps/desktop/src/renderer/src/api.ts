@@ -68,6 +68,70 @@ function absoluteResourceUrl(url: string | null | undefined): string | null {
   return url.startsWith("/") ? `${apiOrigin}${url}` : url;
 }
 
+function withAbsoluteUserAvatar<T extends { avatarUrl?: string | null }>(
+  user: T,
+): T {
+  return { ...user, avatarUrl: absoluteResourceUrl(user.avatarUrl) };
+}
+
+function withAbsoluteServerMedia<T extends ServerSummary>(server: T): T {
+  return {
+    ...server,
+    iconUrl: absoluteResourceUrl(server.iconUrl),
+    bannerUrl: absoluteResourceUrl(server.bannerUrl),
+  };
+}
+
+function normalizeServerDetail(detail: ServerDetail): ServerDetail {
+  return {
+    ...withAbsoluteServerMedia(detail),
+    members: detail.members.map((member) =>
+      withAbsoluteUserAvatar(member),
+    ),
+    channels: detail.channels.map((channel) => ({
+      ...channel,
+      ...(channel.voiceParticipants === undefined
+        ? {}
+        : {
+            voiceParticipants: channel.voiceParticipants.map((participant) =>
+              withAbsoluteUserAvatar(participant),
+            ),
+          }),
+    })),
+  };
+}
+
+function normalizeHomeDashboard(
+  dashboard: HomeDashboardResponse,
+): HomeDashboardResponse {
+  return {
+    ...dashboard,
+    user: withAbsoluteUserAvatar(dashboard.user),
+    servers: dashboard.servers.map((server) => withAbsoluteServerMedia(server)),
+    gaming: {
+      ...dashboard.gaming,
+      activeSpaces: dashboard.gaming.activeSpaces.map((space) => ({
+        ...space,
+        serverIconUrl: absoluteResourceUrl(space.serverIconUrl),
+        coverUrl: absoluteResourceUrl(space.coverUrl),
+      })),
+      friendsInGame: dashboard.gaming.friendsInGame.map((friend) =>
+        withAbsoluteUserAvatar(friend),
+      ),
+    },
+  };
+}
+
+function normalizeUserProfileSettings(
+  profile: UserProfileSettings,
+): UserProfileSettings {
+  return {
+    ...profile,
+    avatarUrl: absoluteResourceUrl(profile.avatarUrl),
+    coverUrl: absoluteResourceUrl(profile.coverUrl),
+  };
+}
+
 export class ClientError extends Error {
   constructor(
     readonly code: string,
@@ -116,7 +180,7 @@ export class ApiClient {
       const response = await window.desktop.refreshAuthSession();
       if (!response) return null;
       this.acceptAccess(response);
-      return response.user;
+      return withAbsoluteUserAvatar(response.user);
     } catch {
       return null;
     }
@@ -201,11 +265,11 @@ export class ApiClient {
   }
 
   async setPassword(code: string, password: string): Promise<PublicUser> {
-    const user = await this.request<PublicUser>("/me/password", {
+    const user = withAbsoluteUserAvatar(await this.request<PublicUser>("/me/password", {
       method: "PUT",
       body: { code, password },
       auth: true,
-    });
+    }));
     this.user = user;
     return user;
   }
@@ -220,16 +284,17 @@ export class ApiClient {
       body: { code },
       auth: true,
     });
-    this.user = result.user;
-    return result;
+    const user = withAbsoluteUserAvatar(result.user);
+    this.user = user;
+    return { ...result, user };
   }
 
   async disableTwoFactor(code: string): Promise<PublicUser> {
-    const user = await this.request<PublicUser>("/me/2fa", {
+    const user = withAbsoluteUserAvatar(await this.request<PublicUser>("/me/2fa", {
       method: "DELETE",
       body: { code },
       auth: true,
-    });
+    }));
     this.user = user;
     return user;
   }
@@ -272,11 +337,11 @@ export class ApiClient {
   }
 
   async updateProfile(displayName: string): Promise<PublicUser> {
-    const user = await this.request<PublicUser>("/me", {
+    const user = withAbsoluteUserAvatar(await this.request<PublicUser>("/me", {
       method: "PATCH",
       body: { displayName },
       auth: true,
-    });
+    }));
     this.user = user;
     return user;
   }
@@ -331,7 +396,9 @@ export class ApiClient {
   }
 
   listServers(): Promise<ServerSummary[]> {
-    return this.request("/servers", { auth: true });
+    return this.request<ServerSummary[]>("/servers", { auth: true }).then(
+      (servers) => servers.map((server) => withAbsoluteServerMedia(server)),
+    );
   }
 
   listPublicServers(
@@ -344,18 +411,29 @@ export class ApiClient {
       offset: String(offset),
     });
     if (search.trim()) query.set("search", search.trim());
-    return this.request(`/public-servers?${query.toString()}`, { auth: true });
+    return this.request<PublicServerSummary[]>(
+      `/public-servers?${query.toString()}`,
+      { auth: true },
+    ).then((servers) =>
+      servers.map((server) => ({
+        ...server,
+        iconUrl: absoluteResourceUrl(server.iconUrl),
+        bannerUrl: absoluteResourceUrl(server.bannerUrl),
+      })),
+    );
   }
 
   joinPublicServer(serverId: string): Promise<ServerDetail> {
-    return this.request(`/public-servers/${serverId}/join`, {
+    return this.request<ServerDetail>(`/public-servers/${serverId}/join`, {
       method: "POST",
       auth: true,
-    });
+    }).then(normalizeServerDetail);
   }
 
   getHomeDashboard(): Promise<HomeDashboardResponse> {
-    return this.request("/home", { auth: true });
+    return this.request<HomeDashboardResponse>("/home", { auth: true }).then(
+      normalizeHomeDashboard,
+    );
   }
 
   async recordOpenedChannel(channelId: string): Promise<void> {
@@ -373,36 +451,40 @@ export class ApiClient {
   }
 
   createServer(name: string): Promise<ServerDetail> {
-    return this.request("/servers", {
+    return this.request<ServerDetail>("/servers", {
       method: "POST",
       body: { name },
       auth: true,
-    });
+    }).then(normalizeServerDetail);
   }
 
   acceptServerInvite(inviteToken: string): Promise<ServerDetail> {
-    return this.request(`/invites/${encodeURIComponent(inviteToken)}/accept`, {
+    return this.request<ServerDetail>(`/invites/${encodeURIComponent(inviteToken)}/accept`, {
       method: "POST",
       auth: true,
-    });
+    }).then(normalizeServerDetail);
   }
 
   getServer(serverId: string): Promise<ServerDetail> {
-    return this.request(`/servers/${serverId}`, { auth: true });
+    return this.request<ServerDetail>(`/servers/${serverId}`, { auth: true }).then(
+      normalizeServerDetail,
+    );
   }
 
   getUserProfileSettings(): Promise<UserProfileSettings> {
-    return this.request("/users/me/profile", { auth: true });
+    return this.request<UserProfileSettings>("/users/me/profile", {
+      auth: true,
+    }).then(normalizeUserProfileSettings);
   }
 
   updateUserProfileSettings(
     input: Pick<UserProfileSettings, "displayName" | "username" | "bio">,
   ): Promise<UserProfileSettings> {
-    return this.request("/users/me/profile", {
+    return this.request<UserProfileSettings>("/users/me/profile", {
       method: "PATCH",
       body: input,
       auth: true,
-    });
+    }).then(normalizeUserProfileSettings);
   }
 
   async uploadUserAvatar(file: File): Promise<UserProfileSettings> {
@@ -426,19 +508,19 @@ export class ApiClient {
         "Не удалось загрузить аватар",
         response.status,
       );
-    return this.request("/users/me/avatar", {
+    return this.request<UserProfileSettings>("/users/me/avatar", {
       method: "PUT",
       body: { objectKey: intent.objectKey },
       auth: true,
-    });
+    }).then(normalizeUserProfileSettings);
   }
 
   resetUserAvatar(): Promise<UserProfileSettings> {
-    return this.request("/users/me/avatar", {
+    return this.request<UserProfileSettings>("/users/me/avatar", {
       method: "PUT",
       body: { objectKey: null },
       auth: true,
-    });
+    }).then(normalizeUserProfileSettings);
   }
 
   async uploadUserProfileCover(file: File): Promise<UserProfileSettings> {
@@ -462,19 +544,19 @@ export class ApiClient {
         "Не удалось загрузить обложку профиля",
         response.status,
       );
-    return this.request("/users/me/profile-cover", {
+    return this.request<UserProfileSettings>("/users/me/profile-cover", {
       method: "PUT",
       body: { objectKey: intent.objectKey },
       auth: true,
-    });
+    }).then(normalizeUserProfileSettings);
   }
 
   resetUserProfileCover(): Promise<UserProfileSettings> {
-    return this.request("/users/me/profile-cover", {
+    return this.request<UserProfileSettings>("/users/me/profile-cover", {
       method: "PUT",
       body: { objectKey: null },
       auth: true,
-    });
+    }).then(normalizeUserProfileSettings);
   }
 
   requestEmailChange(input: {
@@ -490,10 +572,10 @@ export class ApiClient {
   }
 
   async confirmEmailChange(code: string): Promise<PublicUser> {
-    const user = await this.request<PublicUser>(
+    const user = withAbsoluteUserAvatar(await this.request<PublicUser>(
       "/users/me/email-change/confirm",
       { method: "POST", body: { code }, auth: true },
-    );
+    ));
     this.user = user;
     return user;
   }
@@ -1561,13 +1643,17 @@ export class ApiClient {
         result.status,
         result.error?.details,
       );
-    this.acceptAccess(result.session);
-    return result.session;
+    const session = {
+      ...result.session,
+      user: withAbsoluteUserAvatar(result.session.user),
+    };
+    this.acceptAccess(session);
+    return session;
   }
 
   private acceptAccess(response: DesktopAuthSession): void {
     this.accessToken = response.accessToken;
-    this.user = response.user;
+    this.user = withAbsoluteUserAvatar(response.user);
   }
 
   private async clearSession(): Promise<void> {

@@ -31,8 +31,16 @@ export default defineConfig({
           browser: {
             enabled: true,
             headless: true,
-            provider: playwright({}),
+            provider: playwright({
+              launchOptions: {
+                // The Windows runner can inherit a VPN/system proxy. Browser
+                // interaction tests only use the local Vitest server.
+                args: ['--no-proxy-server', '--proxy-bypass-list=<-loopback>'],
+              },
+            }),
             instances: [{ browser: 'chromium' }],
+            api: { host: '127.0.0.1', port: 63315 },
+            fileParallelism: false,
           },
         },
       },

@@ -6,8 +6,25 @@ const enabled = environment.VITE_HAWK_DESKTOP_RENDERER_ENABLED === 'true';
 const token = typeof environment.VITE_HAWK_INTEGRATION_TOKEN === 'string'
   ? environment.VITE_HAWK_INTEGRATION_TOKEN
   : undefined;
+const forbiddenKey = /(?:authorization|cookie|password|secret|token|otp|code|email|message|content|body)/iu;
+const forbiddenValue = /(?:bearer\s+|eyJ[a-zA-Z0-9_-]{10,}|https?:\/\/[^\s]+[?&](?:token|key|code)=)/iu;
 
 let hawk: HawkCatcher | null = null;
+
+function scrub(value: unknown, key = ''): unknown {
+  if (forbiddenKey.test(key)) return '[redacted]';
+  if (typeof value === 'string')
+    return forbiddenValue.test(value) ? '[redacted]' : value.slice(0, 512);
+  if (Array.isArray(value)) return value.map((item) => scrub(item));
+  if (value && typeof value === 'object')
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([entryKey, entryValue]) => [
+        entryKey,
+        scrub(entryValue, entryKey),
+      ]),
+    );
+  return value;
+}
 
 export function initializeRendererHawk(): void {
   if (!enabled || !token || hawk) return;
@@ -19,8 +36,8 @@ export function initializeRendererHawk(): void {
         : 'unknown',
       breadcrumbs: false,
       consoleTracking: false,
-      issues: false,
-      beforeSend: (event) => event,
+      issues: { errors: true },
+      beforeSend: (event) => scrub(event) as typeof event,
     });
   } catch {
     hawk = null;

@@ -1,6 +1,6 @@
 {
   "name": "@vatrushka/desktop",
-  "version": "0.8.8",
+  "version": "0.8.9",
   "private": true,
   "description": "Клиент серверов и каналов «Ватрушка» для Windows",
   "author": "Ватрушка",
@@ -19,7 +19,7 @@
     "storybook": "storybook dev -p 6006 --no-open",
     "build-storybook": "storybook build",
     "test:storybook": "vitest run --project=storybook",
-    "visual:serve": "vite preview --host 127.0.0.1 --port 6006 --strictPort --outDir storybook-static",
+    "visual:serve": "node scripts/serve-storybook.mjs",
     "test:visual": "npm run build-storybook && playwright test --config=playwright.storybook.config.ts",
     "perf:check": "node scripts/check-bundle.mjs",
     "perf:bundle": "electron-vite build && node scripts/check-bundle.mjs"
@@ -32,7 +32,7 @@
     "@hawk.so/browser": "^3.4.0",
     "@tanstack/react-query": "^5.101.2",
     "@tanstack/react-virtual": "^3.14.6",
-    "@vatrushka/shared": "0.8.8",
+    "@vatrushka/shared": "0.8.9",
     "electron-log": "5.4.4",
     "electron-updater": "6.8.9",
     "livekit-client": "2.20.1",

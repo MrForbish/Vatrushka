@@ -201,6 +201,7 @@ const envSchema = z
       .default("development"),
     HAWK_RELEASE: z.string().trim().min(1).default(packageVersion),
     HAWK_USER_HASH_SECRET: z.string().min(32).optional().or(z.literal("")),
+    HAWK_STARTUP_SMOKE_TEST: booleanFromString,
   })
   .superRefine((env, context) => {
     if (env.MEDIA_STORAGE_DRIVER === "s3") {

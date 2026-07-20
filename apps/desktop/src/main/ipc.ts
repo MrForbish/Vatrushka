@@ -29,9 +29,6 @@ import type { DesktopStorage } from "./storage.js";
 
 export const IPC_CHANNELS = {
   appVersion: "app:get-version",
-  windowFullscreenGet: "window:get-fullscreen",
-  windowFullscreenToggle: "window:toggle-fullscreen",
-  windowFullscreenState: "window:fullscreen-state",
   updateStateGet: "update:get-state",
   updateCheck: "update:check",
   updateInstall: "update:install",
@@ -63,8 +60,6 @@ interface IpcOptions {
   ): void;
   showMessageNotification(notification: DesktopMessageNotification): void;
   setBadgeCount(count: number): void;
-  getFullscreen(): boolean;
-  toggleFullscreen(): boolean;
   updater: {
     getState(): DesktopUpdateState;
     check(): Promise<void>;
@@ -287,7 +282,6 @@ export function registerIpc(options: IpcOptions): () => void {
     IPC_CHANNELS.deepLink,
     IPC_CHANNELS.notificationClick,
     IPC_CHANNELS.updateState,
-    IPC_CHANNELS.windowFullscreenState,
   ]);
   const channels = Object.values(IPC_CHANNELS).filter(
     (channel) => !outgoingChannels.has(channel),
@@ -314,8 +308,6 @@ export function registerIpc(options: IpcOptions): () => void {
   };
 
   handle(IPC_CHANNELS.appVersion, () => app.getVersion());
-  handle(IPC_CHANNELS.windowFullscreenGet, () => options.getFullscreen());
-  handle(IPC_CHANNELS.windowFullscreenToggle, () => options.toggleFullscreen());
   handle(IPC_CHANNELS.updateStateGet, () => options.updater.getState());
   handle(IPC_CHANNELS.updateCheck, () => options.updater.check());
   handle(IPC_CHANNELS.updateInstall, () => options.updater.install());
@@ -343,12 +335,13 @@ export function registerIpc(options: IpcOptions): () => void {
   });
   handle(IPC_CHANNELS.authClear, () => options.storage.clearAuthSession());
   handle(IPC_CHANNELS.sourcesList, listSources);
-  handle(IPC_CHANNELS.sourceSelect, async (_event, value: unknown) => {
+  handle(IPC_CHANNELS.sourceSelect, (_event, value: unknown) => {
     const selection = desktopSourceSelectionSchema.parse(value);
-    const exists = (await listSources()).some(
-      (source) => source.id === selection.sourceId,
-    );
-    if (!exists) throw new Error("Desktop source is no longer available");
+    // The source list is intentionally not re-enumerated here. Chromium asks for
+    // the source immediately after this IPC call; a second enumeration races
+    // with disappearing/recreated windows and rejects an otherwise valid first
+    // selection. The display-media handler remains authoritative and safely
+    // denies a source that is genuinely gone.
     options.setSelectedSource(selection);
   });
   handle(IPC_CHANNELS.sourceClear, () => options.setSelectedSource(null));

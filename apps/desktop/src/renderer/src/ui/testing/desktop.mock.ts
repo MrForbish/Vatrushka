@@ -2,9 +2,6 @@ import type { DesktopBridge } from "@vatrushka/shared";
 
 export const desktopMock: DesktopBridge = {
   getAppVersion: async () => "0.2.0-storybook",
-  getFullscreen: async () => false,
-  toggleFullscreen: async () => false,
-  onFullscreenChange: () => () => undefined,
   getUpdateState: async () => ({
     status: "unsupported",
     currentVersion: "0.2.0-storybook",
@@ -29,6 +26,7 @@ export const desktopMock: DesktopBridge = {
   getPlatform: async () => "win32",
   getLocalSettings: async () => ({
     volume: 1,
+    appSoundVolume: 1,
     desktopNotificationsEnabled: true,
     messageSoundsEnabled: true,
   }),

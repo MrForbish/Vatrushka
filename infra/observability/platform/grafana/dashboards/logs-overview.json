@@ -103,7 +103,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "Что показывает: текущий объём относительно предыдущего часа. Как считается: rate сейчас / rate с offset 1h. Норма: универсальной нормы нет. Проблема: многократный рост вместе с errors. Что проверить: release и нагрузку.",
+      "description": "Что показывает: во сколько раз текущая скорость поступления логов отличается от такой же точки час назад. Как считается: LogQL rate сейчас / rate с offset 1h. Норма: около 1. Проблема: многократный рост вместе с ошибками. Что проверить: релиз и нагрузку.",
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit"
@@ -119,7 +119,7 @@
       "id": 4,
       "targets": [
         {
-          "expr": "sum(rate({source=~\".+\",environment=~\"$environment\",service=~\"$service\",host=~\"$host\",container=~\"$container\",level=~\"$level\"} |~ `(?i)$search` [$__auto])) / clamp_min(sum(rate({source=~\".+\",environment=~\"$environment\",service=~\"$service\",host=~\"$host\",container=~\"$container\",level=~\"$level\"} |~ `(?i)$search` [$__auto] offset 1h)), 0.001)",
+          "expr": "sum(rate({source=~\".+\",environment=~\"$environment\",service=~\"$service\",host=~\"$host\",container=~\"$container\",level=~\"$level\"} |~ `(?i)$search` [$__auto])) / sum(rate({source=~\".+\",environment=~\"$environment\",service=~\"$service\",host=~\"$host\",container=~\"$container\",level=~\"$level\"} |~ `(?i)$search` [$__auto] offset 1h))",
           "legendFormat": "current / previous",
           "queryType": "range",
           "refId": "A"
@@ -133,7 +133,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "Что показывает: наиболее частые bounded error_code. Как считается: JSON parsing во время query и count_over_time. Норма: универсальной нормы нет. Проблема: один код доминирует или резко растёт. Что проверить: сообщения и API route.",
+      "description": "Что показывает: наиболее частые структурированные коды ошибок из JSON-логов. Как считается: JSON parsing во время запроса и count_over_time. Норма: «Нет данных» означает, что в выбранный период не было структурированных ошибок — это штатно. Проблема: один код доминирует или резко растёт. Что проверить: сообщения и API route.",
       "gridPos": {
         "h": 7,
         "w": 8,
@@ -149,7 +149,7 @@
           "refId": "A"
         }
       ],
-      "title": "Top error codes",
+      "title": "Частые коды ошибок",
       "type": "barchart"
     },
     {
@@ -157,7 +157,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "Что показывает: наиболее частые exception_type без превращения в label. Как считается: query-time JSON parsing и count_over_time. Норма: универсальной нормы нет. Проблема: повторяющееся исключение. Что проверить: связанные request ID и stack.",
+      "description": "Что показывает: наиболее частые типы исключений из JSON-логов без превращения их в Loki label. Как считается: JSON parsing во время запроса и count_over_time. Норма: «Нет данных» означает, что в выбранный период исключений не было — это штатно. Проблема: повторяющееся исключение. Что проверить: связанные request ID и stack trace.",
       "gridPos": {
         "h": 7,
         "w": 8,
@@ -173,7 +173,7 @@
           "refId": "A"
         }
       ],
-      "title": "Top exception types",
+      "title": "Частые типы исключений",
       "type": "barchart"
     },
     {

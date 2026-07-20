@@ -4,6 +4,28 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.9] - 2026-07-20
+
+### Fixed
+
+- the unread divider no longer appears for the current user's own message or in an already open conversation;
+- restores the explicit 2560 × 1440 / 60 FPS screen-share quality choice;
+- Home, server and direct-message surfaces consistently resolve uploaded server covers, server avatars and profile avatars;
+- removes the application-window fullscreen control; fullscreen remains available only for screen-share viewing;
+- enables actionable Hawk runtime error capture and validates the protected release token before packaging.
+
+### Added
+
+- configurable local volume for Vatrushka cues: voice join/leave, screen-share start/stop, message and ready-to-install update notifications;
+- a manual update check in the Notification Center.
+
+### Fixed
+
+- screen-share source selection no longer rejects a valid first selection because a second desktop-source enumeration raced with window lifecycle;
+- only participants already present in a voice channel can be dragged between voice channels; regular/offline member rows are no longer drag sources;
+- presence on the central voice stage now uses the same realtime status as member lists and profile surfaces.
+- background update checks stay quiet during a local network outage and distinguish it from an update-service outage when the user runs a manual check.
+
 ## [0.8.8] - 2026-07-20
 
 ### Fixed

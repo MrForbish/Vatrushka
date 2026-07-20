@@ -29,6 +29,7 @@ import {
   type DirectConversationSummary,
   type DirectMessage,
   type DirectMessageCandidate,
+  type EffectivePresenceStatus,
   type HomeDestination,
   type InternalNotification,
   type LocalSettings,
@@ -413,6 +414,7 @@ export default function App(): ReactNode {
     useState("");
   const [settings, setSettings] = useState<LocalSettings>({
     volume: 1,
+    appSoundVolume: 1,
     desktopNotificationsEnabled: true,
     messageSoundsEnabled: true,
   });
@@ -503,6 +505,8 @@ export default function App(): ReactNode {
   const voiceCuePlayerRef = useRef<VoiceCuePlayer | null>(null);
   const participantConnectionRef = useRef<RoomConnection | null>(null);
   const previousRemoteParticipantsRef = useRef<Set<string> | null>(null);
+  const previousScreenShareActiveRef = useRef<boolean | null>(null);
+  const announcedUpdateRef = useRef<string | null>(null);
   const voiceTransitionRef = useRef(false);
   const serverMessageRetryRef = useRef(new Map<string, () => void>());
   const directMessageRetryRef = useRef(new Map<string, () => void>());
@@ -533,6 +537,22 @@ export default function App(): ReactNode {
               member.userId === user.id
                 ? { ...member, presence: presence.effectiveStatus }
                 : member,
+            ),
+            channels: current.channels.map((channel) =>
+              channel.voiceParticipants === undefined
+                ? channel
+                : {
+                    ...channel,
+                    voiceParticipants: channel.voiceParticipants.map(
+                      (participant) =>
+                        participant.userId === user.id
+                          ? {
+                              ...participant,
+                              presence: presence.effectiveStatus,
+                            }
+                          : participant,
+                    ),
+                  },
             ),
           },
     );
@@ -589,6 +609,39 @@ export default function App(): ReactNode {
     const refresh = (): void => setRealtimeRevision((current) => current + 1);
     const unsubscribeEvent = realtime.onEvent((event) => {
       refresh();
+      if (
+        event.type === "presence.updated" &&
+        typeof event.payload.userId === "string" &&
+        isEffectivePresenceStatus(event.payload.effectiveStatus)
+      ) {
+        const userId = event.payload.userId;
+        const presenceStatus = event.payload.effectiveStatus;
+        setServerDetail((current) =>
+          current === null
+            ? null
+            : {
+                ...current,
+                members: current.members.map((member) =>
+                  member.userId === userId
+                    ? { ...member, presence: presenceStatus }
+                    : member,
+                ),
+                channels: current.channels.map((channel) =>
+                  channel.voiceParticipants === undefined
+                    ? channel
+                    : {
+                        ...channel,
+                        voiceParticipants: channel.voiceParticipants.map(
+                          (participant) =>
+                            participant.userId === userId
+                              ? { ...participant, presence: presenceStatus }
+                              : participant,
+                        ),
+                      },
+                ),
+              },
+        );
+      }
       if (event.type !== "typing.started" && event.type !== "typing.stopped")
         setHomeRealtimeRevision((current) => current + 1);
       if (event.type.startsWith("voice.")) {
@@ -828,9 +881,13 @@ export default function App(): ReactNode {
     (cue: VoiceCue): void => {
       if (presence?.preference === "do_not_disturb") return;
       voiceCuePlayerRef.current ??= new VoiceCuePlayer();
-      voiceCuePlayerRef.current.play(cue, settings.outputDeviceId);
+      voiceCuePlayerRef.current.play(
+        cue,
+        settings.outputDeviceId,
+        settings.appSoundVolume,
+      );
     },
-    [presence?.preference, settings.outputDeviceId],
+    [presence?.preference, settings.appSoundVolume, settings.outputDeviceId],
   );
 
   const updateUser = (next: PublicUser | null): void => {
@@ -1111,6 +1168,21 @@ export default function App(): ReactNode {
     if (changes.joined.length > 0) playVoiceCue("join");
     if (changes.left.length > 0) playVoiceCue("leave");
   }, [connection, mediaSnapshot.participants, playVoiceCue]);
+
+  useEffect(() => {
+    const active = mediaSnapshot.screenTrack !== null;
+    const previous = previousScreenShareActiveRef.current;
+    previousScreenShareActiveRef.current = active;
+    if (previous === null || previous === active) return;
+    playVoiceCue(active ? "stream-start" : "stream-stop");
+  }, [mediaSnapshot.screenTrack, playVoiceCue]);
+
+  useEffect(() => {
+    const key = updateState.status === "ready" ? updateState.version ?? "ready" : null;
+    if (key === null || announcedUpdateRef.current === key) return;
+    announcedUpdateRef.current = key;
+    playVoiceCue("update");
+  }, [playVoiceCue, updateState.status, updateState.version]);
 
   useEffect(() => {
     if (
@@ -2688,6 +2760,12 @@ export default function App(): ReactNode {
     void window.desktop.updateLocalSettings(next);
   };
 
+  const setAppSoundVolume = (value: number): void => {
+    const next = { ...settings, appSoundVolume: Math.max(0, Math.min(1, value)) };
+    setSettings(next);
+    void window.desktop.updateLocalSettings(next);
+  };
+
   const showSourcePicker = (): void => {
     if (!connection) return;
     if (mediaSnapshot.isScreenSharing) {
@@ -2979,6 +3057,11 @@ export default function App(): ReactNode {
               .checkForUpdates()
               .catch((caught) => setError(userMessage(caught)))
           }
+          onCheckUpdate={() =>
+            void window.desktop
+              .checkForUpdates()
+              .catch((caught) => setError(userMessage(caught)))
+          }
         />
       ) : null}
       <ConfirmDialog
@@ -3002,18 +3085,11 @@ export default function App(): ReactNode {
       (count, conversation) => count + conversation.unreadCount,
       0,
     );
-  const serverFirstUnreadMessageId =
-    activeChannelId === null
-      ? null
-      : (unreadSummary?.conversations.find(
-          (item) => item.conversationId === activeChannelId,
-        )?.firstUnreadMessageId ?? null);
-  const directFirstUnreadMessageId =
-    activeDirectConversationId === null
-      ? null
-      : (unreadSummary?.conversations.find(
-          (item) => item.conversationId === activeDirectConversationId,
-        )?.firstUnreadMessageId ?? null);
+  // The currently open conversation is marked read immediately. A divider in
+  // that view is misleading during the short acknowledgement window and after
+  // the current user sends a message.
+  const serverFirstUnreadMessageId = null;
+  const directFirstUnreadMessageId = null;
   const serverTypingText = activeChannelId
     ? (typingUsers[activeChannelId] ?? [])
         .map(
@@ -3320,6 +3396,7 @@ export default function App(): ReactNode {
           onMicrophone={(deviceId) =>
             persistDevice("microphoneDeviceId", deviceId)
           }
+          onAppSoundVolume={setAppSoundVolume}
           onNavigate={(path) => {
             void navigate(path);
           }}
@@ -3563,6 +3640,12 @@ function supportsOwnAudioExclusion(): boolean {
     | (MediaTrackSupportedConstraints & { restrictOwnAudio?: boolean })
     | undefined;
   return constraints?.restrictOwnAudio === true;
+}
+
+function isEffectivePresenceStatus(
+  value: unknown,
+): value is EffectivePresenceStatus {
+  return value === "online" || value === "idle" || value === "dnd" || value === "offline";
 }
 
 function userMessage(error: unknown): string {

@@ -30,7 +30,10 @@ describe('media storage configuration', () => {
 
 describe('Hawk configuration', () => {
   it('is disabled by default', () => {
-    expect(loadConfig({ NODE_ENV: 'test' }).HAWK_ENABLED).toBe(false);
+    expect(loadConfig({ NODE_ENV: 'test' })).toEqual(expect.objectContaining({
+      HAWK_ENABLED: false,
+      HAWK_STARTUP_SMOKE_TEST: false,
+    }));
   });
 
   it('requires a token only when enabled', () => {

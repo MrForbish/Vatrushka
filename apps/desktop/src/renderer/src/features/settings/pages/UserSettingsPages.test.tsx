@@ -69,7 +69,8 @@ describe('routed user settings pages', () => {
   it('renders real device labels and persists selected device identifiers', async () => {
     const onMicrophone = vi.fn();
     const onOutput = vi.fn();
-    render(<UserAudioSettingsPage busy={false} devices={{ inputs: [device('audioinput', 'default', 'Default - Studio Mic'), device('audioinput', 'mic-2', 'USB Microphone')], outputs: [device('audiooutput', 'default', 'Default - Headphones'), device('audiooutput', 'speaker-2', 'Monitor Speakers')] }} inputLevel={0.3} microphoneId="default" onMicrophone={onMicrophone} onOutput={onOutput} onRefresh={vi.fn()} onTestOutput={vi.fn()} outputId="default" voiceConnected />);
+    const onAppSoundVolume = vi.fn();
+    render(<UserAudioSettingsPage appSoundVolume={1} busy={false} devices={{ inputs: [device('audioinput', 'default', 'Default - Studio Mic'), device('audioinput', 'mic-2', 'USB Microphone')], outputs: [device('audiooutput', 'default', 'Default - Headphones'), device('audiooutput', 'speaker-2', 'Monitor Speakers')] }} inputLevel={0.3} microphoneId="default" onAppSoundVolume={onAppSoundVolume} onMicrophone={onMicrophone} onOutput={onOutput} onRefresh={vi.fn()} onTestOutput={vi.fn()} outputId="default" voiceConnected />);
 
     expect(screen.getByText('Системное · Studio Mic')).toBeInTheDocument();
     expect(screen.getByText('Системное · Headphones')).toBeInTheDocument();
@@ -80,6 +81,8 @@ describe('routed user settings pages', () => {
 
     expect(onMicrophone).toHaveBeenCalledWith('mic-2');
     expect(onOutput).toHaveBeenCalledWith('speaker-2');
+    await userEvent.click(screen.getByRole('slider', { name: 'Громкость звуков приложения' }));
+    expect(screen.getByText(/Вход и выход из голоса/u)).toBeInTheDocument();
   });
 
   it('loads and saves DND as a server-side presence preference', async () => {

@@ -66,3 +66,14 @@ it('keeps one actionable client update inside the notification center', () => {
   expect(onInstallUpdate).toHaveBeenCalledOnce();
   expect(screen.queryByText('Установлена актуальная версия')).not.toBeInTheDocument();
 });
+
+it('offers a manual update check without manufacturing an unread notification', () => {
+  const onCheckUpdate = vi.fn();
+  render(<NotificationCenter items={[]} onCheckUpdate={onCheckUpdate} onDismiss={vi.fn()} onMarkAllRead={vi.fn()} onOpen={vi.fn()} onRead={vi.fn()} updateState={{ status: 'up-to-date', currentVersion: '0.8.8' }} />);
+
+  fireEvent.click(screen.getByRole('button', { name: /Уведомления/u }));
+  fireEvent.click(screen.getByRole('button', { name: 'Проверить обновления' }));
+
+  expect(onCheckUpdate).toHaveBeenCalledOnce();
+  expect(screen.queryByText('Обновление клиента')).not.toBeInTheDocument();
+});

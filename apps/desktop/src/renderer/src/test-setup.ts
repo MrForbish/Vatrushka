@@ -4,9 +4,6 @@ import type { DesktopBridge } from "@vatrushka/shared";
 
 const desktop: DesktopBridge = {
   getAppVersion: async () => "0.1.0-test",
-  getFullscreen: async () => false,
-  toggleFullscreen: async () => false,
-  onFullscreenChange: () => () => undefined,
   getUpdateState: async () => ({
     status: "unsupported",
     currentVersion: "0.1.0-test",
@@ -31,6 +28,7 @@ const desktop: DesktopBridge = {
   getPlatform: async () => "win32",
   getLocalSettings: async () => ({
     volume: 1,
+    appSoundVolume: 1,
     desktopNotificationsEnabled: true,
     messageSoundsEnabled: true,
   }),

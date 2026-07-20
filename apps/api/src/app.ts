@@ -239,6 +239,7 @@ const voiceMemberStateResponseSchema = z.object({
   connectionQuality: z
     .enum(["excellent", "good", "poor", "unknown"])
     .optional(),
+  presence: z.enum(["online", "idle", "dnd", "offline"]).optional(),
 });
 const serverVoiceStateResponseSchema = z.object({
   serverId: z.uuid(),
@@ -936,6 +937,15 @@ export async function buildApp(
     bodyLimit: 64 * 1024,
     trustProxy: config.NODE_ENV === "production",
   });
+
+  if (config.HAWK_STARTUP_SMOKE_TEST) {
+    hawk.capture(new Error("Hawk startup smoke test"), {
+      operation: "startup-smoke-test",
+      runtime: "api",
+      release: config.HAWK_RELEASE,
+    });
+    app.log.info("Hawk startup smoke test submitted");
+  }
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);

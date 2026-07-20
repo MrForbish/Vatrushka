@@ -61,6 +61,32 @@ describe("screen share source picker", () => {
     expect(onSelect).toHaveBeenCalledWith(sources[1], "1080p60", false);
   });
 
+  it("offers the 2560 by 1440 preset at 60 FPS", async () => {
+    const onSelect = vi.fn();
+    render(
+      <SourcePicker
+        sources={sources}
+        platform="win32"
+        onSelect={onSelect}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Качество демонстрации" }),
+    );
+    await userEvent.click(
+      screen.getByRole("option", {
+        name: "2560 × 1440 · 60 FPS — высокое качество",
+      }),
+    );
+    await userEvent.click(
+      screen.getByRole("button", { name: "Начать демонстрацию" }),
+    );
+
+    expect(onSelect).toHaveBeenCalledWith(sources[0], "1440p60", false);
+  });
+
   it("allows video-only sharing when system audio is unavailable", () => {
     render(
       <SourcePicker
