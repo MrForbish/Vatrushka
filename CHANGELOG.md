@@ -4,6 +4,12 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-07-20
+
+### Fixed
+
+- production SSH deployment jobs now declare the protected `production` environment, allowing GitLab to expose only the intended environment-scoped SSH variables.
+
 ## [0.8.2] - 2026-07-20
 
 ### Fixed
