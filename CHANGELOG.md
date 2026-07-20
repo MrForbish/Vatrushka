@@ -4,6 +4,12 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-07-20
+
+### Fixed
+
+- production deployment jobs now pull their SSH runtime image through the GitLab Dependency Proxy, avoiding Docker Hub rate-limit failures before deployment begins.
+
 ## [0.8.1] - 2026-07-20
 
 ### Fixed
