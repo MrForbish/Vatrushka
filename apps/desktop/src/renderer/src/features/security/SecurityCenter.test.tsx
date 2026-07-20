@@ -40,7 +40,7 @@ describe('SecurityCenter', () => {
 
   it('lists sessions, changes trust, and revokes another device with confirmation', async () => {
     const mock = client();
-    render(<SecurityCenter client={mock} onClose={vi.fn()} onCurrentSessionRevoked={vi.fn()} onSettingsChange={vi.fn()} onUserChange={vi.fn()} open settings={{ volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }} user={user} />);
+    render(<SecurityCenter client={mock} onClose={vi.fn()} onCurrentSessionRevoked={vi.fn()} onSettingsChange={vi.fn()} onUserChange={vi.fn()} open settings={{ volume: 1, appSoundVolume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }} user={user} />);
     await waitFor(() => expect(mock.listSessions).toHaveBeenCalled());
     await userEvent.click(screen.getByRole('button', { name: 'Сессии' }));
     expect(await screen.findByText('Рабочий ноутбук')).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe('SecurityCenter', () => {
 
   it('regenerates recovery codes only after a TOTP confirmation', async () => {
     const mock = client();
-    render(<SecurityCenter client={mock} onClose={vi.fn()} onCurrentSessionRevoked={vi.fn()} onSettingsChange={vi.fn()} onUserChange={vi.fn()} open settings={{ volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }} user={user} />);
+    render(<SecurityCenter client={mock} onClose={vi.fn()} onCurrentSessionRevoked={vi.fn()} onSettingsChange={vi.fn()} onUserChange={vi.fn()} open settings={{ volume: 1, appSoundVolume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }} user={user} />);
     await userEvent.click(screen.getByRole('button', { name: 'Резервные коды' }));
     await userEvent.click(screen.getByRole('button', { name: 'Создать новый набор' }));
     await userEvent.type(screen.getByLabelText('Код из приложения'), '123456');
@@ -67,7 +67,7 @@ describe('SecurityCenter', () => {
 
   it('shows the security activity feed', async () => {
     const mock = client();
-    render(<SecurityCenter client={mock} onClose={vi.fn()} onCurrentSessionRevoked={vi.fn()} onSettingsChange={vi.fn()} onUserChange={vi.fn()} open settings={{ volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }} user={user} />);
+    render(<SecurityCenter client={mock} onClose={vi.fn()} onCurrentSessionRevoked={vi.fn()} onSettingsChange={vi.fn()} onUserChange={vi.fn()} open settings={{ volume: 1, appSoundVolume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }} user={user} />);
     await waitFor(() => expect(mock.listSecurityEvents).toHaveBeenCalled());
     await userEvent.click(screen.getByRole('button', { name: 'Активность' }));
     expect(screen.getByText('Вход в аккаунт')).toBeInTheDocument();
@@ -76,7 +76,7 @@ describe('SecurityCenter', () => {
 
   it('updates desktop and sound notification preferences independently', async () => {
     const onSettingsChange = vi.fn();
-    render(<SecurityCenter client={client()} onClose={vi.fn()} onCurrentSessionRevoked={vi.fn()} onSettingsChange={onSettingsChange} onUserChange={vi.fn()} open settings={{ volume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }} user={user} />);
+    render(<SecurityCenter client={client()} onClose={vi.fn()} onCurrentSessionRevoked={vi.fn()} onSettingsChange={onSettingsChange} onUserChange={vi.fn()} open settings={{ volume: 1, appSoundVolume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true }} user={user} />);
 
     const notificationTab = document.querySelectorAll<HTMLButtonElement>('.security-center__tabs button')[1];
     expect(notificationTab).toBeDefined();

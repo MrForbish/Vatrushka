@@ -31,6 +31,7 @@ const desktop: DesktopBridge = {
   getPlatform: async () => "win32",
   getLocalSettings: async () => ({
     volume: 1,
+    appSoundVolume: 1,
     desktopNotificationsEnabled: true,
     messageSoundsEnabled: true,
   }),

@@ -28,8 +28,12 @@ test('GitLab pipeline preserves Linux, integration and Windows quality gates', a
   assert.match(pipeline, /tags: \[vatrushka-windows\]/u);
   assert.match(
     pipeline,
-    /visual-regression:[\s\S]*Get-NetTCPConnection -LocalPort 6006[\s\S]*Stop-Process -Id \$_ -Force[\s\S]*after_script:[\s\S]*Get-NetTCPConnection -LocalPort 6006/u,
+    /desktop-behavior:[\s\S]*prepare-windows-browser-tests\.ps1/u,
   );
+  assert.match(pipeline, /visual-regression:[\s\S]*prepare-windows-browser-tests\.ps1[\s\S]*after_script:[\s\S]*Get-NetTCPConnection -LocalPort 6006/u);
+  const windowsPreflight = await read('scripts/ci/prepare-windows-browser-tests.ps1');
+  assert.match(windowsPreflight, /taskkill\.exe[\s\S]*\/T[\s\S]*\/F/u);
+  assert.match(windowsPreflight, /Get-NetTCPConnection -LocalPort 6006/u);
   assert.match(pipeline, /CI_PIPELINE_SOURCE == "merge_request_event"/u);
   assert.match(pipeline, /ELECTRON_BUILDER_CACHE: '\$CI_PROJECT_DIR\/\.cache\/electron-builder'/u);
   assert.match(pipeline, /\.cache\/electron-dist\//u);

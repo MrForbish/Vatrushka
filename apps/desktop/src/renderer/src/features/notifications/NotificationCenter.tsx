@@ -20,6 +20,7 @@ export interface NotificationCenterProps {
   updateInstallBlocked?: boolean | undefined;
   onInstallUpdate?(): void;
   onRetryUpdate?(): void;
+  onCheckUpdate?(): void;
 }
 
 const filters: Array<{ value: NotificationFilter; label: string }> = [
@@ -51,7 +52,7 @@ function relativeTime(value: string): string {
   }).format(new Date(value));
 }
 
-export function NotificationCenter({ hasMore = false, items, loadingMore = false, onDismiss, onInstallUpdate, onLoadMore, onMarkAllRead, onOpen, onRead, onRetryUpdate, updateInstallBlocked = false, updateState }: NotificationCenterProps): React.JSX.Element {
+export function NotificationCenter({ hasMore = false, items, loadingMore = false, onCheckUpdate, onDismiss, onInstallUpdate, onLoadMore, onMarkAllRead, onOpen, onRead, onRetryUpdate, updateInstallBlocked = false, updateState }: NotificationCenterProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [seenUpdateKey, setSeenUpdateKey] = useState<string | null>(null);
@@ -89,9 +90,12 @@ export function NotificationCenter({ hasMore = false, items, loadingMore = false
         </nav>
         <div className="vui-notification-center__actions">
           <span>{unreadCount === 0 ? 'Всё прочитано' : `${unreadCount} непрочитано`}</span>
-          <Button disabled={unreadCount === 0} onClick={onMarkAllRead} size="sm" type="button" variant="quiet">
-            Прочитать всё
-          </Button>
+          <span>
+            {onCheckUpdate ? <Button disabled={updateState?.status === 'checking' || updateState?.status === 'downloading'} onClick={onCheckUpdate} size="sm" type="button" variant="quiet">Проверить обновления</Button> : null}
+            <Button disabled={unreadCount === 0} onClick={onMarkAllRead} size="sm" type="button" variant="quiet">
+              Прочитать всё
+            </Button>
+          </span>
         </div>
         <div className="vui-notification-center__list">
           {showUpdate && updateState ? (

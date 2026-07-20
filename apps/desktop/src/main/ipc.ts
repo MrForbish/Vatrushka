@@ -343,12 +343,13 @@ export function registerIpc(options: IpcOptions): () => void {
   });
   handle(IPC_CHANNELS.authClear, () => options.storage.clearAuthSession());
   handle(IPC_CHANNELS.sourcesList, listSources);
-  handle(IPC_CHANNELS.sourceSelect, async (_event, value: unknown) => {
+  handle(IPC_CHANNELS.sourceSelect, (_event, value: unknown) => {
     const selection = desktopSourceSelectionSchema.parse(value);
-    const exists = (await listSources()).some(
-      (source) => source.id === selection.sourceId,
-    );
-    if (!exists) throw new Error("Desktop source is no longer available");
+    // The source list is intentionally not re-enumerated here. Chromium asks for
+    // the source immediately after this IPC call; a second enumeration races
+    // with disappearing/recreated windows and rejects an otherwise valid first
+    // selection. The display-media handler remains authoritative and safely
+    // denies a source that is genuinely gone.
     options.setSelectedSource(selection);
   });
   handle(IPC_CHANNELS.sourceClear, () => options.setSelectedSource(null));

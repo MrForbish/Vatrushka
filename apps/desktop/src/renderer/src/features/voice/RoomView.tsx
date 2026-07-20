@@ -89,6 +89,7 @@ function participantModel(
     locallyMuted: participant.locallyMuted,
     volume: participant.volume,
     audioLevel: participant.audioLevel,
+    presence: voiceState?.presence ?? "online",
     statusLabel: participant.isOwner
       ? "Владелец сервера"
       : participant.connectionQuality,

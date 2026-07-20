@@ -71,6 +71,7 @@ export interface SettingsRoutePageProps {
   onOutput(deviceId: string): void;
   onRefreshDevices(): void;
   onTestOutput(): void;
+  onAppSoundVolume(value: number): void;
   onLoadPresence(): Promise<UserPresence>;
   onUpdatePresence(input: {
     preference: UserPresence["preference"];
@@ -216,11 +217,13 @@ export function SettingsRoutePage(
         />
       ) : props.route.section === "audio" ? (
         <UserAudioSettingsPage
+          appSoundVolume={props.settings.appSoundVolume}
           busy={props.busy}
           devices={props.devices}
           inputLevel={props.inputLevel}
           microphoneId={props.microphoneId}
           onMicrophone={props.onMicrophone}
+          onAppSoundVolume={props.onAppSoundVolume}
           onOutput={props.onOutput}
           onRefresh={props.onRefreshDevices}
           onTestOutput={props.onTestOutput}
