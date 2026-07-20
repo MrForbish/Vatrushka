@@ -39,6 +39,8 @@ docker compose \
 
 Runner использует `ALLOY_CONFIG_FILE=runner.alloy`, `OBSERVABILITY_ROLE=gitlab-runner` и только profile `docker`. CI job container logs намеренно не собираются: они могут содержать masked-but-sensitive build context и создают высокий объём. Собираются journald units `gitlab-runner`, `docker`, `ssh`.
 
+При каждом production release агент пересоздаётся автоматически, если существует `infra/observability/agents/.env.agent`. Если файла нет, продуктовый деплой не падает, но в логе появляется операторское предупреждение; Redis/PostgreSQL/container метрики в этом случае не обновляются.
+
 ## Проверка здоровья
 
 ```bash

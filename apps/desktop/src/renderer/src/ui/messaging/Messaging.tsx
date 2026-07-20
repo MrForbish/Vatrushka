@@ -207,14 +207,20 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
     previousLatestId.current = latestId;
   }, [messages]);
 
-  useEffect(() => {
-    if (messages.length === 0 || !stickToLatest.current) return;
+  useLayoutEffect(() => {
+    if (messages.length === 0 || !stickToLatest.current || targetMessageId !== null) return undefined;
+    let nestedFrame = 0;
     const frame = window.requestAnimationFrame(() => {
-      if (virtualized) virtualizer.scrollToIndex(messages.length - 1, { align: 'end' });
-      else if (scrollElement.current) scrollElement.current.scrollTop = scrollElement.current.scrollHeight;
+      nestedFrame = window.requestAnimationFrame(() => {
+        if (virtualized) virtualizer.scrollToIndex(messages.length - 1, { align: 'end' });
+        else if (scrollElement.current) scrollElement.current.scrollTop = scrollElement.current.scrollHeight;
+      });
     });
-    return () => window.cancelAnimationFrame(frame);
-  }, [messages.length, virtualized, virtualizer]);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.cancelAnimationFrame(nestedFrame);
+    };
+  }, [channelName, messages.length, targetMessageId, virtualized, virtualizer]);
 
   useLayoutEffect(() => {
     const snapshot = prependSnapshot.current;

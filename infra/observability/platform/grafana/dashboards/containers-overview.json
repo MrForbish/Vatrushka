@@ -126,8 +126,8 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Что показывает: working set относительно заданного memory limit. Как считается: working_set/limit только при limit > 0. Норма: ниже 80%. Проблема: приближение к 100% и OOM. Что проверить: memory limit и приложение.",
-      "fieldConfig": { "defaults": { "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.95 }] }, "unit": "percentunit" }, "overrides": [] },
+      "description": "Что показывает: working set относительно заданного memory limit. Как считается: working_set/limit только при limit > 0. Если лимит Docker не задан, данных намеренно нет: процент вычислить нельзя. Норма: ниже 80%. Что проверить: memory limit и приложение.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "noValue": "Лимит не задан", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.95 }] }, "unit": "percentunit" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
       "id": 12,
       "targets": [{ "expr": "max by(host,name) (container_memory_working_set_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}) / max by(host,name) (container_spec_memory_limit_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"} > 0)", "legendFormat": "{{host}} {{name}}", "refId": "A" }],
@@ -136,8 +136,8 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Что показывает: долю throttled CPU periods. Как считается: rate throttled periods / periods. Норма: близко к 0. Проблема: устойчивый throttling. Что проверить: CPU quota и нагрузку.",
-      "fieldConfig": { "defaults": { "max": 1, "min": 0, "unit": "percentunit" }, "overrides": [] },
+      "description": "Что показывает: долю throttled CPU periods. Как считается: rate throttled periods / periods. Если CPU quota не задана Docker, метрика может отсутствовать — это не ошибка. Норма: близко к 0. Проблема: устойчивый throttling. Что проверить: CPU quota и нагрузку.",
+      "fieldConfig": { "defaults": { "max": 1, "min": 0, "noValue": "CPU quota не задана", "unit": "percentunit" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 35 },
       "id": 13,
       "targets": [{ "expr": "sum by(host,name) (rate(container_cpu_cfs_throttled_periods_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval])) / clamp_min(sum by(host,name) (rate(container_cpu_cfs_periods_total{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}[$__rate_interval])), 0.001)", "legendFormat": "{{host}} {{name}}", "refId": "A" }],
@@ -185,12 +185,12 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "description": "Что показывает: использование writable container filesystem относительно limit. Как считается: usage/limit по device. Норма: ниже 80%. Проблема: приближение к 100%. Что проверить: логи, caches и volumes.",
-      "fieldConfig": { "defaults": { "max": 1, "min": 0, "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.8 }, { "color": "red", "value": 0.9 }] }, "unit": "percentunit" }, "overrides": [] },
+      "description": "Что показывает: занятые байты writable filesystem каждого контейнера. Как считается: cgroup container_fs_usage_bytes. Абсолютное значение используется вместо доли: Docker обычно не задаёт отдельный filesystem limit, поэтому прежняя доля была пустой. Что проверить: логи, caches и volumes.",
+      "fieldConfig": { "defaults": { "min": 0, "unit": "bytes" }, "overrides": [] },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 51 },
       "id": 17,
-      "targets": [{ "expr": "max by(host,name,device) (container_fs_usage_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}) / clamp_min(max by(host,name,device) (container_fs_limit_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"}), 1)", "legendFormat": "{{host}} {{name}} {{device}}", "refId": "A" }],
-      "title": "Использование файловой системы контейнеров",
+      "targets": [{ "expr": "max by(host,name,device) (container_fs_usage_bytes{environment=~\"$environment\",host=~\"$host\",role=~\"$role\",name=~\"$container\",name!=\"\"})", "legendFormat": "{{host}} {{name}} {{device}}", "refId": "A" }],
+      "title": "Занято в файловой системе контейнеров",
       "type": "timeseries"
     }
   ],

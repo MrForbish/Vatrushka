@@ -106,22 +106,22 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
             <div className="home-support-panel__card">
               <span className="home-support-panel__icon"><Icon name="message" size={20} /></span>
               <div>
-                <strong>Помощь и обратная связь</strong>
-                <p>Сообщите о проблеме, предложении или благодарности.</p>
+                <strong>Нужна помощь?</strong>
+                <p>Telegram или email.</p>
               </div>
               <Button
                 onClick={() => void window.desktop.openExternal("https://t.me/MaksZJ")}
                 size="sm"
                 variant="secondary"
               >
-                Telegram · @MaksZJ
+                Telegram
               </Button>
               <Button
                 onClick={() => void window.desktop.openExternal("mailto:vatrushka-notify@yandex.ru")}
                 size="sm"
                 variant="quiet"
               >
-                Написать на email
+                Email
               </Button>
             </div>
           </aside>

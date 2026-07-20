@@ -170,6 +170,9 @@ export function SettingsRoutePage(
     name: server.name,
     memberCount: server.memberCount,
     activeVoice: false,
+    iconUrl: server.iconUrl ?? null,
+    bannerUrl: server.bannerUrl ?? null,
+    accentColor: server.accentColor ?? null,
   }));
   const workspaceLibrary = (
     <WorkspaceLibrary
@@ -279,6 +282,7 @@ export function SettingsRoutePage(
           activeSection={props.route.section}
           entityLabel="Личные настройки"
           entityName={props.user.displayName ?? props.user.email}
+          entityAvatarUrl={props.user.avatarUrl ?? null}
           items={userSettingsNavigation}
           onBack={() => requestNavigation(props.onBack)}
           onSelect={(section) =>
@@ -337,6 +341,16 @@ export function SettingsRoutePage(
       activeSection={navigationSection}
       entityLabel="Настройки сервера"
       entityName={entityName}
+      entityAvatarUrl={
+        props.server?.id === serverRoute.serverId
+          ? props.server.iconUrl ?? null
+          : serverSummary?.iconUrl ?? null
+      }
+      entityBannerUrl={
+        props.server?.id === serverRoute.serverId
+          ? props.server.bannerUrl ?? null
+          : serverSummary?.bannerUrl ?? null
+      }
       items={navigationItems}
       onBack={props.onBack}
       onSelect={(section) =>

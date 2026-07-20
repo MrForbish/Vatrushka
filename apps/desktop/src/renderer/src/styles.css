@@ -8,7 +8,13 @@
 
 * {
   box-sizing: border-box;
+  scrollbar-color: var(--color-border-strong) var(--color-surface-1);
+  scrollbar-width: thin;
 }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: var(--color-surface-1); }
+*::-webkit-scrollbar-thumb { border: 2px solid var(--color-surface-1); border-radius: var(--radius-round); background: var(--color-border-strong); }
+*::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
 html,
 body,
 #root {
