@@ -102,7 +102,7 @@ test("alloy agents sanitize logs and runner excludes CI job container logs", asy
   }
   assert.match(product, /values = \["vatrushka-\*"\]/u);
   assert.match(product, /scrape_interval\s*=\s*"5s"/u);
-  assert.match(product, /batch_send_deadline\s*=\s*"1s"/u);
+  assert.doesNotMatch(product, /queue_config/u);
   assert.match(runner, /_SYSTEMD_UNIT=gitlab-runner\.service/u);
   assert.doesNotMatch(runner, /loki\.source\.docker/u);
 });
@@ -219,7 +219,7 @@ test('infrastructure dashboards cover required diagnostics without fixed rate wi
   const infrastructureTitles = new Set(infrastructure.panels.map((panel) => panel.title));
   for (const title of ['CPU и iowait', 'Load1 на CPU', 'RAM и swap', 'Диски и inode', 'Disk throughput', 'Disk IOPS и latency', 'Сетевые ошибки и drops', 'Uptime и часы']) assert.ok(infrastructureTitles.has(title), title);
   const containerTitles = new Set(containers.panels.map((panel) => panel.title));
-  for (const title of ['Контейнеры: состояние и события', 'Ограничение CPU', 'Рестарты и OOM', 'Сеть контейнеров', 'Скорость работы с файловой системой', 'Использование файловой системы контейнеров']) assert.ok(containerTitles.has(title), title);
+  for (const title of ['Контейнеры: состояние и события', 'Ограничение CPU', 'Рестарты и OOM', 'Сеть контейнеров', 'Скорость работы с файловой системой', 'Занято в файловой системе контейнеров']) assert.ok(containerTitles.has(title), title);
 });
 
 test('cAdvisor labels and restart alerts use bounded container semantics', async () => {
@@ -267,14 +267,22 @@ test('logs and Loki dashboards use structured levels and TSDB-compatible diagnos
       /source=~"\.\+"/u,
       `LogQL selector must retain a non-empty matcher: ${expression}`,
     );
+  for (const variable of logs.templating.list.filter((item) => item.datasource?.uid === 'loki')) {
+    assert.equal(variable.allValue, '.+', `Loki selector variable $${variable.name} must use a non-empty allValue`);
+  }
   assert.doesNotMatch(logsText, /clamp_min/u);
   for (const variable of ['environment', 'service', 'host', 'container', 'level', 'search']) assert.ok(logs.templating.list.some((item) => item.name === variable));
 
   const lokiText = JSON.stringify(loki);
   assert.match(lokiText, /loki_canary_missing_entries_total/u);
   assert.match(lokiText, /loki_ingester_wal_/u);
-  assert.match(lokiText, /loki_compactor_/u);
+  assert.match(lokiText, /Compactor: доступность процесса/u);
+  assert.doesNotMatch(lokiText, /last_successful_run_timestamp_seconds/u);
   assert.match(lokiText, /source=~\\"\.\+\\"/u);
+  const lokiService = loki.templating.list.find((item) => item.name === 'service');
+  assert.equal(lokiService?.allValue, '.+');
+  const lokiEnvironment = loki.templating.list.find((item) => item.name === 'environment');
+  assert.equal(lokiEnvironment?.allValue, '.+');
   assert.doesNotMatch(lokiText, /loki_request_duration_seconds_count\{environment=/u);
   assert.doesNotMatch(lokiText, /loki_boltdb/iu);
   const rules = await read('infra/observability/platform/prometheus/rules/observability.yml');
@@ -344,6 +352,9 @@ test("migration and recovery scripts preserve old metrics and secrets", async ()
   assert.match(restore, /--dry-run/u);
   assert.doesNotMatch(rollback, /down\s+-v|volume\s+rm|s3.*delete/iu);
   assert.match(releaseApply, /up -d --force-recreate/u);
+  const productReleaseApply = await read("scripts/deploy/apply-product-release.sh");
+  assert.match(productReleaseApply, /infra\/observability\/agents\/\.env\.agent/u);
+  assert.match(productReleaseApply, /--profile product --profile docker/u);
   const healthcheck = await read("infra/observability/platform/scripts/healthcheck.sh");
   assert.match(healthcheck, /OBSERVABILITY_HEALTHCHECK_ATTEMPTS:-30/u);
   assert.match(healthcheck, /wait_for_url/u);

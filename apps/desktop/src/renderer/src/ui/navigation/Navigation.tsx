@@ -38,6 +38,7 @@ export interface WorkspaceNavigationItem {
   mentionCount?: number;
   activeVoice?: boolean;
   iconUrl?: string | null;
+  bannerUrl?: string | null;
   accentColor?: string | null;
 }
 
@@ -69,6 +70,7 @@ export function WorkspaceCard({
       onClick={() => onSelect(workspace.id)}
       type="button"
     >
+      {workspace.bannerUrl === undefined || workspace.bannerUrl === null ? null : <StableImage alt="" aria-hidden="true" className="vui-workspace-card__cover" fallback={null} src={workspace.bannerUrl} />}
       <span
         aria-hidden="true"
         className="vui-workspace-card__mark"

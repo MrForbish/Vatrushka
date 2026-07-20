@@ -532,7 +532,7 @@
       },
       "targets": [
         {
-          "expr": "(sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=\"5xx\"}[$__rate_interval])) or vector(0)) / clamp_min((sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\"}[$__rate_interval])) or vector(0)), 0.001)",
+          "expr": "(sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\",status_class=\"5xx\"}[$__rate_interval])) / clamp_min(sum(rate(api_http_requests_total{environment=~\"$environment\",method=~\"$method\",route=~\"$route\"}[$__rate_interval])), 0.001)) or vector(0)",
           "legendFormat": "5xx",
           "refId": "A"
         }
@@ -786,7 +786,7 @@
       },
       "targets": [
         {
-          "expr": "redis_connected_clients{environment=~\"$environment\"}",
+          "expr": "sum(redis_connected_clients{environment=~\"$environment\"})",
           "legendFormat": "Клиенты",
           "refId": "A"
         }

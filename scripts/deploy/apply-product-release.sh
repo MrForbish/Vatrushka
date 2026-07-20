@@ -43,4 +43,16 @@ until curl -fsS http://127.0.0.1:3001/health/ready >/dev/null; do
   sleep 2
 done
 
+# Keep the production telemetry agent on the same immutable source revision as
+# the API. Its operator-owned .env.agent contains only endpoint and secret
+# values and is deliberately preserved outside the release archive.
+AGENT_DIR="$APP_DIR/infra/observability/agents"
+if [ -f "$AGENT_DIR/.env.agent" ]; then
+  cd "$AGENT_DIR"
+  docker compose --env-file "$APP_DIR/.env" --env-file .env.agent -f docker-compose.yml --profile product --profile docker config -q
+  docker compose --env-file "$APP_DIR/.env" --env-file .env.agent -f docker-compose.yml --profile product --profile docker up -d --force-recreate
+else
+  printf '%s\n' 'Observability agent was not deployed: missing infra/observability/agents/.env.agent' >&2
+fi
+
 printf 'Product runtime is ready: version=%s commit=%s\n' "$VERSION" "$COMMIT"
