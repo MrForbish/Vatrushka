@@ -65,6 +65,10 @@ test("prometheus has remote write, alertmanager, external labels and separated r
     prometheus,
     /job_name: blackbox-turn[\s\S]+module: \[tcp_tls\]/u,
   );
+  assert.match(
+    prometheus,
+    /job_name: blackbox-livekit[\s\S]+targets: \[https:\/\/livekit\.myvatrushka\.ru\/\]/u,
+  );
 
   const rulesDirectory = new URL('../../infra/observability/platform/prometheus/rules/', import.meta.url);
   const ruleFiles = (await readdir(rulesDirectory)).filter((file) => file.endsWith('.yml'));
@@ -355,10 +359,14 @@ test("migration and recovery scripts preserve old metrics and secrets", async ()
   const productReleaseApply = await read("scripts/deploy/apply-product-release.sh");
   assert.match(productReleaseApply, /infra\/observability\/agents\/\.env\.agent/u);
   assert.match(productReleaseApply, /--profile product --profile docker/u);
+  assert.match(productReleaseApply, /APP_DIR=\$\{VATRUSHKA_APP_DIR:-\/opt\/vatrushka\}/u);
+  assert.match(productReleaseApply, /hawk_reporter_enabled/u);
   const healthcheck = await read("infra/observability/platform/scripts/healthcheck.sh");
   assert.match(healthcheck, /OBSERVABILITY_HEALTHCHECK_ATTEMPTS:-30/u);
   assert.match(healthcheck, /wait_for_url/u);
   assert.match(healthcheck, /wait_for_healthy_targets/u);
+  assert.match(healthcheck, /wait_for_probe_series "LiveKit" "blackbox-livekit"/u);
+  assert.match(healthcheck, /wait_for_probe_series "TURN TLS" "blackbox-turn"/u);
 });
 
 test("public product Caddy endpoint does not proxy Prometheus metrics", async () => {

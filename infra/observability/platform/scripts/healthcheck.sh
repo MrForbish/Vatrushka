@@ -47,9 +47,29 @@ wait_for_healthy_targets() {
   done
 }
 
+wait_for_probe_series() {
+  name=$1
+  job=$2
+  url="http://${OBSERVABILITY_PRIVATE_BIND_IP}:9090/api/v1/query"
+  attempt=1
+  while ! probe_series_exists "$url" "$job"; do
+    if [ "$attempt" -ge "$HEALTHCHECK_ATTEMPTS" ]; then
+      echo "Prometheus has no probe series for $name ($job)" >&2
+      return 1
+    fi
+    attempt=$((attempt + 1))
+    sleep "$HEALTHCHECK_INTERVAL_SECONDS"
+  done
+}
+
 healthy_targets() {
   targets=$(curl -fsS "$1" 2>/dev/null) || return 1
   printf '%s' "$targets" | grep -q '"health":"up"'
+}
+
+probe_series_exists() {
+  response=$(curl -fsS --get "$1" --data-urlencode "query=probe_success{job=\"$2\"}" 2>/dev/null) || return 1
+  printf '%s' "$response" | grep -q '"result":\[{' || return 1
 }
 
 expected="alertmanager alloy blackbox-exporter caddy grafana loki node-exporter prometheus"
@@ -66,5 +86,7 @@ wait_for_url "Prometheus" "http://${OBSERVABILITY_PRIVATE_BIND_IP}:9090/-/ready"
 wait_for_url "Loki" "http://${OBSERVABILITY_PRIVATE_BIND_IP}:3100/ready"
 wait_for_url "Grafana" "https://${GRAFANA_DOMAIN}/api/health"
 wait_for_healthy_targets
+wait_for_probe_series "LiveKit" "blackbox-livekit"
+wait_for_probe_series "TURN TLS" "blackbox-turn"
 
 echo "Observability healthcheck passed"

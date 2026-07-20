@@ -4,6 +4,14 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.12] - 2026-07-21
+
+### Fixed
+
+- restores the versioned TURN TLS blackbox module and adds a public LiveKit HTTPS probe, so availability panels have an explicit data source;
+- makes `/opt/vatrushka` the canonical production runtime whenever its operator-owned `.env` exists, preventing a release directory from silently using a different configuration;
+- fails a production deploy when Hawk is enabled in the runtime configuration but the API reporter is not actually active.
+
 ## [0.8.11] - 2026-07-20
 
 ### Fixed
