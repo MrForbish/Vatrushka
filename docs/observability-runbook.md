@@ -129,6 +129,20 @@ Alloy разбирает JSON `level` и нормализует только з�
 - Grafana down: проверить SQLite/volume/provisioning; восстановить последний проверенный backup.
 - Alert delivery down: проверить `alertmanager_notifications_failed_total` и secret webhook file, отправить controlled test alert.
 
+## Realtime and messaging
+
+Откройте дашборд `Realtime и сообщения` (`vatrushka-realtime-messaging`). Для всплеска переподключений сначала проверьте разбивку `event/reason`, затем доступность Redis и логи API. При росте outbox сначала устраните зависимость или ошибку публикации; вручную удалять durable-события запрещено. Значение `chat_outbox_failed` выше нуля требует проверки последней ошибки worker и повторной доставки после устранения причины.
+
+## Voice and screen share
+
+Откройте дашборд `Голос и демонстрация экрана` (`vatrushka-voice-screen-share`). Расхождение reconciliation или version gap проверяйте вместе с LiveKit webhook, Redis и WebSocket. Для конфликтов screen-share lease сравните `acquire`, `renew`, `release`, результат и доступность LiveKit; не очищайте lease напрямую до проверки фактического participant/track state.
+
+## Dependencies and delivery
+
+Откройте дашборд `Зависимости и доставка` (`vatrushka-dependencies-delivery`). Для PostgreSQL проверьте подключения, rollback/deadlock и cache hit. Для Redis — память, evictions и rejected connections. Для S3 — операцию, result и p95; затем endpoint, DNS/TLS, credentials и bucket policy. Для почты и входа сопоставьте delivery result и login factor, не добавляя email или user ID в labels и логи.
+
+После развёртывания 0.8.0 накопите минимум семь дней production baseline. До этого пороги новых warning alerts считаются стартовыми и корректируются отдельным MR на основании фактических p95/p99 и частоты событий.
+
 ## Backup, restore, update, rollback
 
 ```bash

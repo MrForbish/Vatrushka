@@ -1,0 +1,196 @@
+{
+  "annotations": { "list": [] },
+  "description": "Голосовое присутствие, перемещения, LiveKit webhook и аренды демонстрации экрана.",
+  "editable": false,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Количество подтверждённых активных голосовых сессий.",
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        {
+          "expr": "sum(voice_active_sessions{instance=~\"$instance\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Участники в голосе",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Подтверждённые входы, выходы и обновления состояния.",
+      "gridPos": { "h": 6, "w": 9, "x": 6, "y": 0 },
+      "id": 2,
+      "targets": [
+        {
+          "expr": "sum by (event) (rate(voice_state_updates_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{event}}",
+          "refId": "A"
+        }
+      ],
+      "title": "События voice presence",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Запрошенные, успешные, неуспешные и просроченные перемещения.",
+      "gridPos": { "h": 6, "w": 9, "x": 15, "y": 0 },
+      "id": 3,
+      "targets": [
+        {
+          "expr": "sum(rate(voice_move_requests_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "запросы",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(voice_move_success_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "успех",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(voice_move_failure_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "ошибки",
+          "refId": "C"
+        },
+        {
+          "expr": "sum(rate(voice_move_timeout_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "таймаут",
+          "refId": "D"
+        }
+      ],
+      "title": "Перемещения участников",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Квантили времени принятия команды перемещения.",
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 6 },
+      "id": 4,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(voice_move_duration_seconds_bucket{instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p50",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(voice_move_duration_seconds_bucket{instance=~\"$instance\"}[$__rate_interval])))",
+          "legendFormat": "p95",
+          "refId": "B"
+        }
+      ],
+      "title": "Задержка перемещения",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Расхождения reconciliation и пропуски версий WebSocket.",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 6 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "sum(rate(voice_presence_reconciliation_diff_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "reconciliation",
+          "refId": "A"
+        },
+        {
+          "expr": "sum(rate(voice_websocket_version_gap_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "version gap",
+          "refId": "B"
+        }
+      ],
+      "title": "Рассинхронизация voice",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Принятые, дублированные, отклонённые и ошибочные LiveKit webhook.",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 6 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "sum by (event, result) (rate(livekit_webhook_events_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{event}} / {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "LiveKit webhook",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Число активных аренд демонстрации экрана.",
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 13 },
+      "id": 7,
+      "targets": [
+        {
+          "expr": "sum(screen_share_active_sessions{instance=~\"$instance\"})",
+          "refId": "A"
+        }
+      ],
+      "title": "Активные демонстрации",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Выдача, продление и освобождение права на демонстрацию.",
+      "gridPos": { "h": 7, "w": 9, "x": 6, "y": 13 },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "sum by (event, result) (rate(screen_share_lease_events_total{instance=~\"$instance\"}[$__rate_interval]))",
+          "legendFormat": "{{event}} / {{result}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Аренда screen share",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Доступность публичных endpoint LiveKit и TURN.",
+      "gridPos": { "h": 7, "w": 9, "x": 15, "y": 13 },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "probe_success{job=~\"blackbox-livekit|blackbox-turn\"}",
+          "legendFormat": "{{job}} / {{instance}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Доступность LiveKit и TURN",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["vatrushka", "voice", "livekit"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "Все", "value": ".*" },
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "definition": "label_values(up{job=\"vatrushka-api\"}, instance)",
+        "includeAll": true,
+        "label": "Экземпляр API",
+        "multi": true,
+        "name": "instance",
+        "query": {
+          "query": "label_values(up{job=\"vatrushka-api\"}, instance)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "Голос и демонстрация экрана",
+  "uid": "vatrushka-voice-screen-share",
+  "version": 1
+}

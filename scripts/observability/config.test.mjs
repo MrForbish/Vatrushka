@@ -1,17 +1,24 @@
-import assert from 'node:assert/strict';
-import { readdir, readFile } from 'node:fs/promises';
-import test from 'node:test';
-import { URL } from 'node:url';
+import assert from "node:assert/strict";
+import { readdir, readFile } from "node:fs/promises";
+import test from "node:test";
+import { URL } from "node:url";
 
-const read = (path) => readFile(new URL(`../../${path}`, import.meta.url), 'utf8');
+const read = (path) =>
+  readFile(new URL(`../../${path}`, import.meta.url), "utf8");
 
-test('legacy stack remains private and available for rollback', async () => {
-  const compose = await read('infra/observability/docker-compose.yml');
-  const images = [...compose.matchAll(/^\s+image:\s+(\S+)$/gmu)].map((match) => match[1]);
+test("legacy stack remains private and available for rollback", async () => {
+  const compose = await read("infra/observability/docker-compose.yml");
+  const images = [...compose.matchAll(/^\s+image:\s+(\S+)$/gmu)].map(
+    (match) => match[1],
+  );
   assert.equal(images.length, 7);
-  assert.ok(images.every((image) => !image.endsWith(':latest')), images.join('\n'));
+  assert.ok(
+    images.every((image) => !image.endsWith(":latest")),
+    images.join("\n"),
+  );
   assert.doesNotMatch(compose, /^\s+ports:/mu);
-  for (const port of ['9090', '9100', '9187', '9121', '9115']) assert.match(compose, new RegExp(`127\\.0\\.0\\.1:${port}`, 'u'));
+  for (const port of ["9090", "9100", "9187", "9121", "9115"])
+    assert.match(compose, new RegExp(`127\\.0\\.0\\.1:${port}`, "u"));
 });
 
 test('new platform pins services and exposes only Grafana plus private ingestion', async () => {
@@ -23,7 +30,10 @@ test('new platform pins services and exposes only Grafana plus private ingestion
   assert.match(compose, /GRAFANA_BIND_ADDRESS[^\n]+:443:443/u);
   assert.match(compose, /OBSERVABILITY_PRIVATE_BIND_IP[^\n]+:9090:9090/u);
   assert.match(compose, /OBSERVABILITY_PRIVATE_BIND_IP[^\n]+:3100:3100/u);
-  assert.doesNotMatch(compose, /:9093:9093|:9115:9115|:3000:3000|:12345:12345/u);
+  assert.doesNotMatch(
+    compose,
+    /:9093:9093|:9115:9115|:3000:3000|:12345:12345/u,
+  );
   assert.match(compose, /GF_AUTH_ANONYMOUS_ENABLED: "false"/u);
   assert.match(compose, /loki_aws_credentials/u);
   assert.match(compose, /NO_PROXY: [^\n]*0\.0\.0\.0[^\n]*loki/u);
@@ -31,16 +41,30 @@ test('new platform pins services and exposes only Grafana plus private ingestion
   assert.doesNotMatch(compose, /aws_secret_access_key\s*[:=]\s*[^$]/iu);
 });
 
-test('prometheus has remote write, alertmanager, external labels and separated rules', async () => {
-  const compose = await read('infra/observability/platform/docker-compose.yml');
-  const prometheus = await read('infra/observability/platform/prometheus/prometheus.yml');
-  assert.match(compose, /--storage\.tsdb\.retention\.time=\$\{PROMETHEUS_RETENTION_TIME:-30d\}/u);
-  assert.match(compose, /--storage\.tsdb\.retention\.size=\$\{PROMETHEUS_RETENTION_SIZE:-55GB\}/u);
+test("prometheus has remote write, alertmanager, external labels and separated rules", async () => {
+  const compose = await read("infra/observability/platform/docker-compose.yml");
+  const prometheus = await read(
+    "infra/observability/platform/prometheus/prometheus.yml",
+  );
+  assert.match(
+    compose,
+    /--storage\.tsdb\.retention\.time=\$\{PROMETHEUS_RETENTION_TIME:-30d\}/u,
+  );
+  assert.match(
+    compose,
+    /--storage\.tsdb\.retention\.size=\$\{PROMETHEUS_RETENTION_SIZE:-55GB\}/u,
+  );
   assert.match(compose, /--web\.enable-remote-write-receiver/u);
-  assert.match(prometheus, /external_labels:[\s\S]+monitoring_cluster: primary/u);
+  assert.match(
+    prometheus,
+    /external_labels:[\s\S]+monitoring_cluster: primary/u,
+  );
   assert.match(prometheus, /targets: \[alertmanager:9093\]/u);
   assert.match(prometheus, /\/etc\/prometheus\/rules\/\*\.yml/u);
-  assert.match(prometheus, /job_name: blackbox-turn[\s\S]+module: \[tcp_tls\]/u);
+  assert.match(
+    prometheus,
+    /job_name: blackbox-turn[\s\S]+module: \[tcp_tls\]/u,
+  );
 
   const rulesDirectory = new URL('../../infra/observability/platform/prometheus/rules/', import.meta.url);
   const ruleFiles = (await readdir(rulesDirectory)).filter((file) => file.endsWith('.yml'));
@@ -51,8 +75,8 @@ test('prometheus has remote write, alertmanager, external labels and separated r
   }
 });
 
-test('loki uses S3 TSDB schema and bounded 30-day ingestion', async () => {
-  const loki = await read('infra/observability/platform/loki/loki.yml');
+test("loki uses S3 TSDB schema and bounded 30-day ingestion", async () => {
+  const loki = await read("infra/observability/platform/loki/loki.yml");
   assert.match(loki, /object_store: s3/u);
   assert.match(loki, /schema: v13/u);
   assert.match(loki, /retention_period: 744h/u);
@@ -62,14 +86,19 @@ test('loki uses S3 TSDB schema and bounded 30-day ingestion', async () => {
   assert.match(loki, /reporting_enabled: false/u);
 });
 
-test('alloy agents sanitize logs and runner excludes CI job container logs', async () => {
-  const platform = await read('infra/observability/platform/alloy/platform.alloy');
-  const product = await read('infra/observability/agents/alloy/product.alloy');
-  const runner = await read('infra/observability/agents/alloy/runner.alloy');
+test("alloy agents sanitize logs and runner excludes CI job container logs", async () => {
+  const platform = await read(
+    "infra/observability/platform/alloy/platform.alloy",
+  );
+  const product = await read("infra/observability/agents/alloy/product.alloy");
+  const runner = await read("infra/observability/agents/alloy/runner.alloy");
   for (const config of [platform, product, runner]) {
     assert.match(config, /stage\.replace/u);
     assert.match(config, /\[REDACTED\]/u);
-    assert.doesNotMatch(config, /target_label\s*=\s*"(request_id|trace_id|user_id|session_id|email|ip)"/u);
+    assert.doesNotMatch(
+      config,
+      /target_label\s*=\s*"(request_id|trace_id|user_id|session_id|email|ip)"/u,
+    );
   }
   assert.match(product, /values = \["vatrushka-\*"\]/u);
   assert.match(runner, /_SYSTEMD_UNIT=gitlab-runner\.service/u);
@@ -83,10 +112,10 @@ test('grafana provisions valid, linked and extensible dashboards', async () => {
 
   const directory = new URL('../../infra/observability/platform/grafana/dashboards/', import.meta.url);
   const files = (await readdir(directory)).filter((file) => file.endsWith('.json'));
-  assert.ok(files.length >= 7, `expected at least 7 dashboards, got ${files.length}`);
+  assert.ok(files.length >= 11, `expected at least 11 dashboards, got ${files.length}`);
   const dashboards = await Promise.all(files.map(async (file) => JSON.parse(await read(`infra/observability/platform/grafana/dashboards/${file}`))));
   const titles = new Set(dashboards.map((dashboard) => dashboard.title));
-  for (const title of ['Инфраструктура: обзор', 'Контейнеры: обзор', 'Приложение: обзор', 'API: детали HTTP', 'Prometheus: состояние', 'Loki: состояние', 'Логи: обзор', 'Service Health & SLO']) assert.ok(titles.has(title), title);
+  for (const title of ['Инфраструктура: обзор', 'Контейнеры: обзор', 'Приложение: обзор', 'API: детали HTTP', 'Prometheus: состояние', 'Loki: состояние', 'Логи: обзор', 'Service Health & SLO', 'Realtime и сообщения', 'Голос и демонстрация экрана', 'Зависимости и доставка']) assert.ok(titles.has(title), title);
   assert.ok(dashboards.every((dashboard) => dashboard.uid && dashboard.panels.length >= 3));
 
   const uids = dashboards.map((dashboard) => dashboard.uid);
@@ -108,6 +137,21 @@ test('grafana provisions valid, linked and extensible dashboards', async () => {
       const linkedUid = /^\/d\/([^/?]+)/u.exec(link.url)?.[1];
       if (linkedUid) assert.ok(uids.includes(linkedUid), `${dashboard.uid}: unknown linked dashboard ${linkedUid}`);
     }
+  }
+
+  const productDashboards = dashboards.filter((dashboard) => [
+    'vatrushka-realtime-messaging',
+    'vatrushka-voice-screen-share',
+    'vatrushka-dependencies-delivery',
+  ].includes(dashboard.uid));
+  assert.equal(productDashboards.length, 3);
+  for (const dashboard of productDashboards) {
+    assert.ok(dashboard.tags?.includes('vatrushka'), dashboard.uid);
+    assert.ok(dashboard.description, dashboard.uid);
+    assert.ok(dashboard.templating?.list?.length > 0, dashboard.uid);
+    assert.ok(dashboard.panels.every((panel) => panel.description), dashboard.uid);
+    assert.doesNotMatch(JSON.stringify(dashboard), /\[(?:1|5|10|15|30)m\]/u);
+    assert.doesNotMatch(JSON.stringify(dashboard), /user_id|session_id|movement_id|request_id|trace_id/u);
   }
 });
 
@@ -246,17 +290,42 @@ test('Prometheus and Service Health dashboards expose operational and SLO diagno
   assert.match(rules, /alert: VatrushkaApiLatencyObjectiveAtRisk/u);
 });
 
-test('migration and recovery scripts preserve old metrics and secrets', async () => {
-  const backup = await read('infra/observability/platform/scripts/backup.sh');
-  const restore = await read('infra/observability/platform/scripts/restore.sh');
-  const rollback = await read('infra/observability/platform/scripts/rollback.sh');
+test("product metrics use bounded labels and Prometheus-compatible units", async () => {
+  const app = await read("apps/api/src/app.ts");
+  const messaging = await read("apps/api/src/services/canonical-messaging.ts");
+  const objectStorage = await read("apps/api/src/services/object-storage.ts");
+  const realtime = await read("apps/api/src/services/realtime.ts");
+  const voice = await read("apps/api/src/service.ts");
+  const websocket = await read("apps/api/src/services/websocket-gateway.ts");
+  for (const metric of [
+    "api_http_requests_in_flight",
+    "api_error_responses_total",
+    "auth_login_attempts_total",
+    "livekit_webhook_events_total",
+  ])
+    assert.match(app, new RegExp(metric, "u"));
+  assert.match(messaging, /chat_message_create_duration_seconds/u);
+  assert.match(objectStorage, /object_storage_request_duration_seconds/u);
+  assert.match(realtime, /chat_outbox_pending/u);
+  assert.match(realtime, /chat_outbox_failed/u);
+  assert.match(voice, /voice_move_duration_seconds/u);
+  assert.match(voice, /screen_share_active_sessions/u);
+  assert.match(websocket, /chat_ws_connection_events_total/u);
+});
+
+test("migration and recovery scripts preserve old metrics and secrets", async () => {
+  const backup = await read("infra/observability/platform/scripts/backup.sh");
+  const restore = await read("infra/observability/platform/scripts/restore.sh");
+  const rollback = await read(
+    "infra/observability/platform/scripts/rollback.sh",
+  );
   assert.match(backup, /--exclude='\.\/secrets'/u);
   assert.match(backup, /--dry-run/u);
   assert.match(restore, /--dry-run/u);
   assert.doesNotMatch(rollback, /down\s+-v|volume\s+rm|s3.*delete/iu);
 });
 
-test('public product Caddy endpoint does not proxy Prometheus metrics', async () => {
-  const caddy = await read('infra/caddy/Caddyfile');
+test("public product Caddy endpoint does not proxy Prometheus metrics", async () => {
+  const caddy = await read("infra/caddy/Caddyfile");
   assert.match(caddy, /handle \/metrics\s*\{\s*respond 404\s*\}/u);
 });

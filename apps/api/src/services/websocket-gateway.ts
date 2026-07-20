@@ -19,6 +19,15 @@ interface ConnectionState {
   alive: boolean;
 }
 
+function closeReason(code: number): string {
+  if (code === 1000) return 'normal';
+  if (code === 1001) return 'shutdown';
+  if (code === 1006) return 'network';
+  if (code === 1009) return 'payload_too_large';
+  if (code === 4401) return 'authentication';
+  return 'other';
+}
+
 export class WebSocketGateway {
   private readonly connections = new Map<string, ConnectionState>();
   private readonly seenDevices = new Set<string>();
@@ -35,19 +44,26 @@ export class WebSocketGateway {
     const state: ConnectionState = { id: randomUUID(), socket, userId: null, deviceId: null, authorization: null, subscriptions: new Set(), voiceSubscriptions: new Set(), alive: true };
     this.connections.set(state.id, state);
     technicalMetrics.set('chat_ws_connections_active', this.connections.size);
+    technicalMetrics.increment('chat_ws_connection_events_total', 1, { event: 'opened', reason: 'network' });
     const authTimeout = setTimeout(() => {
-      if (!state.userId) socket.close(4401, 'Authentication timeout');
+      if (!state.userId) {
+        technicalMetrics.increment('chat_ws_connection_events_total', 1, { event: 'auth_failed', reason: 'timeout' });
+        socket.close(4401, 'Authentication timeout');
+      }
     }, 5_000);
     authTimeout.unref();
     socket.on('pong', () => { state.alive = true; });
     socket.on('message', (data) => void this.onMessage(state, data));
-    socket.on('close', () => {
+    socket.on('close', (code) => {
       clearTimeout(authTimeout);
       this.connections.delete(state.id);
       technicalMetrics.set('chat_ws_connections_active', this.connections.size);
+      technicalMetrics.increment('chat_ws_connection_events_total', 1, { event: 'closed', reason: closeReason(code) });
       if (state.userId) void this.bus.unregisterConnection(state.userId, state.id);
     });
-    socket.on('error', () => undefined);
+    socket.on('error', () => {
+      technicalMetrics.increment('chat_ws_connection_events_total', 1, { event: 'error', reason: 'network' });
+    });
     this.send(state, { type: 'hello', connectionId: state.id, protocolVersion: 1 });
   }
 
@@ -75,9 +91,12 @@ export class WebSocketGateway {
         state.deviceId = command.deviceId;
         state.authorization = `Bearer ${command.token}`;
         const deviceKey = `${user.id}:${command.deviceId}`;
-        if (this.seenDevices.has(deviceKey)) technicalMetrics.increment('chat_ws_reconnects_total');
-        else this.seenDevices.add(deviceKey);
+        if (this.seenDevices.has(deviceKey)) {
+          technicalMetrics.increment('chat_ws_reconnects_total');
+          technicalMetrics.increment('chat_ws_connection_events_total', 1, { event: 'reconnected', reason: 'client_retry' });
+        } else this.seenDevices.add(deviceKey);
         await this.bus.registerConnection(user.id, state.id, command.deviceId);
+        technicalMetrics.increment('chat_ws_connection_events_total', 1, { event: 'authenticated', reason: 'success' });
         return this.send(state, { type: 'authenticated', userId: user.id });
       }
       if (!state.userId || !state.authorization || !state.deviceId) return state.socket.close(4401, 'Authentication required');
@@ -126,6 +145,7 @@ export class WebSocketGateway {
       }
       await this.service.updateCanonicalReadState(state.authorization, command.conversationId, command.messageId, command.messageId);
     } catch {
+      technicalMetrics.increment('chat_ws_connection_events_total', 1, { event: 'command_rejected', reason: 'authorization' });
       this.sendError(state, 'COMMAND_REJECTED');
     }
   }
@@ -144,6 +164,7 @@ export class WebSocketGateway {
   private async pingConnections(): Promise<void> {
     for (const connection of this.connections.values()) {
       if (!connection.alive) {
+        technicalMetrics.increment('chat_ws_connection_events_total', 1, { event: 'heartbeat_timeout', reason: 'timeout' });
         connection.socket.terminate();
         continue;
       }
@@ -154,6 +175,7 @@ export class WebSocketGateway {
           await this.service.authenticate(connection.authorization);
           await this.bus.refreshConnection(connection.userId);
         } catch {
+          technicalMetrics.increment('chat_ws_connection_events_total', 1, { event: 'auth_failed', reason: 'session_revoked' });
           connection.socket.close(4401, 'Session revoked');
         }
       }

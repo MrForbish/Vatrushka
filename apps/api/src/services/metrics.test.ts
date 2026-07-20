@@ -33,4 +33,13 @@ describe('TechnicalMetrics', () => {
     expect(() => metrics.increment('shared_metric')).toThrow(/already registered/u);
     expect(() => metrics.increment('valid_metric_total', 1, { le: '1' })).toThrow(/Invalid Prometheus label/u);
   });
+
+  it('increments and clamps gauges without changing their type', () => {
+    const metrics = new TechnicalMetrics();
+    metrics.addGauge('api_http_requests_in_flight', 1, { route: '/health' });
+    metrics.addGauge('api_http_requests_in_flight', 2, { route: '/health' });
+    metrics.addGauge('api_http_requests_in_flight', -4, { route: '/health' });
+
+    expect(metrics.render()).toContain('api_http_requests_in_flight{route="/health"} 0');
+  });
 });

@@ -94,6 +94,7 @@ export interface VoicePresenceStore {
   getSession(userId: string): Promise<VoiceSession | null>;
   snapshot(serverId: string): Promise<VoiceStateSnapshot>;
   activeServerIds(): Promise<string[]>;
+  activeSessionCount(): Promise<number>;
   createMove(
     move: PendingVoiceMove,
     ttlSeconds: number,
@@ -271,6 +272,10 @@ export class MemoryVoicePresenceStore implements VoicePresenceStore {
     return Promise.resolve([
       ...new Set([...this.sessions.values()].map((session) => session.serverId)),
     ]);
+  }
+
+  activeSessionCount(): Promise<number> {
+    return Promise.resolve(this.sessions.size);
   }
 
   createMove(
@@ -540,6 +545,12 @@ return 1
 
   activeServerIds(): Promise<string[]> {
     return this.client.sMembers("vatrushka:voice:servers");
+  }
+
+  async activeSessionCount(): Promise<number> {
+    const serverIds = await this.activeServerIds();
+    const counts = await Promise.all(serverIds.map((serverId) => this.client.sCard(this.serverUsersKey(serverId))));
+    return counts.reduce((total, count) => total + count, 0);
   }
 
   async createMove(

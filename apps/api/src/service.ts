@@ -167,6 +167,18 @@ export interface ServiceDependencies {
 }
 
 const RECOVERY_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const LIVEKIT_METRIC_EVENTS = new Set([
+  "participant_joined",
+  "participant_left",
+  "participant_connection_aborted",
+  "track_published",
+  "track_unpublished",
+  "room_finished",
+]);
+
+function liveKitMetricEvent(event: string | undefined): string {
+  return event && LIVEKIT_METRIC_EVENTS.has(event) ? event : "other";
+}
 
 function randomRecoveryCode(): string {
   const bytes = randomBytes(12);
@@ -4517,6 +4529,12 @@ export class VatrushkaService {
       [10, 25, 50, 100, 250, 500, 1_000, 2_500],
       { status: "accepted" },
     );
+    technicalMetrics.observeHistogram(
+      "voice_move_duration_seconds",
+      Math.max(0, performance.now() - startedAt) / 1_000,
+      [0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+      { status: "accepted" },
+    );
     return {
       movementId: acceptedMove.movementId,
       status: "pending",
@@ -4706,6 +4724,7 @@ export class VatrushkaService {
         participantIdentity,
       );
       await this.store.releaseChannelLeaseByParticipant(participantIdentity);
+      await this.updateScreenShareActiveMetric();
     } catch (error) {
       if (error instanceof AppError) throw error;
       throw new AppError("LIVEKIT_UNAVAILABLE", 503);
@@ -4723,18 +4742,31 @@ export class VatrushkaService {
       participantIdentity,
       "STREAM_SCREEN",
     );
-    const result = await this.store.claimChannelLease(
-      channel.id,
-      participantIdentity,
-      displayName,
-      this.now(),
-      this.config.SCREEN_SHARE_LEASE_SECONDS,
-    );
-    if (result.status === "busy")
-      throw new AppError("SCREEN_SHARE_BUSY", 409, undefined, {
-        participantDisplayName: result.lease.participantDisplayName,
+    try {
+      const result = await this.store.claimChannelLease(
+        channel.id,
+        participantIdentity,
+        displayName,
+        this.now(),
+        this.config.SCREEN_SHARE_LEASE_SECONDS,
+      );
+      if (result.status === "busy")
+        throw new AppError("SCREEN_SHARE_BUSY", 409, undefined, {
+          participantDisplayName: result.lease.participantDisplayName,
+        });
+      technicalMetrics.increment("screen_share_lease_events_total", 1, {
+        event: "acquire",
+        result: "success",
       });
-    return { expiresAt: result.lease.expiresAt.toISOString() };
+      await this.updateScreenShareActiveMetric();
+      return { expiresAt: result.lease.expiresAt.toISOString() };
+    } catch (error) {
+      technicalMetrics.increment("screen_share_lease_events_total", 1, {
+        event: "acquire",
+        result: error instanceof AppError && error.statusCode === 409 ? "busy" : "error",
+      });
+      throw error;
+    }
   }
 
   async heartbeatChannelScreenShare(
@@ -4768,6 +4800,7 @@ export class VatrushkaService {
       technicalMetrics.increment("screen_share_lease_heartbeat_total", 1, {
         result: "renewed",
       });
+      technicalMetrics.increment("screen_share_lease_events_total", 1, { event: "renew", result: "success" });
       return { expiresAt: lease.expiresAt.toISOString() };
     } catch (error) {
       technicalMetrics.increment("screen_share_lease_heartbeat_total", 1, {
@@ -4777,6 +4810,14 @@ export class VatrushkaService {
             : error instanceof AppError && error.statusCode < 500
               ? "rejected"
               : "dependency_error",
+      });
+      technicalMetrics.increment("screen_share_lease_events_total", 1, {
+        event: "renew",
+        result: error instanceof AppError && error.statusCode === 409
+          ? "ownership_lost"
+          : error instanceof AppError && error.statusCode < 500
+            ? "rejected"
+            : "error",
       });
       throw error;
     }
@@ -4797,7 +4838,12 @@ export class VatrushkaService {
     );
     if (!participantIdentity.startsWith(`user_${user.id}_`))
       throw new AppError("UNAUTHORIZED", 401);
-    await this.store.releaseChannelLease(channelId, participantIdentity);
+    const released = await this.store.releaseChannelLease(channelId, participantIdentity);
+    technicalMetrics.increment("screen_share_lease_events_total", 1, {
+      event: "release",
+      result: released ? "success" : "not_found",
+    });
+    await this.updateScreenShareActiveMetric();
   }
 
   async handleWebhookEvent(event: {
@@ -4813,8 +4859,16 @@ export class VatrushkaService {
   }): Promise<void> {
     if (event.id && !(await this.voicePresenceStore.acceptWebhook(event.id))) {
       technicalMetrics.increment("voice_webhook_duplicate_total");
+      technicalMetrics.increment("livekit_webhook_events_total", 1, {
+        event: liveKitMetricEvent(event.event),
+        result: "duplicate",
+      });
       return;
     }
+    technicalMetrics.increment("livekit_webhook_events_total", 1, {
+      event: liveKitMetricEvent(event.event),
+      result: "accepted",
+    });
     const identity = event.participant?.identity;
     if (
       (event.event === "participant_left" ||
@@ -4823,6 +4877,7 @@ export class VatrushkaService {
       identity
     ) {
       await this.store.releaseChannelLeaseByParticipant(identity);
+      await this.updateScreenShareActiveMetric();
     }
     if (event.event === "room_finished" && event.room?.metadata) {
       try {
@@ -4831,6 +4886,7 @@ export class VatrushkaService {
         };
         if (metadata.appChannelId) {
           await this.store.releaseChannelLeaseByChannel(metadata.appChannelId);
+          await this.updateScreenShareActiveMetric();
           const finishedChannel = await this.store.findServerChannel(
             metadata.appChannelId,
           );
@@ -4952,8 +5008,7 @@ export class VatrushkaService {
           version: mutation.version,
         });
       }
-      const snapshot = await this.voicePresenceStore.snapshot(server.id);
-      technicalMetrics.set("voice_active_sessions", snapshot.sessions.length);
+      technicalMetrics.set("voice_active_sessions", await this.voicePresenceStore.activeSessionCount());
       return;
     }
 
@@ -4989,8 +5044,7 @@ export class VatrushkaService {
           sessionId: mutation.previousSessionId,
           version: mutation.version,
         });
-      const snapshot = await this.voicePresenceStore.snapshot(server.id);
-      technicalMetrics.set("voice_active_sessions", snapshot.sessions.length);
+      technicalMetrics.set("voice_active_sessions", await this.voicePresenceStore.activeSessionCount());
       return;
     }
 
@@ -5013,6 +5067,10 @@ export class VatrushkaService {
           patch: { screenSharing: updated.screenSharing },
         });
     }
+  }
+
+  private async updateScreenShareActiveMetric(): Promise<void> {
+    technicalMetrics.set("screen_share_active_sessions", await this.store.countChannelLeases(this.now()));
   }
 
   private async issueEmailCode(

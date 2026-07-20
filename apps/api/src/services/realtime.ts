@@ -178,6 +178,8 @@ export class OutboxWorker {
     const events = await this.store.claimOutboxBatch(100, new Date());
     for (const event of events) await this.process(event);
     const metrics = await this.store.outboxMetrics(new Date());
+    technicalMetrics.set("chat_outbox_pending", metrics.pending);
+    technicalMetrics.set("chat_outbox_failed", metrics.failed);
     technicalMetrics.set("chat_outbox_pending_total", metrics.pending);
     technicalMetrics.set("chat_outbox_failed_total", metrics.failed);
     technicalMetrics.set(
