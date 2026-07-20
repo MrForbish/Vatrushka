@@ -7,6 +7,7 @@ const accepted = [
   ['fix/WEB-20810-message-duplicates', 'develop', '[WEB-20810] Исправить дубли'],
   ['chore/migrate-to-gitlab', 'develop', '[CHORE] Migrate to GitLab'],
   ['chore/migrate-to-gitlab', 'develop', 'Draft: [CHORE] Migrate to GitLab'],
+  ['chore/release-0.8.11-preparation', 'develop', '[CHORE] Prepare v0.8.11 release'],
   ['develop', 'main', '[RELEASE] Vatrushka v0.7.0'],
   ['hotfix/0.6.2-auth-session-crash', 'main', '[HOTFIX] Vatrushka v0.6.2'],
   ['hotfix/0.6.2-auth-session-crash', 'main', '[WIP] [HOTFIX] Vatrushka v0.6.2'],

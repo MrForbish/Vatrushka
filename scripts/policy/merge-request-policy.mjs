@@ -12,6 +12,10 @@ function taskBranch(source) {
   const ticketed = source.match(/^(feat|fix)\/([A-Za-z]+-\d+)-([a-z0-9][a-z0-9-]*)$/u);
   if (ticketed) return { titlePrefix: `[${ticketed[2].toUpperCase()}]` };
 
+  // SemVer dots are accepted only for this explicitly versioned maintenance branch.
+  const releasePreparation = source.match(/^chore\/release-(\d+\.\d+\.\d+)-preparation$/u);
+  if (releasePreparation) return { titlePrefix: '[CHORE]' };
+
   const unticketed = source.match(/^(chore|refactor|test|docs)\/([a-z0-9][a-z0-9-]*)$/u);
   if (unticketed) return { titlePrefix: `[${unticketed[1].toUpperCase()}]` };
 
