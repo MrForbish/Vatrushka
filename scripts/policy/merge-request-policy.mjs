@@ -33,28 +33,8 @@ export function validateMergeRequest({ source, target, title, productionBranch =
     return { valid: errors.length === 0, errors };
   }
 
-  const assemble = source.match(new RegExp(`^assemble/${SEMVER}$`, 'u'));
-  if (assemble) {
-    const releaseTarget = target.match(new RegExp(`^release/${SEMVER}$`, 'u'));
-    addError(errors, Boolean(releaseTarget), `${source} разрешено вливать только в release/<version>`);
-    addError(errors, !releaseTarget || assemble[1] === releaseTarget[1], 'Версии assemble и release веток должны совпадать');
-    addError(errors, normalizedTitle.startsWith('[ASSEMBLE]'), 'Название assembly MR должно начинаться с [ASSEMBLE]');
-    return { valid: errors.length === 0, errors };
-  }
-
-  const releaseFix = source.match(new RegExp(`^release-fix/${SEMVER}-[a-z0-9][a-z0-9-]*$`, 'u'));
-  if (releaseFix) {
-    const releaseTarget = target.match(new RegExp(`^release/${SEMVER}$`, 'u'));
-    addError(errors, Boolean(releaseTarget), `${source} разрешено вливать только в release/<version>`);
-    addError(errors, !releaseTarget || releaseFix[1] === releaseTarget[1], 'Версии release-fix и release веток должны совпадать');
-    addError(errors, normalizedTitle.startsWith('[RELEASE FIX]'), 'Название release fix MR должно начинаться с [RELEASE FIX]');
-    return { valid: errors.length === 0, errors };
-  }
-
-  const release = source.match(new RegExp(`^release/${SEMVER}$`, 'u'));
-  if (release) {
-    addError(errors, target === productionBranch, `${source} разрешено вливать только в ${productionBranch}`);
-    addError(errors, normalizedTitle.startsWith('[RELEASE]'), 'Название release MR должно начинаться с [RELEASE]');
+  if (source === 'develop' && target === productionBranch) {
+    addError(errors, normalizedTitle.startsWith('[RELEASE]'), 'Название production MR должно начинаться с [RELEASE]');
     return { valid: errors.length === 0, errors };
   }
 
@@ -66,8 +46,8 @@ export function validateMergeRequest({ source, target, title, productionBranch =
   }
 
   if (source === productionBranch) {
-    const validTarget = target === 'develop' || /^release\/\d+\.\d+\.\d+$/u.test(target);
-    addError(errors, validTarget, `${productionBranch} разрешено синхронизировать только в develop или активную release ветку`);
+    const validTarget = target === 'develop';
+    addError(errors, validTarget, `${productionBranch} разрешено синхронизировать только в develop`);
     addError(errors, normalizedTitle.startsWith('[SYNC]'), 'Название sync MR должно начинаться с [SYNC]');
     return { valid: errors.length === 0, errors };
   }

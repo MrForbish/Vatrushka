@@ -25,6 +25,7 @@ import { findDeepLink } from "./deep-link.js";
 import { configureLogging, IPC_CHANNELS, registerIpc } from "./ipc.js";
 import { DesktopStorage } from "./storage.js";
 import { DesktopUpdater } from "./updater.js";
+import { captureMainHawk, initializeMainHawk } from "./hawk.js";
 
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const productionRendererDirectory = normalize(
@@ -406,6 +407,7 @@ if (!hasLock) {
   });
 
   void app.whenReady().then(async () => {
+    initializeMainHawk();
     app.setName(APP_NAME);
     app.setAppUserModelId("ru.vatrushka.desktop");
     registerProtocol();
@@ -453,6 +455,9 @@ if (!hasLock) {
     powerMonitor.on("resume", checkForUpdatesIfDue);
   });
 }
+
+process.on("uncaughtException", (error) => captureMainHawk(error, "uncaught-exception"));
+process.on("unhandledRejection", (reason) => captureMainHawk(reason, "unhandled-rejection"));
 
 app.on("activate", showMainWindow);
 app.on("browser-window-focus", checkForUpdatesIfDue);

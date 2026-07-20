@@ -15,6 +15,7 @@ import {
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { WebhookReceiver } from "livekit-server-sdk";
 import { z, ZodError } from "zod";
+import { createHawkReporter } from "./observability/hawk.js";
 
 import {
   API_PREFIX,
@@ -909,6 +910,7 @@ export async function buildApp(
   options: BuildAppOptions,
 ): Promise<FastifyInstance> {
   const { config, service } = options;
+  const hawk = createHawkReporter(config);
   technicalMetrics.set("vatrushka_build_info", 1, {
     version: config.APP_VERSION,
     commit: config.BUILD_COMMIT,
@@ -1046,6 +1048,12 @@ export async function buildApp(
         status_class: `${Math.floor(error.statusCode / 100)}xx`,
       });
       if (error.statusCode >= 500) {
+        hawk.capture(error, {
+          requestId: request.id,
+          route: request.routeOptions.url || "unmatched",
+          statusCode: String(error.statusCode),
+          errorCode: error.code,
+        });
         technicalMetrics.increment("api_errors_total", 1, {
           code: error.code,
           route: request.routeOptions.url || "unmatched",
@@ -1123,6 +1131,12 @@ export async function buildApp(
       return;
     }
     request.log.error({ err: error }, "Unhandled API error");
+    hawk.capture(error, {
+      requestId: request.id,
+      route: request.routeOptions.url || "unmatched",
+      statusCode: "500",
+      errorCode: "INTERNAL_ERROR",
+    });
     technicalMetrics.increment("api_errors_total", 1, {
       code: "INTERNAL_ERROR",
       route: request.routeOptions.url || "unmatched",

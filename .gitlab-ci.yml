@@ -2,10 +2,6 @@ workflow:
   rules:
     - if: '$CI_COMMIT_TAG'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS'
-      when: never
-    - if: '$CI_COMMIT_BRANCH == "develop"'
-    - if: '$CI_COMMIT_BRANCH =~ /^release\/[0-9]+\.[0-9]+\.[0-9]+$/'
     - if: '$CI_PIPELINE_SOURCE == "web"'
     - when: never
 
@@ -13,6 +9,7 @@ stages:
   - policy
   - quality
   - release
+  - deploy
   - package
   - publish
 
@@ -76,26 +73,11 @@ variables:
         - .cache/electron-dist/
       policy: pull-push
 
-.quality-rules:
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
-    - if: '$CI_COMMIT_TAG'
-    - if: '$CI_COMMIT_BRANCH == "develop"'
-    - if: '$CI_COMMIT_BRANCH =~ /^release\/[0-9]+\.[0-9]+\.[0-9]+$/'
-
-.release-candidate-rules:
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME =~ /^release\/[0-9]+\.[0-9]+\.[0-9]+$/'
-    - if: '$CI_COMMIT_BRANCH =~ /^release\/[0-9]+\.[0-9]+\.[0-9]+$/'
-
 .observability-rules:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes: [infra/observability/**/*, scripts/observability/**/*]
-    - if: '$CI_COMMIT_TAG'
-      changes: [infra/observability/**/*, scripts/observability/**/*]
-    - if: '$CI_COMMIT_BRANCH == "develop"'
-      changes: [infra/observability/**/*, scripts/observability/**/*]
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
 
 merge-request-policy:
   extends: .node-linux
@@ -137,12 +119,15 @@ verify-tag:
 verify:
   extends:
     - .node-linux
-    - .quality-rules
   stage: quality
   # The complete quality bundle includes lint, typecheck, unit tests and builds.
   # Self-hosted runners may be temporarily CPU-constrained; eight minutes causes
   # a false timeout while lint is still making progress.
   timeout: 20m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: [apps/**/*, packages/**/*, scripts/**/*, infra/docker/**/*, package.json, package-lock.json, tsconfig.base.json, eslint.config.*]
   script:
     - npm run repo-policy:test
     - npm run version:check
@@ -156,9 +141,12 @@ verify:
 integration:
   extends:
     - .node-linux
-    - .quality-rules
   stage: quality
   timeout: 5m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: [apps/api/**/*, packages/**/*, scripts/**/*, infra/docker/**/*, package.json, package-lock.json]
   services:
     - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/postgres:17-alpine
       alias: postgres
@@ -275,9 +263,12 @@ observability-caddy:
 desktop-behavior:
   extends:
     - .node-windows
-    - .quality-rules
   stage: quality
   timeout: 12m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: [apps/desktop/**/*, packages/shared/**/*, packages/config/**/*, package.json, package-lock.json]
   script:
     - npx playwright install chromium
     - npm run build -w @vatrushka/shared
@@ -293,9 +284,12 @@ desktop-behavior:
 visual-regression:
   extends:
     - .node-windows
-    - .quality-rules
   stage: quality
   timeout: 10m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes: [apps/desktop/**/*, packages/shared/**/*, packages/config/**/*, package.json, package-lock.json]
   script:
     - |
       $storybookListeners = @(Get-NetTCPConnection -LocalPort 6006 -State Listen -ErrorAction SilentlyContinue)
@@ -323,9 +317,10 @@ visual-regression:
 release-validate:
   extends:
     - .node-linux
-    - .release-candidate-rules
   stage: release
   timeout: 5m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
   variables:
     RELEASE_BRANCH: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME'
   script:
@@ -347,9 +342,10 @@ release-validate:
 database-upgrade:
   extends:
     - .node-linux
-    - .release-candidate-rules
   stage: release
   timeout: 8m
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
   services:
     - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/postgres:17-alpine
       alias: postgres
@@ -412,75 +408,80 @@ release-auth-smoke:
   script:
     - glab release view v0.6.6 >/dev/null
 
-windows-rc:
-  extends:
-    - .node-windows-package
-    - .release-candidate-rules
-  stage: package
-  timeout: 25m
+prepare-production-source:
+  extends: .node-linux
+  stage: deploy
+  timeout: 3m
   interruptible: false
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
   needs:
-    - verify
-    - integration
-    - desktop-behavior
-    - visual-regression
-    - release-validate
-    - database-upgrade
-  variables:
-    VITE_PUBLIC_API_BASE_URL: '$PRODUCTION_API_BASE_URL'
+    - job: verify-tag
+      artifacts: true
   script:
-    - npm run package:win
-    - |
-      function Install-Client([string]$Path) {
-        $process = Start-Process -FilePath $Path -ArgumentList '/S' -Wait -PassThru
-        if ($process.ExitCode -ne 0) { throw "Silent install failed with $($process.ExitCode): $Path" }
-        $installed = Get-ChildItem "$env:LOCALAPPDATA/Programs" -Recurse -Filter '*.exe' -ErrorAction SilentlyContinue |
-          Where-Object { $_.Name -notlike 'Uninstall*' } | Select-Object -First 1
-        if (-not $installed) { throw 'Installed application executable was not found' }
-        return $installed
-      }
-      function Uninstall-Client {
-        $uninstaller = Get-ChildItem "$env:LOCALAPPDATA/Programs" -Recurse -Filter 'Uninstall*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
-        if (-not $uninstaller) { throw 'Uninstaller was not found after clean install' }
-        $process = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
-        if ($process.ExitCode -ne 0) { throw "Silent uninstall failed with $($process.ExitCode)" }
-      }
-      $setup = Get-ChildItem apps/desktop/release/Vatrushka-Setup-*-x64.exe | Select-Object -First 1
-      if (-not $setup) { throw 'NSIS installer was not created' }
-      Install-Client $setup.FullName | Out-Null
-      Uninstall-Client
-      $latest = Invoke-RestMethod "$env:PRODUCTION_UPDATE_FEED/latest.yml"
-      $match = [regex]::Match([string]$latest, '(?m)^path:\s*([^\r\n]+)$')
-      if (-not $match.Success) { throw 'Production latest.yml does not contain an installer path' }
-      $previousName = $match.Groups[1].Value.Trim().Trim('"').Trim("'")
-      $previousUri = [Uri]::new([Uri]"$env:PRODUCTION_UPDATE_FEED/", $previousName)
-      $previousSetup = Join-Path $env:TEMP 'Vatrushka-previous.exe'
-      Invoke-WebRequest $previousUri -OutFile $previousSetup
-      Install-Client $previousSetup | Out-Null
-      Install-Client $setup.FullName | Out-Null
-    - |
-      $package = Get-Content package.json -Raw | ConvertFrom-Json
-      $shortSha = $env:CI_COMMIT_SHA.Substring(0, 7)
-      $setup = Get-ChildItem apps/desktop/release/Vatrushka-Setup-*-x64.exe | Select-Object -First 1
-      $rcName = "Vatrushka-$($package.version)-rc.$env:CI_PIPELINE_IID-$shortSha.exe"
-      Copy-Item $setup.FullName "apps/desktop/release/$rcName"
-      Get-ChildItem apps/desktop/release/* -File | Get-FileHash -Algorithm SHA256 |
-        ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } |
-        Set-Content apps/desktop/release/SHA256SUMS.txt
-      $metadata = [ordered]@{
-        version = "$($package.version)-rc.$env:CI_PIPELINE_IID"
-        commitSha = $env:CI_COMMIT_SHA
-        baseTag = (git describe --tags --abbrev=0 2>$null)
-        buildNumber = [int]$env:CI_PIPELINE_IID
-        channel = 'rc'
-        builtAt = (Get-Date).ToUniversalTime().ToString('o')
-        pipelineId = $env:CI_PIPELINE_ID
-      }
-      $metadata | ConvertTo-Json | Set-Content apps/desktop/release/release-metadata.json
+    - git archive --format=tar "$CI_COMMIT_SHA" | gzip -n > release-source.tar.gz
+    - test -s release-source.tar.gz
   artifacts:
-    expire_in: 30 days
-    name: 'vatrushka-rc-$CI_PIPELINE_IID-$CI_COMMIT_SHORT_SHA'
-    paths: [apps/desktop/release/]
+    expire_in: 1 day
+    paths: [release-source.tar.gz]
+
+.production-ssh:
+  image: alpine:3.22
+  tags: [vatrushka-linux]
+  interruptible: false
+  before_script:
+    - apk add --no-cache openssh-client
+    - |
+      for name in PRODUCTION_SSH_PRIVATE_KEY PRODUCTION_SSH_HOST_KEY PRODUCTION_SSH_HOST PRODUCTION_SSH_USER PRODUCTION_UPDATE_PATH; do
+        test -n "$(eval "printf '%s' \"\$$name\"")" || { echo "Required production setting is missing: $name" >&2; exit 1; }
+      done
+      echo "$PRODUCTION_UPDATE_PATH" | grep -Eq '^/[A-Za-z0-9._/-]+$' || { echo 'PRODUCTION_UPDATE_PATH has unsafe characters.' >&2; exit 1; }
+      install -d -m 700 ~/.ssh
+      install -m 600 "$PRODUCTION_SSH_PRIVATE_KEY" ~/.ssh/id_ed25519
+      install -m 600 "$PRODUCTION_SSH_HOST_KEY" ~/.ssh/known_hosts
+
+deploy-production-runtime:
+  extends: .production-ssh
+  stage: deploy
+  timeout: 20m
+  resource_group: production-runtime
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+  needs:
+    - job: verify-tag
+      artifacts: true
+    - job: prepare-production-source
+      artifacts: true
+  script:
+    - remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
+    - archive="/tmp/vatrushka-${CI_COMMIT_TAG}.tar.gz"
+    - scp release-source.tar.gz "$remote:$archive"
+    - ssh "$remote" "sh -s -- '$archive' '$VERSION' '$CI_COMMIT_SHA' '$PRODUCTION_UPDATE_PATH'" < scripts/deploy/apply-product-release.sh
+
+deploy-observability-runtime:
+  extends: .production-ssh
+  stage: deploy
+  timeout: 20m
+  resource_group: observability-runtime
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+  needs:
+    - job: deploy-production-runtime
+    - job: prepare-production-source
+      artifacts: true
+  script:
+    - remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
+    - archive="/tmp/vatrushka-observability-${CI_COMMIT_TAG}.tar.gz"
+    - scp release-source.tar.gz infra/deploy/monitoring-known_hosts "$remote:/tmp/"
+    - |
+      ssh "$remote" "set -eu
+      install -d -m 700 /root/.ssh
+      touch /root/.ssh/known_hosts
+      grep -qxF \"$(cat infra/deploy/monitoring-known_hosts)\" /root/.ssh/known_hosts || cat /tmp/monitoring-known_hosts >> /root/.ssh/known_hosts
+      chmod 600 /root/.ssh/known_hosts
+      mv /tmp/release-source.tar.gz '$archive'
+      scp -o StrictHostKeyChecking=yes '$archive' root@5.42.107.9:'$archive'"
+    - ssh "$remote" "ssh -o StrictHostKeyChecking=yes root@5.42.107.9 'sh -s -- \"$archive\" \"$VERSION\"'" < scripts/deploy/apply-observability-release.sh
 
 windows-production-package:
   extends: .node-windows-package
@@ -491,12 +492,15 @@ windows-production-package:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
   needs:
     - verify-tag
-    - verify
-    - integration
-    - desktop-behavior
-    - visual-regression
+    - deploy-observability-runtime
   variables:
     VITE_PUBLIC_API_BASE_URL: '$PRODUCTION_API_BASE_URL'
+    HAWK_DESKTOP_MAIN_ENABLED: 'true'
+    HAWK_DESKTOP_RENDERER_ENABLED: 'true'
+    HAWK_DESKTOP_RENDERER_TOKEN: '$HAWK_INTEGRATION_TOKEN'
+    VITE_HAWK_DESKTOP_RENDERER_ENABLED: 'true'
+    VITE_HAWK_INTEGRATION_TOKEN: '$HAWK_INTEGRATION_TOKEN'
+    HAWK_DESKTOP_RELEASE: '$CI_COMMIT_TAG'
     RELEASE_BRANCH: '$PRODUCTION_BRANCH'
     CSC_LINK: '$WINDOWS_CSC_LINK'
     CSC_KEY_PASSWORD: '$WINDOWS_CSC_KEY_PASSWORD'
@@ -537,6 +541,8 @@ publish-production:
   needs:
     - job: verify-tag
       artifacts: true
+    - job: deploy-production-runtime
+    - job: deploy-observability-runtime
     - job: windows-production-package
       artifacts: true
   variables:

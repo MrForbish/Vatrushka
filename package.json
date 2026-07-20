@@ -1,6 +1,6 @@
 {
   "name": "vatrushka",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "description": "«Ватрушка» — настольные серверы, текстовые и голосовые каналы",
   "type": "module",
@@ -46,6 +46,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@hawk.so/vite-plugin": "^1.0.6",
     "@types/node": "26.1.1",
     "concurrently": "10.0.3",
     "eslint": "10.7.0",
