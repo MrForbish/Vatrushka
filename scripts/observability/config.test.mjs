@@ -70,7 +70,7 @@ test("prometheus has remote write, alertmanager, external labels and separated r
   const ruleFiles = (await readdir(rulesDirectory)).filter((file) => file.endsWith('.yml'));
   const rules = await Promise.all(ruleFiles.map((file) => read(`infra/observability/platform/prometheus/rules/${file}`)));
   const merged = rules.join('\n');
-  for (const alert of ['HostCpuHigh', 'HostMemoryCritical', 'HostDiskCritical', 'VatrushkaPublicReadinessDown', 'VatrushkaApiUnhandledErrors', 'VatrushkaScreenShareHeartbeatFailures', 'VatrushkaOutboxFailed', 'PrometheusTargetDown', 'LokiDiscardedLogs', 'AlertmanagerNotificationsFailing']) {
+  for (const alert of ['HostCpuHigh', 'HostMemoryCritical', 'HostDiskCritical', 'VatrushkaProductTelemetryMissing', 'VatrushkaPublicReadinessDown', 'VatrushkaApiUnhandledErrors', 'VatrushkaScreenShareHeartbeatFailures', 'VatrushkaOutboxFailed', 'PrometheusTargetDown', 'LokiDiscardedLogs', 'AlertmanagerNotificationsFailing']) {
     assert.match(merged, new RegExp(`alert: ${alert}`, 'u'));
   }
 });

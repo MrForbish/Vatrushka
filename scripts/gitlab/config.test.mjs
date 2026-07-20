@@ -14,6 +14,14 @@ test('GitLab pipeline preserves Linux, integration and Windows quality gates', a
   assert.match(pipeline, /postgres:17-alpine/u);
   assert.match(pipeline, /redis:8-alpine/u);
   assert.match(pipeline, /CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX/u);
+  assert.match(
+    pipeline,
+    /\.production-ssh:[\s\S]*name: \$\{CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX\}\/alpine:3\.22/u,
+  );
+  assert.match(
+    pipeline,
+    /\.production-ssh:[\s\S]*environment:[\s\S]*name: production/u,
+  );
   assert.equal(pipeline.match(/name: \$\{CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX\}\/postgres:17-alpine/gu)?.length, 2);
   assert.match(pipeline, /pull_policy: if-not-present/u);
   assert.match(pipeline, /tags: \[vatrushka-linux\]/u);
@@ -71,6 +79,13 @@ test('production publication is tag-only and uses protected file variables', asy
   assert.match(publish, /CI_COMMIT_TAG =~ \/\^v\[0-9\]/u);
   assert.match(pipeline, /^deploy-production-runtime:[\s\S]*PRODUCTION_SSH_PRIVATE_KEY/mu);
   assert.match(pipeline, /^deploy-observability-runtime:[\s\S]*apply-observability-release/mu);
+  assert.match(
+    pipeline,
+    /^deploy-observability-runtime:[\s\S]*needs:[\s\S]*job: verify-tag[\s\S]*artifacts: true/mu,
+  );
+  assert.match(pipeline, /OBSERVABILITY_SSH_HOST: "201\.51\.4\.24"/u);
+  assert.match(pipeline, /root@\$OBSERVABILITY_SSH_HOST/u);
+  assert.doesNotMatch(pipeline, /5\.42\.107\.9/u);
   assert.match(publish, /GLAB_ENABLE_CI_AUTOLOGIN: 'true'/u);
   assert.doesNotMatch(publish, /GITLAB_TOKEN:/u);
   assert.doesNotMatch(publish, /GITLAB_RELEASE_TOKEN/u);

@@ -3031,6 +3031,7 @@ export async function buildApp(
       schema: { tags: ["health"], response: { 200: z.string() } },
     },
     async (_request, reply) => {
+      await service.refreshOperationalMetrics();
       if (service.canonicalMessagingStore) {
         const outbox = await service.canonicalMessagingStore.outboxMetrics(
           new Date(),

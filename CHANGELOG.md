@@ -4,6 +4,37 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.6] - 2026-07-20
+
+### Fixed
+
+- Voice and screen-share gauges are refreshed from their authoritative operational stores on every internal metrics scrape, so an API restart no longer leaves the dashboards at a stale zero until the next media event.
+- Central Prometheus now alerts when product telemetry disappears from the cross-VPS ingestion path even while the public API remains reachable.
+
+## [0.8.5] - 2026-07-20
+
+### Fixed
+
+- observability deployment now explicitly receives the release-version artifact from tag verification, preventing an empty version from reaching the monitoring deployment script.
+
+## [0.8.4] - 2026-07-20
+
+### Fixed
+
+- production and observability deployment scripts now execute on the VPS through non-interactive sudo, allowing the deployment user to update the root-owned runtime tree safely.
+
+## [0.8.3] - 2026-07-20
+
+### Fixed
+
+- production SSH deployment jobs now declare the protected `production` environment, allowing GitLab to expose only the intended environment-scoped SSH variables.
+
+## [0.8.2] - 2026-07-20
+
+### Fixed
+
+- production deployment jobs now pull their SSH runtime image through the GitLab Dependency Proxy, avoiding Docker Hub rate-limit failures before deployment begins.
+
 ## [0.8.1] - 2026-07-20
 
 ### Fixed

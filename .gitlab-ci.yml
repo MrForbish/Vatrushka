@@ -20,6 +20,7 @@ variables:
   PRODUCTION_BRANCH: "main"
   PRODUCTION_API_BASE_URL: "https://api.myvatrushka.ru"
   PRODUCTION_UPDATE_FEED: "https://api.myvatrushka.ru/updates"
+  OBSERVABILITY_SSH_HOST: "201.51.4.24"
   WINDOWS_TOOLCHAIN_MIRROR: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/windows-toolchain/43.1.1"
   WINDOWS_CSC_ENABLED: "false"
 
@@ -426,8 +427,13 @@ prepare-production-source:
     paths: [release-source.tar.gz]
 
 .production-ssh:
-  image: alpine:3.22
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:3.22
+    pull_policy: if-not-present
   tags: [vatrushka-linux]
+  environment:
+    name: production
+    url: https://api.myvatrushka.ru
   interruptible: false
   before_script:
     - apk add --no-cache openssh-client
@@ -456,7 +462,7 @@ deploy-production-runtime:
     - remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
     - archive="/tmp/vatrushka-${CI_COMMIT_TAG}.tar.gz"
     - scp release-source.tar.gz "$remote:$archive"
-    - ssh "$remote" "sh -s -- '$archive' '$VERSION' '$CI_COMMIT_SHA' '$PRODUCTION_UPDATE_PATH'" < scripts/deploy/apply-product-release.sh
+    - ssh "$remote" "sudo -n sh -s -- '$archive' '$VERSION' '$CI_COMMIT_SHA' '$PRODUCTION_UPDATE_PATH'" < scripts/deploy/apply-product-release.sh
 
 deploy-observability-runtime:
   extends: .production-ssh
@@ -466,6 +472,8 @@ deploy-observability-runtime:
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
   needs:
+    - job: verify-tag
+      artifacts: true
     - job: deploy-production-runtime
     - job: prepare-production-source
       artifacts: true
@@ -474,14 +482,16 @@ deploy-observability-runtime:
     - archive="/tmp/vatrushka-observability-${CI_COMMIT_TAG}.tar.gz"
     - scp release-source.tar.gz infra/deploy/monitoring-known_hosts "$remote:/tmp/"
     - |
-      ssh "$remote" "set -eu
+      ssh "$remote" "sudo -n sh -s -- '$archive' '$OBSERVABILITY_SSH_HOST'" <<'REMOTE_SETUP'
+      set -eu
       install -d -m 700 /root/.ssh
       touch /root/.ssh/known_hosts
-      grep -qxF \"$(cat infra/deploy/monitoring-known_hosts)\" /root/.ssh/known_hosts || cat /tmp/monitoring-known_hosts >> /root/.ssh/known_hosts
+      grep -qxF "$(cat /tmp/monitoring-known_hosts)" /root/.ssh/known_hosts || cat /tmp/monitoring-known_hosts >> /root/.ssh/known_hosts
       chmod 600 /root/.ssh/known_hosts
-      mv /tmp/release-source.tar.gz '$archive'
-      scp -o StrictHostKeyChecking=yes '$archive' root@5.42.107.9:'$archive'"
-    - ssh "$remote" "ssh -o StrictHostKeyChecking=yes root@5.42.107.9 'sh -s -- \"$archive\" \"$VERSION\"'" < scripts/deploy/apply-observability-release.sh
+      mv /tmp/release-source.tar.gz "$1"
+      scp -o StrictHostKeyChecking=yes "$1" "root@$2:$1"
+      REMOTE_SETUP
+    - ssh "$remote" "sudo -n ssh -o StrictHostKeyChecking=yes root@$OBSERVABILITY_SSH_HOST 'sh -s -- \"$archive\" \"$VERSION\"'" < scripts/deploy/apply-observability-release.sh
 
 windows-production-package:
   extends: .node-windows-package
