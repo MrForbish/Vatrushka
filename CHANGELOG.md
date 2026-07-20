@@ -4,6 +4,16 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-07-20
+
+### Fixed
+
+- Loki dashboard queries now retain a non-empty stream selector when every filter is set to `All`, so the Logs Overview dashboard opens without a LogQL parse error.
+
+### Operations
+
+- adds opt-in Hawk error monitoring for the API, Electron Main process and renderer, with source-map upload restricted to protected CI credentials and pseudonymised user context.
+
 ## [0.8.0] - 2026-07-20
 
 ### Added
