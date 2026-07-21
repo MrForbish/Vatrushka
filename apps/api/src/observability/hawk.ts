@@ -28,11 +28,12 @@ export interface HawkReporter {
 }
 
 export function createHawkReporter(config: AppConfig): HawkReporter {
-  if (!config.HAWK_ENABLED || !config.HAWK_INTEGRATION_TOKEN)
+  const token = config.HAWK_API_INTEGRATION_TOKEN || config.HAWK_INTEGRATION_TOKEN;
+  if (!config.HAWK_ENABLED || !token)
     return { enabled: false, capture: () => false };
 
   HawkCatcher.init({
-    token: config.HAWK_INTEGRATION_TOKEN,
+    token,
     release: config.HAWK_RELEASE,
     breadcrumbs: false,
     beforeSend: (event) => scrub(event) as typeof event,

@@ -195,6 +195,9 @@ const envSchema = z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),
     HAWK_ENABLED: booleanFromString,
+    HAWK_API_INTEGRATION_TOKEN: z.string().trim().optional().or(z.literal("")),
+    // Temporary compatibility path for existing production installations.
+    // New deployments must use the API-specific variable above.
     HAWK_INTEGRATION_TOKEN: z.string().trim().optional().or(z.literal("")),
     HAWK_ENVIRONMENT: z
       .enum(["development", "staging", "production"])
@@ -306,11 +309,11 @@ const envSchema = z
         });
     }
     if (env.HAWK_ENABLED) {
-      if (!env.HAWK_INTEGRATION_TOKEN)
+      if (!env.HAWK_API_INTEGRATION_TOKEN && !env.HAWK_INTEGRATION_TOKEN)
         context.addIssue({
           code: "custom",
-          path: ["HAWK_INTEGRATION_TOKEN"],
-          message: "HAWK_INTEGRATION_TOKEN is required when HAWK_ENABLED=true",
+          path: ["HAWK_API_INTEGRATION_TOKEN"],
+          message: "HAWK_API_INTEGRATION_TOKEN is required when HAWK_ENABLED=true",
         });
       if (!env.HAWK_RELEASE)
         context.addIssue({

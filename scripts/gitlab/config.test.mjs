@@ -99,8 +99,12 @@ test('production publication is tag-only and uses protected file variables', asy
   assert.match(pipeline, /deploy-observability-runtime:[\s\S]*deploy-production-runtime/u);
   assert.match(pipeline, /windows-production-package:[\s\S]*deploy-observability-runtime/u);
   const windowsPackage = pipeline.slice(pipeline.indexOf('windows-production-package:'), pipeline.indexOf('publish-production:'));
-  assert.match(windowsPackage, /\[string\]::IsNullOrWhiteSpace\(\$env:HAWK_INTEGRATION_TOKEN\)/u);
-  assert.match(windowsPackage, /Write-Error 'HAWK_INTEGRATION_TOKEN must be configured/u);
+  assert.match(windowsPackage, /\[string\]::IsNullOrWhiteSpace\(\$env:HAWK_DESKTOP_MAIN_TOKEN\)/u);
+  assert.match(windowsPackage, /Write-Error 'HAWK_DESKTOP_MAIN_TOKEN must be configured/u);
+  assert.match(windowsPackage, /\[string\]::IsNullOrWhiteSpace\(\$env:HAWK_DESKTOP_RENDERER_TOKEN\)/u);
+  assert.match(windowsPackage, /Write-Error 'HAWK_DESKTOP_RENDERER_TOKEN must be configured/u);
+  assert.match(windowsPackage, /VITE_HAWK_DESKTOP_RENDERER_TOKEN: '\$HAWK_DESKTOP_RENDERER_TOKEN'/u);
+  assert.doesNotMatch(windowsPackage, /\$HAWK_INTEGRATION_TOKEN/u);
   assert.doesNotMatch(windowsPackage, /test -n "\$HAWK_INTEGRATION_TOKEN"/u);
 });
 
