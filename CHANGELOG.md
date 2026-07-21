@@ -4,6 +4,12 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.13] - 2026-07-21
+
+### Fixed
+
+- fixes the production Alloy API scrape timeout so it is shorter than the 5-second interval and telemetry can start.
+
 ## [0.8.12] - 2026-07-21
 
 ### Fixed
