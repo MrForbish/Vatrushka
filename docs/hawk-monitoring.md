@@ -8,7 +8,7 @@ The API integration is disabled by default. Enable it only after the Hawk API pr
 
 ```text
 HAWK_ENABLED=true
-HAWK_INTEGRATION_TOKEN=<protected value>
+HAWK_API_INTEGRATION_TOKEN=<API project token>
 HAWK_ENVIRONMENT=production
 HAWK_RELEASE=<immutable application version>
 HAWK_USER_HASH_SECRET=<separate 32+ character secret>
@@ -19,9 +19,9 @@ Never commit these values or put them in build arguments. The reporter removes s
 ## Rollout
 
 1. Create three projects in Hawk Garage: API, Desktop Main, Desktop Renderer.
-2. Add separate protected tokens. Do not reuse a token between projects.
-3. Store `HAWK_INTEGRATION_TOKEN` as a protected GitLab CI/CD variable. The Windows release build embeds it only into the main/renderer catchers; it is never read by the API container.
-4. In the production API `.env`, set `HAWK_ENABLED=true`, `HAWK_INTEGRATION_TOKEN`, `HAWK_RELEASE` and `HAWK_USER_HASH_SECRET`.
+2. Create and use one Integration Token per project. Never reuse an API token in the Windows build or a renderer token in the Electron Main process.
+3. In GitLab, store `HAWK_DESKTOP_MAIN_TOKEN` and `HAWK_DESKTOP_RENDERER_TOKEN` as protected, masked CI/CD variables. The Windows release build embeds only the corresponding token in each catcher.
+4. In the production API `.env`, set `HAWK_ENABLED=true`, `HAWK_API_INTEGRATION_TOKEN`, `HAWK_RELEASE` and `HAWK_USER_HASH_SECRET`. `HAWK_INTEGRATION_TOKEN` remains a temporary API-only compatibility fallback and must not be used by new installations.
 5. To prove delivery once, set `HAWK_STARTUP_SMOKE_TEST=true`, restart the API, find the single `Hawk startup smoke test` event, then immediately set it back to `false` and restart the API again. The API metric `hawk_reporter_enabled{runtime="api"}` must be `1`; `hawk_events_submit_attempts_total{result="submitted"}` confirms that the catcher accepted the smoke event for delivery. These metrics do not claim that Hawk has received it: confirm the event in Hawk before disabling the smoke test.
 6. Enable Desktop Main in RC, then Renderer only after confirming browser-token exposure is acceptable to Hawk support.
 7. Configure notifications for new critical events only.

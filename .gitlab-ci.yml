@@ -503,9 +503,10 @@ windows-production-package:
     VITE_PUBLIC_API_BASE_URL: '$PRODUCTION_API_BASE_URL'
     HAWK_DESKTOP_MAIN_ENABLED: 'true'
     HAWK_DESKTOP_RENDERER_ENABLED: 'true'
-    HAWK_DESKTOP_RENDERER_TOKEN: '$HAWK_INTEGRATION_TOKEN'
+    HAWK_DESKTOP_MAIN_TOKEN: '$HAWK_DESKTOP_MAIN_TOKEN'
+    HAWK_DESKTOP_RENDERER_TOKEN: '$HAWK_DESKTOP_RENDERER_TOKEN'
     VITE_HAWK_DESKTOP_RENDERER_ENABLED: 'true'
-    VITE_HAWK_INTEGRATION_TOKEN: '$HAWK_INTEGRATION_TOKEN'
+    VITE_HAWK_DESKTOP_RENDERER_TOKEN: '$HAWK_DESKTOP_RENDERER_TOKEN'
     HAWK_DESKTOP_RELEASE: '$CI_COMMIT_TAG'
     RELEASE_BRANCH: '$PRODUCTION_BRANCH'
     CSC_LINK: '$WINDOWS_CSC_LINK'
@@ -513,8 +514,12 @@ windows-production-package:
     CSC_IDENTITY_AUTO_DISCOVERY: '$WINDOWS_CSC_ENABLED'
   script:
     - |
-      if ([string]::IsNullOrWhiteSpace($env:HAWK_INTEGRATION_TOKEN)) {
-        Write-Error 'HAWK_INTEGRATION_TOKEN must be configured as a protected CI/CD variable.'
+      if ([string]::IsNullOrWhiteSpace($env:HAWK_DESKTOP_MAIN_TOKEN)) {
+        Write-Error 'HAWK_DESKTOP_MAIN_TOKEN must be configured as a protected CI/CD variable.'
+        exit 1
+      }
+      if ([string]::IsNullOrWhiteSpace($env:HAWK_DESKTOP_RENDERER_TOKEN)) {
+        Write-Error 'HAWK_DESKTOP_RENDERER_TOKEN must be configured as a protected CI/CD variable.'
         exit 1
       }
     - npm run release:validate

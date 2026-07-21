@@ -3,8 +3,8 @@ import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 const environment = import.meta.env as unknown as Record<string, unknown>;
 const enabled = environment.VITE_HAWK_DESKTOP_RENDERER_ENABLED === 'true';
-const token = typeof environment.VITE_HAWK_INTEGRATION_TOKEN === 'string'
-  ? environment.VITE_HAWK_INTEGRATION_TOKEN
+const token = typeof environment.VITE_HAWK_DESKTOP_RENDERER_TOKEN === 'string'
+  ? environment.VITE_HAWK_DESKTOP_RENDERER_TOKEN
   : undefined;
 const forbiddenKey = /(?:authorization|cookie|password|secret|token|otp|code|email|message|content|body)/iu;
 const forbiddenValue = /(?:bearer\s+|eyJ[a-zA-Z0-9_-]{10,}|https?:\/\/[^\s]+[?&](?:token|key|code)=)/iu;

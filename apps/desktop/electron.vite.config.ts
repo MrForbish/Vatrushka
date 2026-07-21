@@ -4,7 +4,7 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import { resolve } from 'node:path';
 
 const hawkRendererToken = process.env.HAWK_DESKTOP_RENDERER_TOKEN;
-const hawkIntegrationToken = process.env.HAWK_INTEGRATION_TOKEN;
+const hawkMainToken = process.env.HAWK_DESKTOP_MAIN_TOKEN;
 const hawkRelease = process.env.HAWK_DESKTOP_RELEASE ?? 'unknown';
 
 export default defineConfig({
@@ -12,7 +12,7 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
     define: {
       'process.env.HAWK_DESKTOP_MAIN_ENABLED': JSON.stringify(process.env.HAWK_DESKTOP_MAIN_ENABLED ?? 'false'),
-      'process.env.HAWK_INTEGRATION_TOKEN': JSON.stringify(hawkIntegrationToken ?? ''),
+      'process.env.HAWK_DESKTOP_MAIN_TOKEN': JSON.stringify(hawkMainToken ?? ''),
       'process.env.HAWK_DESKTOP_RELEASE': JSON.stringify(hawkRelease),
     },
     build: { sourcemap: true },
@@ -28,7 +28,7 @@ export default defineConfig({
     root: resolve('src/renderer'),
     plugins: [
       react(),
-      ...(hawkRendererToken && hawkIntegrationToken
+      ...(hawkRendererToken
         ? [hawkVitePlugin({ token: hawkRendererToken, release: hawkRelease, removeSourceMaps: true })]
         : []),
     ],

@@ -36,12 +36,21 @@ describe('Hawk configuration', () => {
     }));
   });
 
-  it('requires a token only when enabled', () => {
-    expect(() => loadConfig({ NODE_ENV: 'test', HAWK_ENABLED: 'true' })).toThrow(/HAWK_INTEGRATION_TOKEN/);
+  it('requires an API token only when enabled', () => {
+    expect(() => loadConfig({ NODE_ENV: 'test', HAWK_ENABLED: 'true' })).toThrow(/HAWK_API_INTEGRATION_TOKEN/);
     expect(loadConfig({
       NODE_ENV: 'test',
       HAWK_ENABLED: 'true',
-      HAWK_INTEGRATION_TOKEN: 'test-token',
+      HAWK_API_INTEGRATION_TOKEN: 'api-test-token',
+      HAWK_RELEASE: '0.8.0-test',
+    })).toEqual(expect.objectContaining({ HAWK_ENABLED: true }));
+  });
+
+  it('keeps the legacy API token as a temporary compatibility fallback', () => {
+    expect(loadConfig({
+      NODE_ENV: 'test',
+      HAWK_ENABLED: 'true',
+      HAWK_INTEGRATION_TOKEN: 'legacy-api-test-token',
       HAWK_RELEASE: '0.8.0-test',
     })).toEqual(expect.objectContaining({ HAWK_ENABLED: true }));
   });
