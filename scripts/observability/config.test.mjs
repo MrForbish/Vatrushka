@@ -106,6 +106,7 @@ test("alloy agents sanitize logs and runner excludes CI job container logs", asy
   }
   assert.match(product, /values = \["vatrushka-\*"\]/u);
   assert.match(product, /scrape_interval\s*=\s*"5s"/u);
+  assert.match(product, /scrape_timeout\s*=\s*"4s"/u);
   assert.doesNotMatch(product, /queue_config/u);
   assert.match(runner, /_SYSTEMD_UNIT=gitlab-runner\.service/u);
   assert.doesNotMatch(runner, /loki\.source\.docker/u);
