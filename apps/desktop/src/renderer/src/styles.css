@@ -204,25 +204,11 @@ body.desktopTitlebarOverlay .vui-auth-page {
   font: var(--text-heading-sm);
   letter-spacing: 0.13em;
 }
-.vui-auth-brand > span {
-  display: grid;
-  width: 40px;
-  height: 40px;
-  place-items: center;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-sm);
-  background: var(--gradient-brand);
-  box-shadow: 0 10px 32px var(--color-primary-soft);
-  color: white;
-}
 .vui-auth-visual__copy {
   position: relative;
   z-index: 1;
   align-self: center;
   max-width: 720px;
-}
-.vui-auth-visual__copy .vui-badge {
-  gap: var(--space-1);
 }
 .vui-auth-visual__copy h2 {
   margin: var(--space-5) 0 var(--space-4);
@@ -239,95 +225,6 @@ body.desktopTitlebarOverlay .vui-auth-page {
   color: var(--color-text-secondary);
   font: var(--text-body-lg);
   line-height: 1.7;
-}
-.vui-auth-preview {
-  position: absolute;
-  z-index: 0;
-  right: -72px;
-  bottom: 130px;
-  display: grid;
-  grid-template-columns: 42px 230px;
-  width: 330px;
-  height: 190px;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border-default);
-  border-radius: var(--radius-xl);
-  background: color-mix(in srgb, var(--color-surface-2), transparent 12%);
-  box-shadow: var(--shadow-float);
-  opacity: 0.55;
-  transform: rotate(-5deg);
-}
-.vui-auth-preview__rail {
-  border-radius: var(--radius-md);
-  background: var(--color-surface-0);
-}
-.vui-auth-preview > div {
-  display: grid;
-  align-content: start;
-  gap: var(--space-2);
-  padding: var(--space-2);
-}
-.vui-auth-preview > div span {
-  height: 28px;
-  border-radius: var(--radius-xs);
-  background: var(--color-surface-3);
-}
-.vui-auth-preview > div span:first-child {
-  background: var(--color-primary-soft);
-}
-.vui-auth-preview > i {
-  position: absolute;
-  right: 20px;
-  bottom: 20px;
-  width: 90px;
-  height: 7px;
-  border-radius: var(--radius-round);
-  background: var(--gradient-brand);
-}
-.vui-auth-preview > i:last-child {
-  right: 116px;
-  width: 32px;
-  background: var(--color-cyan);
-}
-.vui-auth-benefits {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.vui-auth-benefits li {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-surface-1), transparent 10%);
-  color: var(--color-cyan);
-}
-.vui-auth-benefits li > span {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-.vui-auth-benefits strong {
-  overflow: hidden;
-  color: var(--color-text-primary);
-  font: var(--text-label-md);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.vui-auth-benefits small {
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font: var(--text-caption);
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .vui-auth-surface {
   display: grid;
@@ -442,20 +339,9 @@ body.desktopTitlebarOverlay .vui-auth-page {
   font: var(--text-caption);
   text-align: center;
 }
-.vui-auth-page--profile .vui-auth-benefits,
-.vui-auth-page--profile .vui-auth-preview {
-  display: none;
-}
-
 @media (max-width: 1180px) {
   .vui-auth-page {
     grid-template-columns: minmax(400px, 0.85fr) minmax(520px, 1.15fr);
-  }
-  .vui-auth-benefits {
-    grid-template-columns: 1fr;
-  }
-  .vui-auth-benefits li:nth-child(n + 2) {
-    display: none;
   }
 }
 
