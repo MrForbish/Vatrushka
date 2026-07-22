@@ -20,8 +20,8 @@ function readCachedDashboard(userId: string): HomeDashboardResponse | undefined 
       !Array.isArray(value.servers) ||
       !Array.isArray(value.continueItems) ||
       !Array.isArray(value.gaming?.quickReturn) ||
-      !Array.isArray(value.gaming.activeSpaces) ||
-      !Array.isArray(value.gaming.friendsInGame)
+      !Array.isArray(value.gaming?.activeSpaces) ||
+      !Array.isArray(value.gaming?.friendsInGame)
     ) return undefined;
     return value as HomeDashboardResponse;
   } catch {

@@ -1,7 +1,7 @@
 import HawkCatcher from "@hawk.so/nodejs";
 
 const enabled = process.env.HAWK_DESKTOP_MAIN_ENABLED === "true";
-const token = process.env.HAWK_INTEGRATION_TOKEN;
+const token = process.env.HAWK_DESKTOP_MAIN_TOKEN;
 const forbiddenKey = /(?:authorization|cookie|password|secret|token|otp|code|email|message|content|body)/iu;
 const forbiddenValue = /(?:bearer\s+|eyJ[a-zA-Z0-9_-]{10,}|https?:\/\/[^\s]+[?&](?:token|key|code)=)/iu;
 

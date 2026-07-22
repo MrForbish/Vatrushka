@@ -42,7 +42,9 @@ describe("screen share source picker", () => {
     expect(
       screen.getByRole("button", { name: "Экран 1, 2560 × 1440" }),
     ).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText(/1080p · 60 FPS · без звука/u)).toBeInTheDocument();
+    expect(
+      screen.getByText(/1920 × 1080 · 60 FPS · без звука/u),
+    ).toBeInTheDocument();
 
     await userEvent.click(
       screen.getByRole("button", { name: "Окно приложения" }),
@@ -75,6 +77,9 @@ describe("screen share source picker", () => {
     await userEvent.click(
       screen.getByRole("button", { name: "Качество демонстрации" }),
     );
+    expect(screen.getByRole("listbox", { name: "Качество демонстрации" })).toHaveStyle({
+      zIndex: "var(--z-tooltip)",
+    });
     await userEvent.click(
       screen.getByRole("option", {
         name: "2560 × 1440 · 60 FPS — высокое качество",
