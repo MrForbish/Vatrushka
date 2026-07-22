@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.17] - 2026-07-22
+
+### Fixed
+
+- preserves protected Hawk integration tokens during Windows release packaging instead of replacing them with literal self-references in GitLab CI;
+- validates the inherited Desktop Main and Renderer Hawk tokens before packaging, while exporting renderer-only build aliases at runtime without logging secrets.
+
 ## [0.8.16] - 2026-07-22
 
 ### Fixed
