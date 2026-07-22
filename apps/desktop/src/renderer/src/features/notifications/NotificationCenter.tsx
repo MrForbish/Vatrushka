@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 import type { DesktopUpdateState, InternalNotification } from '@vatrushka/shared';
 
@@ -56,6 +57,8 @@ export function NotificationCenter({ hasMore = false, items, loadingMore = false
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [seenUpdateKey, setSeenUpdateKey] = useState<string | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const updateVisible = updateState !== undefined && ['available', 'downloading', 'ready', 'error'].includes(updateState.status);
   const updateKey = updateVisible ? `${updateState.status}:${updateState.version ?? ''}:${updateState.message ?? ''}` : null;
   const updateUnread = updateKey !== null && updateKey !== seenUpdateKey;
@@ -64,111 +67,138 @@ export function NotificationCenter({ hasMore = false, items, loadingMore = false
   useEffect(() => {
     if (open && updateKey !== null) setSeenUpdateKey(updateKey);
   }, [open, updateKey]);
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setOpen(false);
+    };
+    const animationFrame = window.requestAnimationFrame(() => {
+      panelRef.current?.querySelector<HTMLElement>('button:not([disabled])')?.focus();
+    });
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      document.removeEventListener('keydown', onKeyDown);
+      triggerRef.current?.focus();
+    };
+  }, [open]);
   const showUpdate = updateVisible && (filter === 'all' || filter === 'system');
+
+  const panel = !open
+    ? null
+    : createPortal(
+        <>
+          <button aria-label="Закрыть уведомления" className="vui-notification-center__backdrop" onClick={() => setOpen(false)} type="button" />
+          <div aria-label="Центр уведомлений" className="vui-notification-center__panel" id="vui-notification-center-panel" ref={panelRef} role="dialog" tabIndex={-1}>
+            <header>
+              <span>
+                <strong>Уведомления</strong>
+                <small>Важные события собраны здесь</small>
+              </span>
+              <IconButton icon="close" label="Закрыть" onClick={() => setOpen(false)} size="sm" type="button" />
+            </header>
+            <nav aria-label="Фильтр уведомлений">
+              {filters.map((item) => (
+                <button aria-current={filter === item.value ? 'page' : undefined} key={item.value} onClick={() => setFilter(item.value)} type="button">
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+            <div className="vui-notification-center__actions">
+              <span>{unreadCount === 0 ? 'Всё прочитано' : `${unreadCount} непрочитано`}</span>
+              <span>
+                {onCheckUpdate ? <Button disabled={updateState?.status === 'checking' || updateState?.status === 'downloading'} onClick={onCheckUpdate} size="sm" type="button" variant="quiet">Проверить обновления</Button> : null}
+                <Button disabled={unreadCount === 0} onClick={onMarkAllRead} size="sm" type="button" variant="quiet">
+                  Прочитать всё
+                </Button>
+              </span>
+            </div>
+            <div className="vui-notification-center__list">
+              {showUpdate && updateState ? (
+                <article className="vui-notification-center__update" data-status={updateState.status}>
+                  <span className="vui-notification-center__icon">
+                    <Icon name="download" size={18} />
+                  </span>
+                  <span className="vui-notification-center__copy">
+                    <span>
+                      <strong>Обновление клиента</strong>
+                      {updateUnread ? <Badge tone="primary">Новое</Badge> : null}
+                    </span>
+                    <p>{updateState.status === 'available' ? `Найдена версия ${updateState.version ?? ''}. Начинаем загрузку.` : updateState.status === 'downloading' ? `Загружаем версию ${updateState.version ?? ''}: ${updateState.percent ?? 0}%` : updateState.status === 'ready' ? `Версия ${updateState.version ?? ''} готова к установке.` : (updateState.message ?? 'Не удалось проверить или загрузить обновление.')}</p>
+                    {updateState.status === 'downloading' ? <progress aria-label="Загрузка обновления" max={100} value={updateState.percent ?? 0} /> : null}
+                    {updateState.status === 'ready' && onInstallUpdate ? (
+                      <Button disabled={updateInstallBlocked} onClick={onInstallUpdate} size="sm" type="button">
+                        {updateInstallBlocked ? 'После выхода из голоса' : 'Перезапустить и обновить'}
+                      </Button>
+                    ) : null}
+                    {updateState.status === 'error' && onRetryUpdate ? (
+                      <Button onClick={onRetryUpdate} size="sm" type="button" variant="quiet">
+                        Повторить проверку
+                      </Button>
+                    ) : null}
+                  </span>
+                </article>
+              ) : null}
+              {filtered.length === 0 && !showUpdate ? (
+                <div className="vui-notification-center__empty">
+                  <Icon name="bell" size={30} />
+                  <strong>Здесь пока тихо</strong>
+                  <span>Новые сообщения, упоминания и ответы появятся в этом списке.</span>
+                </div>
+              ) : (
+                filtered.map((item) => {
+                  const preview = typeof item.payload.preview === 'string' && item.payload.preview.trim() ? item.payload.preview : titles[item.type];
+                  return (
+                    <article data-unread={item.readAt === null || undefined} key={item.id}>
+                      <button
+                        className="vui-notification-center__item"
+                        onClick={() => {
+                          if (item.readAt === null) onRead(item.id);
+                          onOpen(item);
+                          setOpen(false);
+                        }}
+                        type="button"
+                      >
+                        <span className="vui-notification-center__icon">{item.actorAvatarUrl ? <Avatar name={item.actorDisplayName ?? 'Участник'} size="sm" src={item.actorAvatarUrl} /> : <Icon name={item.type === 'mention' ? 'invite' : item.type === 'reply' ? 'reply' : item.type === 'direct_message' ? 'message' : 'bell'} size={18} />}</span>
+                        <span className="vui-notification-center__copy">
+                          <span>
+                            <strong>{titles[item.type]}</strong>
+                            {item.readAt === null ? <Badge tone="primary">Новое</Badge> : null}
+                          </span>
+                          <small>
+                            {item.actorDisplayName ?? item.conversationTitle ?? 'Ватрушка'}
+                            {item.conversationTitle ? ` · ${item.conversationTitle}` : ''}
+                          </small>
+                          <p>{preview.slice(0, 180)}</p>
+                          <time dateTime={item.createdAt}>{relativeTime(item.createdAt)}</time>
+                        </span>
+                      </button>
+                      <IconButton className="vui-notification-center__dismiss" icon="close" label="Скрыть уведомление" onClick={() => onDismiss(item.id)} size="sm" type="button" />
+                    </article>
+                  );
+                })
+              )}
+              {hasMore && onLoadMore ? (
+                <Button className="vui-notification-center__more" disabled={loadingMore} onClick={onLoadMore} size="sm" type="button" variant="quiet">
+                  {loadingMore ? 'Загружаем…' : 'Показать более ранние'}
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </>,
+        document.body,
+      );
 
   return (
     <div className="vui-notification-center" data-open={open || undefined} data-settings={window.location.pathname.startsWith('/settings') || undefined}>
-      <button aria-expanded={open} aria-label={`Уведомления${unreadCount > 0 ? `, непрочитанных: ${unreadCount}` : ''}`} className="vui-notification-center__trigger" onClick={() => setOpen((current) => !current)} type="button">
+      <button aria-expanded={open} aria-controls="vui-notification-center-panel" aria-haspopup="dialog" aria-label={`Уведомления${unreadCount > 0 ? `, непрочитанных: ${unreadCount}` : ''}`} className="vui-notification-center__trigger" onClick={() => setOpen((current) => !current)} ref={triggerRef} type="button">
         <Icon name="bell" size={19} />
         {unreadCount === 0 ? null : <span>{unreadCount > 99 ? '99+' : unreadCount}</span>}
       </button>
-      {open ? <button aria-label="Закрыть уведомления" className="vui-notification-center__backdrop" onClick={() => setOpen(false)} type="button" /> : null}
-      <aside aria-label="Центр уведомлений" className="vui-notification-center__panel">
-        <header>
-          <span>
-            <strong>Уведомления</strong>
-            <small>Важные события собраны здесь</small>
-          </span>
-          <IconButton icon="close" label="Закрыть" onClick={() => setOpen(false)} size="sm" type="button" />
-        </header>
-        <nav aria-label="Фильтр уведомлений">
-          {filters.map((item) => (
-            <button aria-current={filter === item.value ? 'page' : undefined} key={item.value} onClick={() => setFilter(item.value)} type="button">
-              {item.label}
-            </button>
-          ))}
-        </nav>
-        <div className="vui-notification-center__actions">
-          <span>{unreadCount === 0 ? 'Всё прочитано' : `${unreadCount} непрочитано`}</span>
-          <span>
-            {onCheckUpdate ? <Button disabled={updateState?.status === 'checking' || updateState?.status === 'downloading'} onClick={onCheckUpdate} size="sm" type="button" variant="quiet">Проверить обновления</Button> : null}
-            <Button disabled={unreadCount === 0} onClick={onMarkAllRead} size="sm" type="button" variant="quiet">
-              Прочитать всё
-            </Button>
-          </span>
-        </div>
-        <div className="vui-notification-center__list">
-          {showUpdate && updateState ? (
-            <article className="vui-notification-center__update" data-status={updateState.status}>
-              <span className="vui-notification-center__icon">
-                <Icon name="download" size={18} />
-              </span>
-              <span className="vui-notification-center__copy">
-                <span>
-                  <strong>Обновление клиента</strong>
-                  {updateUnread ? <Badge tone="primary">Новое</Badge> : null}
-                </span>
-                <p>{updateState.status === 'available' ? `Найдена версия ${updateState.version ?? ''}. Начинаем загрузку.` : updateState.status === 'downloading' ? `Загружаем версию ${updateState.version ?? ''}: ${updateState.percent ?? 0}%` : updateState.status === 'ready' ? `Версия ${updateState.version ?? ''} готова к установке.` : (updateState.message ?? 'Не удалось проверить или загрузить обновление.')}</p>
-                {updateState.status === 'downloading' ? <progress aria-label="Загрузка обновления" max={100} value={updateState.percent ?? 0} /> : null}
-                {updateState.status === 'ready' && onInstallUpdate ? (
-                  <Button disabled={updateInstallBlocked} onClick={onInstallUpdate} size="sm" type="button">
-                    {updateInstallBlocked ? 'После выхода из голоса' : 'Перезапустить и обновить'}
-                  </Button>
-                ) : null}
-                {updateState.status === 'error' && onRetryUpdate ? (
-                  <Button onClick={onRetryUpdate} size="sm" type="button" variant="quiet">
-                    Повторить проверку
-                  </Button>
-                ) : null}
-              </span>
-            </article>
-          ) : null}
-          {filtered.length === 0 && !showUpdate ? (
-            <div className="vui-notification-center__empty">
-              <Icon name="bell" size={30} />
-              <strong>Здесь пока тихо</strong>
-              <span>Новые сообщения, упоминания и ответы появятся в этом списке.</span>
-            </div>
-          ) : (
-            filtered.map((item) => {
-              const preview = typeof item.payload.preview === 'string' && item.payload.preview.trim() ? item.payload.preview : titles[item.type];
-              return (
-                <article data-unread={item.readAt === null || undefined} key={item.id}>
-                  <button
-                    className="vui-notification-center__item"
-                    onClick={() => {
-                      if (item.readAt === null) onRead(item.id);
-                      onOpen(item);
-                      setOpen(false);
-                    }}
-                    type="button"
-                  >
-                    <span className="vui-notification-center__icon">{item.actorAvatarUrl ? <Avatar name={item.actorDisplayName ?? 'Участник'} size="sm" src={item.actorAvatarUrl} /> : <Icon name={item.type === 'mention' ? 'invite' : item.type === 'reply' ? 'reply' : item.type === 'direct_message' ? 'message' : 'bell'} size={18} />}</span>
-                    <span className="vui-notification-center__copy">
-                      <span>
-                        <strong>{titles[item.type]}</strong>
-                        {item.readAt === null ? <Badge tone="primary">Новое</Badge> : null}
-                      </span>
-                      <small>
-                        {item.actorDisplayName ?? item.conversationTitle ?? 'Ватрушка'}
-                        {item.conversationTitle ? ` · ${item.conversationTitle}` : ''}
-                      </small>
-                      <p>{preview.slice(0, 180)}</p>
-                      <time dateTime={item.createdAt}>{relativeTime(item.createdAt)}</time>
-                    </span>
-                  </button>
-                  <IconButton className="vui-notification-center__dismiss" icon="close" label="Скрыть уведомление" onClick={() => onDismiss(item.id)} size="sm" type="button" />
-                </article>
-              );
-            })
-          )}
-          {hasMore && onLoadMore ? (
-            <Button className="vui-notification-center__more" disabled={loadingMore} onClick={onLoadMore} size="sm" type="button" variant="quiet">
-              {loadingMore ? 'Загружаем…' : 'Показать более ранние'}
-            </Button>
-          ) : null}
-        </div>
-      </aside>
+      {panel}
     </div>
   );
 }

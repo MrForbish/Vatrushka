@@ -15,6 +15,7 @@ import {
   Button,
   ConfirmDialog,
   Icon,
+  IconButton,
   Input,
   MemberPanel,
   MessageComposer,
@@ -108,6 +109,7 @@ export function DirectMessagesView(
   const [blockConfirmOpen, setBlockConfirmOpen] = useState(false);
   const [notificationSettingsOpen, setNotificationSettingsOpen] =
     useState(false);
+  const [conversationSearch, setConversationSearch] = useState("");
   const activeConversation =
     props.conversations.find(
       (conversation) => conversation.id === props.activeConversationId,
@@ -191,6 +193,16 @@ export function DirectMessagesView(
     (count, conversation) => count + conversation.unreadCount,
     0,
   );
+  const visibleConversations = props.conversations.filter((conversation) => {
+    const query = conversationSearch.trim().toLocaleLowerCase("ru-RU");
+    if (query.length === 0) return true;
+    return (
+      conversation.participant.displayName
+        .toLocaleLowerCase("ru-RU")
+        .includes(query) ||
+      conversationPreview(conversation).toLocaleLowerCase("ru-RU").includes(query)
+    );
+  });
   const messageModels: MessageViewModel[] = props.messages.map((message) => ({
     id: message.id,
     authorId: message.authorUserId,
@@ -255,6 +267,16 @@ export function DirectMessagesView(
           Новый
         </Button>
       </header>
+      <label className="vui-direct-context__search">
+        <Icon name="search" size={16} />
+        <input
+          aria-label="Поиск личных диалогов"
+          onChange={(event) => setConversationSearch(event.target.value)}
+          placeholder="Поиск по сообщениям"
+          type="search"
+          value={conversationSearch}
+        />
+      </label>
       <div className="vui-direct-context__list">
         {props.conversations.length === 0 ? (
           <div className="vui-direct-context__empty">
@@ -262,8 +284,14 @@ export function DirectMessagesView(
             <strong>Здесь будут ваши диалоги</strong>
             <span>Начните разговор с участником общего сервера.</span>
           </div>
+        ) : visibleConversations.length === 0 ? (
+          <div className="vui-direct-context__empty vui-direct-context__empty--search">
+            <Icon name="search" size={28} />
+            <strong>Ничего не найдено</strong>
+            <span>Попробуйте другое имя или текст сообщения.</span>
+          </div>
         ) : (
-          props.conversations.map((conversation) => (
+          visibleConversations.map((conversation) => (
             <button
               aria-current={
                 conversation.id === props.activeConversationId
@@ -318,6 +346,7 @@ export function DirectMessagesView(
           {
             id: props.user.id,
             name: userDisplayName(props.user),
+            ...(props.user.avatarUrl ? { avatarUrl: props.user.avatarUrl } : {}),
             founder: props.user.platformRole === "owner",
             roleLabel: "Вы",
             status: "online",
@@ -336,7 +365,19 @@ export function DirectMessagesView(
     );
   const topBar = (
     <div className="vui-direct-topbar">
-      <Icon name="message" size={19} />
+      {activeConversation === null ? (
+        <span className="vui-direct-topbar__icon">
+          <Icon name="message" size={19} />
+        </span>
+      ) : (
+        <Avatar
+          name={activeConversation.participant.displayName}
+          size="lg"
+          {...(activeConversation.participant.avatarUrl
+            ? { src: activeConversation.participant.avatarUrl }
+            : {})}
+        />
+      )}
       <span>
         <strong>
           {activeConversation?.participant.displayName ?? "Личные сообщения"}
@@ -351,15 +392,13 @@ export function DirectMessagesView(
       </span>
       {activeConversation === null ? null : (
         <>
-          <Button
+          <IconButton
             className="vui-direct-topbar__notifications"
+            icon="bell"
+            label="Настройки уведомлений диалога"
             onClick={() => setNotificationSettingsOpen(true)}
-            size="sm"
             type="button"
-            variant="quiet"
-          >
-            Уведомления
-          </Button>
+          />
           <Button
             className="vui-direct-topbar__block"
             onClick={() =>

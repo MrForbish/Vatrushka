@@ -253,6 +253,15 @@ test.describe('Vatrushka design system visual baseline', () => {
     });
   });
 
+  test('direct messages preserve the app shell and conversation context', async ({ page }) => {
+    await openStory(page, 'features-direct-messages--visual-active-conversation');
+    await expect(page.getByRole('complementary', { name: 'Личные диалоги' })).toBeVisible();
+    await expect(page).toHaveScreenshot('direct-messages-active.png', {
+      animations: 'disabled',
+      fullPage: true,
+    });
+  });
+
   test('server invite short link', async ({ page }) => {
     await openStory(page, 'screens-server--invite-link');
     await expect(page.getByRole('dialog', { name: 'Пригласить на сервер' })).toBeVisible();
