@@ -4,6 +4,12 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.20] - 2026-07-22
+
+### Changed
+
+- removes confirmed unused legacy authentication preview, benefits and responsive CSS after the V2 UI Kit migration; active authentication and profile scenarios are unchanged.
+
 ## [0.8.19] - 2026-07-22
 
 ### Changed
