@@ -103,6 +103,10 @@ export const FullServer: Story = {
   },
 };
 
+// Keep visual tests free of the asynchronous interaction sequence above.
+// The interaction story remains the behavioural contract for AppShell.
+export const VisualFullServer: Story = {};
+
 export const ResponsiveMemberDrawer: Story = {
   play: async () => {
     const trigger = screen.getByRole('button', { name: 'Открыть участников' });
