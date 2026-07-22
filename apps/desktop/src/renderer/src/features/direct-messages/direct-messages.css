@@ -1,12 +1,16 @@
-.vui-direct-context { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 100%; border-right: 1px solid var(--color-border-subtle); background: var(--color-surface-0); color: var(--color-text-primary); }
-.vui-direct-context > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 76px; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-subtle); }
+.vui-direct-context { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100%; border-right: 1px solid var(--color-border-subtle); background: color-mix(in srgb, var(--color-surface-0), #030711 16%); color: var(--color-text-primary); }
+.vui-direct-context > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 70px; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-border-subtle); }
 .vui-direct-context > header > span { display: grid; }
 .vui-direct-context > header strong { font: var(--text-heading-sm); }
 .vui-direct-context > header small { color: var(--color-text-muted); font: var(--text-caption); }
-.vui-direct-context__list { display: grid; align-content: start; gap: var(--space-1); overflow-y: auto; padding: var(--space-3); }
-.vui-direct-context__list > button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); width: 100%; min-height: 58px; padding: var(--space-2); border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; color: var(--color-text-primary); text-align: left; }
+.vui-direct-context__search { display: flex; align-items: center; gap: var(--space-2); margin: 0 var(--space-3); padding: 0 var(--space-3); min-height: 38px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-sm); background: var(--color-surface-2); color: var(--color-text-muted); }
+.vui-direct-context__search:focus-within { border-color: var(--color-focus); box-shadow: var(--shadow-focus); color: var(--color-cyan); }
+.vui-direct-context__search input { min-width: 0; width: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--color-text-primary); font: var(--text-body-sm); }
+.vui-direct-context__search input::placeholder { color: var(--color-text-muted); }
+.vui-direct-context__list { display: grid; align-content: start; gap: 3px; overflow-y: auto; padding: var(--space-3); }
+.vui-direct-context__list > button { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--space-3); width: 100%; min-height: 62px; padding: var(--space-2); border: 1px solid transparent; border-radius: 10px; background: transparent; color: var(--color-text-primary); text-align: left; transition: background var(--duration-fast) var(--easing-standard), border-color var(--duration-fast) var(--easing-standard); }
 .vui-direct-context__list > button:hover { background: var(--color-surface-1); }
-.vui-direct-context__list > button[data-active='true'] { border-color: var(--color-border-default); background: var(--gradient-active-server); }
+.vui-direct-context__list > button[data-active='true'] { border-color: color-mix(in srgb, var(--color-primary), transparent 52%); background: linear-gradient(100deg, color-mix(in srgb, var(--color-primary), transparent 76%), color-mix(in srgb, var(--color-cyan), transparent 94%)); }
 .vui-direct-context__list > button > span:nth-child(2) { display: grid; min-width: 0; }
 .vui-direct-context__list > button strong,
 .vui-direct-context__list > button small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -16,10 +20,12 @@
 .vui-direct-context__empty strong { color: var(--color-text-primary); font: var(--text-heading-sm); }
 .vui-direct-context__empty span { font: var(--text-body-md); }
 .vui-direct-topbar { display: flex; align-items: center; gap: var(--space-3); width: 100%; height: 100%; }
+.vui-direct-topbar__icon { display: grid !important; width: 34px; height: 34px; place-items: center; border-radius: 10px; background: var(--color-surface-3); color: var(--color-cyan); }
 .vui-direct-topbar > span { display: grid; }
 .vui-direct-topbar strong { font: var(--text-heading-sm); }
 .vui-direct-topbar small { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-direct-topbar__notifications { margin-left: auto; }
+.vui-direct-topbar__notifications.vui-icon-button { border-color: var(--color-border-subtle); background: var(--color-surface-2); }
 .vui-direct-blocked-notice { display: flex; align-items: center; justify-content: center; gap: var(--space-3); min-height: 76px; padding: var(--space-3) var(--space-5); border-top: 1px solid var(--color-border-subtle); background: var(--color-surface-0); color: var(--color-text-secondary); }
 .vui-direct-blocked-notice strong { color: var(--color-text-primary); font: var(--text-label-md); }
 .vui-direct-blocked-notice span { font: var(--text-body-sm); }

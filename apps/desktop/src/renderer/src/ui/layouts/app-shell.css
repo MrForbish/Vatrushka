@@ -84,7 +84,7 @@ body.desktopTitlebarOverlay .vui-app-shell {
     grid-template-areas:
       "workspaces server topbar topbar"
       "workspaces server content members";
-    grid-template-columns: 220px 292px minmax(620px, 1fr) 280px;
+    grid-template-columns: 232px 304px minmax(620px, 1fr) 272px;
   }
   .vui-app-shell[data-has-members="true"] .vui-app-shell__members {
     display: block;
@@ -99,7 +99,7 @@ body.desktopTitlebarOverlay .vui-app-shell {
     grid-template-areas:
       "workspaces topbar topbar"
       "workspaces content members";
-    grid-template-columns: 220px minmax(620px, 1fr) 280px;
+    grid-template-columns: 232px minmax(620px, 1fr) 272px;
   }
 }
 

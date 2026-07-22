@@ -52,6 +52,9 @@ export const ActiveConversation: Story = {
   },
 };
 
+// Static visual contract: interaction tests use ActiveConversation above.
+export const VisualActiveConversation: Story = {};
+
 export const EmptyInbox: Story = {
   args: { activeConversationId: null, conversations: [], messages: [] },
 };

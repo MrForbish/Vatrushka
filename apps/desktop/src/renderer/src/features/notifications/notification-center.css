@@ -1,6 +1,6 @@
 .vui-notification-center {
   position: fixed;
-  z-index: 70;
+  z-index: 200;
   top: 3px;
   right: 146px;
   -webkit-app-region: no-drag;
@@ -44,16 +44,17 @@
 }
 .vui-notification-center__backdrop {
   position: fixed;
-  z-index: -1;
+  z-index: 180;
   inset: 0;
   border: 0;
   background: rgba(2, 7, 15, 0.3);
   cursor: default;
 }
 .vui-notification-center__panel {
-  position: absolute;
-  top: 48px;
-  right: 0;
+  position: fixed;
+  z-index: 190;
+  top: 51px;
+  right: 146px;
   display: flex;
   width: min(410px, calc(100vw - 32px));
   max-height: min(720px, calc(100vh - 76px));
@@ -71,7 +72,7 @@
     opacity var(--motion-fast),
     transform var(--motion-fast);
 }
-.vui-notification-center[data-open] .vui-notification-center__panel {
+.vui-notification-center__panel {
   transform: translateY(0) scale(1);
   opacity: 1;
   pointer-events: auto;
@@ -261,5 +262,18 @@
 @media (prefers-reduced-motion: reduce) {
   .vui-notification-center__panel {
     transition: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .vui-notification-center {
+    top: 6px;
+    right: 16px;
+  }
+
+  .vui-notification-center__panel {
+    top: 52px;
+    right: 16px;
+    width: calc(100vw - 32px);
   }
 }

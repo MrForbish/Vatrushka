@@ -49,6 +49,30 @@ describe('direct messages UI', () => {
     expect(onCreateConversation).toHaveBeenCalledWith('user-3');
   });
 
+  it('filters the real conversation list without changing the active dialog', async () => {
+    const secondConversation: DirectConversationSummary = {
+      ...conversation,
+      id: 'conversation-2',
+      participant: {
+        userId: 'user-4',
+        displayName: 'Максим',
+        platformRole: 'member',
+      },
+      lastMessage: {
+        authorUserId: 'user-4',
+        content: 'Созвон после обеда',
+        createdAt: '2026-01-01T10:10:00.000Z',
+      },
+    };
+    render(<DirectMessagesView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Анна', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} servers={[]} conversations={[conversation, secondConversation]} candidates={[]} activeConversationId={conversation.id} messages={[message]} messageDraft="" serverName="" busy={false} error={null} onHome={noop} onSwitchServer={noop} onConversation={noop} onCreateConversation={noop} onBlockParticipant={noop} onUnblockParticipant={noop} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={noop} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onLogout={noop} />);
+
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Поиск личных диалогов' }), 'максим');
+
+    expect(screen.getByRole('button', { name: /Максим/u })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Мария/u })).not.toBeInTheDocument();
+    expect(screen.getByText('Привет!')).toBeInTheDocument();
+  });
+
   it('confirms blocking and disables the composer for a blocked participant', async () => {
     const onBlockParticipant = vi.fn();
     const { rerender } = render(<DirectMessagesView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Анна', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} servers={[]} conversations={[conversation]} candidates={[]} activeConversationId={conversation.id} messages={[message]} messageDraft="" serverName="" busy={false} error={null} onHome={noop} onSwitchServer={noop} onConversation={noop} onCreateConversation={noop} onBlockParticipant={onBlockParticipant} onUnblockParticipant={noop} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={noop} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onLogout={noop} />);
