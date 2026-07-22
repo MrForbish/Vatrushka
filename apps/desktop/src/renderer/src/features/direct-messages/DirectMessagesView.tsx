@@ -405,6 +405,7 @@ export function DirectMessagesView(
           <section className="vui-message-stage">
             <MessageList
               channelName={activeConversation.participant.displayName}
+              conversationId={activeConversation.id}
               emptyDescription="Отправьте первое сообщение — оно будет видно только участникам этого диалога."
               emptyTitle={`Начало диалога с ${activeConversation.participant.displayName}`}
               firstUnreadMessageId={props.firstUnreadMessageId}

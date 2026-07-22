@@ -1982,6 +1982,7 @@ export default function App(): ReactNode {
   };
 
   const selectDirectConversation = (conversationId: string): void => {
+    if (conversationId === activeDirectConversationId) return;
     setActiveDirectConversationId(conversationId);
     setDirectMessages([]);
     setDirectMessageDraft("");
@@ -2523,10 +2524,33 @@ export default function App(): ReactNode {
 
   const deleteCommunityChannel = (channelId: string): void => {
     void run(async () => {
+      const replacementChannel =
+        serverDetail?.channels.find(
+          (candidate) =>
+            candidate.id !== channelId && candidate.type === "text",
+        ) ??
+        serverDetail?.channels.find((candidate) => candidate.id !== channelId) ??
+        null;
+      if (activeChannelId === channelId) {
+        setActiveChannelId(replacementChannel?.id ?? null);
+        setMessages([]);
+        setServerMessageHistory({
+          conversationId: null,
+          before: null,
+          hasMore: false,
+          loading: false,
+        });
+      }
       await apiClient.deleteServerChannel(channelId);
       const detail = await refreshServer();
-      if (activeChannelId === channelId)
-        setActiveChannelId(detail.channels[0]?.id ?? null);
+      setActiveChannelId((current) =>
+        current === channelId
+          ? (detail.channels.find((candidate) => candidate.type === "text")
+              ?.id ??
+            detail.channels[0]?.id ??
+            null)
+          : current,
+      );
     });
   };
 
@@ -3519,6 +3543,7 @@ export default function App(): ReactNode {
           onDirectMessages={openDirectMessages}
           onSwitchServer={openServer}
           onChannel={(channelId) => {
+            if (channelId === activeChannelId) return;
             setActiveChannelId(channelId);
             setMessages([]);
             setServerMessageHistory({
