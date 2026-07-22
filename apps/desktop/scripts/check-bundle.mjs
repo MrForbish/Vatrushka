@@ -7,11 +7,12 @@ const desktopDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const rendererDirectory = resolve(desktopDirectory, 'out/renderer');
 const assetsDirectory = resolve(rendererDirectory, 'assets');
 const budgets = {
-  // Hawk Browser adds a measured 64 KiB to the packaged renderer. Keep the
-  // threshold tight enough to catch a further meaningful regression.
+  // Hawk Browser adds a measured 64 KiB to the packaged renderer.
+  // UI Kit foundations and settings styles need a measured 4 KiB envelope;
+  // Keep the threshold tight enough to catch a further meaningful regression.
   javascript: 2_800_000,
   largestJavaScript: 2_350_000,
-  styles: 200_000,
+  styles: 204_000,
   fonts: 500_000,
 };
 
