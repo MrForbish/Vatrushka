@@ -286,6 +286,12 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('server-settings-roles.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('routed user notification settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--user-notifications');
+    await expect(page.getByRole('heading', { name: 'Уведомления' })).toBeVisible();
+    await expect(page).toHaveScreenshot('user-settings-notifications.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('routed channel permission overrides', async ({ page }) => {
     await openStory(page, 'features-settings-channel-permissions--role-override');
     await expect(page.getByRole('heading', { name: 'Права конкретного канала' })).toBeVisible();
