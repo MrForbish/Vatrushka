@@ -54,6 +54,11 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('app-shell-desktop.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('system toolbar', async ({ page }) => {
+    await openStory(page, 'layouts-system-toolbar--notification-control');
+    await expect(page).toHaveScreenshot('system-toolbar.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('app shell at the supported 1280 by 720 boundary', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await openStory(page, 'layouts-app-shell--full-server');
