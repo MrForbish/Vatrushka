@@ -81,7 +81,7 @@ import {
 } from "./features/voice/store/voice-state.js";
 import { MediaSession } from "./media.js";
 import { RealtimeClient } from "./realtime.js";
-import { ConfirmDialog } from "./ui";
+import { ConfirmDialog, SystemToolbar } from "./ui";
 
 type Screen = "boot" | "auth" | "profile" | "home" | "server" | "direct";
 const media = new MediaSession(apiClient);
@@ -3060,7 +3060,8 @@ export default function App(): ReactNode {
     <>
       {content}
       {user ? (
-        <NotificationCenter
+        <SystemToolbar>
+          <NotificationCenter
           hasMore={notificationHistory.hasMore}
           items={notifications}
           loadingMore={notificationHistory.loading}
@@ -3086,7 +3087,8 @@ export default function App(): ReactNode {
               .checkForUpdates()
               .catch((caught) => setError(userMessage(caught)))
           }
-        />
+          />
+        </SystemToolbar>
       ) : null}
       <ConfirmDialog
         confirmLabel="Выйти"

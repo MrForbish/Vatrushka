@@ -93,6 +93,9 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
     const first = gaming?.activeSpaces[0];
     if (first) props.onOpenServer(first.serverId);
   };
+  const displayName = props.dashboard?.user.displayName ?? props.user.displayName ?? props.user.email;
+  const activeSpaceCount = gaming?.activeSpaces.length ?? 0;
+  const friendCount = gaming?.friendsInGame.length ?? 0;
 
   return (
     <>
@@ -152,6 +155,17 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
       >
         <div className="home-dashboard home-dashboard--gaming">
           <div className="home-dashboard__inner gaming-home">
+            <section className="gaming-home-welcome" aria-labelledby="gaming-home-welcome-title">
+              <div>
+                <span className="gaming-home-welcome__eyebrow">Ваше пространство</span>
+                <h1 id="gaming-home-welcome-title">С возвращением, {displayName}</h1>
+                <p>Выберите, куда хотите вернуться: к друзьям, в голосовой канал или к недавней активности.</p>
+              </div>
+              <dl aria-label="Активность сейчас" className="gaming-home-welcome__stats">
+                <div><dt>Активных голосовых</dt><dd>{activeSpaceCount}</dd></div>
+                <div><dt>Друзей в игре</dt><dd>{friendCount}</dd></div>
+              </dl>
+            </section>
             {props.dashboardError || props.error ? (
               <HomeWidgetError
                 message={props.dashboard === undefined ? (props.dashboardError ?? props.error ?? "Нет соединения с Vatrushka") : "Нет соединения с Vatrushka. Показываем последние доступные данные."}

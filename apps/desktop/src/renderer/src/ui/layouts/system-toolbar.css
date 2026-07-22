@@ -1,0 +1,17 @@
+.vui-system-toolbar {
+  position: fixed;
+  z-index: 70;
+  top: 0;
+  right: 136px;
+  display: flex;
+  height: 44px;
+  align-items: center;
+  gap: var(--space-2);
+  -webkit-app-region: no-drag;
+}
+
+.vui-system-toolbar .vui-notification-center { position: relative; z-index: auto; top: auto; right: auto; }
+
+@media (max-width: 700px) {
+  .vui-system-toolbar { right: var(--space-3); }
+}

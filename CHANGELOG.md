@@ -4,6 +4,14 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.18] - 2026-07-22
+
+### Changed
+
+- introduces the first V2 UI Kit slice: shared foundations, application shell, system toolbar, profile card, portal-safe overlays and unified avatar/community branding;
+- refreshes the personal Home dashboard with existing active-space and friends-in-game data while preserving its API and navigation contracts;
+- makes AppShell Storybook visual scenarios deterministic without weakening the interaction coverage for drawers and keyboard dismissal.
+
 ## [0.8.17] - 2026-07-22
 
 ### Fixed

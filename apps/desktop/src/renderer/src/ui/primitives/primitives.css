@@ -249,6 +249,14 @@
 .vui-avatar__mask > img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 .vui-avatar .vui-status-dot { position: absolute; right: -1px; bottom: -1px; }
 
+.vui-community-logo { position: relative; display: inline-grid; overflow: hidden; flex: 0 0 auto; place-items: center; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--community-accent, var(--color-primary)) 20%, var(--color-surface-3)); isolation: isolate; }
+.vui-community-logo--sm { width: 28px; height: 28px; }
+.vui-community-logo--md { width: 40px; height: 40px; }
+.vui-community-logo--lg { width: 56px; height: 56px; }
+.vui-community-logo__cover { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0.42; object-fit: cover; }
+.vui-community-logo__mark { position: relative; display: grid; width: calc(100% - 8px); height: calc(100% - 8px); place-items: center; border: 1px solid color-mix(in srgb, white 14%, transparent); border-radius: calc(var(--radius-sm) - 3px); background: var(--gradient-brand); color: var(--color-text-on-accent); font: var(--text-label-md); }
+.vui-community-logo__mark > img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+
 .vui-progress { width: 100%; height: 8px; overflow: hidden; border-radius: var(--radius-round); background: var(--color-surface-3); }
 .vui-progress span { display: block; height: 100%; border-radius: inherit; background: var(--gradient-brand); transition: width var(--duration-panel) var(--easing-standard); }
 
