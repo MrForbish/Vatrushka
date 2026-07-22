@@ -4,6 +4,15 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.14] - 2026-07-22
+
+### Fixed
+
+- prevents an incomplete offline Home cache from crashing the network-unavailable notification;
+- avoids clearing or briefly replacing the current server channel or direct conversation when it is selected again;
+- switches from a server channel before deletion and uses the styled application confirmation dialog;
+- restores an interactable `2560 × 1440 · 60 FPS` screen-share preset by placing its portalled menu above the source-picker modal.
+
 ## [0.8.13] - 2026-07-21
 
 ### Fixed
