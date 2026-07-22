@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.16] - 2026-07-22
+
+### Fixed
+
+- makes Hawk source-map upload verifiable for Desktop Main and Renderer instead of allowing a release package to succeed after a hidden upload failure;
+- publishes API source maps with the immutable API release while keeping Hawk outages outside the API availability path.
+
 ## [0.8.15] - 2026-07-22
 
 ### Fixed
