@@ -103,8 +103,13 @@ test('production publication is tag-only and uses protected file variables', asy
   assert.match(windowsPackage, /Write-Error 'HAWK_DESKTOP_MAIN_TOKEN must be configured/u);
   assert.match(windowsPackage, /\[string\]::IsNullOrWhiteSpace\(\$env:HAWK_DESKTOP_RENDERER_TOKEN\)/u);
   assert.match(windowsPackage, /Write-Error 'HAWK_DESKTOP_RENDERER_TOKEN must be configured/u);
-  assert.match(windowsPackage, /VITE_HAWK_DESKTOP_RENDERER_TOKEN: '\$HAWK_DESKTOP_RENDERER_TOKEN'/u);
-  assert.match(windowsPackage, /VITE_HAWK_DESKTOP_RELEASE: '\$CI_COMMIT_TAG'/u);
+  assert.match(windowsPackage, /function Test-HawkIntegrationToken/u);
+  assert.match(windowsPackage, /HAWK_DESKTOP_MAIN_TOKEN must be a valid Hawk integration token/u);
+  assert.match(windowsPackage, /HAWK_DESKTOP_RENDERER_TOKEN must be a valid Hawk integration token/u);
+  assert.match(windowsPackage, /\$env:VITE_HAWK_DESKTOP_RENDERER_TOKEN = \$env:HAWK_DESKTOP_RENDERER_TOKEN/u);
+  assert.match(windowsPackage, /\$env:VITE_HAWK_DESKTOP_RELEASE = \$env:CI_COMMIT_TAG/u);
+  assert.doesNotMatch(windowsPackage, /HAWK_DESKTOP_MAIN_TOKEN: '\$HAWK_DESKTOP_MAIN_TOKEN'/u);
+  assert.doesNotMatch(windowsPackage, /HAWK_DESKTOP_RENDERER_TOKEN: '\$HAWK_DESKTOP_RENDERER_TOKEN'/u);
   assert.doesNotMatch(windowsPackage, /\$HAWK_INTEGRATION_TOKEN/u);
   assert.doesNotMatch(windowsPackage, /test -n "\$HAWK_INTEGRATION_TOKEN"/u);
 

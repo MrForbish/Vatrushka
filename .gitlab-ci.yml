@@ -501,20 +501,22 @@ windows-production-package:
     - deploy-observability-runtime
   variables:
     VITE_PUBLIC_API_BASE_URL: '$PRODUCTION_API_BASE_URL'
-    HAWK_DESKTOP_MAIN_ENABLED: 'true'
-    HAWK_DESKTOP_RENDERER_ENABLED: 'true'
-    HAWK_DESKTOP_MAIN_TOKEN: '$HAWK_DESKTOP_MAIN_TOKEN'
-    HAWK_DESKTOP_RENDERER_TOKEN: '$HAWK_DESKTOP_RENDERER_TOKEN'
-    VITE_HAWK_DESKTOP_RENDERER_ENABLED: 'true'
-    VITE_HAWK_DESKTOP_RENDERER_TOKEN: '$HAWK_DESKTOP_RENDERER_TOKEN'
-    HAWK_DESKTOP_RELEASE: '$CI_COMMIT_TAG'
-    VITE_HAWK_DESKTOP_RELEASE: '$CI_COMMIT_TAG'
     RELEASE_BRANCH: '$PRODUCTION_BRANCH'
     CSC_LINK: '$WINDOWS_CSC_LINK'
     CSC_KEY_PASSWORD: '$WINDOWS_CSC_KEY_PASSWORD'
     CSC_IDENTITY_AUTO_DISCOVERY: '$WINDOWS_CSC_ENABLED'
   script:
     - |
+      function Test-HawkIntegrationToken([string] $value) {
+        try {
+          $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($value)) | ConvertFrom-Json
+          return -not [string]::IsNullOrWhiteSpace([string] $decoded.integrationId) -and
+            -not [string]::IsNullOrWhiteSpace([string] $decoded.secret)
+        } catch {
+          return $false
+        }
+      }
+
       if ([string]::IsNullOrWhiteSpace($env:HAWK_DESKTOP_MAIN_TOKEN)) {
         Write-Error 'HAWK_DESKTOP_MAIN_TOKEN must be configured as a protected CI/CD variable.'
         exit 1
@@ -523,6 +525,25 @@ windows-production-package:
         Write-Error 'HAWK_DESKTOP_RENDERER_TOKEN must be configured as a protected CI/CD variable.'
         exit 1
       }
+      if (-not (Test-HawkIntegrationToken $env:HAWK_DESKTOP_MAIN_TOKEN)) {
+        Write-Error 'HAWK_DESKTOP_MAIN_TOKEN must be a valid Hawk integration token.'
+        exit 1
+      }
+      if (-not (Test-HawkIntegrationToken $env:HAWK_DESKTOP_RENDERER_TOKEN)) {
+        Write-Error 'HAWK_DESKTOP_RENDERER_TOKEN must be a valid Hawk integration token.'
+        exit 1
+      }
+
+      # Do not define a CI variable in terms of itself in YAML: GitLab leaves it as
+      # a literal string and the packager then receives an invalid Hawk token.
+      # The protected variables stay inherited; only distinct build-time aliases are
+      # exported here for the Electron main and renderer bundles.
+      $env:HAWK_DESKTOP_MAIN_ENABLED = 'true'
+      $env:HAWK_DESKTOP_RENDERER_ENABLED = 'true'
+      $env:VITE_HAWK_DESKTOP_RENDERER_ENABLED = 'true'
+      $env:VITE_HAWK_DESKTOP_RENDERER_TOKEN = $env:HAWK_DESKTOP_RENDERER_TOKEN
+      $env:HAWK_DESKTOP_RELEASE = $env:CI_COMMIT_TAG
+      $env:VITE_HAWK_DESKTOP_RELEASE = $env:CI_COMMIT_TAG
     - npm run release:validate
     - npm run package:win
     - |
