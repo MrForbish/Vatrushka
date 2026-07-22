@@ -47,8 +47,9 @@ export async function uploadHawkSourceMap({ filePath, token, release, endpoint =
 }
 
 export default function hawkSourceMapPlugin({ token, release, removeSourceMaps = true }) {
-  if (!token) return undefined;
-  if (!release || release === 'unknown') throw new Error('HAWK release is required for production source-map upload');
+  // Regular CI, E2E and local builds intentionally have no immutable tag.
+  // Only protected tag packaging is a Hawk release-publication build.
+  if (!token || !release || release === 'unknown') return undefined;
 
   return {
     name: 'vatrushka-hawk-source-maps',
