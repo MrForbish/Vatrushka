@@ -24,6 +24,7 @@ import {
   MessageList,
   MemberPanel,
   Modal,
+  ConfirmDialog,
   SegmentedControl,
   ServerContext,
   ServerTopBar,
@@ -115,6 +116,8 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
   const [channelName, setChannelName] = useState("");
   const [channelType, setChannelType] = useState<"text" | "voice">("text");
   const [renamingChannel, setRenamingChannel] =
+    useState<ChannelNavigationItem | null>(null);
+  const [deletingChannel, setDeletingChannel] =
     useState<ChannelNavigationItem | null>(null);
   const [renamedChannelName, setRenamedChannelName] = useState("");
   const [moveMemberId, setMoveMemberId] = useState<string | null>(null);
@@ -405,8 +408,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
         const channel = props.server.channels.find(
           (candidate) => candidate.id === channelId,
         );
-        if (channel && window.confirm(`Удалить канал «${channel.name}»?`))
-          props.onDeleteChannel(channelId);
+        if (channel) setDeletingChannel(channel);
       }}
       onManageRoles={props.onServerSettings}
       onRenameChannel={(channel) => {
@@ -576,6 +578,30 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        cancelLabel="Отмена"
+        confirmLabel="Удалить канал"
+        danger
+        description={
+          deletingChannel === null
+            ? ""
+            : `Канал «${deletingChannel.name}» и его историю сообщений нельзя будет восстановить.`
+        }
+        loading={props.busy}
+        onClose={() => setDeletingChannel(null)}
+        onConfirm={() => {
+          if (deletingChannel !== null)
+            props.onDeleteChannel(deletingChannel.id);
+          setDeletingChannel(null);
+        }}
+        open={deletingChannel !== null}
+        title={
+          deletingChannel === null
+            ? "Удалить канал"
+            : `Удалить «${deletingChannel.name}»?`
+        }
+      />
 
       <Modal
         description="Новое название сразу увидят все участники сервера."
@@ -923,6 +949,7 @@ function ServerStage({
     <section className="vui-message-stage">
       <MessageList
         channelName={activeChannel.name}
+        conversationId={activeChannel.id}
         firstUnreadMessageId={props.firstUnreadMessageId}
         hasOlder={props.hasOlderMessages}
         loadingOlder={props.loadingOlderMessages}

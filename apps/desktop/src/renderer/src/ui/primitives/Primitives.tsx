@@ -200,9 +200,11 @@ export interface SelectProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
   defaultValue?: string;
   onChange?: (event: { target: { value: string } }) => void;
   onValueChange?: (value: string) => void;
+  /** Raises a portalled menu above its owning overlay without changing the global popover layer. */
+  menuZIndex?: React.CSSProperties['zIndex'];
 }
 
-export function Select({ className, defaultValue, disabled = false, error, hint, id: providedId, label, onChange, onValueChange, options, value, ...props }: SelectProps): React.JSX.Element {
+export function Select({ className, defaultValue, disabled = false, error, hint, id: providedId, label, menuZIndex, onChange, onValueChange, options, value, ...props }: SelectProps): React.JSX.Element {
   const generatedId = useId();
   const id = providedId ?? generatedId;
   const listboxId = `${id}-listbox`;
@@ -344,7 +346,7 @@ export function Select({ className, defaultValue, disabled = false, error, hint,
                 onPointerDown={(event) => event.stopPropagation()}
                 ref={menuRef}
                 role="listbox"
-                style={menuPosition}
+                style={{ ...menuPosition, ...(menuZIndex === undefined ? {} : { zIndex: menuZIndex }) }}
                 tabIndex={-1}
               >
                 {options.map((option) => {

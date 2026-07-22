@@ -105,7 +105,9 @@ export function SourcePicker({
       : [
           selectedSource.type === "screen" ? "весь экран" : "окно приложения",
           sourceDescription(selectedSource),
-          quality === "1080p60" ? "1080p · 60 FPS" : "1440p · 60 FPS",
+          quality === "1080p60"
+            ? "1920 × 1080 · 60 FPS"
+            : "2560 × 1440 · 60 FPS",
           includeAudio ? "со звуком, голоса Ватрушки исключены" : "без звука",
         ].join(" · ");
 
@@ -217,6 +219,7 @@ export function SourcePicker({
         <div className="vui-share-picker__options">
           <Select
             label="Качество демонстрации"
+            menuZIndex="var(--z-tooltip)"
             onValueChange={(value) => setQuality(value as ScreenShareQuality)}
             options={[
               { value: "1080p60", label: "1080p · 60 FPS — рекомендуется" },

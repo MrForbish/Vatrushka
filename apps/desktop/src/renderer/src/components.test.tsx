@@ -461,4 +461,17 @@ describe('server UI', () => {
     await userEvent.click(screen.getByRole('button', { name: 'общий' }));
     expect(onChannel).toHaveBeenCalledWith('text-1');
   });
+
+  it('uses the application confirmation dialog before deleting a channel', async () => {
+    const onDeleteChannel = vi.fn();
+    render(<ServerView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'owner', hasPassword: true, twoFactorEnabled: true }} server={server} servers={[server]} activeChannelId="text-1" messages={[]} messageDraft="" serverName="" busy={false} error={null} onBack={noop} onSwitchServer={noop} onChannel={noop} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={noop} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onConnectVoice={noop} onCopyInvite={noop} onCreateChannel={noop} onRenameChannel={noop} onDeleteChannel={onDeleteChannel} onKickMember={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onServerSettings={noop} onLogout={noop} />);
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'общий' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Удалить канал' }));
+    expect(screen.getByRole('dialog', { name: 'Удалить «общий»?' })).toBeInTheDocument();
+    expect(onDeleteChannel).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Удалить канал' }));
+    expect(onDeleteChannel).toHaveBeenCalledWith('text-1');
+  });
 });

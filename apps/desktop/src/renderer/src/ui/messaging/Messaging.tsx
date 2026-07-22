@@ -144,6 +144,7 @@ function renderMessageContent(content: string, mentions: MessageViewModel['menti
 }
 
 export interface MessageListProps {
+  conversationId?: string | null | undefined;
   messages: MessageViewModel[];
   channelName: string;
   emptyDescription?: string;
@@ -178,7 +179,7 @@ function isGroupedWithPrevious(message: MessageViewModel, previous: MessageViewM
   return distance >= 0 && distance <= 5 * 60 * 1_000;
 }
 
-export function MessageList({ channelName, emptyDescription = 'Здесь появится первая история вашего сервера.', emptyTitle, firstUnreadMessageId = null, hasOlder = false, loadingOlder = false, messages, onDelete, onDeleteAttachment, onDownloadAttachment, onEdit, onLoadAttachment, onLoadOlder, onMention, onReaction, onReply, onRetry, targetMessageId = null }: MessageListProps): React.JSX.Element {
+export function MessageList({ channelName, conversationId, emptyDescription = 'Здесь появится первая история вашего сервера.', emptyTitle, firstUnreadMessageId = null, hasOlder = false, loadingOlder = false, messages, onDelete, onDeleteAttachment, onDownloadAttachment, onEdit, onLoadAttachment, onLoadOlder, onMention, onReaction, onReply, onRetry, targetMessageId = null }: MessageListProps): React.JSX.Element {
   const scrollElement = useRef<HTMLDivElement>(null);
   const stickToLatest = useRef(true);
   const previousLatestId = useRef<string | null>(null);
@@ -199,7 +200,7 @@ export function MessageList({ channelName, emptyDescription = 'Здесь поя
     stickToLatest.current = true;
     previousLatestId.current = null;
     setUnseenCount(0);
-  }, [channelName]);
+  }, [conversationId]);
 
   useEffect(() => {
     const latestId = messages.at(-1)?.id ?? null;
