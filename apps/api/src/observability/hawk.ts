@@ -1,4 +1,7 @@
 import { createHmac } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import { basename, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import HawkCatcher from "@hawk.so/nodejs";
 
@@ -25,6 +28,55 @@ function scrub(value: unknown, key = ""): unknown {
 export interface HawkReporter {
   readonly enabled: boolean;
   capture(error: unknown, context: Record<string, string>, userId?: string): boolean;
+}
+
+function hawkReleaseEndpoint(token: string): string {
+  try {
+    const decoded = JSON.parse(Buffer.from(token, "base64").toString("utf8")) as { integrationId?: unknown };
+    if (typeof decoded.integrationId !== "string" || decoded.integrationId.length === 0)
+      throw new Error("missing integration id");
+    return `https://${decoded.integrationId}.k1.hawk.so/release`;
+  } catch {
+    throw new Error("HAWK API integration token has an invalid format");
+  }
+}
+
+async function sourceMaps(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { recursive: true, withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".map"))
+    .map((entry) => join(entry.parentPath, entry.name));
+}
+
+/**
+ * Creates the Hawk release from the API source maps. This is intentionally
+ * best-effort: a third-party telemetry outage must not make the API unavailable.
+ */
+export async function publishApiHawkRelease(config: AppConfig): Promise<number> {
+  const token = config.HAWK_API_INTEGRATION_TOKEN || config.HAWK_INTEGRATION_TOKEN;
+  if (!config.HAWK_ENABLED || !token) return 0;
+
+  const directory = fileURLToPath(new URL("../", import.meta.url));
+  const maps = await sourceMaps(directory);
+  const endpoint = hawkReleaseEndpoint(token);
+
+  for (const filePath of maps) {
+    const form = new FormData();
+    form.set("release", config.HAWK_RELEASE);
+    form.set("file", new Blob([await readFile(filePath)], { type: "application/json" }), basename(filePath));
+    const response = await fetch(endpoint, {
+      method: "POST",
+      body: form,
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    const body = (await response.text()).trim().slice(0, 512);
+    if (!response.ok) throw new Error(`Hawk API release upload failed with HTTP ${response.status}: ${body || "empty response body"}`);
+    const parsed = body ? (JSON.parse(body) as { error?: unknown; message?: unknown }) : undefined;
+    if (parsed?.error) throw new Error(`Hawk API release upload rejected: ${typeof parsed.message === "string" ? parsed.message : "unknown error"}`);
+  }
+
+  return maps.length;
 }
 
 export function createHawkReporter(config: AppConfig): HawkReporter {

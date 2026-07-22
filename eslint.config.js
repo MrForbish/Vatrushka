@@ -16,6 +16,7 @@ export default tseslint.config(
       '**/test-results/**',
       'eslint.config.js',
       'apps/desktop/build/icon.*',
+      'apps/desktop/scripts/**/*.d.mts',
     ],
   },
   eslint.configs.recommended,

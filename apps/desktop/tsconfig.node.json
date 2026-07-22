@@ -9,6 +9,6 @@
       "@vatrushka/shared": ["../../packages/shared/src/index.ts"]
     }
   },
-  "include": ["electron.vite.config.ts", "vitest.config.ts", "playwright.config.ts", "e2e/**/*.ts", "src/main/**/*.ts", "src/preload/**/*.ts"],
+  "include": ["electron.vite.config.ts", "vitest.config.ts", "playwright.config.ts", "e2e/**/*.ts", "src/main/**/*.ts", "src/preload/**/*.ts", "scripts/**/*.d.mts"],
   "references": [{ "path": "../../packages/shared" }]
 }
