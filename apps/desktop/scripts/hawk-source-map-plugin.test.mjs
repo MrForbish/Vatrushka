@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import { Buffer } from 'node:buffer';
-import { uploadHawkSourceMap } from './hawk-source-map-plugin.mjs';
+import hawkSourceMapPlugin, { uploadHawkSourceMap } from './hawk-source-map-plugin.mjs';
 
 async function withServer(handler, run) {
   const server = createServer(handler);
@@ -34,6 +34,11 @@ test('uploads a map with release metadata', async () => {
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+test('does not enable release uploads outside immutable tag packaging', () => {
+  assert.equal(hawkSourceMapPlugin({ token: 'test', release: 'unknown' }), undefined);
+  assert.equal(hawkSourceMapPlugin({ token: 'test', release: '' }), undefined);
 });
 
 test('shows Hawk rejection instead of hiding it', async () => {
