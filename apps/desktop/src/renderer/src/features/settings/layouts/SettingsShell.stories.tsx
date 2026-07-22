@@ -9,6 +9,7 @@ import { WorkspaceLibrary, type WorkspaceNavigationItem } from '../../../ui';
 import { SettingsPageState } from '../components/SettingsPageState';
 import { SettingsSaveBar } from '../components/SettingsSaveBar';
 import { UserAudioSettingsPage } from '../pages/UserAudioSettingsPage';
+import { UserNotificationSettingsPage } from '../pages/UserNotificationSettingsPage';
 import { UserProfileSettingsPage } from '../pages/UserProfileSettingsPage';
 import { UserPresenceSettingsPage } from '../pages/UserPresenceSettingsPage';
 import { UserPrivacySettingsPage } from '../pages/UserPrivacySettingsPage';
@@ -44,6 +45,7 @@ const audioDevices: AudioDevices = {
 };
 const dndPresence = { preference: 'do_not_disturb' as const, effectiveStatus: 'dnd' as const, customText: 'Фокус до релиза', customTextExpiresAt: null, updatedAt: '2026-07-17T10:00:00.000Z' };
 const privacySettings = { directMessages: 'shared_servers' as const, presenceVisibility: 'shared_servers' as const, activityVisible: true, updatedAt: '2026-07-17T10:00:00.000Z' };
+const notificationSettings = { desktopEnabled: true, soundEnabled: true, previewMode: 'full' as const, directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: '22:00', quietHoursEnd: '08:00', quietHoursTimezone: 'Europe/Moscow', updatedAt: '2026-07-17T10:00:00.000Z' };
 const securityClient: SecurityClient = {
   requestPasswordSetup: fn(() => Promise.resolve({ retryAfterSeconds: 60 })),
   setPassword: fn(() => Promise.resolve(securityUser)),
@@ -108,6 +110,11 @@ export const UserPresenceDnd: Story = {
 export const UserPrivacy: Story = {
   args: { scope: 'user' },
   render: (args) => <SettingsShell activeSection="privacy" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserPrivacySettingsPage onDirtyChange={() => undefined} onLoad={() => Promise.resolve(privacySettings)} onLoadBlocked={() => Promise.resolve([])} onSave={() => Promise.resolve(privacySettings)} onUnblock={() => Promise.resolve()} /></SettingsShell>,
+};
+
+export const UserNotifications: Story = {
+  args: { scope: 'user' },
+  render: (args) => <SettingsShell activeSection="notifications" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserNotificationSettingsPage dndActive={false} onDirtyChange={() => undefined} onLoad={() => Promise.resolve(notificationSettings)} onPreviewSound={() => undefined} onSave={() => Promise.resolve(notificationSettings)} /></SettingsShell>,
 };
 
 export const UserSecurityLiveSection: Story = {
