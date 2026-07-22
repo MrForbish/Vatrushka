@@ -107,6 +107,13 @@ test('production publication is tag-only and uses protected file variables', asy
   assert.match(windowsPackage, /VITE_HAWK_DESKTOP_RELEASE: '\$CI_COMMIT_TAG'/u);
   assert.doesNotMatch(windowsPackage, /\$HAWK_INTEGRATION_TOKEN/u);
   assert.doesNotMatch(windowsPackage, /test -n "\$HAWK_INTEGRATION_TOKEN"/u);
+
+  const viteConfig = await read('apps/desktop/electron.vite.config.ts');
+  const sourceMapPlugin = await read('apps/desktop/scripts/hawk-source-map-plugin.mjs');
+  assert.match(viteConfig, /hawkSourceMapPlugin\(\{ token: hawkMainToken, release: hawkRelease \}\)/u);
+  assert.match(viteConfig, /hawkSourceMapPlugin\(\{ token: hawkRendererToken, release: hawkRelease \}\)/u);
+  assert.match(sourceMapPlugin, /Hawk source-map upload failed with HTTP/u);
+  assert.match(sourceMapPlugin, /if \(removeSourceMaps\) await rm\(filePath\)/u);
 });
 
 test('GitLab repository metadata replaces GitHub automation', async () => {

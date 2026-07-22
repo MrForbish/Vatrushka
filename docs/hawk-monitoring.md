@@ -20,8 +20,8 @@ Never commit these values or put them in build arguments. The reporter removes s
 
 1. Create three projects in Hawk Garage: API, Desktop Main, Desktop Renderer.
 2. Create and use one Integration Token per project. Never reuse an API token in the Windows build or a renderer token in the Electron Main process.
-3. In GitLab, store `HAWK_DESKTOP_MAIN_TOKEN` and `HAWK_DESKTOP_RENDERER_TOKEN` as protected, masked CI/CD variables. The Windows release build embeds only the corresponding token in each catcher. The release pipeline passes the immutable tag to both `HAWK_DESKTOP_RELEASE` (Main) and `VITE_HAWK_DESKTOP_RELEASE` (Renderer); neither catcher may use `unknown` in a production package.
-4. In the production API `.env`, set `HAWK_ENABLED=true`, `HAWK_API_INTEGRATION_TOKEN`, `HAWK_RELEASE` and `HAWK_USER_HASH_SECRET`. `HAWK_INTEGRATION_TOKEN` remains a temporary API-only compatibility fallback and must not be used by new installations.
+3. In GitLab, store `HAWK_DESKTOP_MAIN_TOKEN` and `HAWK_DESKTOP_RENDERER_TOKEN` as protected, masked CI/CD variables. The Windows release build embeds only the corresponding token in each catcher. Both Electron Main and Renderer upload their source maps under the immutable tag; a rejected upload fails package creation and retains maps for diagnosis. Neither catcher may use `unknown` in a production package.
+4. In the production API `.env`, set `HAWK_ENABLED=true`, `HAWK_API_INTEGRATION_TOKEN`, `HAWK_RELEASE` and `HAWK_USER_HASH_SECRET`. After API startup it publishes its compiled source maps under `HAWK_RELEASE`; a Hawk outage is logged but never blocks API readiness. `HAWK_INTEGRATION_TOKEN` remains a temporary API-only compatibility fallback and must not be used by new installations.
 5. To prove delivery once, set `HAWK_STARTUP_SMOKE_TEST=true`, restart the API, find the single `Hawk startup smoke test` event, then immediately set it back to `false` and restart the API again. The API metric `hawk_reporter_enabled{runtime="api"}` must be `1`; `hawk_events_submit_attempts_total{result="submitted"}` confirms that the catcher accepted the smoke event for delivery. These metrics do not claim that Hawk has received it: confirm the event in Hawk before disabling the smoke test.
 6. Enable Desktop Main in RC, then Renderer only after confirming browser-token exposure is acceptable to Hawk support.
 7. Configure notifications for new critical events only.
@@ -35,6 +35,12 @@ safe way to distinguish that healthy idle state from a missing token or blocked
 outbound HTTPS connection. A production Windows package fails its release
 preflight when the required CI variable is absent, rather than silently
 shipping a disabled catcher.
+
+Source-map upload is release delivery, not optional telemetry: a rejected
+Desktop Main or Renderer upload fails Windows packaging with Hawk's HTTP status
+and a safe response detail. API release publication is best-effort to preserve
+application availability; inspect API logs for `Hawk API release publication
+failed` if its release is missing.
 
 ## Incident response
 
