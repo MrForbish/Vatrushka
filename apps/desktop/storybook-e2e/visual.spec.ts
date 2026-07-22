@@ -27,6 +27,14 @@ async function openStory(page: Page, id: string): Promise<void> {
   }
 }
 
+async function settlePortalAnimations(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    for (const animation of document.getAnimations({ subtree: true })) {
+      animation.finish();
+    }
+  });
+}
+
 test.describe('Vatrushka design system visual baseline', () => {
   test('foundations', async ({ page }) => {
     await openStory(page, 'foundations-colors--palette');
@@ -50,7 +58,7 @@ test.describe('Vatrushka design system visual baseline', () => {
   });
 
   test('app shell desktop', async ({ page }) => {
-    await openStory(page, 'layouts-app-shell--full-server');
+    await openStory(page, 'layouts-app-shell--visual-full-server');
     await expect(page).toHaveScreenshot('app-shell-desktop.png', { animations: 'disabled', fullPage: true });
   });
 
@@ -61,16 +69,17 @@ test.describe('Vatrushka design system visual baseline', () => {
 
   test('app shell at the supported 1280 by 720 boundary', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
-    await openStory(page, 'layouts-app-shell--full-server');
+    await openStory(page, 'layouts-app-shell--visual-full-server');
     await expect(page.getByRole('button', { name: 'Открыть участников' })).toBeVisible();
     await expect(page).toHaveScreenshot('app-shell-1280.png', { animations: 'disabled', fullPage: true });
   });
 
   test('app shell at the minimum 1024 by 680 boundary', async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 680 });
-    await openStory(page, 'layouts-app-shell--full-server');
+    await openStory(page, 'layouts-app-shell--visual-full-server');
     await page.getByRole('button', { name: 'Открыть список серверов' }).click();
     await expect(page.getByRole('dialog', { name: 'Серверы' })).toBeVisible();
+    await settlePortalAnimations(page);
     await expect(page).toHaveScreenshot('app-shell-minimum.png', { animations: 'disabled', fullPage: true });
   });
 
@@ -164,9 +173,10 @@ test.describe('Vatrushka design system visual baseline', () => {
 
   test('app shell compact drawers', async ({ page }) => {
     await page.setViewportSize({ width: 1100, height: 760 });
-    await openStory(page, 'layouts-app-shell--full-server');
+    await openStory(page, 'layouts-app-shell--visual-full-server');
     await page.getByRole('button', { name: 'Открыть список серверов' }).click();
     await expect(page.getByRole('dialog', { name: 'Серверы' })).toBeVisible();
+    await settlePortalAnimations(page);
     await expect(page).toHaveScreenshot('app-shell-compact.png', { animations: 'disabled', fullPage: true });
   });
 
