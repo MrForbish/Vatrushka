@@ -286,6 +286,12 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('server-settings-roles.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('routed server settings overview', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--server-overview');
+    await expect(page.getByRole('heading', { name: 'Настройки сервера' })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-settings-overview.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('routed user notification settings', async ({ page }) => {
     await openStory(page, 'features-settings-settings-shell--user-notifications');
     await expect(page.getByRole('heading', { name: 'Уведомления' })).toBeVisible();
