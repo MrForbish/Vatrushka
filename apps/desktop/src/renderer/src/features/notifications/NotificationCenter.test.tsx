@@ -77,3 +77,26 @@ it('offers a manual update check without manufacturing an unread notification', 
   expect(onCheckUpdate).toHaveBeenCalledOnce();
   expect(screen.queryByText('Обновление клиента')).not.toBeInTheDocument();
 });
+
+it('renders its panel in the document portal and restores focus after Escape', () => {
+  render(<NotificationCenter items={[]} onDismiss={vi.fn()} onMarkAllRead={vi.fn()} onOpen={vi.fn()} onRead={vi.fn()} />);
+
+  const trigger = screen.getByRole('button', { name: /Уведомления/u });
+  fireEvent.click(trigger);
+  const panel = screen.getByRole('dialog', { name: 'Центр уведомлений' });
+
+  expect(panel.parentElement).toBe(document.body);
+  fireEvent.keyDown(document, { key: 'Escape' });
+
+  expect(screen.queryByRole('dialog', { name: 'Центр уведомлений' })).not.toBeInTheDocument();
+  expect(trigger).toHaveFocus();
+});
+
+it('closes the portal panel when clicking outside it', () => {
+  render(<NotificationCenter items={[]} onDismiss={vi.fn()} onMarkAllRead={vi.fn()} onOpen={vi.fn()} onRead={vi.fn()} />);
+
+  fireEvent.click(screen.getByRole('button', { name: /Уведомления/u }));
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть уведомления' }));
+
+  expect(screen.queryByRole('dialog', { name: 'Центр уведомлений' })).not.toBeInTheDocument();
+});
