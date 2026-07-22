@@ -10,6 +10,7 @@ import brandMarkUrl from "../../assets/brand-mark.png";
 import {
   Avatar,
   Badge,
+  CommunityLogo,
   Icon,
   IconButton,
   StableImage,
@@ -55,12 +56,6 @@ export function WorkspaceCard({
   onSelect,
   workspace,
 }: WorkspaceCardProps): React.JSX.Element {
-  const initials = workspace.name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((word) => word[0])
-    .join("")
-    .toUpperCase();
   return (
     <button
       aria-current={active ? "page" : undefined}
@@ -71,17 +66,13 @@ export function WorkspaceCard({
       type="button"
     >
       {workspace.bannerUrl === undefined || workspace.bannerUrl === null ? null : <StableImage alt="" aria-hidden="true" className="vui-workspace-card__cover" fallback={null} src={workspace.bannerUrl} />}
-      <span
-        aria-hidden="true"
-        className="vui-workspace-card__mark"
-        style={
-          {
-            "--workspace-accent": workspace.accentColor ?? undefined,
-          } as React.CSSProperties
-        }
-      >
-        <StableImage alt="" fallback={initials} src={workspace.iconUrl} />
-      </span>
+      <CommunityLogo
+        accentColor={workspace.accentColor}
+        bannerSrc={workspace.bannerUrl}
+        className="vui-workspace-card__logo"
+        name={workspace.name}
+        src={workspace.iconUrl}
+      />
       <span className="vui-workspace-card__copy">
         <strong>{workspace.name}</strong>
         <small>
@@ -567,14 +558,28 @@ export function UserProfileDock({
   status = "online",
 }: UserProfileDockProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  const [statusMenuPosition, setStatusMenuPosition] = useState<{
+    bottom: number;
+    left: number;
+  } | null>(null);
+  const statusButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const closeStatusMenu = (): void => {
+    setOpen(false);
+    setStatusMenuPosition(null);
+    requestAnimationFrame(() => statusButtonRef.current?.focus());
+  };
   useEffect(() => {
     if (!open) return undefined;
     const close = (event: MouseEvent): void => {
-      if (!menuRef.current?.contains(event.target as Node)) setOpen(false);
+      if (
+        !menuRef.current?.contains(event.target as Node) &&
+        !statusButtonRef.current?.contains(event.target as Node)
+      )
+        closeStatusMenu();
     };
     const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") closeStatusMenu();
     };
     document.addEventListener("mousedown", close);
     document.addEventListener("keydown", closeOnEscape);
@@ -589,11 +594,26 @@ export function UserProfileDock({
       data-audio={audioControls ? "true" : undefined}
       data-founder={founder || undefined}
     >
-      <div className="vui-profile-dock__presence" ref={menuRef}>
+      <div className="vui-profile-dock__presence">
         <button
           aria-expanded={open}
+          aria-haspopup="menu"
           aria-label="Изменить статус"
-          onClick={() => setOpen((current) => !current)}
+          onClick={() => {
+            if (open) {
+              closeStatusMenu();
+              return;
+            }
+            const rect = statusButtonRef.current?.getBoundingClientRect();
+            if (rect) {
+              setStatusMenuPosition({
+                bottom: Math.max(8, window.innerHeight - rect.top + 12),
+                left: Math.max(8, rect.left),
+              });
+            }
+            setOpen(true);
+          }}
+          ref={statusButtonRef}
           type="button"
         >
           <Avatar
@@ -603,14 +623,22 @@ export function UserProfileDock({
             status={status}
           />
         </button>
-        {open && onStatus ? (
-          <div className="vui-profile-dock__status-menu" role="menu">
+      </div>
+      {open && onStatus && statusMenuPosition
+        ? createPortal(
+          <div
+            aria-label="Статус активности"
+            className="vui-profile-dock__status-menu"
+            ref={menuRef}
+            role="menu"
+            style={statusMenuPosition}
+          >
             {profileStatusOptions.map((option) => (
               <button
                 key={option.preference}
                 onClick={() => {
                   void onStatus(option.preference);
-                  setOpen(false);
+                  closeStatusMenu();
                 }}
                 role="menuitem"
                 type="button"
@@ -619,9 +647,10 @@ export function UserProfileDock({
                 <span>{option.label}</span>
               </button>
             ))}
-          </div>
-        ) : null}
-      </div>
+          </div>,
+          document.body,
+        )
+        : null}
       <span className="vui-profile-dock__copy">
         <strong title={name}>{name}</strong>
         <small>

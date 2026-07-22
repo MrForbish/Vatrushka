@@ -641,6 +641,32 @@ export function Avatar({ className, name, size = 'md', src, status, ...props }: 
   );
 }
 
+export interface CommunityLogoProps extends HTMLAttributes<HTMLSpanElement> {
+  accentColor?: string | null | undefined;
+  bannerSrc?: string | null | undefined;
+  name: string;
+  size?: 'sm' | 'md' | 'lg';
+  src?: string | null | undefined;
+}
+
+export function CommunityLogo({ accentColor, bannerSrc, className, name, size = 'md', src, ...props }: CommunityLogoProps): React.JSX.Element {
+  const initials = name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  return (
+    <span
+      {...props}
+      aria-label={name}
+      className={cx('vui-community-logo', `vui-community-logo--${size}`, className)}
+      role="img"
+      style={{ '--community-accent': accentColor ?? undefined, ...props.style } as React.CSSProperties}
+    >
+      {bannerSrc ? <StableImage alt="" aria-hidden="true" className="vui-community-logo__cover" fallback={null} src={bannerSrc} /> : null}
+      <span aria-hidden="true" className="vui-community-logo__mark">
+        <StableImage alt="" fallback={initials} src={src} />
+      </span>
+    </span>
+  );
+}
+
 export interface ProgressProps extends HTMLAttributes<HTMLDivElement> {
   label: string;
   value: number;
