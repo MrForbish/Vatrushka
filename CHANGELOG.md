@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.15] - 2026-07-22
+
+### Fixed
+
+- passes the immutable release tag to the Desktop Renderer Hawk catcher, so new events no longer use `unknown` as their release;
+- adds a CI contract test and release configuration documentation for the Renderer Hawk metadata.
+
 ## [0.8.14] - 2026-07-22
 
 ### Fixed
