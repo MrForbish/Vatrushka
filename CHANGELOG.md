@@ -4,6 +4,14 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.19] - 2026-07-22
+
+### Changed
+
+- aligns the live Server and direct-message workspace with the V2 UI Kit: denser four-rail layout, message stage and composer, real conversation search, avatar-aware conversation header and notification control;
+- preserves the existing API, shared contracts, permissions, authentication, WebSocket/reconnect, LiveKit/media and Electron preload boundaries;
+- refreshes the affected Storybook visual baselines and keeps the virtualized message list deterministic.
+
 ## [0.8.18] - 2026-07-22
 
 ### Changed
