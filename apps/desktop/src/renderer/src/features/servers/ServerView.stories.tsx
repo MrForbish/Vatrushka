@@ -5,7 +5,7 @@ import { expect, fireEvent, fn, userEvent, within } from "storybook/test";
 import type { RoomConnection, ServerDetail } from "@vatrushka/shared";
 
 import type { MediaSnapshot } from "../../media";
-import { RoomView, VoiceConnectionPanel } from "../voice/RoomView";
+import { RoomView } from "../voice/RoomView";
 import { ServerView } from "./ServerView";
 
 const connection: RoomConnection = {
@@ -211,12 +211,10 @@ const voiceStage = (
     onMute={fn()}
     onDeafen={fn()}
     onShare={fn()}
-    onCopy={fn()}
     onLeave={fn()}
     onKick={fn()}
     onMicrophone={fn()}
     onOutput={fn()}
-    onRefreshDevices={fn()}
     onStartAudio={fn()}
     onScreenAudioMute={fn()}
     onScreenAudioVolume={fn()}
@@ -224,19 +222,6 @@ const voiceStage = (
     onParticipantVolume={fn()}
   />
 );
-const voiceConnectionPanel = (
-  <VoiceConnectionPanel
-    canShare
-    channelName="Голосовой"
-    snapshot={snapshot}
-    onOpen={fn()}
-    onMute={fn()}
-    onDeafen={fn()}
-    onShare={fn()}
-    onLeave={fn()}
-  />
-);
-
 const meta = {
   title: "Screens/Server",
   component: ServerView,
@@ -256,7 +241,6 @@ const meta = {
     connectedVoiceChannelId: "voice-1",
     connectedVoiceServerId: "server-1",
     voiceStage,
-    voiceConnectionPanel,
     messages: [],
     messageDraft: "",
     serverName: "",
@@ -291,7 +275,57 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-export const ConnectedVoice: Story = {};
+export const ConnectedVoice: Story = {
+  render: (args) => (
+    <ServerView
+      {...args}
+      voiceConnectionStatus={
+        <span className="vui-server-topbar__connection-status" data-state="connected" role="status">
+          <i aria-hidden="true" />
+          <strong>Вы подключены</strong>
+          <small>31 мс</small>
+        </span>
+      }
+    />
+  ),
+};
+
+export const TextChannel: Story = {
+  args: {
+    activeChannelId: "text-1",
+    connectedVoiceChannelId: undefined,
+    connectedVoiceServerId: undefined,
+    voiceStage: undefined,
+    messages: [
+      {
+        id: "message-1",
+        channelId: "text-1",
+        authorUserId: "anna",
+        authorDisplayName: "Анна Белова",
+        authorPlatformRole: "member",
+        content: "Собираю краткий план на сегодня. Если есть идеи — пишите сюда.",
+        attachments: [],
+        reactions: [],
+        createdAt: "2026-07-23T10:30:00.000Z",
+        editedAt: null,
+        replyTo: null,
+      },
+      {
+        id: "message-2",
+        channelId: "text-1",
+        authorUserId: "owner",
+        authorDisplayName: "Илья Форбиш",
+        authorPlatformRole: "owner",
+        content: "Я на связи. Давайте начнём с голосового и статуса релиза.",
+        attachments: [],
+        reactions: [],
+        createdAt: "2026-07-23T10:35:00.000Z",
+        editedAt: null,
+        replyTo: null,
+      },
+    ],
+  },
+};
 
 export const InviteLink: Story = {
   args: {
@@ -299,7 +333,6 @@ export const InviteLink: Story = {
     connectedVoiceChannelId: undefined,
     connectedVoiceServerId: undefined,
     voiceStage: undefined,
-    voiceConnectionPanel: undefined,
   },
   play: async ({ canvasElement }) => {
     await userEvent.click(

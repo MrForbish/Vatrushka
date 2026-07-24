@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, screen, userEvent, within } from 'storybook/test';
 
 import { IconButton, Popover, Tooltip } from './Primitives';
 import './stories.css';
@@ -24,8 +24,8 @@ export const Catalog: Story = {
     const trigger = canvas.getByRole('button', { name: 'Выбрать устройство' });
     await userEvent.click(trigger);
     await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    await expect(canvas.getByRole('dialog', { name: 'Быстрые настройки' })).toBeVisible();
+    await expect(screen.getByRole('dialog', { name: 'Быстрые настройки' })).toBeVisible();
     await userEvent.click(trigger);
-    await expect(canvas.queryByRole('dialog', { name: 'Быстрые настройки' })).not.toBeInTheDocument();
+    await expect(screen.queryByRole('dialog', { name: 'Быстрые настройки' })).not.toBeInTheDocument();
   },
 };

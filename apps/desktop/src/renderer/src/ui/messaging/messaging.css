@@ -1,4 +1,5 @@
-.vui-message-list { height: 100%; min-height: 0; overflow-y: auto; padding: var(--space-5) clamp(var(--space-4), 3vw, var(--space-7)); }
+.vui-message-list { position: relative; display: flex; flex-direction: column; height: 100%; min-height: 0; overflow-y: auto; padding: var(--space-5) clamp(var(--space-4), 3vw, var(--space-7)); }
+.vui-message-list__content { display: flex; flex: 1 0 auto; flex-direction: column; justify-content: flex-end; min-height: 100%; }
 .vui-message-list__virtual { position: relative; width: 100%; }
 .vui-message-list__older { display: block; margin: var(--space-3) auto var(--space-2); padding: 7px 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-round); background: var(--color-surface-0); color: var(--color-text-secondary); font: var(--text-label-sm); }
 .vui-message-list__older:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-text-primary); }
@@ -12,8 +13,6 @@
 .vui-message[data-grouped="true"] { padding-block: var(--space-1); }
 .vui-message:hover { background: color-mix(in srgb, var(--color-surface-2), transparent 18%); }
 .vui-message[data-targeted="true"] { border-color: color-mix(in srgb, var(--color-cyan), transparent 35%); background: color-mix(in srgb, var(--color-cyan), transparent 90%); animation: vui-message-target 1.6s ease-out 1; }
-.vui-message[data-author-badge="founder"] { border-left-color: color-mix(in srgb, var(--color-founder), transparent 48%); }
-.vui-message[data-author-badge="admin"] { border-left-color: color-mix(in srgb, var(--color-primary), transparent 58%); }
 .vui-message__avatar-space { width: 40px; }
 .vui-message__content { min-width: 0; }
 .vui-message__content > header { display: flex; align-items: center; gap: var(--space-2); }
@@ -26,10 +25,12 @@
 .vui-message__mention { display: inline; padding: 1px 3px; border: 0; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-primary), transparent 76%); color: var(--color-primary-hover); font: inherit; font-weight: 650; }
 button.vui-message__mention { cursor: pointer; }
 button.vui-message__mention:hover { background: color-mix(in srgb, var(--color-primary), transparent 62%); color: var(--color-text-primary); }
-.vui-message__delivery { display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-1); color: var(--color-text-muted); font: var(--text-caption); }
+.vui-message__delivery { display: flex; align-items: center; justify-content: flex-start; gap: var(--space-2); margin-top: 3px; color: var(--color-text-muted); font: var(--text-caption); }
 .vui-message__delivery[data-state="failed"] { color: var(--color-danger); }
 .vui-message__delivery[data-state="read"] { color: var(--color-cyan); }
-.vui-message__tombstone { color: var(--color-text-muted); font-style: italic; }
+.vui-message__delivery-checks { display: inline-flex; align-items: center; gap: 0; line-height: 1; }
+.vui-message__delivery-checks svg + svg { margin-left: -7px; }
+.vui-message__delivery[data-state="read"] .vui-message__delivery-checks { color: var(--color-cyan); }
 .vui-message > .vui-unread-divider { grid-column: 1 / -1; }
 .vui-message-list__jump-unread { position: sticky; z-index: 4; top: var(--space-2); align-self: center; margin: 0 auto var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-strong); border-radius: var(--radius-round); background: var(--color-surface-raised); color: var(--color-cyan); font: var(--text-label-sm); box-shadow: var(--shadow-md); cursor: pointer; }
 .vui-message-list__jump-latest { position: sticky; z-index: 5; bottom: var(--space-2); display: block; margin: 0 auto; padding: var(--space-2) var(--space-4); border: 1px solid var(--color-primary); border-radius: var(--radius-round); background: var(--color-surface-elevated); color: var(--color-text-primary); font: var(--text-label-sm); box-shadow: var(--shadow-float); cursor: pointer; }
@@ -79,10 +80,23 @@ button.vui-message__mention:hover { background: color-mix(in srgb, var(--color-p
 .vui-message-composer__body { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: end; gap: var(--space-2); padding: var(--space-2); }
 .vui-message-composer__tools { display: flex; align-items: center; }
 .vui-message-composer__emoji { position: relative; }
-.vui-message-composer__emoji-menu { position: absolute; z-index: 180; bottom: calc(100% + var(--space-3)); left: 0; display: grid; grid-template-columns: repeat(8, 34px); gap: var(--space-1); width: max-content; max-width: min(340px, calc(100vw - 32px)); max-height: min(270px, calc(100vh - 160px)); overflow-y: auto; padding: var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-elevated); box-shadow: var(--shadow-modal); }
-.vui-message-composer__emoji-menu button { display: grid; width: 34px; height: 34px; padding: 0; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; font-size: 19px; }
-.vui-message-composer__emoji-menu button:hover,
-.vui-message-composer__emoji-menu button:focus-visible { background: var(--color-surface-3); outline: 0; transform: scale(1.06); }
+.vui-message-composer__emoji-menu { position: absolute; z-index: 180; bottom: calc(100% + var(--space-3)); left: 0; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr); width: min(352px, calc(100vw - 32px)); max-height: min(356px, calc(100vh - 160px)); overflow: hidden; padding: var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: var(--color-surface-elevated); box-shadow: var(--shadow-modal); }
+.vui-message-composer__emoji-search { display: flex; align-items: center; gap: var(--space-2); min-width: 0; padding: 0 var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-1); color: var(--color-text-muted); }
+.vui-message-composer__emoji-search input { width: 100%; min-width: 0; height: 34px; border: 0; outline: 0; background: transparent; color: var(--color-text-primary); font: var(--text-body-sm); }
+.vui-message-composer:has(.vui-message-composer__emoji-search input:focus) { border-color: color-mix(in srgb, var(--color-border-default), transparent 12%); box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-text-primary), transparent 95%); }
+.vui-message-composer__emoji-search:focus-within { border-color: color-mix(in srgb, var(--color-primary), var(--color-border-default) 55%); }
+.vui-message-composer__emoji-tabs { display: flex; gap: 2px; padding: var(--space-2) 0; overflow-x: auto; scrollbar-width: none; }
+.vui-message-composer__emoji-tabs::-webkit-scrollbar { display: none; }
+.vui-message-composer__emoji-tabs button { display: grid; flex: 0 0 30px; width: 30px; height: 30px; padding: 0; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; font-size: 16px; }
+.vui-message-composer__emoji-tabs button[aria-selected="true"] { background: var(--color-primary-soft); box-shadow: inset 0 -2px var(--color-primary); }
+.vui-message-composer__emoji-heading { padding: 0 var(--space-1) var(--space-1); color: var(--color-text-secondary); font: var(--text-label-xs); }
+.vui-message-composer__emoji-grid { display: grid; grid-template-columns: repeat(8, 34px); align-content: start; gap: var(--space-1); min-height: 0; overflow-y: auto; padding: var(--space-1); }
+.vui-message-composer__emoji-grid button { display: grid; width: 34px; height: 34px; padding: 0; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; font-size: 19px; }
+.vui-message-composer__emoji-tabs button:hover,
+.vui-message-composer__emoji-tabs button:focus-visible,
+.vui-message-composer__emoji-grid button:hover,
+.vui-message-composer__emoji-grid button:focus-visible { background: var(--color-surface-3); outline: 0; transform: scale(1.06); }
+.vui-message-composer__emoji-grid p { grid-column: 1 / -1; margin: var(--space-4) var(--space-2); color: var(--color-text-muted); font: var(--text-caption); text-align: center; }
 .vui-message-composer__editor { position: relative; min-width: 0; }
 .vui-message-composer textarea { width: 100%; min-height: 36px; max-height: 144px; padding: var(--space-2); resize: vertical; border: 0; outline: 0; background: transparent; color: var(--color-text-primary); font: var(--text-body-md); }
 .vui-message-composer textarea::placeholder { color: var(--color-text-muted); }

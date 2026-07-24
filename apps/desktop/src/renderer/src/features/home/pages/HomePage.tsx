@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type {
   EffectivePresenceStatus,
   GamingHomeConnectionQuality,
@@ -11,13 +11,13 @@ import type {
 } from "@vatrushka/shared";
 
 import type { AudioDevices } from "../../../audio-devices";
-import { AppShell, Button, Icon, Input, Modal } from "../../../ui";
 import {
-  ActiveVoiceSpacesSection,
-  FriendsInGameSection,
-  QuickReturnSection,
-  VoiceStatusBar,
-} from "../components/GamingHome";
+  AppShell,
+  Button,
+  Input,
+  Modal,
+} from "../../../ui";
+import { HomeV2 } from "../components/HomeV2";
 import { HomeNavigation } from "../components/HomeNavigation";
 import { HomeWidgetError } from "../components/HomeWidgetError";
 import { HomeWidgetSkeleton } from "../components/HomeWidgetSkeleton";
@@ -54,92 +54,36 @@ export interface HomePageProps {
   onJoinVoice?: ((serverId: string, channelId: string) => void) | undefined;
   onMessageFriend?: ((userId: string) => void) | undefined;
   onDirectMessages?: (() => void) | undefined;
+  profileCoverUrl?: string | null | undefined;
+  voiceProfileConnection?: ReactNode | undefined;
 }
 
 export function HomePage(props: HomePageProps): React.JSX.Element {
   const [createOpen, setCreateOpen] = useState(false);
   const effectiveServers = props.dashboard?.servers ?? props.servers;
   const gaming = props.dashboard?.gaming;
-  const microphone = props.devices.inputs.find((device) => device.deviceId === props.microphoneId) ?? props.devices.inputs[0];
-  const output = props.devices.outputs.find((device) => device.deviceId === props.outputId) ?? props.devices.outputs[0];
   const connectionQuality = props.dashboardError
     ? "offline"
     : (props.voiceConnectionQuality ?? gaming?.voiceStatus.connectionQuality ?? (props.error ? "poor" : "excellent"));
-  const voiceStatus = {
-    microphone: {
-      available: microphone !== undefined,
-      enabled: microphone !== undefined && props.microphoneMuted !== true,
-      label: microphone?.label || null,
-    },
-    output: {
-      available: output !== undefined,
-      label: output?.label || null,
-    },
-    pingMs: props.voicePingMs ?? gaming?.voiceStatus.pingMs ?? null,
-    connectionQuality,
-  } as const;
-  const openDestination = (serverId: string, channelId: string): void => {
-    if (
-      props.connection?.serverId === serverId &&
-      props.connection.channelId === channelId &&
-      props.onOpenDestination
-    )
-      props.onOpenDestination({ type: "voice_channel", serverId, channelId });
-    else if (props.onJoinVoice) props.onJoinVoice(serverId, channelId);
-    else if (props.onOpenDestination) props.onOpenDestination({ type: "voice_channel", serverId, channelId });
-    else props.onOpenServer(serverId);
-  };
-  const openSpaces = (): void => {
-    const first = gaming?.activeSpaces[0];
-    if (first) props.onOpenServer(first.serverId);
-  };
   const displayName = props.dashboard?.user.displayName ?? props.user.displayName ?? props.user.email;
-  const activeSpaceCount = gaming?.activeSpaces.length ?? 0;
-  const friendCount = gaming?.friendsInGame.length ?? 0;
+
+  const openDestination = (serverId: string, channelId: string): void => {
+    if (props.connection?.serverId === serverId && props.connection.channelId === channelId && props.onOpenDestination) {
+      props.onOpenDestination({ type: "voice_channel", serverId, channelId });
+    } else if (props.onJoinVoice) {
+      props.onJoinVoice(serverId, channelId);
+    } else if (props.onOpenDestination) {
+      props.onOpenDestination({ type: "voice_channel", serverId, channelId });
+    } else {
+      props.onOpenServer(serverId);
+    }
+  };
 
   return (
     <>
       <AppShell
-        members={
-          <aside className="home-support-panel" aria-label="Помощь и обратная связь">
-            <div className="home-support-panel__version">
-              <span>Версия приложения</span>
-              <strong>v{props.version}</strong>
-            </div>
-            <div className="home-support-panel__card">
-              <span className="home-support-panel__icon"><Icon name="message" size={20} /></span>
-              <div>
-                <strong>Нужна помощь?</strong>
-                <p>Telegram или email.</p>
-              </div>
-              <Button
-                onClick={() => void window.desktop.openExternal("https://t.me/MaksZJ")}
-                size="sm"
-                variant="secondary"
-              >
-                Telegram
-              </Button>
-              <Button
-                onClick={() => void window.desktop.openExternal("mailto:vatrushka-notify@yandex.ru")}
-                size="sm"
-                variant="quiet"
-              >
-                Email
-              </Button>
-            </div>
-          </aside>
-        }
-        membersDrawerTitle="Помощь"
-        topBar={
-          <div className="home-header">
-            <Icon name="home" size={19} />
-            <span><strong>Главная</strong><small>Игровой центр Vatrushka</small></span>
-          </div>
-        }
-        variant="home"
-        workspaceLibrary={
+        globalSidebar={
           <HomeNavigation
-            directUnreadCount={props.directUnreadCount ?? 0}
             networkAvailable={connectionQuality !== "offline"}
             onCreate={() => setCreateOpen(true)}
             onDirectMessages={props.onDirectMessages}
@@ -147,51 +91,40 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
             onOpenServer={props.onOpenServer}
             onSecurity={props.onSecurity}
             onStatus={props.onStatus}
+            profileCoverUrl={props.profileCoverUrl}
+            voiceProfileConnection={props.voiceProfileConnection}
             servers={effectiveServers}
             status={props.status ?? props.dashboard?.user.presence}
             user={props.user}
           />
         }
+        variant="home"
       >
-        <div className="home-dashboard home-dashboard--gaming">
-          <div className="home-dashboard__inner gaming-home">
-            <section className="gaming-home-welcome" aria-labelledby="gaming-home-welcome-title">
-              <div>
-                <span className="gaming-home-welcome__eyebrow">Ваше пространство</span>
-                <h1 id="gaming-home-welcome-title">С возвращением, {displayName}</h1>
-                <p>Выберите, куда хотите вернуться: к друзьям, в голосовой канал или к недавней активности.</p>
-              </div>
-              <dl aria-label="Активность сейчас" className="gaming-home-welcome__stats">
-                <div><dt>Активных голосовых</dt><dd>{activeSpaceCount}</dd></div>
-                <div><dt>Друзей в игре</dt><dd>{friendCount}</dd></div>
-              </dl>
-            </section>
-            {props.dashboardError || props.error ? (
-              <HomeWidgetError
-                message={props.dashboard === undefined ? (props.dashboardError ?? props.error ?? "Нет соединения с Vatrushka") : "Нет соединения с Vatrushka. Показываем последние доступные данные."}
-                onRetry={props.onRetryDashboard}
-              />
-            ) : null}
-            <VoiceStatusBar onAudioSettings={props.onAudioSettings ?? props.onSecurity} status={voiceStatus} />
-            {props.dashboardLoading && gaming === undefined ? (
-              <>
-                <HomeWidgetSkeleton label="Загрузка быстрого возврата" rows={3} />
-                <HomeWidgetSkeleton label="Загрузка активных пространств" rows={4} />
-                <HomeWidgetSkeleton label="Загрузка друзей" rows={4} />
-              </>
-            ) : (
-              <>
-                <QuickReturnSection items={gaming?.quickReturn ?? []} onJoin={openDestination} />
-                <ActiveVoiceSpacesSection items={gaming?.activeSpaces ?? []} onJoin={openDestination} onShowAll={openSpaces} />
-                <FriendsInGameSection
-                  friends={gaming?.friendsInGame ?? []}
-                  onJoin={openDestination}
-                  onMessage={(userId) => props.onMessageFriend?.(userId)}
-                  onShowAll={() => props.onDirectMessages?.()}
-                />
-              </>
-            )}
-          </div>
+        <div aria-label="Главная страница" className="home-dashboard home-dashboard--v2" tabIndex={0}>
+          {props.dashboardError || props.error ? (
+            <HomeWidgetError
+              message={props.dashboard === undefined
+                ? (props.dashboardError ?? props.error ?? "Нет соединения с Vatrushka")
+                : "Нет соединения с Vatrushka. Показываем последние доступные данные."}
+              onRetry={props.onRetryDashboard}
+            />
+          ) : null}
+          {props.dashboardLoading && gaming === undefined ? (
+            <div className="home-dashboard__v2-skeleton">
+              <HomeWidgetSkeleton label="Загрузка главной страницы" rows={4} />
+              <HomeWidgetSkeleton label="Загрузка друзей" rows={4} />
+            </div>
+          ) : (
+            <HomeV2
+              activeSpaces={gaming?.activeSpaces ?? []}
+              displayName={displayName}
+              friends={gaming?.friendsInGame ?? []}
+              onJoin={openDestination}
+              onMessage={(userId) => props.onMessageFriend?.(userId)}
+              onOpenServer={props.onOpenServer}
+              quickReturn={gaming?.quickReturn ?? []}
+            />
+          )}
         </div>
       </AppShell>
       <Modal

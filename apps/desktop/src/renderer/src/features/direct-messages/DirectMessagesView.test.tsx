@@ -83,6 +83,6 @@ describe('direct messages UI', () => {
 
     rerender(<DirectMessagesView user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Анна', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} servers={[]} conversations={[conversation]} candidates={[]} activeConversationId={conversation.id} messages={[message]} messageDraft="" serverName="" busy={false} error={null} blockedParticipantIds={['user-2']} onHome={noop} onSwitchServer={noop} onConversation={noop} onCreateConversation={noop} onBlockParticipant={noop} onUnblockParticipant={noop} onMessageDraft={noop} onSendMessage={noop} onUpdateMessage={noop} onMessageReaction={noop} onDeleteMessage={noop} onDeleteAttachment={noop} onDownloadAttachment={noop} onServerName={noop} onCreateServer={noop} onSecurity={noop} onLogout={noop} />);
     expect(screen.getByText('Новые сообщения недоступны, пока вы его не разблокируете.')).toBeInTheDocument();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(document.querySelector('.vui-message-composer textarea')).toBeNull();
   });
 });

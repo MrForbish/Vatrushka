@@ -6,527 +6,118 @@
   background: var(--color-canvas);
 }
 
-* {
-  box-sizing: border-box;
-  scrollbar-color: var(--color-border-strong) var(--color-surface-1);
-  scrollbar-width: thin;
-}
+* { box-sizing: border-box; scrollbar-color: var(--color-border-strong) var(--color-surface-1); scrollbar-width: thin; }
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: var(--color-surface-1); }
 *::-webkit-scrollbar-thumb { border: 2px solid var(--color-surface-1); border-radius: var(--radius-round); background: var(--color-border-strong); }
 *::-webkit-scrollbar-thumb:hover { background: var(--color-text-muted); }
-html,
-body,
-#root {
-  width: 100%;
-  min-width: 1024px;
+html, body, #root { width: 100%; min-width: 1024px; height: 100%; min-height: 680px; margin: 0; overflow: hidden; }
+/* The unauthenticated Electron window is deliberately compact (520×630).
+   It must not inherit the desktop shell's 1024px minimum canvas. */
+html:has(.vui-auth-page),
+body:has(.vui-auth-page),
+#root:has(.vui-auth-page) {
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+}
+/* `getPlatform()` runs before React renders, so the Windows titlebar class can
+   briefly be present on the compact, frameless auth window.  Auth owns the
+   whole viewport and must not reserve the desktop titlebar strip. */
+body.desktopTitlebarOverlay:has(.vui-auth-page)::before { display: none; }
+body.desktopTitlebarOverlay:has(.vui-auth-page) #root {
   height: 100%;
-  min-height: 680px;
-  margin: 0;
-  overflow: hidden;
+  min-height: 0;
+  margin-top: 0;
 }
-body {
-  background: var(--color-canvas);
-}
-body.desktopTitlebarOverlay::before {
-  position: fixed;
-  z-index: 65;
-  top: 0;
-  right: 0;
-  left: 0;
-  height: 38px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  background: #090d18;
-  content: "";
-  -webkit-app-region: drag;
-}
-body.desktopTitlebarOverlay #root {
-  height: calc(100% - 38px);
-  min-height: 642px;
-  margin-top: 38px;
-}
-body.desktopTitlebarOverlay button,
-body.desktopTitlebarOverlay input,
-body.desktopTitlebarOverlay select,
-body.desktopTitlebarOverlay textarea,
-body.desktopTitlebarOverlay a {
-  -webkit-app-region: no-drag;
-}
-button,
-input,
-select {
-  font: inherit;
-}
-button {
-  color: inherit;
-}
-button,
-select {
-  cursor: pointer;
-}
-button:focus-visible,
-input:not(.vui-input):focus-visible,
-select:focus-visible {
-  outline: 2px solid var(--color-focus);
-  outline-offset: 2px;
-}
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.5;
-}
+body { background: var(--color-canvas); }
+html:has(.vui-auth-page),
+body:has(.vui-auth-page),
+#root:has(.vui-auth-page) { background: transparent; }
+body.desktopTitlebarOverlay::before { position: fixed; z-index: 65; top: 0; right: 0; left: 0; height: 38px; border-bottom: 1px solid var(--color-border-subtle); background: #090d18; content: ""; -webkit-app-region: drag; }
+body.desktopTitlebarOverlay #root { height: calc(100% - 38px); min-height: 642px; margin-top: 38px; }
+body.desktopTitlebarOverlay button, body.desktopTitlebarOverlay input, body.desktopTitlebarOverlay select, body.desktopTitlebarOverlay textarea, body.desktopTitlebarOverlay a { -webkit-app-region: no-drag; }
+button, input, select { font: inherit; }
+button, select { cursor: pointer; }
+button:focus-visible, input:not(.vui-input):focus-visible, select:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+button:disabled { cursor: not-allowed; opacity: .5; }
 
-.secondaryButton {
-  min-height: var(--control-height-md);
-  padding: 0 var(--space-4);
-  border: 1px solid var(--color-border-default);
+.secondaryButton { min-height: var(--control-height-md); padding: 0 var(--space-4); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-2); color: var(--color-text-primary); font: var(--text-label-md); }
+.secondaryButton:hover { border-color: var(--color-border-strong); background: var(--color-surface-3); }
+.bootScreen { display: flex; width: 100%; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: var(--space-4); background: var(--color-canvas); color: var(--color-text-secondary); font: var(--text-body-md); }
+.pulseLogo { display: grid; width: 56px; height: 56px; place-items: center; border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); background: var(--gradient-brand); box-shadow: 0 14px 42px var(--color-primary-soft); animation: pulse 1.6s ease-in-out infinite; }
+.pulseLogo > span { width: 10px; height: 6px; margin: -15px 0 0 -10px; border-radius: var(--radius-round); background: rgb(255 255 255 / 50%); transform: rotate(-24deg); }
+@keyframes pulse { 50% { transform: scale(.94); opacity: .75; } }
+
+/* UI Kit auth: a single calm card replaces the former split marketing/form layout. */
+.vui-auth-page { display: grid; min-width: 0; min-height: 680px; height: 100vh; padding: clamp(30px, 6vw, 96px); place-items: center; overflow: auto; background: var(--color-canvas); }
+body.desktopTitlebarOverlay .vui-auth-page { min-height: 642px; height: 100%; }
+.vui-auth-card { display: grid; width: min(520px, 100%); gap: var(--space-5); padding: clamp(28px, 4vw, 48px); border: 1px solid rgb(130 109 228 / 32%); border-radius: 22px; background: linear-gradient(145deg, rgb(16 21 38 / 96%), rgb(10 14 27 / 98%)); box-shadow: 0 30px 90px rgb(0 0 0 / 42%), inset 0 1px rgb(255 255 255 / 6%); }
+.vui-auth-card__brand { display: flex; align-items: center; justify-content: flex-start; gap: var(--space-3); padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-border-subtle); -webkit-app-region: drag; }
+.vui-auth-brand { display: flex; align-items: center; gap: var(--space-3); color: var(--color-text-primary); font-family: var(--font-display); font-size: 18px; font-weight: 800; letter-spacing: .05em; }
+.vui-auth-brand > img { width: 42px; height: 42px; filter: drop-shadow(0 8px 18px rgb(102 69 255 / 36%)); }
+.vui-auth-window-close { display: grid; width: 32px; height: 32px; margin-left: auto; padding: 0; place-items: center; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-muted); -webkit-app-region: no-drag; }
+.vui-auth-window-close:hover { border-color: color-mix(in srgb, var(--color-danger), transparent 58%); background: var(--color-danger-soft); color: var(--color-danger); }
+.vui-auth-window-close:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.vui-auth-card__window { color: var(--color-text-muted); font: var(--text-caption); }
+.vui-auth-card__heading > span { color: var(--color-cyan); font: var(--text-overline); letter-spacing: .14em; text-transform: uppercase; }
+.vui-auth-card__heading h1 { margin: var(--space-2) 0 var(--space-3); color: #f8f8ff; font: var(--text-display-md); letter-spacing: -.035em; }
+.vui-auth-card__heading p { margin: 0; color: var(--color-text-secondary); font: var(--text-body-md); line-height: 1.6; }
+.vui-auth-card > .vui-segmented { display: flex; width: 100%; padding: 4px; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-surface-0); }
+.vui-auth-card > .vui-segmented > button { flex: 1; min-height: 42px; border-radius: var(--radius-sm); }
+.vui-auth-form { display: grid; gap: var(--space-4); }
+.vui-auth-form .vui-field, .vui-auth-form .vui-input-frame { width: 100%; min-width: 0; }
+.vui-auth-form__options { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 36px; }
+.vui-auth-form__options .vui-choice { padding: 0; }
+.vui-auth-form__options > button, .vui-auth-links button { min-height: 32px; padding: 0 var(--space-2); border: 0; background: transparent; color: #b97cff; font: var(--text-body-sm); }
+.vui-auth-form__options > button:hover, .vui-auth-links button:hover:not(:disabled) { color: var(--color-cyan); }
+.vui-auth-otp { font: var(--text-heading-lg); letter-spacing: .32em; text-align: center; }
+.vui-auth-submit { width: 100%; margin-top: var(--space-1); box-shadow: 0 14px 38px rgb(103 60 240 / 30%); }
+.vui-auth-error, .vui-auth-notice { display: flex; align-items: flex-start; gap: var(--space-2); padding: var(--space-3); border-radius: var(--radius-sm); font: var(--text-body-md); }
+.vui-auth-error { border: 1px solid color-mix(in srgb, var(--color-danger), transparent 45%); background: var(--color-danger-soft); color: var(--color-danger); }
+.vui-auth-notice { border: 1px solid color-mix(in srgb, var(--color-success), transparent 45%); background: color-mix(in srgb, var(--color-success), transparent 88%); color: var(--color-success); }
+.vui-voice-leave-notice {
+  position: fixed;
+  z-index: var(--z-tooltip);
+  right: var(--space-5);
+  bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--color-success), transparent 45%);
   border-radius: var(--radius-sm);
   background: var(--color-surface-2);
+  box-shadow: var(--shadow-float);
   color: var(--color-text-primary);
   font: var(--text-label-md);
 }
-.secondaryButton:hover {
-  border-color: var(--color-border-strong);
-  background: var(--color-surface-3);
-}
+.vui-auth-links { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2); }
+.vui-auth-security { display: flex; align-items: center; justify-content: center; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--color-border-subtle); color: var(--color-text-muted); font: var(--text-caption); text-align: center; }
 
-.bootScreen {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-4);
-  background: var(--color-canvas);
-  color: var(--color-text-secondary);
-  font: var(--text-body-md);
-}
-.pulseLogo {
-  width: 56px;
-  height: 56px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--color-border-strong);
-  border-radius: var(--radius-lg);
-  background: var(--gradient-brand);
-  box-shadow: 0 14px 42px var(--color-primary-soft);
-  animation: pulse 1.6s ease-in-out infinite;
-}
-.pulseLogo > span {
-  width: 10px;
-  height: 6px;
-  margin: -15px 0 0 -10px;
-  border-radius: var(--radius-round);
-  background: rgba(255, 255, 255, 0.5);
-  transform: rotate(-24deg);
-}
-@keyframes pulse {
-  50% {
-    transform: scale(0.94);
-    opacity: 0.75;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
-/* Current design-system pages. */
-.vui-auth-page {
-  display: grid;
-  grid-template-columns: minmax(470px, 1.1fr) minmax(500px, 0.9fr);
-  width: 100%;
-  height: 100vh;
-  min-height: 680px;
-  overflow: hidden;
-  background: var(--color-canvas);
-  color: var(--color-text-primary);
-  font-family: var(--font-ui);
-}
-body.desktopTitlebarOverlay .vui-auth-page {
-  height: 100%;
-  min-height: 642px;
-}
-.vui-auth-visual {
-  position: relative;
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: var(--space-8);
-  min-width: 0;
-  padding: clamp(34px, 5vw, 72px);
-  overflow: hidden;
-  border-right: 1px solid var(--color-border-subtle);
-  background:
-    radial-gradient(
-      circle at 18% 18%,
-      color-mix(in srgb, var(--color-primary), transparent 78%),
-      transparent 34%
-    ),
-    radial-gradient(
-      circle at 84% 75%,
-      color-mix(in srgb, var(--color-cyan), transparent 86%),
-      transparent 36%
-    ),
-    var(--color-surface-0);
-}
-.vui-auth-visual::after {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(
-      color-mix(in srgb, var(--color-border-subtle), transparent 35%) 1px,
-      transparent 1px
-    ),
-    linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--color-border-subtle), transparent 35%) 1px,
-      transparent 1px
-    );
-  background-size: 52px 52px;
-  mask-image: linear-gradient(to bottom, transparent, black 28%, transparent);
-  opacity: 0.18;
-  content: "";
-}
-.vui-auth-brand {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  font: var(--text-heading-sm);
-  letter-spacing: 0.13em;
-}
-.vui-auth-visual__copy {
-  position: relative;
-  z-index: 1;
-  align-self: center;
-  max-width: 720px;
-}
-.vui-auth-visual__copy h2 {
-  margin: var(--space-5) 0 var(--space-4);
-  font: var(--text-display-lg);
-  letter-spacing: -0.045em;
-}
-.vui-auth-visual__copy h2 em {
-  color: var(--color-cyan);
-  font-style: normal;
-}
-.vui-auth-visual__copy p {
-  max-width: 590px;
-  margin: 0;
-  color: var(--color-text-secondary);
-  font: var(--text-body-lg);
-  line-height: 1.7;
-}
-.vui-auth-surface {
-  display: grid;
-  place-items: center;
-  min-width: 0;
-  padding: clamp(32px, 5vw, 72px);
-  overflow-y: auto;
-  background:
-    radial-gradient(
-      circle at 50% 0,
-      var(--color-primary-soft),
-      transparent 33%
-    ),
-    var(--color-surface-1);
-}
-.vui-auth-card {
-  width: min(440px, 100%);
-}
-.vui-auth-card__mobile-brand {
-  display: none;
-}
-.vui-auth-card__heading > span {
-  color: var(--color-cyan);
-  font: var(--text-overline);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-.vui-auth-card__heading h1 {
-  margin: var(--space-2) 0 var(--space-3);
-  font: var(--text-display-md);
-  letter-spacing: -0.035em;
-}
-.vui-auth-card__heading p {
-  margin: 0 0 var(--space-6);
-  color: var(--color-text-secondary);
-  font: var(--text-body-md);
-  line-height: 1.65;
-}
-.vui-auth-card > .vui-segmented {
-  display: flex;
-  width: 100%;
-  margin-bottom: var(--space-5);
-}
-.vui-auth-card > .vui-segmented > button {
-  flex: 1;
-}
-.vui-auth-form {
-  display: grid;
-  gap: var(--space-4);
-}
-.vui-auth-form .vui-field,
-.vui-auth-form .vui-input-frame {
-  width: 100%;
-  min-width: 0;
-}
-.vui-auth-otp {
-  font: var(--text-heading-lg);
-  letter-spacing: 0.32em;
-  text-align: center;
-}
-.vui-auth-submit {
-  width: 100%;
-  margin-top: var(--space-1);
-}
-.vui-auth-error {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-danger), transparent 45%);
-  border-radius: var(--radius-sm);
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-  font: var(--text-body-md);
-}
-.vui-auth-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid color-mix(in srgb, var(--color-success), transparent 45%);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-success), transparent 88%);
-  color: var(--color-success);
-  font: var(--text-body-md);
-}
-.vui-auth-links {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: var(--space-2);
-  margin-top: var(--space-4);
-}
-.vui-auth-links button {
-  min-height: 30px;
-  padding: 0 var(--space-2);
-  border: 0;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font: var(--text-caption);
-}
-.vui-auth-links button:hover:not(:disabled) {
-  color: var(--color-cyan);
-}
-.vui-auth-security {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  margin-top: var(--space-7);
-  color: var(--color-text-muted);
-  font: var(--text-caption);
-  text-align: center;
-}
-@media (max-width: 1180px) {
+@media (max-height: 740px) { .vui-auth-page { padding-block: 24px; } .vui-auth-card { gap: var(--space-4); padding: 28px; } .vui-auth-card__heading h1 { font: var(--text-heading-xl); } }
+@media (max-width: 1100px) { .vui-auth-page { padding-inline: 40px; } }
+@media (max-width: 700px) {
   .vui-auth-page {
-    grid-template-columns: minmax(400px, 0.85fr) minmax(520px, 1.15fr);
+    min-width: 0;
+    min-height: 0;
+    height: 100vh;
+    padding: 4px;
+    overflow: hidden;
+    background: transparent;
+  }
+  .vui-auth-card {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    gap: var(--space-4);
+    padding: 28px 32px 24px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-radius: 22px;
+    background: linear-gradient(145deg, rgb(16 21 38 / 100%), rgb(10 14 27 / 100%));
+  }
+  .vui-auth-card__brand {
+    min-height: 59px;
+    padding-bottom: var(--space-4);
   }
 }
-
-/* Gaming authentication shell. */
-.vui-auth-page {
-  grid-template-columns: minmax(580px, 3fr) minmax(480px, 2fr);
-  background: #050917;
-}
-.vui-auth-visual {
-  grid-template-rows: auto 1fr;
-  gap: 0;
-  padding: clamp(30px, 4.2vw, 68px);
-  isolation: isolate;
-  background: #050817;
-}
-.vui-auth-visual::before {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  background:
-    linear-gradient(90deg, rgb(3 7 20 / 28%) 0%, transparent 58%),
-    linear-gradient(to bottom, rgb(3 7 20 / 4%) 28%, rgb(3 7 20 / 82%) 76%, #030714 100%);
-  content: "";
-}
-.vui-auth-visual::after {
-  z-index: 0;
-  inset: auto 0 0;
-  height: 46%;
-  background: radial-gradient(ellipse at 42% 100%, rgb(91 52 241 / 22%), transparent 64%);
-  mask-image: none;
-  opacity: 1;
-}
-.vui-auth-brand {
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-}
-.vui-auth-brand > img {
-  flex: 0 0 auto;
-  filter: drop-shadow(0 8px 18px rgb(102 69 255 / 36%));
-}
-.vui-auth-game-art {
-  position: absolute;
-  z-index: -2;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: 62% center;
-  opacity: 0.94;
-}
-.vui-auth-visual__copy {
-  align-self: end;
-  max-width: 760px;
-  padding-bottom: clamp(12px, 4vh, 54px);
-}
-.vui-auth-kicker {
-  display: block;
-  color: var(--color-cyan);
-  font: var(--text-overline);
-  letter-spacing: 0.17em;
-  text-transform: uppercase;
-}
-.vui-auth-visual__copy h2 {
-  max-width: 720px;
-  margin: var(--space-4) 0 var(--space-4);
-  color: #f7f8ff;
-  font-family: var(--font-display);
-  font-size: clamp(38px, 4.4vw, 76px);
-  font-weight: 850;
-  line-height: 1.03;
-  letter-spacing: -0.055em;
-  text-transform: uppercase;
-  text-shadow: 0 9px 36px rgb(0 0 0 / 52%);
-}
-.vui-auth-visual__copy h2 em {
-  background: linear-gradient(90deg, #28d9ff, #7e83ff 84%);
-  background-clip: text;
-  color: transparent;
-}
-.vui-auth-visual__copy p {
-  color: rgb(218 224 246 / 75%);
-  font-size: clamp(15px, 1.25vw, 20px);
-}
-.vui-auth-surface {
-  padding: clamp(36px, 5vw, 82px);
-  border-left: 1px solid rgb(111 105 173 / 22%);
-  background:
-    radial-gradient(circle at 50% 42%, rgb(83 51 225 / 14%), transparent 38%),
-    linear-gradient(155deg, #070b1a, #080d20 68%, #060916);
-}
-.vui-auth-card {
-  width: min(470px, 100%);
-}
-.vui-auth-card__heading > span {
-  color: var(--color-cyan);
-}
-.vui-auth-card__heading h1 {
-  margin-top: var(--space-3);
-  color: #f8f8ff;
-  font: var(--text-display-md);
-}
-.vui-auth-card__heading p {
-  color: rgb(196 203 228 / 78%);
-}
-.vui-auth-card > .vui-segmented {
-  padding: 0;
-  border: 0;
-  border-bottom: 1px solid var(--color-border-subtle);
-  border-radius: 0;
-  background: transparent;
-}
-.vui-auth-card > .vui-segmented > button {
-  min-height: 44px;
-  border-radius: 0;
-  background: transparent;
-  color: var(--color-text-secondary);
-}
-.vui-auth-card > .vui-segmented > button[aria-pressed="true"] {
-  border-bottom: 2px solid #a562ff;
-  color: #b97cff;
-  box-shadow: 0 8px 20px rgb(110 63 243 / 12%);
-}
-.vui-auth-form__options {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  min-height: 36px;
-}
-.vui-auth-form__options .vui-choice {
-  padding: 0;
-}
-.vui-auth-form__options .vui-choice__copy strong {
-  color: var(--color-text-secondary);
-  font: var(--text-body-sm);
-  font-weight: 500;
-}
-.vui-auth-form__options > button {
-  min-height: 32px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: #b97cff;
-  font: var(--text-body-sm);
-}
-.vui-auth-form__options > button:hover {
-  color: var(--color-cyan);
-}
-.vui-auth-submit {
-  box-shadow: 0 14px 38px rgb(103 60 240 / 30%);
-}
-
-@media (max-width: 1180px) {
-  .vui-auth-page {
-    grid-template-columns: minmax(520px, 1.08fr) minmax(500px, 0.92fr);
-  }
-  .vui-auth-game-art {
-    object-position: 66% center;
-  }
-  .vui-auth-visual__copy h2 {
-    font-size: clamp(36px, 4.5vw, 58px);
-  }
-  .vui-auth-surface {
-    padding-inline: 42px;
-  }
-}
-
-@media (max-height: 740px) {
-  .vui-auth-visual,
-  .vui-auth-surface {
-    padding-block: 28px;
-  }
-  .vui-auth-game-art {
-    object-position: 64% 46%;
-  }
-  .vui-auth-card__heading p {
-    margin-bottom: var(--space-4);
-    line-height: 1.45;
-  }
-  .vui-auth-form {
-    gap: var(--space-3);
-  }
-  .vui-auth-security {
-    margin-top: var(--space-4);
-  }
-}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }

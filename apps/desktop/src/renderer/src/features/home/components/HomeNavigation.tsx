@@ -1,3 +1,5 @@
+import { type ReactNode } from "react";
+
 import type {
   EffectivePresenceStatus,
   PresencePreference,
@@ -6,19 +8,14 @@ import type {
 } from "@vatrushka/shared";
 
 import {
-  Badge,
-  BrandLockup,
-  Button,
-  Icon,
   UserProfileDock,
-  WorkspaceCard,
+  GlobalSidebar,
   type WorkspaceNavigationItem,
 } from "../../../ui";
 
 export interface HomeNavigationProps {
   user: PublicUser;
   servers: ServerSummary[];
-  directUnreadCount: number;
   onCreate: () => void;
   onDirectMessages?: (() => void) | undefined;
   onOpenServer: (serverId: string) => void;
@@ -27,10 +24,11 @@ export interface HomeNavigationProps {
   onStatus?: ((status: PresencePreference) => void | Promise<void>) | undefined;
   status?: EffectivePresenceStatus | undefined;
   networkAvailable?: boolean;
+  profileCoverUrl?: string | null | undefined;
+  voiceProfileConnection?: ReactNode | undefined;
 }
 
 export function HomeNavigation({
-  directUnreadCount,
   networkAvailable = true,
   onCreate,
   onDirectMessages,
@@ -38,110 +36,47 @@ export function HomeNavigation({
   onOpenServer,
   onSecurity,
   onStatus,
+  profileCoverUrl,
   servers,
   status,
   user,
+  voiceProfileConnection,
 }: HomeNavigationProps): React.JSX.Element {
   const name = user.displayName ?? user.email;
-  const workspaces: WorkspaceNavigationItem[] = servers.map((server) => {
-    const dashboardServer = server as ServerSummary & {
-      unreadCount?: number;
-      activeVoiceCount?: number;
-    };
-    return {
-      id: server.id,
-      name: server.name,
-      memberCount: server.memberCount,
-      iconUrl: server.iconUrl ?? null,
-      bannerUrl: server.bannerUrl ?? null,
-      accentColor: server.accentColor ?? null,
-      unread: (dashboardServer.unreadCount ?? 0) > 0,
-      activeVoice: (dashboardServer.activeVoiceCount ?? 0) > 0,
-    };
-  });
+  const serverCards: WorkspaceNavigationItem[] = servers.map((server) => ({
+    id: server.id,
+    name: server.name,
+    memberCount: server.memberCount,
+    iconUrl: server.iconUrl ?? null,
+    bannerUrl: server.bannerUrl ?? null,
+    accentColor: server.accentColor ?? null,
+  }));
   return (
-    <aside className="home-navigation" aria-label="Основная навигация">
-      <div className="home-navigation__brand">
-        <BrandLockup />
-      </div>
-      <nav className="home-navigation__primary" aria-label="Разделы приложения">
-        <button aria-current="page" data-active="true" type="button">
-          <Icon name="home" size={18} />
-          <span>Главная</span>
-        </button>
-        <button
-          disabled={!networkAvailable || onDirectMessages === undefined}
-          onClick={onDirectMessages}
-          type="button"
-        >
-          <Icon name="message" size={18} />
-          <span>Личные сообщения</span>
-          {directUnreadCount === 0 ? null : (
-            <Badge tone="danger">
-              {directUnreadCount > 99 ? "99+" : directUnreadCount}
-            </Badge>
-          )}
-        </button>
-      </nav>
-      <div className="home-navigation__heading">
-        <span>Серверы</span>
-        <button
-          aria-label="Создать сервер"
-          disabled={!networkAvailable}
-          onClick={onCreate}
-          type="button"
-        >
-          <Icon name="plus" size={16} />
-        </button>
-      </div>
-      {workspaces.length === 0 ? (
-        <div className="home-navigation__empty">
-          <span>
-            <Icon name="users" size={22} />
-          </span>
-          <strong>У вас пока нет серверов</strong>
-          <p>Создайте первый сервер или примите приглашение по ссылке.</p>
-          <Button disabled={!networkAvailable} onClick={onCreate} size="sm">
-            Создать сервер
-          </Button>
-        </div>
-      ) : (
-        <nav className="home-navigation__servers" aria-label="Серверы">
-          {workspaces.map((workspace) => (
-            <WorkspaceCard
-              disabled={!networkAvailable}
-              key={workspace.id}
-              onSelect={onOpenServer}
-              workspace={workspace}
-            />
-          ))}
-        </nav>
-      )}
-      {servers.length === 0 ? (
-        <div className="home-navigation__start">
-          <Icon name="sparkles" size={17} />
-          <div>
-            <strong>Готовы начать?</strong>
-            <small>Создайте своё первое пространство.</small>
-          </div>
-        </div>
-      ) : null}
-      <div className="home-navigation__create">
-        <button disabled={!networkAvailable} onClick={onCreate} type="button">
-          <Icon name="plus" size={17} />
-          Создать сервер
-        </button>
-      </div>
-      <UserProfileDock
+    <GlobalSidebar
+      activeSection="home"
+      disabled={!networkAvailable}
+      onCommunity={() => {
+        const firstServer = servers[0];
+        if (firstServer) onOpenServer(firstServer.id);
+        else onCreate();
+      }}
+      onDirectMessages={onDirectMessages ?? (() => undefined)}
+      onHome={() => undefined}
+      onServerSelect={onOpenServer}
+      profile={<UserProfileDock
         avatarUrl={user.avatarUrl ?? null}
+        coverUrl={profileCoverUrl}
         email={user.email}
         founder={user.platformRole === "owner"}
         name={name}
+        enableTilt
         onLogout={onLogout}
         onSecurity={onSecurity}
         {...(onStatus ? { onStatus } : {})}
         {...(status ? { status } : {})}
-      />
-    </aside>
+        voiceConnection={voiceProfileConnection}
+      />}
+      servers={serverCards}
+    />
   );
 }

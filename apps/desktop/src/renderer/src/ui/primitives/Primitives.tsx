@@ -508,35 +508,69 @@ export function Tooltip({ children, content }: TooltipProps): React.JSX.Element 
 }
 
 export interface PopoverProps {
+  className?: string;
   label: string;
   trigger: ReactNode;
-  children: ReactNode;
+  children: ReactNode | ((actions: { close(): void }) => ReactNode);
   defaultOpen?: boolean;
+  placement?: 'bottom-end' | 'top-end';
 }
 
-export function Popover({ children, defaultOpen = false, label, trigger }: PopoverProps): React.JSX.Element {
+export function Popover({ children, className, defaultOpen = false, label, placement = 'bottom-end', trigger }: PopoverProps): React.JSX.Element {
   const [open, setOpen] = useState(defaultOpen);
   const id = useId();
   const anchorRef = useRef<HTMLSpanElement>(null);
+  const dialogRef = useRef<HTMLSpanElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [position, setPosition] = useState({ top: 8, left: 8 });
   useEffect(() => {
     if (!open) return undefined;
     const onPointerDown = (event: PointerEvent): void => {
-      if (event.target instanceof Node && !anchorRef.current?.contains(event.target)) setOpen(false);
+      if (
+        event.target instanceof Node &&
+        !anchorRef.current?.contains(event.target) &&
+        !dialogRef.current?.contains(event.target)
+      ) setOpen(false);
     };
     const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      setOpen(false);
+      requestAnimationFrame(() => triggerRef.current?.focus());
     };
+    const updatePosition = (): void => {
+      const rect = anchorRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const popoverRect = dialogRef.current?.getBoundingClientRect();
+      const popoverWidth = popoverRect?.width ?? 260;
+      const popoverHeight = popoverRect?.height ?? 0;
+      setPosition({
+        top:
+          placement === 'top-end'
+            ? Math.max(8, rect.top - popoverHeight - 8)
+            : Math.min(window.innerHeight - popoverHeight - 8, rect.bottom + 8),
+        left: Math.min(
+          window.innerWidth - popoverWidth - 8,
+          Math.max(8, rect.right - popoverWidth),
+        ),
+      });
+    };
+    updatePosition();
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKeyDown);
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
     return () => {
       document.removeEventListener('pointerdown', onPointerDown);
       document.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
     };
-  }, [open]);
+  }, [open, placement]);
   return (
     <span className="vui-popover-anchor" ref={anchorRef}>
-      <button aria-controls={id} aria-expanded={open} className="vui-popover-trigger" onClick={() => setOpen((current) => !current)} type="button">{trigger}</button>
-      {open ? <span aria-label={label} className="vui-popover" id={id} role="dialog">{children}</span> : null}
+      <button aria-controls={id} aria-expanded={open} className="vui-popover-trigger" onClick={() => setOpen((current) => !current)} ref={triggerRef} type="button">{trigger}</button>
+      {open ? createPortal(<span aria-label={label} className={cx('vui-popover', className)} id={id} ref={dialogRef} role="dialog" style={position}>{typeof children === 'function' ? children({ close: () => setOpen(false) }) : children}</span>, document.body) : null}
     </span>
   );
 }

@@ -1,5 +1,5 @@
 param(
-  [string]$Source = (Join-Path $PSScriptRoot "..\src\renderer\src\assets\brand-mark.png"),
+  [string]$Source = (Join-Path $PSScriptRoot "..\src\renderer\src\assets\vatrushka-logo.png"),
   [string]$Destination = (Join-Path $PSScriptRoot "..\build\icon.ico")
 )
 

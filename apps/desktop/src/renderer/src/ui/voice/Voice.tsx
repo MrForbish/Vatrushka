@@ -42,6 +42,8 @@ export interface VoiceParticipantTileProps {
   onLocalMute?: (id: string, muted: boolean) => void;
   onVolume?: (id: string, volume: number) => void;
   showControls?: boolean;
+  showAudioLevel?: boolean;
+  showMicStatusWhenMutedOnly?: boolean;
 }
 
 export function VoiceParticipantTile({
@@ -52,6 +54,8 @@ export function VoiceParticipantTile({
   onVolume,
   participant,
   showControls = true,
+  showAudioLevel = true,
+  showMicStatusWhenMutedOnly = false,
 }: VoiceParticipantTileProps): React.JSX.Element {
   const audioLevel = Math.max(0, Math.min(1, participant.audioLevel ?? 0));
   const volume =
@@ -119,21 +123,23 @@ export function VoiceParticipantTile({
         </small>
       </div>
       <div className="vui-voice-participant__signals">
-        <AudioLevelMeter
-          label={`Уровень голоса ${participant.name}`}
-          segments={featured ? 16 : 8}
-          value={audioLevel}
-        />
+        {showAudioLevel ? (
+          <AudioLevelMeter
+            label={`Уровень голоса ${participant.name}`}
+            segments={featured ? 16 : 8}
+            value={audioLevel}
+          />
+        ) : null}
         {participant.isScreenSharing === true ? (
           <Badge tone="success">
             <Icon name="screen" size={12} /> LIVE
           </Badge>
         ) : null}
-        <span
+        {showMicStatusWhenMutedOnly && participant.isMuted !== true && participant.isDeafened !== true
+          ? null
+          : <span
           aria-label={
-            participant.isDeafened === true
-              ? "Входящий звук отключён"
-              : participant.isMuted === true
+            participant.isMuted === true || participant.isDeafened === true
               ? "Микрофон выключен"
               : "Микрофон включён"
           }
@@ -141,15 +147,13 @@ export function VoiceParticipantTile({
         >
           <Icon
             name={
-              participant.isDeafened === true
-                ? "volumeOff"
-                : participant.isMuted === true
+              participant.isMuted === true || participant.isDeafened === true
                   ? "micOff"
                   : "mic"
             }
             size={17}
           />
-        </span>
+        </span>}
       </div>
       {hasMenu ? (
         <button

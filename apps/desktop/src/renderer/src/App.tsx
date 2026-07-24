@@ -70,10 +70,10 @@ import { ServerView } from "./features/servers/index.js";
 import {
   diffRemoteParticipants,
   RoomView,
-  VoiceConnectionPanel,
   VoiceCuePlayer,
   type VoiceCue,
 } from "./features/voice/index.js";
+import { VoiceProfileConnection } from "./ui";
 import {
   applyVoiceEvent,
   voiceStateFromSnapshot,
@@ -391,6 +391,7 @@ export default function App(): ReactNode {
   const navigate = useNavigate();
   const [screen, setScreen] = useState<Screen>("boot");
   const [user, setUser] = useState<PublicUser | null>(null);
+  const [profileCoverUrl, setProfileCoverUrl] = useState<string | null>(null);
   const [presence, setPresence] = useState<UserPresence | null>(null);
   const userRef = useRef<PublicUser | null>(null);
   const [authMode, setAuthMode] = useState<"password" | "register" | "reset">(
@@ -433,6 +434,7 @@ export default function App(): ReactNode {
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
+  const [voiceLeaveNotice, setVoiceLeaveNotice] = useState<string | null>(null);
   const [sources, setSources] = useState<DesktopSourceInfo[] | null>(null);
   const [settingsServerLoading, setSettingsServerLoading] = useState(false);
   const [settingsServerError, setSettingsServerError] = useState<string | null>(
@@ -896,15 +898,25 @@ export default function App(): ReactNode {
   };
 
   useEffect(() => {
-    if (user === null) return;
+    if (user === null) {
+      setProfileCoverUrl(null);
+      return;
+    }
     let active = true;
     void apiClient
       .getUserProfileSettings()
       .then((profile) => {
         if (!active) return;
+        setProfileCoverUrl(profile.coverUrl ?? null);
         setUser((current) => {
           if (current === null || current.id !== user.id) return current;
-          const next = { ...current, avatarUrl: profile.avatarUrl };
+          // Profile settings may omit media while the authenticated user payload
+          // already contains a usable URL. Do not turn a loaded avatar into a
+          // fallback merely because this auxiliary request has no avatar value.
+          const next = {
+            ...current,
+            avatarUrl: profile.avatarUrl ?? current.avatarUrl ?? null,
+          };
           userRef.current = next;
           return next;
         });
@@ -2616,6 +2628,7 @@ export default function App(): ReactNode {
 
   const leaveRoom = (): void => {
     void run(async () => {
+      const wasScreenSharing = mediaSnapshot.isScreenSharing;
       if (connection !== null) {
         playVoiceCue("leave");
         void apiClient
@@ -2627,6 +2640,10 @@ export default function App(): ReactNode {
       await media.disconnect();
       setConnection(null);
       setConnectedVoiceChannelName("");
+      if (wasScreenSharing) {
+        setVoiceLeaveNotice("Демонстрация остановлена");
+        window.setTimeout(() => setVoiceLeaveNotice(null), 2_500);
+      }
       setScreen(serverDetail ? "server" : userRef.current ? "home" : "auth");
     });
   };
@@ -2777,6 +2794,7 @@ export default function App(): ReactNode {
     else void apply().catch((caught) => setError(userMessage(caught)));
   };
 
+
   const setScreenShareVolume = (value: number): void => {
     const next = { ...settings, volume: value };
     setSettings(next);
@@ -2846,17 +2864,6 @@ export default function App(): ReactNode {
         throw caught;
       }
     });
-  };
-
-  const copyInvite = async (): Promise<void> => {
-    if (!connection)
-      throw new Error("Сервер голосового канала недоступен");
-    const inviteServer =
-      serverDetail?.id === connection.serverId
-        ? serverDetail
-        : await apiClient.getServer(connection.serverId);
-    const text = `Присоединяйтесь к серверу «${inviteServer.name}»\n${inviteServer.inviteUrl}`;
-    await window.desktop.copyToClipboard(text);
   };
 
   const updateNotificationSettings = (
@@ -3059,6 +3066,11 @@ export default function App(): ReactNode {
   const withNotifications = (content: ReactNode): ReactNode => (
     <>
       {content}
+      {voiceLeaveNotice ? (
+        <div aria-live="polite" className="vui-voice-leave-notice" role="status">
+          {voiceLeaveNotice}
+        </div>
+      ) : null}
       {user ? (
         <SystemToolbar>
           <NotificationCenter
@@ -3203,14 +3215,12 @@ export default function App(): ReactNode {
         void run(() => media.setDeafened(!mediaSnapshot.isDeafened))
       }
       onShare={showSourcePicker}
-      onCopy={copyInvite}
       onLeave={leaveRoom}
       onKick={(identity) =>
         void run(() => apiClient.kickMediaParticipant(connection, identity))
       }
       onMicrophone={(value) => persistDevice("microphoneDeviceId", value)}
       onOutput={(value) => persistDevice("outputDeviceId", value)}
-      onRefreshDevices={() => void run(() => refreshDevices(true))}
       onStartAudio={() => void media.startAudio()}
       onScreenAudioMute={() =>
         media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)
@@ -3227,21 +3237,28 @@ export default function App(): ReactNode {
       }
     />
   ) : undefined;
-  const voiceConnectionPanel = connection ? (
-    <VoiceConnectionPanel
-      canShare={
-        connection.canStream !== false &&
-        mediaSnapshot.connectionState === ConnectionState.Connected
-      }
+  const voiceProfileConnection = connection ? (
+    <VoiceProfileConnection
       channelName={connectedVoiceChannelName}
-      snapshot={mediaSnapshot}
-      onLeave={leaveRoom}
-      onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))}
-      onDeafen={() =>
+      deafened={mediaSnapshot.isDeafened}
+      microphoneMuted={mediaSnapshot.isMuted}
+      onDeafenToggle={() =>
         void run(() => media.setDeafened(!mediaSnapshot.isDeafened))
       }
+      onLeave={leaveRoom}
+      onMicrophoneToggle={() =>
+        void run(() => media.setMuted(!mediaSnapshot.isMuted))
+      }
       onOpen={openConnectedVoice}
-      onShare={showSourcePicker}
+      participantCount={mediaSnapshot.participants.length}
+      state={
+        mediaSnapshot.connectionState === ConnectionState.Connected
+          ? "connected"
+          : mediaSnapshot.connectionState === ConnectionState.Reconnecting ||
+              mediaSnapshot.connectionState === ConnectionState.SignalReconnecting
+            ? "reconnecting"
+            : "connecting"
+      }
     />
   ) : undefined;
   const openUserSettings = (): void => {
@@ -3457,8 +3474,10 @@ export default function App(): ReactNode {
           }
           servers={servers}
           settings={settings}
+          profileCoverUrl={profileCoverUrl}
           user={user}
           voiceConnected={connection !== null}
+          voiceProfileConnection={voiceProfileConnection}
         />
       </Suspense>,
     );
@@ -3509,6 +3528,8 @@ export default function App(): ReactNode {
         onJoinVoice={joinVoiceFromHome}
         onMessageFriend={messageFriendFromHome}
         onDirectMessages={openDirectMessages}
+        profileCoverUrl={profileCoverUrl}
+        voiceProfileConnection={voiceProfileConnection}
       />,
     );
   if (screen === "server" && user && serverDetail)
@@ -3540,7 +3561,38 @@ export default function App(): ReactNode {
           }
           connectedVoiceServerId={connection?.serverId}
           voiceStage={voiceStage}
-          voiceConnectionPanel={voiceConnectionPanel}
+          voiceProfileConnection={voiceProfileConnection}
+          voiceConnectionStatus={
+            connection === null
+              ? undefined
+              : (
+                  <span
+                    className="vui-server-topbar__connection-status"
+                    data-state={
+                      mediaSnapshot.connectionState === ConnectionState.Connected
+                        ? "connected"
+                        : mediaSnapshot.connectionState === ConnectionState.Reconnecting ||
+                            mediaSnapshot.connectionState === ConnectionState.SignalReconnecting
+                          ? "reconnecting"
+                          : "disconnected"
+                    }
+                    role="status"
+                  >
+                    <i aria-hidden="true" />
+                    <strong>
+                      {mediaSnapshot.connectionState === ConnectionState.Connected
+                        ? "Вы подключены"
+                        : mediaSnapshot.connectionState === ConnectionState.Reconnecting ||
+                            mediaSnapshot.connectionState === ConnectionState.SignalReconnecting
+                          ? "Переподключение…"
+                          : "Подключение…"}
+                    </strong>
+                    {mediaSnapshot.pingMs === null || mediaSnapshot.pingMs === undefined ? null : (
+                      <small>{mediaSnapshot.pingMs} мс</small>
+                    )}
+                  </span>
+                )
+          }
           onBack={() => setScreen("home")}
           onDirectMessages={openDirectMessages}
           onSwitchServer={openServer}
@@ -3589,6 +3641,7 @@ export default function App(): ReactNode {
           onPresenceChange={setPresence}
           onServerSettings={() => openServerSettings("overview")}
           onLogout={requestLogout}
+          profileCoverUrl={profileCoverUrl}
         />
         {sources && (
           <SourcePicker
@@ -3647,6 +3700,10 @@ export default function App(): ReactNode {
         onCreateServer={createServer}
         onSecurity={openUserSettings}
         onLogout={requestLogout}
+        profileCoverUrl={profileCoverUrl}
+        presenceStatus={presence?.effectiveStatus}
+        onStatus={updateProfilePresence}
+        voiceProfileConnection={voiceProfileConnection}
       />,
     );
   return withNotifications(
