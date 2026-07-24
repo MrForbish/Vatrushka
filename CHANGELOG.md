@@ -4,6 +4,14 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.21] - 2026-07-24
+
+### Changed
+
+- recomposes the desktop UI around the Vatrushka UI Kit: global navigation, Home, server and direct-message workspaces, notification center, settings, authentication and responsive controls;
+- preserves the API/shared contracts, permissions, authentication lifecycle, WebSocket/reconnect, LiveKit/media architecture and Electron preload boundary;
+- refreshes Storybook coverage, visual baselines and Electron end-to-end paths for the new semantic UI structure.
+
 ## [0.8.20] - 2026-07-22
 
 ### Changed
