@@ -35,7 +35,6 @@ export function SettingsNavigation<TSection extends string>({ activeSection, ent
           </button>
         ))}
       </nav>
-      <footer><Icon name="info" size={15} /><span>Разделы подключаются поэтапно. Работающие функции остаются доступны в прежних окнах.</span></footer>
     </aside>
   );
 }

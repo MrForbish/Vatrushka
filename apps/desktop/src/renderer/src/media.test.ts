@@ -88,7 +88,7 @@ describe("MediaSession incoming audio", () => {
     return { session, setMicrophoneEnabled, setVolume };
   }
 
-  it("mutes the microphone, voices and screen audio while preserving local volume preferences", async () => {
+  it("restores incoming audio when an explicit microphone enable exits deafen", async () => {
     const { session, setMicrophoneEnabled, setVolume } = deafeningSession();
     session.setParticipantVolume("remote-1", 0.4);
     session.setScreenShareAudioVolume(0.6);
@@ -97,14 +97,16 @@ describe("MediaSession incoming audio", () => {
     session.setParticipantVolume("remote-1", 0.7);
     await session.setMuted(false);
 
-    expect(setMicrophoneEnabled).toHaveBeenCalledTimes(1);
+    expect(setMicrophoneEnabled).toHaveBeenCalledTimes(3);
     expect(setMicrophoneEnabled).toHaveBeenCalledWith(false);
+    expect(setMicrophoneEnabled).toHaveBeenCalledWith(true);
     expect(setVolume).toHaveBeenCalledWith(0, Track.Source.Microphone);
+    expect(setVolume).toHaveBeenCalledWith(0.7, Track.Source.Microphone);
     expect(setVolume).toHaveBeenCalledWith(0, Track.Source.ScreenShareAudio);
 
     await session.setDeafened(false);
 
-    expect(setMicrophoneEnabled).toHaveBeenCalledTimes(2);
+    expect(setMicrophoneEnabled).toHaveBeenCalledTimes(3);
     expect(setMicrophoneEnabled).toHaveBeenLastCalledWith(true);
     expect(setVolume).toHaveBeenCalledWith(0.7, Track.Source.Microphone);
     expect(setVolume).toHaveBeenCalledWith(0.6, Track.Source.ScreenShareAudio);

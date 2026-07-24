@@ -16,10 +16,12 @@ export interface SettingsShellProps<TSection extends string> {
   items: readonly SettingsNavigationItem<TSection>[];
   onBack(): void;
   onSelect(section: TSection): void;
-  workspaceLibrary: ReactNode;
+  globalSidebar?: ReactNode;
+  /** @deprecated Story-only compatibility during the shell migration. */
+  workspaceLibrary?: ReactNode;
 }
 
-export function SettingsShell<TSection extends string>({ activeSection, children, entityAvatarUrl, entityBannerUrl, entityLabel, entityName, items, onBack, onSelect, workspaceLibrary }: SettingsShellProps<TSection>): React.JSX.Element {
+export function SettingsShell<TSection extends string>({ activeSection, children, entityAvatarUrl, entityBannerUrl, entityLabel, entityName, globalSidebar, items, onBack, onSelect, workspaceLibrary }: SettingsShellProps<TSection>): React.JSX.Element {
   const activeItem = items.find((item) => item.section === activeSection) ?? items[0];
   if (activeItem === undefined) throw new Error('SettingsShell requires at least one navigation item');
   return (
@@ -27,7 +29,7 @@ export function SettingsShell<TSection extends string>({ activeSection, children
       serverContext={<SettingsNavigation activeSection={activeSection} {...(entityAvatarUrl === undefined ? {} : { entityAvatarUrl })} {...(entityBannerUrl === undefined ? {} : { entityBannerUrl })} entityLabel={entityLabel} entityName={entityName} items={items} onSelect={onSelect} />}
       topBar={<SettingsPageHeader entityName={entityName} onBack={onBack} sectionLabel={activeItem.label} />}
       variant="settings"
-      workspaceLibrary={workspaceLibrary}
+      globalSidebar={globalSidebar ?? workspaceLibrary!}
     >
       <div className="vui-settings-shell__viewport"><div className="vui-settings-shell__content">{children}</div></div>
     </AppShell>

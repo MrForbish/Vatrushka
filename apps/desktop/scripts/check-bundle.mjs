@@ -7,12 +7,12 @@ const desktopDirectory = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const rendererDirectory = resolve(desktopDirectory, 'out/renderer');
 const assetsDirectory = resolve(rendererDirectory, 'assets');
 const budgets = {
-  // Hawk Browser adds a measured 64 KiB to the packaged renderer.
-  // UI Kit foundations and settings styles need a measured 4 KiB envelope;
-  // Keep the threshold tight enough to catch a further meaningful regression.
+  // The UI Kit migration establishes a 252.5 KiB production CSS baseline.
+  // Keep only a 4.5% envelope for a small follow-up screen or state, not a
+  // blanket exemption for stylesheet growth.
   javascript: 2_800_000,
   largestJavaScript: 2_350_000,
-  styles: 204_000,
+  styles: 270_000,
   fonts: 500_000,
 };
 

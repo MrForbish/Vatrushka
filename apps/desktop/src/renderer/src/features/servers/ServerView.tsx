@@ -29,7 +29,7 @@ import {
   ServerContext,
   ServerTopBar,
   UserProfileDock,
-  WorkspaceLibrary,
+  GlobalSidebar,
   type ChannelNavigationItem,
   type MemberNavigationItem,
   type MessageViewModel,
@@ -52,7 +52,8 @@ export interface ServerViewProps {
   connectedVoiceChannelId?: string | undefined;
   connectedVoiceServerId?: string | undefined;
   voiceStage?: ReactNode | undefined;
-  voiceConnectionPanel?: ReactNode | undefined;
+  voiceProfileConnection?: ReactNode | undefined;
+  voiceConnectionStatus?: ReactNode | undefined;
   typingText?: string | undefined;
   hasOlderMessages?: boolean;
   loadingOlderMessages?: boolean;
@@ -94,6 +95,7 @@ export interface ServerViewProps {
   onServerSettings(): void;
   onLogout(): void;
   onPresenceChange?(presence: UserPresence): void;
+  profileCoverUrl?: string | null | undefined;
 }
 
 const allowedAttachmentTypes = new Set([
@@ -243,7 +245,14 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       })),
     }),
   );
-  const workspaces: WorkspaceNavigationItem[] = props.servers.map((server) => ({
+  const connectedMemberIds = new Set(
+    props.server.channels.flatMap(
+      (channel) =>
+        channel.voiceParticipants?.map((participant) => participant.userId) ??
+        [],
+    ),
+  );
+  const serverCards: WorkspaceNavigationItem[] = props.servers.map((server) => ({
     id: server.id,
     name: server.name,
     memberCount: server.memberCount,
@@ -252,13 +261,6 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     accentColor: server.accentColor ?? null,
     activeVoice: server.id === props.connectedVoiceServerId,
   }));
-  const connectedMemberIds = new Set(
-    props.server.channels.flatMap(
-      (channel) =>
-        channel.voiceParticipants?.map((participant) => participant.userId) ??
-        [],
-    ),
-  );
   const members: MemberNavigationItem[] = props.server.members.map((member) => {
     const roleLabel =
       member.userId === props.server.ownerUserId
@@ -364,17 +366,30 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
     }
   };
 
-  const workspaceLibrary = (
-    <WorkspaceLibrary
-      activeWorkspaceId={props.server.id}
-      directUnreadCount={props.directUnreadCount ?? 0}
-      onCreate={() => setServerCreateOpen(true)}
-      {...(props.onDirectMessages === undefined
-        ? {}
-        : { onDirectMessages: props.onDirectMessages })}
+  const globalSidebar = (
+    <GlobalSidebar
+      activeSection="community"
+      onCommunity={() => props.onSwitchServer(props.server.id)}
+      onDirectMessages={props.onDirectMessages ?? (() => undefined)}
       onHome={props.onBack}
-      onSelect={props.onSwitchServer}
-      workspaces={workspaces}
+      activeServerId={props.server.id}
+      onServerSelect={props.onSwitchServer}
+      profile={
+        <UserProfileDock
+          avatarUrl={ownMember?.avatarUrl ?? props.user.avatarUrl ?? null}
+          coverUrl={props.profileCoverUrl}
+          email={props.user.email}
+          founder={props.user.platformRole === "owner"}
+          name={ownMember?.displayName ?? displayName(props.user)}
+          enableTilt
+          onLogout={props.onLogout}
+          onSecurity={props.onSecurity}
+          onStatus={updateProfileStatus}
+          status={profileStatus}
+          voiceConnection={props.voiceProfileConnection}
+        />
+      }
+      servers={serverCards}
     />
   );
   const serverContext = (
@@ -382,7 +397,6 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       activeChannelId={activeChannel?.id}
       canManageChannels={canManageChannels}
       canManageRoles={canManageRoles}
-      connectionPanel={props.voiceConnectionPanel}
       description={props.server.description}
       iconUrl={props.server.iconUrl ?? null}
       bannerUrl={props.server.bannerUrl ?? null}
@@ -418,18 +432,6 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
       {...(canMoveMembers && props.onMoveVoiceMember !== undefined
         ? { onMoveMember: props.onMoveVoiceMember }
         : {})}
-      profile={
-        <UserProfileDock
-          avatarUrl={ownMember?.avatarUrl ?? props.user.avatarUrl ?? null}
-          email={props.user.email}
-          founder={props.user.platformRole === "owner"}
-          name={ownMember?.displayName ?? displayName(props.user)}
-          onLogout={props.onLogout}
-          onSecurity={props.onSecurity}
-          onStatus={updateProfileStatus}
-          status={profileStatus}
-        />
-      }
       textChannels={channels.filter((channel) => channel.type === "text")}
       voiceChannels={channels.filter((channel) => channel.type === "voice")}
     />
@@ -462,18 +464,18 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
               }
               channelName={activeChannel.name}
               channelType={activeChannel.type}
-              description={
-                activeChannel.type === "text"
-                  ? "История сохраняется"
-                  : activeChannel.id === props.connectedVoiceChannelId
-                    ? "Вы подключены · навигация остаётся доступной"
-                    : "Голосовая сессия"
-              }
               memberCount={props.server.memberCount}
+              connectionStatus={
+                activeChannel.type === "voice" &&
+                activeChannel.id === props.connectedVoiceChannelId
+                  ? props.voiceConnectionStatus
+                  : undefined
+              }
+              showMemberCount={activeChannel.type !== "voice"}
             />
           )
         }
-        workspaceLibrary={workspaceLibrary}
+        globalSidebar={globalSidebar}
       >
         <ServerStage
           {...props}

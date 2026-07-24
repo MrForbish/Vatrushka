@@ -14,7 +14,7 @@
   display: grid;
   grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-4);
   min-height: 72px;
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--color-border-subtle);
@@ -72,16 +72,6 @@
 .vui-settings-navigation__items small { display: block; }
 .vui-settings-navigation__items strong { font: var(--text-label-md); }
 .vui-settings-navigation__items small { margin-top: 2px; color: var(--color-text-muted); font: var(--text-caption); }
-
-.vui-settings-navigation footer {
-  display: flex;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  border-top: 1px solid var(--color-border-subtle);
-  color: var(--color-text-muted);
-  font: var(--text-caption);
-}
-.vui-settings-navigation footer svg { flex: 0 0 auto; margin-top: 1px; }
 
 .vui-settings-page-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); width: 100%; min-width: 0; }
 .vui-settings-page-header__crumb { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }

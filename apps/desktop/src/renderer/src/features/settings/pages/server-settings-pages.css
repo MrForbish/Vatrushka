@@ -2,9 +2,22 @@
 .vui-server-settings-page__heading span { color: var(--color-cyan); font: var(--text-overline); letter-spacing: .06em; text-transform: uppercase; }
 .vui-server-settings-page__heading h1 { margin: var(--space-2) 0; font: var(--text-display-md); }
 .vui-server-settings-page__heading p { max-width: 760px; margin: 0; color: var(--color-text-secondary); font: var(--text-body-lg); }
+.vui-server-settings-overview-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-4); overflow: hidden; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-surface-1); }
+.vui-server-settings-overview-card__cover { grid-column: 1 / -1; min-height: 104px; margin-bottom: calc(var(--space-5) * -1); background: var(--gradient-brand); background-position: center; background-size: cover; opacity: .88; }
+.vui-server-settings-overview-card__identity { display: flex; align-items: center; gap: var(--space-4); min-width: 0; padding: var(--space-5); }
+.vui-server-settings-overview-card__identity .vui-community-logo { flex: 0 0 auto; }
+.vui-server-settings-overview-card__identity > div { display: grid; gap: var(--space-1); min-width: 0; }
+.vui-server-settings-overview-card__identity span, .vui-server-settings-overview-card__facts dt { color: var(--color-text-muted); font: var(--text-caption); }
+.vui-server-settings-overview-card__identity h2 { overflow: hidden; margin: 0; color: var(--color-text-primary); font: var(--text-heading-lg); text-overflow: ellipsis; white-space: nowrap; }
+.vui-server-settings-overview-card__identity p { display: -webkit-box; max-width: 680px; margin: 0; overflow: hidden; color: var(--color-text-secondary); font: var(--text-body-sm); -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.vui-server-settings-overview-card__facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); min-width: min(100%, 390px); margin: 0; padding: var(--space-5); }
+.vui-server-settings-overview-card__facts > div { display: grid; align-content: center; gap: var(--space-1); min-width: 0; padding-left: var(--space-3); border-left: 1px solid var(--color-border-subtle); }
+.vui-server-settings-overview-card__facts dd { overflow: hidden; margin: 0; color: var(--color-text-primary); font: var(--text-label-md); text-overflow: ellipsis; white-space: nowrap; }
 .vui-server-settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); align-items: start; gap: var(--space-4); }
 .vui-server-settings-card { display: grid; align-content: start; gap: var(--space-4); min-width: 0; padding: var(--space-5); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-surface-1); }
 .vui-server-settings-card h2 { margin: 0; font: var(--text-heading-lg); }
+.vui-server-settings-card__heading { display: grid; gap: var(--space-1); }
+.vui-server-settings-card__heading p { margin: 0; color: var(--color-text-secondary); font: var(--text-body-sm); }
 .vui-server-settings-card--danger { border-color: color-mix(in srgb, var(--color-danger) 48%, var(--color-border-subtle)); }
 .vui-server-settings-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .vui-server-settings-field { display: grid; gap: var(--space-2); color: var(--color-text-secondary); font: var(--text-label-sm); }
@@ -21,6 +34,13 @@
 .vui-server-member-row > div:first-child, .vui-server-channel-row > div:first-child, .vui-server-invite-row > div:first-child, .vui-server-audit-row > div:first-child { display: grid; gap: var(--space-1); }
 .vui-server-member-row small, .vui-server-channel-row small, .vui-server-invite-row small, .vui-server-audit-row small { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-server-member-roles { display: flex; flex-wrap: wrap; gap: var(--space-2); max-height: 120px; overflow: auto; }
+.vui-server-member-row { grid-template-columns: minmax(170px, .9fr) minmax(220px, 1.2fr) minmax(160px, .8fr) auto; align-items: start; }
+.vui-server-member-row__identity { align-content: start; min-height: 72px; padding-top: var(--space-1); }
+.vui-server-member-row__alias { min-width: 0; }
+.vui-server-member-row__roles { display: grid; gap: var(--space-2); min-width: 0; }
+.vui-server-member-row__roles > span { color: var(--color-text-muted); font: var(--text-caption); }
+.vui-server-member-roles { align-content: start; max-height: 128px; padding-right: var(--space-1); }
+.vui-server-member-row .vui-server-settings-actions { align-self: center; justify-content: flex-end; }
 .vui-server-settings-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
 .vui-server-role-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr); align-items: start; gap: var(--space-4); }
 .vui-server-role-item { display: flex; align-items: center; gap: var(--space-2); width: 100%; padding: var(--space-3); border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--color-text-secondary); cursor: pointer; text-align: left; }
@@ -29,15 +49,32 @@
 .vui-server-permission-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-4); max-height: 520px; overflow: auto; padding-right: var(--space-2); }
 .vui-server-category-list { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 .vui-server-category-list > div { display: flex; align-items: flex-end; gap: var(--space-2); }
-.vui-server-channel-row { grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); align-items: end; }
+.vui-server-channel-row { grid-template-columns: minmax(150px, .7fr) minmax(180px, 1fr) minmax(180px, .8fr) minmax(150px, .6fr) auto; align-items: end; }
+.vui-server-channel-row[data-channel-kind="voice"] { grid-template-columns: minmax(150px, .7fr) minmax(180px, 1fr) minmax(180px, .8fr) auto; }
+.vui-server-channel-row[data-channel-kind="voice"] > :first-child { grid-row: 1 / span 2; }
+.vui-server-channel-row[data-channel-kind="voice"] > :nth-child(4) { grid-column: 2; }
+.vui-server-channel-row[data-channel-kind="voice"] > :nth-child(5) { grid-column: 3; }
+.vui-server-channel-row[data-channel-kind="voice"] > .vui-button { align-self: center; grid-column: 4; grid-row: 1 / span 2; white-space: nowrap; }
 .vui-server-invite-row { grid-template-columns: minmax(0, 1fr) auto; }
+.vui-server-invite-create-card { gap: var(--space-5); }
+.vui-server-invite-create-card__controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.vui-server-invite-create-card__controls > :last-child { grid-column: 1 / -1; }
+.vui-server-invite-list { align-content: start; }
+.vui-server-invite-row { position: relative; overflow: hidden; }
+.vui-server-invite-row::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--color-primary); content: ""; }
+.vui-server-moderation-card { gap: var(--space-5); }
+.vui-server-moderation-bans { min-height: 220px; }
 .vui-server-audit-row { grid-template-columns: minmax(0, 1fr) auto; }
+.vui-server-audit-filter { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 360px); align-items: end; gap: var(--space-4); padding: var(--space-4) var(--space-5); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--color-surface-1); }
+.vui-server-audit-list { align-content: start; }
 .vui-server-audit-row code { overflow: hidden; max-width: 420px; color: var(--color-text-muted); text-overflow: ellipsis; white-space: nowrap; }
 .vui-server-appearance-preview { position: relative; overflow: hidden; min-height: 190px; border-radius: var(--radius-md); background: var(--gradient-brand); }
 .vui-server-appearance-preview > img { width: 100%; height: 130px; object-fit: cover; }
 .vui-server-appearance-preview > div { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); color: white; font: var(--text-heading-lg); }
-.vui-server-appearance-preview > div > img, .vui-server-appearance-preview > div { border-radius: var(--radius-sm); }
-.vui-server-appearance-preview > div > img { width: 52px; height: 52px; object-fit: cover; }
+.vui-server-appearance-preview > div { border-radius: var(--radius-sm); }
+.vui-server-appearance-preview > div > span:last-child { display: grid; gap: var(--space-1); min-width: 0; }
+.vui-server-appearance-preview > div small { color: color-mix(in srgb, white 72%, transparent); font: var(--text-caption); }
+.vui-server-appearance-preview > div strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vui-server-settings-upload { display: grid; gap: var(--space-2); color: var(--color-text-secondary); font: var(--text-label-sm); }
 .vui-server-settings-upload input { padding: var(--space-3); border: 1px dashed var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-0); color: var(--color-text-primary); }
 .vui-server-invite-created { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--color-success); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-success) 8%, var(--color-surface-0)); }
@@ -46,6 +83,6 @@
 .vui-server-ban-row > div, .vui-server-danger-action > div { display: grid; gap: var(--space-1); }
 .vui-server-ban-row small, .vui-server-danger-action small, .vui-server-settings-empty { color: var(--color-text-muted); font: var(--text-caption); }
 .vui-server-danger-action > .vui-select-field, .vui-server-danger-action > .vui-input-field { min-width: 240px; }
-@media (max-width: 1180px) { .vui-server-settings-grid, .vui-server-role-layout { grid-template-columns: 1fr; } .vui-server-member-row, .vui-server-channel-row { grid-template-columns: 1fr 1fr; } }
-@media (max-width: 760px) { .vui-server-settings-row, .vui-server-permission-grid, .vui-server-member-row, .vui-server-channel-row { grid-template-columns: 1fr; } .vui-server-danger-action { align-items: stretch; flex-direction: column; } }
-@container (max-width: 760px) { .vui-server-settings-row, .vui-server-permission-grid, .vui-server-member-row, .vui-server-channel-row { grid-template-columns: 1fr; } }
+@media (max-width: 1180px) { .vui-server-settings-overview-card { grid-template-columns: 1fr; } .vui-server-settings-overview-card__facts { padding-top: 0; } .vui-server-settings-grid, .vui-server-role-layout { grid-template-columns: 1fr; } .vui-server-member-row, .vui-server-channel-row, .vui-server-channel-row[data-channel-kind="voice"] { grid-template-columns: 1fr 1fr; } .vui-server-member-row .vui-server-settings-actions { justify-content: flex-start; } }
+@media (max-width: 760px) { .vui-server-settings-row, .vui-server-permission-grid, .vui-server-member-row, .vui-server-channel-row, .vui-server-invite-create-card__controls, .vui-server-audit-filter { grid-template-columns: 1fr; } .vui-server-invite-create-card__controls > :last-child { grid-column: auto; } .vui-server-danger-action { align-items: stretch; flex-direction: column; } }
+@container (max-width: 760px) { .vui-server-settings-row, .vui-server-permission-grid, .vui-server-member-row, .vui-server-channel-row, .vui-server-invite-create-card__controls, .vui-server-audit-filter { grid-template-columns: 1fr; } .vui-server-invite-create-card__controls > :last-child { grid-column: auto; } }

@@ -277,3 +277,83 @@
     width: calc(100vw - 32px);
   }
 }
+
+/* Full notification workspace: the old narrow popover did not provide enough
+   hierarchy for messages, mentions, replies, and update state. */
+.vui-notification-center__backdrop { background: color-mix(in srgb, var(--color-canvas) 62%, transparent); backdrop-filter: blur(5px); }
+.vui-notification-center__panel {
+  top: 50%;
+  right: auto;
+  left: 50%;
+  width: min(980px, calc(100vw - 48px));
+  max-height: min(920px, calc(100vh - 48px));
+  min-height: min(680px, calc(100vh - 48px));
+  border-color: var(--color-border-default);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at 15% 0%, color-mix(in srgb, var(--color-primary) 16%, transparent), transparent 30%),
+    var(--color-surface-1);
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+}
+.vui-notification-center__panel > header { min-height: 178px; padding: 42px 48px 30px; }
+.vui-notification-center__heading { display: flex !important; align-items: center; gap: 26px; }
+.vui-notification-center__heading-icon {
+  display: grid !important;
+  width: 92px;
+  height: 92px;
+  place-items: center;
+  border: 2px solid color-mix(in srgb, var(--color-primary) 62%, var(--color-border-default));
+  border-radius: var(--radius-round);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+  box-shadow: inset 0 0 24px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.vui-notification-center__heading > span:last-child { display: grid; gap: var(--space-2); }
+.vui-notification-center__panel > header strong { font: var(--text-display-sm); }
+.vui-notification-center__panel > header small { font: var(--text-body-lg); }
+.vui-notification-center__panel > header > .vui-icon-button { width: 56px; min-width: 56px; height: 56px; border: 1px solid var(--color-border-default); border-radius: 18px; }
+.vui-notification-center__panel nav { justify-content: space-between; gap: var(--space-5); padding: 0 42px; border-bottom: 1px solid var(--color-border-subtle); }
+.vui-notification-center__panel nav button { position: relative; min-height: 70px; padding: 0 10px; border-radius: 0; font: var(--text-heading-sm); }
+.vui-notification-center__panel nav button:hover { background: transparent; color: var(--color-text-primary); }
+.vui-notification-center__panel nav button[aria-current="page"] { color: var(--color-text-primary); background: transparent; }
+.vui-notification-center__panel nav button[aria-current="page"]::after { position: absolute; right: 0; bottom: 0; left: 0; height: 4px; border-radius: 4px 4px 0 0; background: var(--color-primary); content: ""; }
+.vui-notification-center__actions { min-height: 108px; padding: 0 48px; }
+.vui-notification-center__actions > span { display: flex; align-items: center; gap: var(--space-3); font: var(--text-body-lg); }
+.vui-notification-center__actions > span:last-child { margin-left: auto; }
+.vui-notification-center__actions .vui-button { font: var(--text-body-lg); }
+.vui-notification-center__mark-all { display: inline-flex; align-items: center; gap: var(--space-3); color: var(--color-text-secondary); }
+.vui-notification-center__list { display: grid; min-height: 0; padding: 18px 36px 30px; }
+.vui-notification-center__empty { min-height: 360px; gap: var(--space-4); }
+.vui-notification-center__empty > svg { width: 78px; height: 78px; padding: 20px; border-radius: var(--radius-round); color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 11%, transparent); box-shadow: 0 16px 40px color-mix(in srgb, var(--color-primary) 15%, transparent); }
+.vui-notification-center__empty strong { font: var(--text-display-sm); }
+.vui-notification-center__empty span { max-width: 460px; font: var(--text-body-lg); }
+.vui-notification-center__update {
+  border-radius: var(--radius-lg) !important;
+  background: color-mix(in srgb, var(--color-primary) 9%, var(--color-surface-2)) !important;
+}
+.vui-notification-center__update progress {
+  height: 8px;
+  margin-top: var(--space-2);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, var(--color-border-default));
+  border-radius: var(--radius-round);
+  background: var(--color-surface-0);
+  accent-color: var(--color-primary);
+}
+.vui-notification-center__update progress::-webkit-progress-bar { background: var(--color-surface-0); }
+.vui-notification-center__update progress::-webkit-progress-value { border-radius: inherit; background: linear-gradient(90deg, var(--color-primary), var(--color-cyan)); }
+
+@media (max-width: 720px) {
+  .vui-notification-center__panel { width: calc(100vw - 24px); min-height: min(620px, calc(100vh - 24px)); border-radius: 22px; }
+  .vui-notification-center__panel > header { min-height: 128px; padding: 24px; }
+  .vui-notification-center__heading { gap: var(--space-3); }
+  .vui-notification-center__heading-icon { width: 54px; height: 54px; }
+  .vui-notification-center__panel > header strong { font: var(--text-heading-lg); }
+  .vui-notification-center__panel > header small { font: var(--text-caption); }
+  .vui-notification-center__panel > header > .vui-icon-button { width: 38px; min-width: 38px; height: 38px; }
+  .vui-notification-center__panel nav { gap: 0; padding: 0 12px; }
+  .vui-notification-center__panel nav button { min-height: 52px; padding: 0 8px; font: var(--text-label-sm); }
+  .vui-notification-center__actions { min-height: 72px; padding: 0 20px; }
+  .vui-notification-center__actions > span { font: var(--text-caption); }
+  .vui-notification-center__actions .vui-button { padding-inline: 6px; font: var(--text-caption); }
+}

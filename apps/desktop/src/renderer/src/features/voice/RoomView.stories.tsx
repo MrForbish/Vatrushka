@@ -42,12 +42,10 @@ const meta = {
     error: null,
     onMute: fn(),
     onShare: fn(),
-    onCopy: fn(),
     onLeave: fn(),
     onKick: fn(),
     onMicrophone: fn(),
     onOutput: fn(),
-    onRefreshDevices: fn(),
     onStartAudio: fn(),
     onScreenAudioMute: fn(),
     onScreenAudioVolume: fn(),
@@ -66,19 +64,25 @@ export const DeviceSelection: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     const page = within(canvasElement.ownerDocument.body);
-    await userEvent.click(canvas.getByRole('button', { name: 'Устройства' }));
-    await userEvent.click(canvas.getByLabelText('Устройство ввода'));
+    await userEvent.click(canvas.getByRole('button', { name: 'Выбрать устройство: Микрофон' }));
     await userEvent.click(page.getByRole('option', { name: 'Studio Microphone' }));
-    await userEvent.click(canvas.getByLabelText('Устройство вывода'));
+    await userEvent.click(canvas.getByRole('button', { name: 'Выбрать устройство: Звук' }));
     await userEvent.click(page.getByRole('option', { name: 'USB Headphones' }));
     await expect(args.onMicrophone).toHaveBeenCalledWith('microphone-studio');
     await expect(args.onOutput).toHaveBeenCalledWith('headphones-usb');
-    await userEvent.click(canvas.getByRole('button', { name: 'Обновить список аудиоустройств' }));
-    await expect(args.onRefreshDevices).toHaveBeenCalledOnce();
   },
 };
 
 export const VisualRoom: Story = { args: { microphoneId: 'microphone-studio', outputId: 'headphones-usb' } };
+
+export const SingleParticipant: Story = {
+  args: {
+    snapshot: {
+      ...meta.args.snapshot,
+      participants: [meta.args.snapshot.participants[0]!],
+    },
+  },
+};
 
 const screenTrack = { attach: () => undefined, detach: () => [] } as unknown as LocalTrack;
 

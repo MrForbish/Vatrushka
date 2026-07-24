@@ -24,6 +24,22 @@
   color: var(--color-text-secondary);
   font: var(--text-body-lg);
 }
+.vui-user-audio-settings__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+  align-items: stretch;
+  gap: var(--space-4);
+}
+.vui-user-audio-settings__grid > .home-widget,
+.vui-user-audio-settings__volume {
+  height: 100%;
+}
+.vui-user-audio-settings__volume {
+  grid-template-rows: auto 1fr;
+}
+.vui-user-audio-settings__volume .vui-slider {
+  align-self: center;
+}
 .vui-user-profile-settings__grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
@@ -171,6 +187,9 @@
 }
 @media (max-width: 1180px) {
   .vui-user-profile-settings__grid {
+    grid-template-columns: 1fr;
+  }
+  .vui-user-audio-settings__grid {
     grid-template-columns: 1fr;
   }
 }

@@ -140,12 +140,12 @@ export const ReturningUser: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.queryByText(/войти по коду/iu)).not.toBeInTheDocument();
-    await expect(canvas.getByRole("heading", { name: "Быстрый возврат" })).toBeInTheDocument();
-    await expect(canvas.getByRole("heading", { name: "Активные пространства" })).toBeInTheDocument();
-    await expect(canvas.getByRole("heading", { name: "Друзья в игре" })).toBeInTheDocument();
-    await userEvent.click(canvas.getByRole("button", { name: "Вернуться" }));
+    await expect(canvas.getByRole("region", { name: "Быстрый возврат" })).toBeInTheDocument();
+    await expect(canvas.getByText("Активные пространства", { exact: true })).toBeInTheDocument();
+    await expect(canvas.getByLabelText("Друзья в сети")).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole("button", { name: "Вернуться в канал" }));
     await expect(args.onJoinVoice).toHaveBeenCalledWith("server-1", "voice-1");
-    await userEvent.click(canvas.getAllByRole("button", { name: "Написать" })[0]!);
+    await userEvent.click(canvas.getByRole("button", { name: "Написать Анна" }));
     await expect(args.onMessageFriend).toHaveBeenCalledWith("friend-1");
   },
 };

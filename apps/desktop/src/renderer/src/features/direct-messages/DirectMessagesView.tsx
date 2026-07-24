@@ -1,9 +1,11 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
 import type {
   DirectConversationSummary,
   DirectMessage,
   DirectMessageCandidate,
+  EffectivePresenceStatus,
+  PresencePreference,
   PublicUser,
   ServerSummary,
 } from "@vatrushka/shared";
@@ -17,13 +19,12 @@ import {
   Icon,
   IconButton,
   Input,
-  MemberPanel,
   MessageComposer,
   MessageList,
   Modal,
   Select,
   UserProfileDock,
-  WorkspaceLibrary,
+  GlobalSidebar,
   type MessageViewModel,
   type WorkspaceNavigationItem,
 } from "../../ui";
@@ -78,6 +79,10 @@ export interface DirectMessagesViewProps {
   onCreateServer(): void;
   onSecurity(): void;
   onLogout(): void;
+  profileCoverUrl?: string | null | undefined;
+  presenceStatus?: EffectivePresenceStatus | undefined;
+  onStatus?: (status: PresencePreference) => void | Promise<void>;
+  voiceProfileConnection?: ReactNode | undefined;
 }
 
 function userDisplayName(user: PublicUser): string {
@@ -89,6 +94,15 @@ function conversationPreview(conversation: DirectConversationSummary): string {
   return conversation.lastMessage.content.trim().length > 0
     ? conversation.lastMessage.content
     : "Вложение";
+}
+
+function conversationTime(value: string): string {
+  const date = new Date(value);
+  const today = new Date();
+  const sameDay = date.toDateString() === today.toDateString();
+  return sameDay
+    ? date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
+    : date.toLocaleDateString("ru-RU", { day: "2-digit", month: "short" });
 }
 
 export function DirectMessagesView(
@@ -110,6 +124,9 @@ export function DirectMessagesView(
   const [notificationSettingsOpen, setNotificationSettingsOpen] =
     useState(false);
   const [conversationSearch, setConversationSearch] = useState("");
+  const [notesByParticipantId, setNotesByParticipantId] = useState<
+    Record<string, string>
+  >({});
   const activeConversation =
     props.conversations.find(
       (conversation) => conversation.id === props.activeConversationId,
@@ -119,6 +136,9 @@ export function DirectMessagesView(
     (props.blockedParticipantIds ?? []).includes(
       activeConversation.participant.userId,
     );
+  const activityLabel = activeParticipantBlocked
+    ? "Диалог заблокирован"
+    : "Статус активности недоступен";
 
   useEffect(() => {
     setEditingMessage(null);
@@ -181,18 +201,6 @@ export function DirectMessagesView(
     setServerCreateOpen(false);
   };
 
-  const workspaces: WorkspaceNavigationItem[] = props.servers.map((server) => ({
-    id: server.id,
-    name: server.name,
-    memberCount: server.memberCount,
-    iconUrl: server.iconUrl ?? null,
-    bannerUrl: server.bannerUrl ?? null,
-    accentColor: server.accentColor ?? null,
-  }));
-  const totalUnread = props.conversations.reduce(
-    (count, conversation) => count + conversation.unreadCount,
-    0,
-  );
   const visibleConversations = props.conversations.filter((conversation) => {
     const query = conversationSearch.trim().toLocaleLowerCase("ru-RU");
     if (query.length === 0) return true;
@@ -203,6 +211,14 @@ export function DirectMessagesView(
       conversationPreview(conversation).toLocaleLowerCase("ru-RU").includes(query)
     );
   });
+  const serverCards: WorkspaceNavigationItem[] = props.servers.map((server) => ({
+    id: server.id,
+    name: server.name,
+    memberCount: server.memberCount,
+    iconUrl: server.iconUrl ?? null,
+    bannerUrl: server.bannerUrl ?? null,
+    accentColor: server.accentColor ?? null,
+  }));
   const messageModels: MessageViewModel[] = props.messages.map((message) => ({
     id: message.id,
     authorId: message.authorUserId,
@@ -240,32 +256,42 @@ export function DirectMessagesView(
         : {}),
   }));
 
-  const workspaceLibrary = (
-    <WorkspaceLibrary
-      directActive
-      directUnreadCount={totalUnread}
-      onCreate={() => setServerCreateOpen(true)}
+  const globalSidebar = (
+    <GlobalSidebar
+      activeSection="messages"
+      onCommunity={() => {
+        const firstServer = props.servers[0];
+        if (firstServer) props.onSwitchServer(firstServer.id);
+        else setServerCreateOpen(true);
+      }}
       onDirectMessages={() => undefined}
       onHome={props.onHome}
-      onSelect={props.onSwitchServer}
-      workspaces={workspaces}
+      onServerSelect={props.onSwitchServer}
+      profile={
+        <UserProfileDock
+          avatarUrl={props.user.avatarUrl ?? null}
+          coverUrl={props.profileCoverUrl}
+          email={props.user.email}
+          founder={props.user.platformRole === "owner"}
+          name={userDisplayName(props.user)}
+          enableTilt
+          onLogout={props.onLogout}
+          onSecurity={props.onSecurity}
+          {...(props.onStatus ? { onStatus: props.onStatus } : {})}
+          {...(props.presenceStatus ? { status: props.presenceStatus } : {})}
+          voiceConnection={props.voiceProfileConnection}
+        />
+      }
+      servers={serverCards}
     />
   );
   const conversationList = (
     <aside aria-label="Личные диалоги" className="vui-direct-context">
-      <header>
-        <span>
-          <strong>Личные сообщения</strong>
-          <small>{props.conversations.length} диалогов</small>
-        </span>
-        <Button
-          icon="plus"
-          onClick={() => setNewConversationOpen(true)}
-          size="sm"
-          type="button"
-        >
-          Новый
-        </Button>
+      <header className="vui-direct-context__tabs">
+        <button aria-current="page" type="button">Личные</button>
+        <button aria-disabled="true" disabled title="Групповые диалоги появятся позже" type="button">Групповые</button>
+        <IconButton icon="plus" label="Новый личный диалог" onClick={() => setNewConversationOpen(true)} size="sm" type="button" />
+        <IconButton disabled icon="search" label="Фильтры личных диалогов появятся позже" size="sm" type="button" />
       </header>
       <label className="vui-direct-context__search">
         <Icon name="search" size={16} />
@@ -316,53 +342,92 @@ export function DirectMessagesView(
                 <strong>{conversation.participant.displayName}</strong>
                 <small>{conversationPreview(conversation)}</small>
               </span>
-              {conversation.unreadCount === 0 ? null : (
-                <Badge tone="danger">
-                  {conversation.unreadCount > 99
-                    ? "99+"
-                    : conversation.unreadCount}
-                </Badge>
-              )}
+              <span className="vui-direct-context__meta">
+                <time dateTime={conversation.updatedAt}>{conversationTime(conversation.updatedAt)}</time>
+                {conversation.unreadCount === 0 ? null : (
+                  <Badge tone="primary">
+                    {conversation.unreadCount > 99
+                      ? "99+"
+                      : conversation.unreadCount}
+                  </Badge>
+                )}
+              </span>
             </button>
           ))
         )}
       </div>
-      <UserProfileDock
-        avatarUrl={props.user.avatarUrl ?? null}
-        email={props.user.email}
-        founder={props.user.platformRole === "owner"}
-        name={userDisplayName(props.user)}
-        onLogout={props.onLogout}
-        onSecurity={props.onSecurity}
-      />
     </aside>
   );
-  const members =
-    activeConversation === null ? (
-      <MemberPanel members={[]} />
-    ) : (
-      <MemberPanel
-        members={[
-          {
-            id: props.user.id,
-            name: userDisplayName(props.user),
-            ...(props.user.avatarUrl ? { avatarUrl: props.user.avatarUrl } : {}),
-            founder: props.user.platformRole === "owner",
-            roleLabel: "Вы",
-            status: "online",
-          },
-          {
-            id: activeConversation.participant.userId,
-            name: activeConversation.participant.displayName,
-            ...(activeConversation.participant.avatarUrl === undefined
-              ? {}
-              : { avatarUrl: activeConversation.participant.avatarUrl }),
-            founder: activeConversation.participant.platformRole === "owner",
-            roleLabel: "Собеседник",
-          },
-        ]}
+  const members = activeConversation === null ? (
+    <aside aria-label="Информация о диалоге" className="vui-direct-inspector vui-direct-inspector--empty">
+      <Icon name="message" size={30} />
+      <strong>Выберите диалог</strong>
+      <span>Здесь появится краткая информация о собеседнике.</span>
+    </aside>
+  ) : (
+    <aside aria-label="Информация о собеседнике" className="vui-direct-inspector">
+      <div className="vui-direct-inspector__cover" />
+      <Avatar
+        className="vui-direct-inspector__avatar"
+        name={activeConversation.participant.displayName}
+        size="lg"
+        {...(activeConversation.participant.avatarUrl ? { src: activeConversation.participant.avatarUrl } : {})}
       />
-    );
+      <div className="vui-direct-inspector__identity">
+        <strong>
+          {activeConversation.participant.displayName}
+          <i aria-hidden="true" className="vui-direct-activity-dot" data-state={activeParticipantBlocked ? "blocked" : "unknown"} />
+        </strong>
+        <span data-state={activeParticipantBlocked ? "blocked" : "unknown"}>{activityLabel}</span>
+      </div>
+      <section>
+        <small>УЧАСТНИКИ ДИАЛОГА</small>
+        <div className="vui-direct-inspector__people">
+          <Avatar name={userDisplayName(props.user)} size="sm" {...(props.user.avatarUrl ? { src: props.user.avatarUrl } : {})} />
+          <span>{userDisplayName(props.user)} <em>Вы</em></span>
+        </div>
+        <div className="vui-direct-inspector__people">
+          <Avatar name={activeConversation.participant.displayName} size="sm" {...(activeConversation.participant.avatarUrl ? { src: activeConversation.participant.avatarUrl } : {})} />
+          <span>{activeConversation.participant.displayName} <em>Собеседник</em></span>
+        </div>
+      </section>
+      <section className="vui-direct-inspector__future">
+        <small>ОБЩИЕ СЕРВЕРЫ И ДРУЗЬЯ</small>
+        <span>Эти данные появятся после подключения соответствующего API.</span>
+      </section>
+      <section className="vui-direct-inspector__future">
+        <small>ОБЩИЕ ФАЙЛЫ</small>
+        <span>Вложения из личного диалога будут доступны здесь.</span>
+      </section>
+      <section className="vui-direct-inspector__future">
+        <small>ИГРАЕТ В</small>
+        <span>Игровая активность появится после подключения API присутствия.</span>
+      </section>
+      <section className="vui-direct-inspector__future">
+        <small>НЕДАВНИЕ ИГРЫ</small>
+        <span>Недавние игры будут доступны после подключения истории активности.</span>
+      </section>
+      <section className="vui-direct-note">
+        <label htmlFor={`direct-note-${activeConversation.participant.userId}`}>ЗАМЕТКИ</label>
+        <textarea
+          aria-describedby={`direct-note-hint-${activeConversation.participant.userId}`}
+          id={`direct-note-${activeConversation.participant.userId}`}
+          maxLength={240}
+          onChange={(event) =>
+            setNotesByParticipantId((current) => ({
+              ...current,
+              [activeConversation.participant.userId]: event.target.value,
+            }))
+          }
+          placeholder="Добавьте личную заметку"
+          value={notesByParticipantId[activeConversation.participant.userId] ?? ""}
+        />
+        <span id={`direct-note-hint-${activeConversation.participant.userId}`}>
+          Пока сохраняется только в этом окне.
+        </span>
+      </section>
+    </aside>
+  );
   const topBar = (
     <div className="vui-direct-topbar">
       {activeConversation === null ? (
@@ -381,17 +446,26 @@ export function DirectMessagesView(
       <span>
         <strong>
           {activeConversation?.participant.displayName ?? "Личные сообщения"}
+          {activeConversation === null ? null : (
+            <i aria-hidden="true" className="vui-direct-activity-dot" data-state={activeParticipantBlocked ? "blocked" : "unknown"} />
+          )}
         </strong>
-        <small>
+        <small data-state={activeParticipantBlocked ? "blocked" : activeConversation === null ? undefined : "unknown"}>
           {activeConversation === null
             ? "Выберите или создайте диалог"
             : activeParticipantBlocked
               ? "Пользователь заблокирован"
-              : "Приватный диалог"}
+              : "Статус активности недоступен"}
         </small>
       </span>
       {activeConversation === null ? null : (
         <>
+          <IconButton
+            disabled
+            icon="phone"
+            label="Звонки в личных диалогах появятся позже"
+            type="button"
+          />
           <IconButton
             className="vui-direct-topbar__notifications"
             icon="bell"
@@ -426,8 +500,8 @@ export function DirectMessagesView(
         membersDrawerTitle="Участники диалога"
         serverContext={conversationList}
         topBar={topBar}
-        workspaceDrawerTitle="Серверы"
-        workspaceLibrary={workspaceLibrary}
+        globalSidebar={globalSidebar}
+        variant="direct-messages"
       >
         {activeConversation === null ? (
           <div className="vui-direct-welcome">
@@ -441,7 +515,7 @@ export function DirectMessagesView(
             </Button>
           </div>
         ) : (
-          <section className="vui-message-stage">
+          <section className="vui-message-stage vui-direct-stage">
             <MessageList
               channelName={activeConversation.participant.displayName}
               conversationId={activeConversation.id}

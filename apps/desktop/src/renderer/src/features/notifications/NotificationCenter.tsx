@@ -57,16 +57,27 @@ export function NotificationCenter({ hasMore = false, items, loadingMore = false
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [seenUpdateKey, setSeenUpdateKey] = useState<string | null>(null);
+  const [updateCheckFeedback, setUpdateCheckFeedback] = useState<'idle' | 'checking' | 'latest'>('idle');
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const updateVisible = updateState !== undefined && ['available', 'downloading', 'ready', 'error'].includes(updateState.status);
   const updateKey = updateVisible ? `${updateState.status}:${updateState.version ?? ''}:${updateState.message ?? ''}` : null;
   const updateUnread = updateKey !== null && updateKey !== seenUpdateKey;
+  const unreadItems = items.filter((item) => item.readAt === null).length;
   const unreadCount = items.filter((item) => item.readAt === null).length + (updateUnread ? 1 : 0);
   const filtered = useMemo(() => items.filter((item) => filter === 'all' || item.type === filter || (filter === 'system' && (item.type === 'system' || item.type === 'moderation' || item.type === 'server_invite'))), [filter, items]);
   useEffect(() => {
     if (open && updateKey !== null) setSeenUpdateKey(updateKey);
   }, [open, updateKey]);
+  useEffect(() => {
+    if (updateState?.status === 'up-to-date' && updateCheckFeedback === 'checking') {
+      setUpdateCheckFeedback('latest');
+      const timeout = window.setTimeout(() => setUpdateCheckFeedback('idle'), 2_000);
+      return () => window.clearTimeout(timeout);
+    }
+    if (['available', 'downloading', 'ready', 'error'].includes(updateState?.status ?? '')) setUpdateCheckFeedback('idle');
+    return undefined;
+  }, [updateCheckFeedback, updateState?.status]);
   useEffect(() => {
     if (!open) return undefined;
 
@@ -92,11 +103,14 @@ export function NotificationCenter({ hasMore = false, items, loadingMore = false
     : createPortal(
         <>
           <button aria-label="Закрыть уведомления" className="vui-notification-center__backdrop" onClick={() => setOpen(false)} type="button" />
-          <div aria-label="Центр уведомлений" className="vui-notification-center__panel" id="vui-notification-center-panel" ref={panelRef} role="dialog" tabIndex={-1}>
+          <div aria-labelledby="vui-notification-center-title" aria-modal="true" className="vui-notification-center__panel" id="vui-notification-center-panel" ref={panelRef} role="dialog" tabIndex={-1}>
             <header>
-              <span>
-                <strong>Уведомления</strong>
-                <small>Важные события собраны здесь</small>
+              <span className="vui-notification-center__heading">
+                <span className="vui-notification-center__heading-icon"><Icon name="bell" size={30} /></span>
+                <span>
+                  <strong id="vui-notification-center-title">Уведомления</strong>
+                  <small>Важные события собраны здесь</small>
+                </span>
               </span>
               <IconButton icon="close" label="Закрыть" onClick={() => setOpen(false)} size="sm" type="button" />
             </header>
@@ -108,12 +122,9 @@ export function NotificationCenter({ hasMore = false, items, loadingMore = false
               ))}
             </nav>
             <div className="vui-notification-center__actions">
-              <span>{unreadCount === 0 ? 'Всё прочитано' : `${unreadCount} непрочитано`}</span>
+              {unreadItems > 0 ? <Button className="vui-notification-center__mark-all" onClick={onMarkAllRead} size="sm" type="button" variant="quiet"><Icon name="check" size={19} />Прочитать всё</Button> : null}
               <span>
-                {onCheckUpdate ? <Button disabled={updateState?.status === 'checking' || updateState?.status === 'downloading'} onClick={onCheckUpdate} size="sm" type="button" variant="quiet">Проверить обновления</Button> : null}
-                <Button disabled={unreadCount === 0} onClick={onMarkAllRead} size="sm" type="button" variant="quiet">
-                  Прочитать всё
-                </Button>
+                {onCheckUpdate ? <Button disabled={updateCheckFeedback === 'checking' || updateState?.status === 'checking' || updateState?.status === 'downloading'} onClick={() => { setUpdateCheckFeedback('checking'); onCheckUpdate(); }} size="sm" type="button" variant="quiet">{updateCheckFeedback === 'latest' ? 'Последняя версия' : updateCheckFeedback === 'checking' ? 'Проверяем…' : 'Проверить обновления'}</Button> : null}
               </span>
             </div>
             <div className="vui-notification-center__list">

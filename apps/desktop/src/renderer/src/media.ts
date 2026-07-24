@@ -210,7 +210,9 @@ export class MediaSession {
 
   async setMuted(muted: boolean): Promise<void> {
     if (!this.room) return;
-    if (this.isDeafened && !muted) return;
+    // An explicit microphone enable is also an explicit return to the call.
+    // Deafen owns the microphone only while it remains enabled.
+    if (this.isDeafened && !muted) await this.setDeafened(false);
     await this.room.localParticipant.setMicrophoneEnabled(!muted);
     this.microphoneEnabledBeforeDeafen = !muted;
     this.refreshSnapshot();

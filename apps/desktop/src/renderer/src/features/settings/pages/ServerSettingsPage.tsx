@@ -20,6 +20,7 @@ import { apiClient } from "../../../api";
 import {
   Button,
   Checkbox,
+  CommunityLogo,
   FilePicker,
   Input,
   Select,
@@ -143,6 +144,32 @@ function Overview({
       title="Настройки сервера"
       description="Название, доступ, системные каналы и поведение по умолчанию."
     >
+      <article className="vui-server-settings-overview-card">
+        <div
+          aria-hidden="true"
+          className="vui-server-settings-overview-card__cover"
+          style={server.bannerUrl ? { backgroundImage: `url(${server.bannerUrl})` } : undefined}
+        />
+        <div className="vui-server-settings-overview-card__identity">
+          <CommunityLogo
+            accentColor={server.accentColor}
+            bannerSrc={server.bannerUrl}
+            name={value.name}
+            size="lg"
+            src={server.iconUrl}
+          />
+          <div>
+            <span>Сервер</span>
+            <h2>{value.name}</h2>
+            <p>{value.description?.trim() || "Описание сервера пока не добавлено."}</p>
+          </div>
+        </div>
+        <dl className="vui-server-settings-overview-card__facts">
+          <div><dt>Участники</dt><dd>{server.memberCount}</dd></div>
+          <div><dt>Владелец</dt><dd>{value.ownerDisplayName}</dd></div>
+          <div><dt>Доступ</dt><dd>{value.visibility === "public" ? "Открытый" : "По приглашению"}</dd></div>
+        </dl>
+      </article>
       <div className="vui-server-settings-grid">
         <article className="vui-server-settings-card">
           <Input
@@ -321,14 +348,16 @@ function Appearance({
             className="vui-server-appearance-preview"
             style={{ backgroundColor: value.accentColor ?? "#635bff" }}
           >
-            <StableImage alt="Обложка сервера" src={value.bannerUrl} />
+            {value.bannerUrl ? <StableImage alt="Обложка сервера" src={value.bannerUrl} /> : null}
             <div>
-              <StableImage
-                alt="Иконка сервера"
-                fallback={server.name.slice(0, 2).toUpperCase()}
+              <CommunityLogo
+                accentColor={value.accentColor}
+                bannerSrc={value.bannerUrl}
+                name={server.name}
+                size="lg"
                 src={value.iconUrl}
               />
-              <strong>{server.name}</strong>
+              <span><small>Предпросмотр</small><strong>{server.name}</strong></span>
             </div>
           </div>
           <Input
@@ -473,6 +502,7 @@ function Members({
                   · с {new Date(member.joinedAt).toLocaleDateString("ru-RU")}
                 </small>
               </div>
+              <div className="vui-server-member-row__alias">
               <Input
                 aria-label={
                   isCurrentUser
@@ -501,28 +531,32 @@ function Members({
                   );
                 }}
               />
+              </div>
               {canManageRoles ? (
-                <div className="vui-server-member-roles">
-                  {server.roles
-                    .filter((role) => role.kind === "CUSTOM")
-                    .map((role) => (
-                      <Checkbox
-                        checked={member.roleIds.includes(role.id)}
-                        key={role.id}
-                        label={role.name}
-                        onChange={(event) =>
-                          mutate(() =>
-                            apiClient.assignServerMemberRoles(
-                              server.id,
-                              member.userId,
-                              event.target.checked
-                                ? [...member.roleIds, role.id]
-                                : member.roleIds.filter((id) => id !== role.id),
-                            ),
-                          )
-                        }
-                      />
-                    ))}
+                <div className="vui-server-member-row__roles">
+                  <span>Роли</span>
+                  <div className="vui-server-member-roles">
+                    {server.roles
+                      .filter((role) => role.kind === "CUSTOM")
+                      .map((role) => (
+                        <Checkbox
+                          checked={member.roleIds.includes(role.id)}
+                          key={role.id}
+                          label={role.name}
+                          onChange={(event) =>
+                            mutate(() =>
+                              apiClient.assignServerMemberRoles(
+                                server.id,
+                                member.userId,
+                                event.target.checked
+                                  ? [...member.roleIds, role.id]
+                                  : member.roleIds.filter((id) => id !== role.id),
+                              ),
+                            )
+                          }
+                        />
+                      ))}
+                  </div>
                 </div>
               ) : null}
               <div className="vui-server-settings-actions">
@@ -869,7 +903,11 @@ function Channels({
       </article>
       <div className="vui-server-settings-list">
         {data.channels.map((channel) => (
-          <article className="vui-server-channel-row" key={channel.id}>
+          <article
+            className="vui-server-channel-row"
+            data-channel-kind={channel.type}
+            key={channel.id}
+          >
             <div>
               <strong>
                 {channel.type === "text" ? "#" : "◉"} {channel.name}
@@ -1057,39 +1095,45 @@ function Invites({ server }: Pick<Props, "server">): React.JSX.Element {
       description="Только короткие ссылки. Ручных кодов и поля ввода кода в приложении нет."
     >
       <div className="vui-server-settings-grid">
-        <article className="vui-server-settings-card">
-          <Select
-            label="Канал назначения"
-            options={[
-              { value: "", label: "По умолчанию" },
-              ...server.channels.map((channel) => ({
-                value: channel.id,
-                label: channel.name,
-              })),
-            ]}
-            value={destination}
-            onValueChange={setDestination}
-          />
-          <Select
-            label="Срок"
-            options={[
-              { value: "3600", label: "1 час" },
-              { value: "86400", label: "1 день" },
-              { value: "604800", label: "7 дней" },
-              { value: "", label: "Без срока" },
-            ]}
-            value={expires}
-            onValueChange={setExpires}
-          />
-          <Input
-            label="Максимум использований"
-            min={1}
-            max={10000}
-            placeholder="Без ограничения"
-            type="number"
-            value={maxUses}
-            onChange={(event) => setMaxUses(event.target.value)}
-          />
+        <article className="vui-server-settings-card vui-server-invite-create-card">
+          <div className="vui-server-settings-card__heading">
+            <h2>Новая ссылка</h2>
+            <p>Настройте срок и назначение до создания приглашения.</p>
+          </div>
+          <div className="vui-server-invite-create-card__controls">
+            <Select
+              label="Канал назначения"
+              options={[
+                { value: "", label: "По умолчанию" },
+                ...server.channels.map((channel) => ({
+                  value: channel.id,
+                  label: channel.name,
+                })),
+              ]}
+              value={destination}
+              onValueChange={setDestination}
+            />
+            <Select
+              label="Срок"
+              options={[
+                { value: "3600", label: "1 час" },
+                { value: "86400", label: "1 день" },
+                { value: "604800", label: "7 дней" },
+                { value: "", label: "Без срока" },
+              ]}
+              value={expires}
+              onValueChange={setExpires}
+            />
+            <Input
+              label="Максимум использований"
+              min={1}
+              max={10000}
+              placeholder="Без ограничения"
+              type="number"
+              value={maxUses}
+              onChange={(event) => setMaxUses(event.target.value)}
+            />
+          </div>
           <Button onClick={create}>Создать ссылку</Button>
           {created ? (
             <div className="vui-server-invite-created">
@@ -1108,7 +1152,11 @@ function Invites({ server }: Pick<Props, "server">): React.JSX.Element {
           ) : null}
           <Feedback error={error} />
         </article>
-        <div className="vui-server-settings-list">
+        <section aria-label="Созданные приглашения" className="vui-server-settings-list vui-server-invite-list">
+          <div className="vui-server-settings-card__heading">
+            <h2>Созданные ссылки</h2>
+            <p>Отозванная ссылка сразу перестаёт открывать сервер.</p>
+          </div>
           {items.map((invite) => (
             <article className="vui-server-invite-row" key={invite.id}>
               <div>
@@ -1141,7 +1189,7 @@ function Invites({ server }: Pick<Props, "server">): React.JSX.Element {
               ) : null}
             </article>
           ))}
-        </div>
+        </section>
       </div>
     </Page>
   );
@@ -1176,7 +1224,11 @@ function Moderation({ server }: Pick<Props, "server">): React.JSX.Element {
       description="Проверка новых участников, лимиты сообщений, правила и список блокировок."
     >
       <div className="vui-server-settings-grid">
-        <article className="vui-server-settings-card">
+        <article className="vui-server-settings-card vui-server-moderation-card">
+          <div className="vui-server-settings-card__heading">
+            <h2>Правила входа и общения</h2>
+            <p>Ограничения применяются к новым сообщениям и вступлениям.</p>
+          </div>
           <Select
             label="Уровень проверки"
             options={[
@@ -1256,8 +1308,11 @@ function Moderation({ server }: Pick<Props, "server">): React.JSX.Element {
             Сохранить
           </Button>
         </article>
-        <article className="vui-server-settings-card">
-          <h2>Заблокированные</h2>
+        <article className="vui-server-settings-card vui-server-moderation-bans">
+          <div className="vui-server-settings-card__heading">
+            <h2>Заблокированные</h2>
+            <p>Эти пользователи не смогут вернуться на сервер, пока вы не снимете блокировку.</p>
+          </div>
           {bans.length === 0 ? (
             <p className="vui-server-settings-empty">
               Нет активных блокировок.
@@ -1370,20 +1425,26 @@ function Audit({ server }: Pick<Props, "server">): React.JSX.Element {
       title="Журнал аудита"
       description="Фильтруемый журнал административных действий."
     >
-      <Select
-        label="Действие"
-        options={[
-          { value: "", label: "Все действия" },
-          ...Object.entries(auditActionLabels).map(([value, label]) => ({
-            value,
-            label,
-          })),
-        ]}
-        value={action}
-        onValueChange={setAction}
-      />
+      <section aria-label="Фильтр журнала" className="vui-server-audit-filter">
+        <div className="vui-server-settings-card__heading">
+          <h2>Фильтр событий</h2>
+          <p>Выберите действие, чтобы оставить в журнале только нужные записи.</p>
+        </div>
+        <Select
+          label="Действие"
+          options={[
+            { value: "", label: "Все действия" },
+            ...Object.entries(auditActionLabels).map(([value, label]) => ({
+              value,
+              label,
+            })),
+          ]}
+          value={action}
+          onValueChange={setAction}
+        />
+      </section>
       <Feedback error={error} />
-      <div className="vui-server-settings-list">
+      <section aria-label="События журнала" className="vui-server-settings-list vui-server-audit-list">
         {entries.map((entry) => (
           <article className="vui-server-audit-row" key={entry.id}>
             <div>
@@ -1401,7 +1462,7 @@ function Audit({ server }: Pick<Props, "server">): React.JSX.Element {
             </span>
           </article>
         ))}
-      </div>
+      </section>
       {cursor ? (
         <Button variant="secondary" onClick={() => load(true)}>
           Показать ещё
@@ -1440,6 +1501,10 @@ function Danger({
       description="Каждое действие требует повторного ввода пароля и TOTP, если 2FA включена."
     >
       <article className="vui-server-settings-card vui-server-settings-card--danger">
+        <div className="vui-server-settings-card__heading">
+          <h2>Подтверждение владельца</h2>
+          <p>Введите пароль и код 2FA один раз перед выполнением любого действия ниже.</p>
+        </div>
         <div className="vui-server-settings-row">
           <Input
             autoComplete="current-password"

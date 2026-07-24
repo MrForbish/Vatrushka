@@ -4,13 +4,14 @@ import { expect, fn, screen, userEvent, waitFor, within } from 'storybook/test';
 import { Avatar, Badge, Button, Icon } from '../primitives';
 import {
   MemberPanel,
+  GlobalSidebar,
   ServerContext,
   ServerTopBar,
   UserProfileDock,
-  WorkspaceLibrary,
+  VoiceProfileConnection,
+  type WorkspaceNavigationItem,
   type ChannelNavigationItem,
   type MemberNavigationItem,
-  type WorkspaceNavigationItem,
 } from '../navigation';
 import { AppShell } from './AppShell';
 import './app-shell.stories.css';
@@ -26,18 +27,17 @@ interface ShellScenarioProps {
   onStatus: () => void;
 }
 
-const workspaces: WorkspaceNavigationItem[] = [
-  { id: 'vatrushka', name: 'Команда Ватрушки', memberCount: 18, statusLabel: '8 в сети', unread: true, mentionCount: 3, activeVoice: true },
-  { id: 'friends', name: 'Друзья и игры', memberCount: 42, statusLabel: '12 в сети', unread: true },
-  { id: 'study', name: 'TypeScript Lab', memberCount: 9, statusLabel: '3 в сети' },
-];
-
 const channels: ChannelNavigationItem[] = [
   { id: 'general', name: 'общий', type: 'text', unread: true, unreadCount: 7 },
   { id: 'planning', name: 'планирование', type: 'text', mentionCount: 2 },
   { id: 'news', name: 'релизы-и-новости', type: 'text' },
   { id: 'lounge', name: 'Разговорная', type: 'voice', participantCount: 4 },
   { id: 'focus', name: 'Фокус-комната', type: 'voice' },
+];
+
+const serverCards: WorkspaceNavigationItem[] = [
+  { id: 'vatrushka', name: 'Команда Ватрушки', memberCount: 18, iconUrl: null, bannerUrl: null, accentColor: '#8357f6', activeVoice: true },
+  { id: 'friends', name: 'Друзья и игры', memberCount: 42, iconUrl: null, bannerUrl: null, accentColor: '#3ed4df' },
 ];
 
 const members: MemberNavigationItem[] = [
@@ -58,11 +58,12 @@ function StoryChannel(): React.JSX.Element {
   );
 }
 
-function ShellScenario({ onChannel, onCreate, onDeafenToggle, onLogout, onMicrophoneToggle, onSecurity, onStatus, onWorkspace }: ShellScenarioProps): React.JSX.Element {
-  const library = <WorkspaceLibrary activeWorkspaceId="vatrushka" onCreate={onCreate} onHome={() => undefined} onSelect={onWorkspace} workspaces={workspaces} />;
-  const profile = <UserProfileDock audioControls={{ connected: true, microphoneMuted: false, deafened: false, onMicrophoneToggle, onDeafenToggle }} email="founder@myvatrushka.ru" founder name="Илья Форбиш" onLogout={onLogout} onSecurity={onSecurity} onStatus={onStatus} />;
-  const context = <ServerContext activeChannelId="general" canManageChannels canManageRoles name="Команда Ватрушки" onChannel={onChannel} onCopyInvite={() => undefined} onCreateChannel={() => undefined} onDeleteChannel={() => undefined} onManageRoles={() => undefined} profile={profile} textChannels={channels.filter((channel) => channel.type === 'text')} voiceChannels={channels.filter((channel) => channel.type === 'voice')} />;
-  return <AppShell members={<MemberPanel members={members} />} serverContext={context} topBar={<ServerTopBar channelName="общий" channelType="text" description="Главное пространство команды" memberCount={18} />} workspaceLibrary={library}><StoryChannel /></AppShell>;
+function ShellScenario({ onChannel, onDeafenToggle, onLogout, onMicrophoneToggle, onSecurity, onStatus, onWorkspace }: ShellScenarioProps): React.JSX.Element {
+  const voiceConnection = <VoiceProfileConnection channelName="Raid" participantCount={3} state="connected" microphoneMuted={false} deafened={false} onMicrophoneToggle={onMicrophoneToggle} onDeafenToggle={onDeafenToggle} onOpen={() => undefined} onLeave={() => undefined} />;
+  const profile = <UserProfileDock email="founder@myvatrushka.ru" enableTilt founder name="Founder" onLogout={onLogout} onSecurity={onSecurity} onStatus={onStatus} voiceConnection={voiceConnection} />;
+  const globalSidebar = <GlobalSidebar activeSection="community" activeServerId="vatrushka" onCommunity={() => onWorkspace('vatrushka')} onDirectMessages={() => undefined} onHome={() => undefined} onServerSelect={onWorkspace} profile={profile} servers={serverCards} />;
+  const context = <ServerContext activeChannelId="general" canManageChannels canManageRoles name="Команда Ватрушки" onChannel={onChannel} onCopyInvite={() => undefined} onCreateChannel={() => undefined} onDeleteChannel={() => undefined} onManageRoles={() => undefined} textChannels={channels.filter((channel) => channel.type === 'text')} voiceChannels={channels.filter((channel) => channel.type === 'voice')} />;
+  return <AppShell globalSidebar={globalSidebar} members={<MemberPanel members={members} />} serverContext={context} topBar={<ServerTopBar channelName="общий" channelType="text" description="Главное пространство команды" memberCount={18} />}><StoryChannel /></AppShell>;
 }
 
 const meta = {
@@ -90,7 +91,7 @@ export const FullServer: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /планирование/u }));
     await expect(args.onChannel).toHaveBeenCalledWith('planning');
     await userEvent.click(canvas.getByRole('button', { name: 'Выключить микрофон' }));
-    await userEvent.click(canvas.getByRole('button', { name: 'Отключить входящий звук и микрофон' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Выключить звук' }));
     await expect(args.onMicrophoneToggle).toHaveBeenCalledOnce();
     await expect(args.onDeafenToggle).toHaveBeenCalledOnce();
     await expect(canvas.getAllByText('CEO Founder').length).toBeGreaterThan(0);
@@ -100,6 +101,10 @@ export const FullServer: Story = {
     await userEvent.keyboard('[Escape]');
     await expect(screen.queryByRole('menu', { name: 'Статус активности' })).not.toBeInTheDocument();
     await expect(statusButton).toHaveFocus();
+    const returnToVoice = canvas.getAllByRole('button', { name: 'Вернуться в голосовой канал' })[0]!;
+    await userEvent.click(returnToVoice);
+    await expect(returnToVoice).toHaveFocus();
+    await expect(canvas.getByRole('button', { name: 'Покинуть голосовой канал' })).toBeEnabled();
   },
 };
 
