@@ -6,7 +6,7 @@ import type {
   PresencePreference,
 } from "@vatrushka/shared";
 
-import brandMarkUrl from "../../assets/brand-mark.png";
+import brandMarkUrl from "../../assets/vatrushka-logo.png";
 import {
   Avatar,
   Badge,
@@ -15,6 +15,7 @@ import {
   IconButton,
   StableImage,
   StatusDot,
+  Tooltip,
 } from "../primitives";
 import type { IconName } from "../primitives";
 import "./navigation.css";
@@ -106,20 +107,109 @@ export interface WorkspaceLibraryProps {
   activeWorkspaceId?: string;
   directActive?: boolean;
   directUnreadCount?: number;
+  disabled?: boolean;
+  homeActive?: boolean;
   onSelect: (id: string) => void;
   onHome: () => void;
   onDirectMessages?: () => void;
   onCreate: () => void;
+  profile?: ReactNode;
+}
+
+export type GlobalSidebarSection = "home" | "community" | "messages";
+
+export interface GlobalSidebarProps {
+  activeSection: GlobalSidebarSection;
+  disabled?: boolean;
+  activeServerId?: string;
+  onCommunity: () => void;
+  onDirectMessages: () => void;
+  onHome: () => void;
+  onServerSelect?: (serverId: string) => void;
+  profile?: ReactNode;
+  servers?: WorkspaceNavigationItem[];
+}
+
+/**
+ * The persistent product navigation from the UI Kit.  Server and channel
+ * navigation deliberately live in the adjacent context column, not here.
+ */
+export function GlobalSidebar({
+  activeSection,
+  activeServerId,
+  disabled = false,
+  onCommunity,
+  onDirectMessages,
+  onHome,
+  onServerSelect,
+  profile,
+  servers = [],
+}: GlobalSidebarProps): React.JSX.Element {
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      return typeof window.localStorage?.getItem === "function" && window.localStorage.getItem("vatrushka.global-sidebar.collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+  const toggleCollapsed = (): void => {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        if (typeof window.localStorage?.setItem === "function") window.localStorage.setItem("vatrushka.global-sidebar.collapsed", String(next));
+      } catch {
+        // Persistence is optional; the control still works for this session.
+      }
+      return next;
+    });
+  };
+  return (
+    <aside aria-label="Основная навигация" className="vui-global-sidebar" data-collapsed={collapsed || undefined}>
+      <div className="vui-global-sidebar__brand"><BrandLockup /><IconButton icon={collapsed ? "panelRight" : "panelLeft"} label={collapsed ? "Развернуть навигацию" : "Свернуть навигацию"} onClick={toggleCollapsed} size="sm" type="button" /></div>
+      <nav aria-label="Разделы приложения" className="vui-global-sidebar__nav">
+        <button aria-current={activeSection === "home" ? "page" : undefined} data-active={activeSection === "home" || undefined} disabled={disabled} onClick={onHome} type="button">
+          <Icon name="home" size={18} /><span>Главная</span>
+        </button>
+        <button aria-current={activeSection === "community" ? "page" : undefined} data-active={activeSection === "community" || undefined} disabled={disabled} onClick={onCommunity} type="button">
+          <Icon name="users" size={18} /><span>Сообщество</span>
+        </button>
+        <button aria-describedby="vui-global-sidebar-friends-hint" disabled type="button">
+          <Icon name="users" size={18} /><span>Друзья</span>
+        </button>
+        <button aria-current={activeSection === "messages" ? "page" : undefined} data-active={activeSection === "messages" || undefined} disabled={disabled} onClick={onDirectMessages} type="button">
+          <Icon name="message" size={18} /><span>Сообщения</span>
+        </button>
+      </nav>
+      <span className="vui-sr-only" id="vui-global-sidebar-friends-hint">Раздел друзей появится в следующем обновлении.</span>
+      {servers.length === 0 ? null : (
+        <nav aria-label="Ваши серверы" className="vui-global-sidebar__servers">
+          {servers.map((server) => (
+            <WorkspaceCard
+              active={server.id === activeServerId}
+              disabled={disabled}
+              key={server.id}
+              onSelect={onServerSelect ?? (() => undefined)}
+              workspace={server}
+            />
+          ))}
+        </nav>
+      )}
+      {profile === undefined ? null : <div className="vui-global-sidebar__profile">{profile}</div>}
+    </aside>
+  );
 }
 
 export function WorkspaceLibrary({
   activeWorkspaceId,
   directActive = false,
   directUnreadCount = 0,
+  disabled = false,
+  homeActive = false,
   onCreate,
   onDirectMessages,
   onHome,
   onSelect,
+  profile,
   workspaces,
 }: WorkspaceLibraryProps): React.JSX.Element {
   return (
@@ -128,7 +218,10 @@ export function WorkspaceLibrary({
         <BrandLockup />
       </div>
       <button
+        aria-current={homeActive ? "page" : undefined}
         className="vui-workspace-library__home"
+        data-active={homeActive || undefined}
+        disabled={disabled}
         onClick={onHome}
         type="button"
       >
@@ -160,6 +253,7 @@ export function WorkspaceLibrary({
         {workspaces.map((workspace) => (
           <WorkspaceCard
             active={workspace.id === activeWorkspaceId}
+            disabled={disabled}
             key={workspace.id}
             onSelect={onSelect}
             workspace={workspace}
@@ -167,11 +261,12 @@ export function WorkspaceLibrary({
         ))}
       </nav>
       <div className="vui-workspace-library__actions">
-        <button onClick={onCreate} type="button">
+        <button disabled={disabled} onClick={onCreate} type="button">
           <Icon name="plus" size={17} />
           <span>Создать сервер</span>
         </button>
       </div>
+      {profile === undefined ? null : <div className="vui-workspace-library__profile">{profile}</div>}
     </aside>
   );
 }
@@ -514,19 +609,12 @@ export interface UserProfileDockProps {
   founder?: boolean;
   status?: EffectivePresenceStatus;
   avatarUrl?: string | null;
+  coverUrl?: string | null | undefined;
   onStatus?: (status: PresencePreference) => void | Promise<void>;
   onSecurity: () => void;
   onLogout: () => void;
-  audioControls?: UserProfileDockAudioControls;
-}
-
-export interface UserProfileDockAudioControls {
-  connected: boolean;
-  microphoneMuted: boolean;
-  deafened: boolean;
-  busy?: boolean;
-  onMicrophoneToggle: () => void;
-  onDeafenToggle: () => void;
+  voiceConnection?: ReactNode | undefined;
+  enableTilt?: boolean | undefined;
 }
 
 const profileStatusLabels: Record<EffectivePresenceStatus, string> = {
@@ -547,8 +635,8 @@ const profileStatusOptions: Array<{
 ];
 
 export function UserProfileDock({
-  audioControls,
   avatarUrl,
+  coverUrl,
   email,
   founder = false,
   name,
@@ -556,12 +644,17 @@ export function UserProfileDock({
   onSecurity,
   onStatus,
   status = "online",
+  voiceConnection,
+  enableTilt = false,
 }: UserProfileDockProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [statusMenuPosition, setStatusMenuPosition] = useState<{
-    bottom: number;
+    top: number;
     left: number;
   } | null>(null);
+  const profileStackRef = useRef<HTMLDivElement>(null);
+  const tiltFrameRef = useRef<number | null>(null);
+  const pendingTiltRef = useRef<{ x: number; y: number } | null>(null);
   const statusButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const closeStatusMenu = (): void => {
@@ -569,6 +662,56 @@ export function UserProfileDock({
     setStatusMenuPosition(null);
     requestAnimationFrame(() => statusButtonRef.current?.focus());
   };
+  const toggleStatusMenu = (event: React.MouseEvent<HTMLButtonElement>): void => {
+    event.stopPropagation();
+    if (open) {
+      closeStatusMenu();
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    setStatusMenuPosition({
+      top: Math.max(8, rect.top - 156),
+      left: Math.max(
+        8,
+        Math.min(window.innerWidth - 172, rect.left + rect.width / 2 - 82),
+      ),
+    });
+    setOpen(true);
+  };
+  const applyTilt = (x: number, y: number): void => {
+    const stack = profileStackRef.current;
+    if (stack === null) return;
+    stack.style.transition = "none";
+    stack.style.transform = `perspective(520px) rotateX(${x}deg) rotateY(${y}deg)`;
+  };
+  const scheduleTilt = (event: React.PointerEvent<HTMLDivElement>): void => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    pendingTiltRef.current = {
+      x: ((event.clientY - rect.top) / rect.height - 0.5) * -12,
+      y: ((event.clientX - rect.left) / rect.width - 0.5) * 18,
+    };
+    if (tiltFrameRef.current !== null) return;
+    tiltFrameRef.current = window.requestAnimationFrame(() => {
+      tiltFrameRef.current = null;
+      const next = pendingTiltRef.current;
+      if (next !== null) applyTilt(next.x, next.y);
+    });
+  };
+  const resetTilt = (): void => {
+    if (tiltFrameRef.current !== null) window.cancelAnimationFrame(tiltFrameRef.current);
+    tiltFrameRef.current = null;
+    pendingTiltRef.current = null;
+    const stack = profileStackRef.current;
+    if (stack === null) return;
+    stack.style.transition = "transform 140ms var(--easing-standard)";
+    stack.style.transform = "perspective(520px) rotateX(0deg) rotateY(0deg)";
+  };
+  useEffect(
+    () => () => {
+      if (tiltFrameRef.current !== null) window.cancelAnimationFrame(tiltFrameRef.current);
+    },
+    [],
+  );
   useEffect(() => {
     if (!open) return undefined;
     const close = (event: MouseEvent): void => {
@@ -590,29 +733,31 @@ export function UserProfileDock({
   }, [open]);
   return (
     <div
-      className="vui-profile-dock"
-      data-audio={audioControls ? "true" : undefined}
-      data-founder={founder || undefined}
+      className="vui-profile-stack"
+      data-tilt-enabled={enableTilt || undefined}
+      onPointerLeave={enableTilt ? resetTilt : undefined}
+      onPointerMove={enableTilt ? scheduleTilt : undefined}
+      ref={profileStackRef}
     >
+      {voiceConnection}
+      <section
+        className="vui-profile-dock"
+        data-founder={founder || undefined}
+        data-invisible={status === "offline" || undefined}
+      >
+      <StableImage
+        alt=""
+        aria-hidden="true"
+        className="vui-profile-dock__cover"
+        fallback={<span className="vui-profile-dock__cover vui-profile-dock__cover-fallback" />}
+        src={coverUrl}
+      />
       <div className="vui-profile-dock__presence">
         <button
           aria-expanded={open}
           aria-haspopup="menu"
           aria-label="Изменить статус"
-          onClick={() => {
-            if (open) {
-              closeStatusMenu();
-              return;
-            }
-            const rect = statusButtonRef.current?.getBoundingClientRect();
-            if (rect) {
-              setStatusMenuPosition({
-                bottom: Math.max(8, window.innerHeight - rect.top + 12),
-                left: Math.max(8, rect.left),
-              });
-            }
-            setOpen(true);
-          }}
+          onClick={toggleStatusMenu}
           ref={statusButtonRef}
           type="button"
         >
@@ -659,69 +804,99 @@ export function UserProfileDock({
             : `${email} · ${profileStatusLabels[status]}`}
         </small>
       </span>
-      {audioControls ? (
-        <span
-          aria-label="Управление голосовой связью"
-          className="vui-profile-dock__audio"
-          role="group"
-        >
-          <IconButton
-            active={audioControls.microphoneMuted}
-            aria-pressed={audioControls.microphoneMuted}
-            disabled={
-              !audioControls.connected ||
-              audioControls.busy === true ||
-              audioControls.deafened
-            }
-            icon={audioControls.microphoneMuted ? "micOff" : "mic"}
-            label={
-              !audioControls.connected
-                ? "Подключитесь к голосовому каналу, чтобы управлять микрофоном"
-                : audioControls.deafened
-                  ? "Входящий звук отключён — микрофон тоже выключен"
-                  : audioControls.microphoneMuted
-                    ? "Включить микрофон"
-                    : "Выключить микрофон"
-            }
-            onClick={audioControls.onMicrophoneToggle}
-            size="sm"
-            type="button"
-          />
-          <IconButton
-            active={audioControls.deafened}
-            aria-pressed={audioControls.deafened}
-            disabled={!audioControls.connected || audioControls.busy === true}
-            icon={audioControls.deafened ? "volumeOff" : "volume"}
-            label={
-              !audioControls.connected
-                ? "Подключитесь к голосовому каналу, чтобы управлять входящим звуком"
-                : audioControls.deafened
-                  ? "Включить входящий звук"
-                  : "Отключить входящий звук и микрофон"
-            }
-            onClick={audioControls.onDeafenToggle}
-            size="sm"
-            type="button"
-          />
-        </span>
-      ) : null}
-      <IconButton
-        className="vui-profile-dock__settings"
-        icon="settings"
-        label="Безопасность и настройки"
-        onClick={onSecurity}
-        size="sm"
-        type="button"
-      />
-      <IconButton
-        className="vui-profile-dock__logout"
-        icon="logout"
-        label="Выйти из аккаунта"
-        onClick={onLogout}
-        size="sm"
-        type="button"
-      />
+      <span className="vui-profile-dock__top-actions">
+        <IconButton
+          className="vui-profile-dock__logout"
+          icon="logout"
+          label="Выйти из аккаунта"
+          onClick={onLogout}
+          size="sm"
+          type="button"
+        />
+        <IconButton
+          className="vui-profile-dock__settings"
+          icon="settings"
+          label="Настройки пользователя"
+          onClick={onSecurity}
+          size="sm"
+          type="button"
+        />
+      </span>
+      </section>
     </div>
+  );
+}
+
+export interface VoiceProfileConnectionProps {
+  channelName: string;
+  participantCount: number;
+  state: "connected" | "connecting" | "reconnecting";
+  microphoneMuted: boolean;
+  deafened: boolean;
+  onMicrophoneToggle: () => void;
+  onDeafenToggle: () => void;
+  onOpen: () => void;
+  onLeave: () => void;
+}
+
+/**
+ * A compact, transport-agnostic connection controller.  It lives in the
+ * persistent global profile card, while device selection remains in the full
+ * voice dock and audio settings.
+ */
+export function VoiceProfileConnection({
+  channelName,
+  deafened,
+  microphoneMuted,
+  onDeafenToggle,
+  onLeave,
+  onMicrophoneToggle,
+  onOpen,
+  participantCount,
+  state,
+}: VoiceProfileConnectionProps): React.JSX.Element {
+  const controlsDisabled = state !== "connected";
+  const stateLabel =
+    state === "connected"
+      ? "В голосовом канале"
+      : state === "reconnecting"
+        ? "Переподключаемся…"
+        : "Подключаемся…";
+  const microphoneLabel = microphoneMuted
+    ? "Включить микрофон"
+    : "Выключить микрофон";
+  const soundLabel = deafened ? "Включить звук" : "Выключить звук";
+  return (
+    <section className="vui-profile-voice" data-state={state}>
+      <button
+        aria-label="Вернуться в голосовой канал"
+        className="vui-profile-voice__summary"
+        onClick={onOpen}
+        type="button"
+      >
+        <span aria-hidden="true" className="vui-profile-voice__status" />
+        <span>
+          <strong>{stateLabel}</strong>
+          <small>
+            {channelName} · {participantCount} {participantCount === 1 ? "участник" : "участника"}
+          </small>
+        </span>
+      </button>
+      <div aria-label="Управление голосовым каналом" className="vui-profile-voice__actions">
+        <Tooltip content={microphoneLabel}>
+          <IconButton active={microphoneMuted} className="vui-profile-voice__action" disabled={controlsDisabled} icon={microphoneMuted ? "micOff" : "mic"} label={microphoneLabel} onClick={onMicrophoneToggle} size="sm" type="button" />
+        </Tooltip>
+        <Tooltip content={soundLabel}>
+          <IconButton active={deafened} className="vui-profile-voice__action" disabled={controlsDisabled} icon={deafened ? "volumeOff" : "volume"} label={soundLabel} onClick={onDeafenToggle} size="sm" type="button" />
+        </Tooltip>
+        <Tooltip content="Вернуться в голосовой канал">
+          <IconButton className="vui-profile-voice__action" icon="arrowRight" label="Вернуться в голосовой канал" onClick={onOpen} size="sm" type="button" />
+        </Tooltip>
+        <Tooltip content="Покинуть голосовой канал">
+          <IconButton className="vui-profile-voice__action vui-profile-voice__leave" icon="phone" label="Покинуть голосовой канал" onClick={onLeave} size="sm" type="button" />
+        </Tooltip>
+      </div>
+    </section>
   );
 }
 
@@ -737,9 +912,6 @@ export interface ServerContextProps {
   voiceChannels: ChannelNavigationItem[];
   canManageChannels?: boolean;
   canManageRoles?: boolean;
-  connectionLabel?: string;
-  connectionPanel?: ReactNode;
-  profile: ReactNode;
   onChannel: (id: string) => void;
   onConnectVoice?: ((id: string) => void) | undefined;
   onCreateChannel?: ((type: ChannelNavigationItem["type"]) => void) | undefined;
@@ -754,8 +926,6 @@ export function ServerContext({
   activeChannelId,
   canManageChannels = false,
   canManageRoles = false,
-  connectionLabel = "Голосовой канал не подключён",
-  connectionPanel,
   description,
   iconUrl,
   bannerUrl,
@@ -770,10 +940,10 @@ export function ServerContext({
   onMoveMember,
   onRenameChannel,
   privacyLabel = "Приватный сервер",
-  profile,
   textChannels,
   voiceChannels,
 }: ServerContextProps): React.JSX.Element {
+  const isOfficial = name.trim().toLocaleLowerCase("ru-RU") === "ватрушка";
   return (
     <aside
       aria-label="Навигация сервера"
@@ -788,21 +958,20 @@ export function ServerContext({
           className="vui-server-context__banner"
           src={bannerUrl}
         />
-        <div>
-          <span aria-hidden="true" className="vui-server-context__cover">
-            <StableImage
-              alt=""
-              fallback={name.slice(0, 1).toUpperCase()}
-              src={iconUrl}
-            />
-          </span>
-          <span>
+        <span aria-hidden="true" className="vui-server-context__cover">
+          <StableImage
+            alt=""
+            fallback={name.slice(0, 1).toUpperCase()}
+            src={iconUrl}
+          />
+        </span>
+        <div className="vui-server-context__identity">
+          <span className="vui-server-context__title">
             <strong title={name}>{name}</strong>
-            <small>
-              <Icon name="lock" size={12} />
-              {privacyLabel}
-            </small>
+            <Icon aria-label={privacyLabel} name="lock" size={18} />
           </span>
+          {isOfficial ? <small className="vui-server-context__official"><Icon name="check" size={13} />Официальный сервер</small> : null}
+          <p title={description?.trim() || "Описание сервера не задано"}>{description?.trim() || "Описание сервера не задано"}</p>
         </div>
         <span className="vui-server-context__tools">
           <IconButton
@@ -857,13 +1026,6 @@ export function ServerContext({
           type="voice"
         />
       </div>
-      {connectionPanel ?? (
-        <div className="vui-server-context__connection">
-          <StatusDot label="Статус голосового подключения" status="offline" />
-          <span>{connectionLabel}</span>
-        </div>
-      )}
-      {profile}
     </aside>
   );
 }
@@ -874,14 +1036,18 @@ export interface ServerTopBarProps {
   description?: string;
   memberCount: number;
   actions?: ReactNode;
+  connectionStatus?: ReactNode;
+  showMemberCount?: boolean;
 }
 
 export function ServerTopBar({
   actions,
   channelName,
   channelType,
+  connectionStatus,
   description,
   memberCount,
+  showMemberCount = true,
 }: ServerTopBarProps): React.JSX.Element {
   return (
     <div className="vui-server-topbar">
@@ -890,10 +1056,13 @@ export function ServerTopBar({
         <strong>{channelName}</strong>
         {description === undefined ? null : <small>{description}</small>}
       </span>
-      <span className="vui-server-topbar__members">
-        <Icon name="users" size={17} />
-        {memberCount}
-      </span>
+      {showMemberCount ? (
+        <span className="vui-server-topbar__members">
+          <Icon name="users" size={17} />
+          {memberCount}
+        </span>
+      ) : null}
+      {connectionStatus}
       {actions}
     </div>
   );

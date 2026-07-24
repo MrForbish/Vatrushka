@@ -54,6 +54,7 @@ export const IPC_CHANNELS = {
 
 interface IpcOptions {
   isTrustedSender(event: IpcMainInvokeEvent): boolean;
+  onAuthWindowModeChange?(authenticated: boolean): void | Promise<void>;
   storage: DesktopStorage;
   setSelectedSource(
     selection: { sourceId: string; includeAudio: boolean } | null,
@@ -66,6 +67,12 @@ interface IpcOptions {
     install(): void;
   };
 }
+
+// The compact auth window is replaced after successful sign-in. Keep the
+// returned access session in main memory for the first bootstrap of the new
+// renderer, so it does not race a second refresh-token rotation. The refresh
+// token itself remains in DesktopStorage only.
+let pendingCompletedAuthSession: DesktopAuthSession | null = null;
 
 const desktopMessageNotificationSchema = z
   .object({
@@ -214,16 +221,19 @@ async function completeAuthSession(
 
 async function refreshAuthSession(
   storage: DesktopStorage,
-): Promise<DesktopAuthSession | null> {
+): Promise<{ session: DesktopAuthSession | null; expired: boolean }> {
   const session = await storage.getAuthSession();
-  if (!session) return null;
+  if (!session) return { session: null, expired: false };
   const response = await fetch(`${session.apiBaseUrl}/auth/refresh`, {
     method: "POST",
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify({ refreshToken: session.refreshToken }),
   });
   if (!response.ok) {
-    if (response.status === 401) await storage.clearAuthSession();
+    if (response.status === 401) {
+      await storage.clearAuthSession();
+      return { session: null, expired: true };
+    }
     throw new Error(`Session refresh failed with status ${response.status}`);
   }
   const refreshed = desktopAuthSessionSchema.parse(await response.json());
@@ -232,9 +242,12 @@ async function refreshAuthSession(
     apiBaseUrl: session.apiBaseUrl,
   });
   return {
-    accessToken: refreshed.accessToken,
-    expiresIn: refreshed.expiresIn,
-    user: refreshed.user,
+    expired: false,
+    session: {
+      accessToken: refreshed.accessToken,
+      expiresIn: refreshed.expiresIn,
+      user: refreshed.user,
+    },
   };
 }
 
@@ -313,11 +326,41 @@ export function registerIpc(options: IpcOptions): () => void {
   handle(IPC_CHANNELS.updateInstall, () => options.updater.install());
   handle(
     IPC_CHANNELS.authComplete,
-    (_event, path: unknown, body: unknown, apiBaseUrl: unknown, rememberSession: unknown) =>
-      completeAuthSession(options.storage, path, body, apiBaseUrl, rememberSession),
+    async (_event, path: unknown, body: unknown, apiBaseUrl: unknown, rememberSession: unknown) => {
+      const result = await completeAuthSession(options.storage, path, body, apiBaseUrl, rememberSession);
+      if (result.ok) {
+        pendingCompletedAuthSession = result.session;
+        // Let the requesting renderer receive its result before it is
+        // destroyed. The full app window consumes this session exactly once.
+        setTimeout(() => void options.onAuthWindowModeChange?.(true), 0);
+      }
+      return result;
+    },
   );
-  handle(IPC_CHANNELS.authRefresh, () => refreshAuthSession(options.storage));
+  handle(IPC_CHANNELS.authRefresh, async () => {
+    if (pendingCompletedAuthSession) {
+      const completed = pendingCompletedAuthSession;
+      pendingCompletedAuthSession = null;
+      return completed;
+    }
+    try {
+      const refreshed = await refreshAuthSession(options.storage);
+      if (refreshed.expired) {
+        // A stale refresh token is discovered only after the normal desktop
+        // window has already been created. Electron cannot safely switch a
+        // framed window to transparent/frameless in place, so replace it with
+        // the dedicated compact auth window after this IPC response resolves.
+        setTimeout(() => void options.onAuthWindowModeChange?.(false), 0);
+      }
+      return refreshed.session;
+    } catch (error) {
+      if ((await options.storage.getAuthSession()) === null)
+        await options.onAuthWindowModeChange?.(false);
+      throw error;
+    }
+  });
   handle(IPC_CHANNELS.authLogout, async () => {
+    pendingCompletedAuthSession = null;
     const session = await options.storage.getAuthSession();
     try {
       if (session)
@@ -331,9 +374,14 @@ export function registerIpc(options: IpcOptions): () => void {
         });
     } finally {
       await options.storage.clearAuthSession();
+      await options.onAuthWindowModeChange?.(false);
     }
   });
-  handle(IPC_CHANNELS.authClear, () => options.storage.clearAuthSession());
+  handle(IPC_CHANNELS.authClear, async () => {
+    pendingCompletedAuthSession = null;
+    await options.storage.clearAuthSession();
+    await options.onAuthWindowModeChange?.(false);
+  });
   handle(IPC_CHANNELS.sourcesList, listSources);
   handle(IPC_CHANNELS.sourceSelect, (_event, value: unknown) => {
     const selection = desktopSourceSelectionSchema.parse(value);

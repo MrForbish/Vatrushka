@@ -20,10 +20,7 @@ import {
   Icon,
   IconButton,
   Popover,
-  Select,
   Slider,
-  VoiceControlButton,
-  VoiceControlDock,
   VoiceParticipantStrip,
   VoiceParticipantTile,
   type VoiceParticipantViewModel,
@@ -49,12 +46,10 @@ export interface RoomViewProps {
   onMute(): void;
   onDeafen?(): void;
   onShare(): void;
-  onCopy(): void | Promise<void>;
   onLeave(): void;
   onKick(identity: string): void;
   onMicrophone(value: string): void;
   onOutput(value: string): void;
-  onRefreshDevices(): void;
   onStartAudio(): void;
   onScreenAudioMute(): void;
   onScreenAudioVolume(value: number): void;
@@ -102,12 +97,6 @@ function participantModel(
 }
 
 export function RoomView(props: RoomViewProps): React.JSX.Element {
-  const [inviteState, setInviteState] = useState<
-    "idle" | "copying" | "copied" | "error"
-  >("idle");
-  const reconnecting =
-    props.snapshot.connectionState === ConnectionState.Reconnecting ||
-    props.snapshot.connectionState === ConnectionState.SignalReconnecting;
   const participantModels = props.snapshot.participants.map((participant) =>
     participantModel(
       participant,
@@ -128,39 +117,8 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
     onLocalMute: props.onParticipantMute,
     onVolume: props.onParticipantVolume,
   };
-  const copyInvite = async (): Promise<void> => {
-    if (inviteState === "copying") return;
-    setInviteState("copying");
-    try {
-      await props.onCopy();
-      setInviteState("copied");
-      window.setTimeout(() => setInviteState("idle"), 2_500);
-    } catch {
-      setInviteState("error");
-    }
-  };
-
   return (
     <section className="vui-room">
-      <header className="vui-room__topbar">
-        <div>
-          <span
-            className="vui-room__connection"
-            data-state={props.snapshot.connectionState}
-          />
-          <strong>
-            {reconnecting
-              ? "Переподключение…"
-              : props.snapshot.connectionState === ConnectionState.Connected
-                ? "Голосовая связь активна"
-                : "Подключение…"}
-          </strong>
-        </div>
-        <span>
-          <Icon name="users" size={15} />
-          {props.snapshot.participants.length} в канале
-        </span>
-      </header>
       <div className="vui-room__content">
         {props.snapshot.screenTrack === null ? (
           <div className="vui-room__voice-stage">
@@ -170,12 +128,16 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
                 <h1>Ожидаем участников</h1>
               </div>
             ) : (
-              <div className="vui-room__participant-grid">
+              <div
+                className={`vui-room__participant-grid vui-room__participant-grid--count-${Math.min(participantModels.length, 4)}${participantModels.length === 1 ? " vui-room__participant-grid--single" : ""}`}
+              >
                 {participantModels.map((participant) => (
                   <VoiceParticipantTile
                     {...participantActions}
                     key={participant.id}
                     participant={participant}
+                    showAudioLevel={false}
+                    showMicStatusWhenMutedOnly
                   />
                 ))}
               </div>
@@ -231,72 +193,49 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
         </div>
       ) : null}
       <div className="vui-room__controls">
-        <VoiceControlDock>
-          <VoiceControlButton
+        <footer className="vui-room__control-dock" aria-label="Управление голосовым каналом">
+          <VoiceDeviceControl
             active={props.snapshot.isMuted}
-            disabled={props.connection.canSpeak === false}
-            icon={props.snapshot.isMuted ? "micOff" : "mic"}
-            label={
+            actionLabel={
               props.connection.canSpeak === false
                 ? "Роль не разрешает говорить"
                 : props.snapshot.isMuted
                   ? "Включить микрофон"
                   : "Выключить микрофон"
             }
-            onClick={props.onMute}
+            disabled={props.connection.canSpeak === false}
+            icon={props.snapshot.isMuted ? "micOff" : "mic"}
+            menuLabel="Выбрать устройство: Микрофон"
+            onToggle={props.onMute}
+            onValueChange={props.onMicrophone}
+            options={prioritizeSelectedDevice(
+              audioDeviceOptions(props.devices.inputs, "input"),
+              props.microphoneId ?? "default",
+            )}
+            selectLabel="Устройство ввода"
             testId="mute-control"
+            value={props.microphoneId ?? "default"}
           />
-          <VoiceControlButton
+          <VoiceDeviceControl
             active={props.snapshot.isDeafened}
-            icon={props.snapshot.isDeafened ? "volumeOff" : "volume"}
-            label={
+            actionLabel={
               props.snapshot.isDeafened
                 ? "Включить входящий звук"
                 : "Отключить входящий звук и микрофон"
             }
-            onClick={props.onDeafen ?? (() => undefined)}
+            icon={props.snapshot.isDeafened ? "volumeOff" : "volume"}
+            menuLabel="Выбрать устройство: Звук"
+            onToggle={props.onDeafen ?? (() => undefined)}
+            onValueChange={props.onOutput}
+            options={prioritizeSelectedDevice(
+              audioDeviceOptions(props.devices.outputs, "output"),
+              props.outputId ?? "default",
+            )}
+            selectLabel="Устройство вывода"
             testId="deafen-control"
+            value={props.outputId ?? "default"}
           />
-          <div className="vui-room__device-popover">
-            <Popover
-              label="Выбор аудиоустройств"
-              trigger={
-                <span className="vui-room__device-trigger">
-                  <UiDeviceIcon />
-                  <small>Устройства</small>
-                </span>
-              }
-            >
-              <div className="vui-room__devices">
-                <header>
-                  <span>
-                    <strong>Аудиоустройства</strong>
-                    <small>Выбор применяется сразу</small>
-                  </span>
-                  <IconButton
-                    icon="refresh"
-                    label="Обновить список аудиоустройств"
-                    onClick={props.onRefreshDevices}
-                    size="sm"
-                    type="button"
-                  />
-                </header>
-                <Select
-                  label="Устройство ввода"
-                  onValueChange={props.onMicrophone}
-                  options={audioDeviceOptions(props.devices.inputs, "input")}
-                  value={props.microphoneId ?? "default"}
-                />
-                <Select
-                  label="Устройство вывода"
-                  onValueChange={props.onOutput}
-                  options={audioDeviceOptions(props.devices.outputs, "output")}
-                  value={props.outputId ?? "default"}
-                />
-              </div>
-            </Popover>
-          </div>
-          <VoiceControlButton
+          <VoiceDockAction
             active={props.snapshot.isScreenSharing}
             disabled={
               props.busy ||
@@ -311,135 +250,151 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
                   ? "Дождитесь подключения к голосовому серверу"
                   : props.snapshot.isScreenSharing
                     ? "Остановить показ"
-                    : "Показать экран"
+                    : "Демонстрация"
             }
             onClick={props.onShare}
             testId="screen-share-control"
           />
-          <VoiceControlButton
-            icon="copy"
-            label={
-              inviteState === "copying"
-                ? "Копируем…"
-                : inviteState === "copied"
-                  ? "Ссылка скопирована"
-                  : "Пригласить"
-            }
-            onClick={() => void copyInvite()}
-            testId="copy-invite-control"
-          />
-          <VoiceControlButton
+          <VoiceDockAction
             danger
-            icon="logout"
-            label="Выйти"
+            icon="phone"
+            label="Покинуть голосовой канал"
             onClick={props.onLeave}
             testId="leave-control"
           />
-        </VoiceControlDock>
-        {inviteState === "copied" || inviteState === "error" ? (
-          <span className="vui-room__invite-status" role="status">
-            {inviteState === "copied"
-              ? "Ссылка на сервер скопирована"
-              : "Не удалось скопировать ссылку"}
-          </span>
-        ) : null}
+        </footer>
       </div>
     </section>
   );
 }
 
-function UiDeviceIcon(): React.JSX.Element {
+interface VoiceDockActionProps {
+  active?: boolean;
+  danger?: boolean;
+  disabled?: boolean;
+  icon: Parameters<typeof Icon>[0]["name"];
+  label: string;
+  onClick(): void;
+  testId: string;
+}
+
+function VoiceDockAction({
+  active = false,
+  danger = false,
+  disabled = false,
+  icon,
+  label,
+  onClick,
+  testId,
+}: VoiceDockActionProps): React.JSX.Element {
   return (
-    <span aria-hidden="true" className="vui-room__device-icon">
-      <Icon name="settings" size={20} />
-    </span>
+    <button
+      aria-label={label}
+      aria-pressed={active}
+      className="vui-room__dock-action"
+      data-active={active || undefined}
+      data-danger={danger || undefined}
+      data-testid={testId}
+      disabled={disabled}
+      onClick={onClick}
+      title={label}
+      type="button"
+    >
+      <span aria-hidden="true">
+        <Icon name={icon} size={20} />
+      </span>
+    </button>
   );
 }
 
-export interface VoiceConnectionPanelProps {
-  channelName: string;
-  snapshot: MediaSnapshot;
-  canShare: boolean;
-  onOpen(): void;
-  onMute(): void;
-  onDeafen?(): void;
-  onShare(): void;
-  onLeave(): void;
+interface VoiceDeviceControlProps {
+  active: boolean;
+  actionLabel: string;
+  disabled?: boolean;
+  icon: Parameters<typeof Icon>[0]["name"];
+  menuLabel: string;
+  onToggle(): void;
+  onValueChange(value: string): void;
+  options: Array<{ label: string; value: string }>;
+  selectLabel: string;
+  testId: string;
+  value: string;
 }
 
-export function VoiceConnectionPanel({
-  canShare,
-  channelName,
-  onDeafen,
-  onLeave,
-  onMute,
-  onOpen,
-  onShare,
-  snapshot,
-}: VoiceConnectionPanelProps): React.JSX.Element {
-  const connected = snapshot.connectionState === ConnectionState.Connected;
+function prioritizeSelectedDevice<T extends { value: string }>(
+  options: T[],
+  selectedValue: string,
+): T[] {
+  const selected = options.find((option) => option.value === selectedValue);
+  return selected
+    ? [selected, ...options.filter((option) => option.value !== selectedValue)]
+    : options;
+}
+
+function VoiceDeviceControl({
+  active,
+  actionLabel,
+  disabled = false,
+  icon,
+  menuLabel,
+  onToggle,
+  onValueChange,
+  options,
+  selectLabel,
+  testId,
+  value,
+}: VoiceDeviceControlProps): React.JSX.Element {
   return (
-    <section className="vui-voice-connection">
-      <button
-        className="vui-voice-connection__summary"
-        onClick={onOpen}
-        type="button"
-      >
-        <span
-          className="vui-room__connection"
-          data-state={snapshot.connectionState}
-        />
-        <span>
-          <strong>
-            {connected ? "Голосовая связь подключена" : "Подключение…"}
-          </strong>
-          <small>
-            {channelName} · {snapshot.participants.length} участников
-          </small>
-        </span>
-      </button>
+    <div className="vui-room__device-control">
       <div>
-        <IconButton
-          active={snapshot.isMuted}
-          icon={snapshot.isMuted ? "micOff" : "mic"}
-          label={snapshot.isMuted ? "Включить микрофон" : "Выключить микрофон"}
-          onClick={onMute}
-          size="sm"
+        <button
+          aria-pressed={active}
+          className="vui-room__device-main"
+          data-active={active || undefined}
+          data-testid={testId}
+          disabled={disabled}
+          onClick={onToggle}
+          title={actionLabel}
           type="button"
-        />
-        <IconButton
-          active={snapshot.isDeafened}
-          icon={snapshot.isDeafened ? "volumeOff" : "volume"}
-          label={
-            snapshot.isDeafened
-              ? "Включить входящий звук"
-              : "Отключить входящий звук и микрофон"
+        >
+          <Icon name={icon} size={20} />
+          <span className="vui-sr-only">{actionLabel}</span>
+        </button>
+        <Popover
+          className="vui-room__device-popover"
+          label={menuLabel}
+          placement="top-end"
+          trigger={
+            <span className="vui-room__device-menu">
+              <Icon name="chevronDown" size={16} />
+              <span className="vui-sr-only">{menuLabel}</span>
+            </span>
           }
-          onClick={onDeafen ?? (() => undefined)}
-          size="sm"
-          type="button"
-        />
-        <IconButton
-          active={snapshot.isScreenSharing}
-          disabled={!canShare}
-          icon="screen"
-          label={
-            snapshot.isScreenSharing ? "Остановить показ" : "Показать экран"
-          }
-          onClick={onShare}
-          size="sm"
-          type="button"
-        />
-        <IconButton
-          className="vui-voice-connection__leave"
-          icon="logout"
-          label="Выйти из голосового канала"
-          onClick={onLeave}
-          size="sm"
-          type="button"
-        />
+        >
+          {({ close }) => (
+          <div className="vui-room__devices">
+            <div aria-label={selectLabel} className="vui-room__device-options" role="listbox">
+              {options.map((option) => (
+                <button
+                  aria-selected={option.value === value}
+                  key={option.value}
+                  onClick={() => {
+                    onValueChange(option.value);
+                    close();
+                  }}
+                  role="option"
+                  type="button"
+                >
+                  <span>{option.label}</span>
+                  {option.value === value ? <Icon name="check" size={16} /> : null}
+                </button>
+              ))}
+            </div>
+          </div>
+          )}
+        </Popover>
       </div>
-    </section>
+    </div>
   );
 }
 

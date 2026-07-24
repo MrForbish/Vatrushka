@@ -107,9 +107,24 @@
   --z-tooltip: 90;
 
   --app-titlebar-height: 28px;
+  --shell-global-width: 224px;
+  --shell-context-width: 270px;
+  --shell-inspector-width: 250px;
+  --shell-toolbar-height: 68px;
   --home-sidebar-width: 272px;
   --home-profile-rail-width: 224px;
   --home-dashboard-max-width: 1120px;
   --home-page-gap: 20px;
   --home-card-radius: 16px;
+}
+
+.vui-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

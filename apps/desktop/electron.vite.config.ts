@@ -6,6 +6,16 @@ import hawkSourceMapPlugin from './scripts/hawk-source-map-plugin.mjs';
 const hawkRendererToken = process.env.HAWK_DESKTOP_RENDERER_TOKEN;
 const hawkMainToken = process.env.HAWK_DESKTOP_MAIN_TOKEN;
 const hawkRelease = process.env.HAWK_DESKTOP_RELEASE ?? 'unknown';
+const devApiProxyTarget = process.env.VATRUSHKA_DEV_API_PROXY_TARGET ?? 'https://api.myvatrushka.ru';
+
+function stripBrowserOrigin(proxy: { on(event: string, listener: (...args: unknown[]) => void): void }): void {
+  proxy.on('proxyReq', (request: unknown) => {
+    (request as { removeHeader(name: string): void }).removeHeader('origin');
+  });
+  proxy.on('proxyReqWs', (request: unknown) => {
+    (request as { removeHeader(name: string): void }).removeHeader('origin');
+  });
+}
 
 export default defineConfig({
   main: {
@@ -29,6 +39,26 @@ export default defineConfig({
   },
   renderer: {
     root: resolve('src/renderer'),
+    server: {
+      host: '127.0.0.1',
+      port: 5174,
+      strictPort: true,
+      proxy: {
+        '/api': {
+          target: devApiProxyTarget,
+          changeOrigin: true,
+          configure: stripBrowserOrigin,
+          secure: true,
+        },
+        '/ws': {
+          target: devApiProxyTarget,
+          changeOrigin: true,
+          configure: stripBrowserOrigin,
+          secure: true,
+          ws: true,
+        },
+      },
+    },
     plugins: [
       react(),
       ...(hawkRendererToken

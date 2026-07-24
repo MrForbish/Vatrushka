@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import type {
   LocalSettings,
@@ -27,7 +27,8 @@ import {
 import { apiClient } from "../../api";
 import {
   ConfirmDialog,
-  WorkspaceLibrary,
+  GlobalSidebar,
+  UserProfileDock,
   type WorkspaceNavigationItem,
 } from "../../ui";
 import type { SettingsRoute } from "./route-paths";
@@ -48,11 +49,13 @@ export interface SettingsRoutePageProps {
   presenceEnabled: boolean;
   route: SettingsRoute;
   settings: LocalSettings;
+  profileCoverUrl?: string | null | undefined;
   server: ServerDetail | null;
   serverSettingsRevision: number;
   servers: ServerSummary[];
   user: PublicUser;
   voiceConnected: boolean;
+  voiceProfileConnection?: ReactNode | undefined;
   onBack(): void;
   onCreateServer(): void;
   onDirectMessages(): void;
@@ -165,28 +168,37 @@ export function SettingsRoutePage(
     return () => window.removeEventListener("beforeunload", blockWindowClose);
   }, [pageDirty]);
 
-  const workspaces: WorkspaceNavigationItem[] = props.servers.map((server) => ({
-    id: server.id,
-    name: server.name,
-    memberCount: server.memberCount,
-    activeVoice: false,
-    iconUrl: server.iconUrl ?? null,
-    bannerUrl: server.bannerUrl ?? null,
-    accentColor: server.accentColor ?? null,
-  }));
-  const workspaceLibrary = (
-    <WorkspaceLibrary
-      {...(props.route.kind === "server"
-        ? { activeWorkspaceId: props.route.serverId }
-        : {})}
-      directUnreadCount={props.directUnreadCount}
-      onCreate={() => requestNavigation(props.onCreateServer)}
+  const globalSidebar = (
+    <GlobalSidebar
+      activeSection={props.route.kind === "server" ? "community" : "home"}
+      {...(props.route.kind === "server" ? { activeServerId: props.route.serverId } : {})}
+      onCommunity={() => {
+        const serverId = props.route.kind === "server" ? props.route.serverId : props.servers[0]?.id;
+        if (serverId) requestNavigation(() => props.onOpenServer(serverId));
+        else requestNavigation(props.onCreateServer);
+      }}
       onDirectMessages={() => requestNavigation(props.onDirectMessages)}
       onHome={() => requestNavigation(props.onHome)}
-      onSelect={(serverId) =>
-        requestNavigation(() => props.onOpenServer(serverId))
-      }
-      workspaces={workspaces}
+      onServerSelect={(serverId) => requestNavigation(() => props.onOpenServer(serverId))}
+      profile={<UserProfileDock
+        avatarUrl={props.user.avatarUrl ?? null}
+        coverUrl={props.profileCoverUrl}
+        email={props.user.email}
+        founder={props.user.platformRole === "owner"}
+        name={props.user.displayName ?? props.user.email}
+        enableTilt
+        onLogout={props.onLogout}
+        onSecurity={() => requestNavigation(() => props.onNavigate(userSettingsPath("profile")))}
+        voiceConnection={props.voiceProfileConnection}
+      />}
+      servers={props.servers.map((server): WorkspaceNavigationItem => ({
+        id: server.id,
+        name: server.name,
+        memberCount: server.memberCount,
+        iconUrl: server.iconUrl ?? null,
+        bannerUrl: server.bannerUrl ?? null,
+        accentColor: server.accentColor ?? null,
+      }))}
     />
   );
 
@@ -288,7 +300,7 @@ export function SettingsRoutePage(
           onSelect={(section) =>
             requestNavigation(() => props.onNavigate(userSettingsPath(section)))
           }
-          workspaceLibrary={workspaceLibrary}
+          globalSidebar={globalSidebar}
         >
           {content}
         </SettingsShell>
@@ -356,7 +368,7 @@ export function SettingsRoutePage(
       onSelect={(section) =>
         props.onNavigate(serverSettingsPath(serverRoute.serverId, section))
       }
-      workspaceLibrary={workspaceLibrary}
+      globalSidebar={globalSidebar}
     >
       {props.loading ? (
         <SettingsPageState kind="loading" />

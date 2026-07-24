@@ -1,19 +1,46 @@
 .vui-app-shell {
+  position: relative;
   display: grid;
-  grid-template-areas:
-    "workspaces server topbar"
-    "workspaces server content";
-  grid-template-columns: 220px 292px minmax(0, 1fr);
-  grid-template-rows: 52px minmax(0, 1fr);
+  grid-template-areas: "global context workspace";
+  grid-template-columns: var(--shell-global-width) var(--shell-context-width) minmax(0, 1fr);
   width: 100vw;
   min-width: 1024px;
   height: 100vh;
   min-height: 680px;
   overflow: hidden;
-  background: var(--color-surface-1);
+  background: var(--color-canvas);
   color: var(--color-text-primary);
   font-family: var(--font-ui);
 }
+
+.vui-app-shell__resize {
+  position: absolute;
+  z-index: 20;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+}
+.vui-app-shell__resize::after {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  width: 2px;
+  height: 38px;
+  border-radius: var(--radius-round);
+  background: transparent;
+  content: "";
+  transform: translateY(-50%);
+  transition: background var(--duration-fast) var(--easing-standard), height var(--duration-fast) var(--easing-standard);
+}
+.vui-app-shell__resize:hover::after,
+.vui-app-shell__resize:focus-visible::after { height: 64px; background: var(--color-primary); }
+.vui-app-shell__resize:focus-visible { outline: 0; }
+.vui-app-shell__resize--context { left: calc(var(--shell-global-width) + var(--shell-context-width) - 5px); }
+.vui-app-shell__resize--members { right: calc(var(--shell-inspector-width) - 5px); }
 
 body.desktopTitlebarOverlay .vui-app-shell {
   height: 100%;
@@ -21,184 +48,191 @@ body.desktopTitlebarOverlay .vui-app-shell {
 }
 
 .vui-app-shell__workspaces {
-  grid-area: workspaces;
+  grid-area: global;
   min-width: 0;
-  overflow: hidden;
+  overflow: visible;
+  background: var(--color-canvas);
+  border-right: 1px solid var(--color-border-subtle);
 }
+
+.vui-app-shell:has(.vui-global-sidebar[data-collapsed="true"]) {
+  --shell-global-width: 76px;
+}
+
 .vui-app-shell__server-context {
-  grid-area: server;
+  grid-area: context;
   min-width: 0;
   overflow: hidden;
 }
+
+.vui-app-shell__workspace {
+  grid-area: workspace;
+  display: grid;
+  grid-template-rows: var(--shell-toolbar-height) minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  background:
+    radial-gradient(circle at 42% -18%, color-mix(in srgb, var(--color-primary) 10%, transparent), transparent 34%),
+    var(--color-canvas);
+}
+
 .vui-app-shell__topbar {
-  grid-area: topbar;
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
-  padding: 0 var(--space-4);
+  padding: 0 var(--space-5);
   border-bottom: 1px solid var(--color-border-subtle);
-  background: var(--color-surface-0);
+  background: color-mix(in srgb, var(--color-surface-0) 92%, transparent);
 }
+
 .vui-app-shell__content {
-  grid-area: content;
+  align-self: stretch;
+  height: auto;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-surface-1);
 }
+
 .vui-app-shell__members {
   display: none;
   grid-area: members;
   min-width: 0;
   overflow: hidden;
-}
-.vui-app-shell__workspace-toggle {
-  display: none;
-  flex: 0 0 auto;
-}
-.vui-app-shell__members-toggle {
-  display: inline-flex;
-  flex: 0 0 auto;
-  margin-left: auto;
-}
-.vui-app-shell__drawer-content {
-  height: calc(100vh - 86px);
-  margin: calc(var(--space-6) * -1);
-}
-.vui-app-shell__drawer-content > .vui-workspace-library,
-.vui-app-shell__drawer-content > .vui-member-panel {
-  width: 100%;
-  border: 0;
+  border-left: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-1);
 }
 
+.vui-app-shell__workspace-toggle { display: none; flex: 0 0 auto; }
+.vui-app-shell__members-toggle { display: inline-flex; flex: 0 0 auto; margin-left: auto; }
+.vui-app-shell__drawer-content { height: calc(100vh - 86px); margin: calc(var(--space-6) * -1); }
+.vui-app-shell__drawer-content > .vui-global-sidebar,
+.vui-app-shell__drawer-content > .vui-member-panel { width: 100%; border: 0; }
+
 .vui-app-shell:not([data-has-server-context]) {
-  grid-template-areas:
-    "workspaces topbar"
-    "workspaces content";
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-areas: "global workspace";
+  grid-template-columns: var(--shell-global-width) minmax(0, 1fr);
 }
 
 @media (min-width: 1440px) {
   .vui-app-shell[data-has-members="true"][data-variant="default"] {
-    grid-template-areas:
-      "workspaces server topbar topbar"
-      "workspaces server content members";
-    grid-template-columns: 232px 304px minmax(620px, 1fr) 272px;
+    grid-template-areas: "global context workspace members";
+    grid-template-columns: var(--shell-global-width) var(--shell-context-width) minmax(620px, 1fr) var(--shell-inspector-width);
   }
-  .vui-app-shell[data-has-members="true"] .vui-app-shell__members {
-    display: block;
+  .vui-app-shell[data-has-members="true"] .vui-app-shell__members { display: block; }
+  .vui-app-shell[data-has-members="true"] .vui-app-shell__members-toggle { display: none; }
+  .vui-app-shell[data-has-members="true"][data-variant="default"]:not([data-has-server-context]) {
+    grid-template-areas: "global workspace members";
+    grid-template-columns: var(--shell-global-width) minmax(620px, 1fr) var(--shell-inspector-width);
   }
-  .vui-app-shell[data-has-members="true"] .vui-app-shell__members-toggle {
-    display: none;
-  }
+}
 
-  .vui-app-shell[data-has-members="true"][data-variant="default"]:not(
-      [data-has-server-context]
-    ) {
-    grid-template-areas:
-      "workspaces topbar topbar"
-      "workspaces content members";
-    grid-template-columns: 232px minmax(620px, 1fr) 272px;
-  }
+@media (max-width: 1439px) {
+  .vui-app-shell__resize { display: none; }
 }
 
 .vui-app-shell[data-variant="settings"] {
-  grid-template-columns: 220px 264px minmax(0, 1fr);
-  min-width: 1024px;
+  grid-template-columns: var(--shell-global-width) 264px minmax(0, 1fr);
   background: var(--color-canvas);
 }
 
-.vui-app-shell[data-variant="settings"] .vui-app-shell__topbar {
-  min-height: 56px;
-  padding-inline: var(--space-5);
-}
-
 .vui-app-shell[data-variant="home"] {
-  grid-template-areas:
-    "workspaces topbar"
-    "workspaces content";
-  grid-template-columns: var(--home-sidebar-width) minmax(0, 1fr);
+  grid-template-areas: "global workspace";
+  grid-template-columns: var(--shell-global-width) minmax(0, 1fr);
   min-width: 1100px;
   background: var(--color-canvas);
 }
 
-.vui-app-shell[data-variant="home"] .vui-app-shell__topbar {
-  min-height: 56px;
-  padding-inline: var(--home-page-gap);
+.vui-app-shell[data-variant="direct-messages"] {
+  grid-template-areas: "global context workspace";
+  grid-template-columns: var(--shell-global-width) 285px minmax(0, 1fr);
 }
 
-@media (min-width: 1280px) {
-  .vui-app-shell[data-variant="home"] {
-    grid-template-areas:
-      "workspaces topbar topbar"
-      "workspaces content members";
-    grid-template-columns: var(--home-sidebar-width) minmax(0, 1fr) var(
-        --home-profile-rail-width
-      );
+.vui-app-shell[data-variant="direct-messages"] .vui-app-shell__workspace {
+  grid-template-rows: 96px minmax(0, 1fr);
+  background: radial-gradient(circle at 49% 0%, color-mix(in srgb, var(--color-primary) 11%, transparent), transparent 31%), var(--color-canvas);
+}
+
+.vui-app-shell[data-variant="direct-messages"] .vui-app-shell__content {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  height: auto;
+  min-height: 0;
+}
+
+.vui-app-shell[data-variant="direct-messages"] .vui-app-shell__topbar {
+  padding-inline: 28px;
+}
+
+@media (min-width: 1440px) {
+  .vui-app-shell[data-has-members="true"][data-variant="direct-messages"] {
+    grid-template-areas: "global context workspace members";
+    grid-template-columns: var(--shell-global-width) 285px minmax(0, 1fr) 310px;
   }
 
-  .vui-app-shell[data-variant="home"] .vui-app-shell__members {
+  .vui-app-shell[data-has-members="true"][data-variant="direct-messages"] .vui-app-shell__members {
     display: block;
   }
-  .vui-app-shell[data-variant="home"] .vui-app-shell__members-toggle {
+
+  .vui-app-shell[data-has-members="true"][data-variant="direct-messages"] .vui-app-shell__members-toggle {
     display: none;
   }
+}
+
+@media (min-width: 1680px) {
+  .vui-app-shell[data-variant="direct-messages"] {
+    grid-template-columns: var(--shell-global-width) 320px minmax(0, 1fr);
+  }
+
+  .vui-app-shell[data-has-members="true"][data-variant="direct-messages"] {
+    grid-template-columns: var(--shell-global-width) 320px minmax(0, 1fr) 380px;
+  }
+}
+
+.vui-app-shell[data-variant="home"]:not([data-has-topbar]) .vui-app-shell__workspace {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.vui-app-shell[data-variant="home"] .vui-app-shell__topbar { padding-inline: var(--home-page-gap); }
+
+@media (min-width: 1280px) {
+  .vui-app-shell[data-variant="home"][data-has-members="true"] {
+    grid-template-areas: "global workspace members";
+    grid-template-columns: var(--shell-global-width) minmax(0, 1fr) var(--home-profile-rail-width);
+  }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__members { display: block; }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__members-toggle { display: none; }
 }
 
 @media (max-width: 1279px) {
-  .vui-app-shell[data-variant="home"] .vui-app-shell__members {
-    display: none;
-  }
-  .vui-app-shell[data-variant="home"] .vui-app-shell__members-toggle {
-    display: inline-flex;
-  }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__members { display: none; }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__members-toggle { display: inline-flex; }
 }
 
 @media (max-width: 1179px) {
   .vui-app-shell {
-    grid-template-areas:
-      "server topbar"
-      "server content";
-    grid-template-columns: 292px minmax(0, 1fr);
+    grid-template-areas: "context workspace";
+    grid-template-columns: var(--shell-context-width) minmax(0, 1fr);
   }
-  .vui-app-shell__workspaces {
-    display: none;
-  }
-  .vui-app-shell__workspace-toggle {
-    display: inline-grid;
-  }
-
+  .vui-app-shell__workspaces { display: none; }
+  .vui-app-shell__workspace-toggle { display: inline-grid; }
   .vui-app-shell:not([data-has-server-context]) {
-    grid-template-areas:
-      "topbar"
-      "content";
+    grid-template-areas: "workspace";
     grid-template-columns: minmax(0, 1fr);
   }
-}
-
-@media (max-width: 1179px) {
   .vui-app-shell[data-variant="settings"] {
-    grid-template-areas:
-      "server topbar"
-      "server content";
+    grid-template-areas: "context workspace";
     grid-template-columns: 264px minmax(0, 1fr);
   }
-}
-
-@media (max-width: 1179px) {
   .vui-app-shell[data-variant="home"],
   .vui-app-shell[data-variant="home"]:not([data-has-server-context]) {
-    grid-template-areas:
-      "workspaces topbar"
-      "workspaces content";
-    grid-template-columns: var(--home-sidebar-width) minmax(0, 1fr);
+    grid-template-areas: "global workspace";
+    grid-template-columns: var(--shell-global-width) minmax(0, 1fr);
   }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__workspaces { display: block; }
+  .vui-app-shell[data-variant="home"] .vui-app-shell__workspace-toggle { display: none; }
+}
 
-  .vui-app-shell[data-variant="home"] .vui-app-shell__workspaces {
-    display: block;
-  }
-  .vui-app-shell[data-variant="home"] .vui-app-shell__workspace-toggle {
-    display: none;
-  }
+@media (min-width: 1180px) and (max-width: 1380px) {
+  .vui-app-shell { --shell-global-width: 224px; }
 }

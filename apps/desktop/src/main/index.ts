@@ -41,7 +41,19 @@ let removeIpcHandlers: (() => void) | null = null;
 let desktopUpdater: DesktopUpdater | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+let compactAuthWindow = false;
 const activeNotifications = new Set<Notification>();
+
+const AUTH_WINDOW_SIZE = { width: 520, height: 680 };
+const APP_WINDOW_MIN_SIZE = { width: 1100, height: 680 };
+
+async function setMainWindowAuthMode(authenticated: boolean): Promise<void> {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const windowToReplace = mainWindow;
+  mainWindow = null;
+  windowToReplace.destroy();
+  await createWindow(authenticated);
+}
 
 function checkForUpdatesIfDue(): void {
   void desktopUpdater?.checkIfDue();
@@ -83,6 +95,10 @@ function isTrustedOrigin(value: string): boolean {
 }
 
 function sendDeepLink(inviteToken: string): void {
+  if (compactAuthWindow) {
+    pendingDeepLink = inviteToken;
+    return;
+  }
   if (
     !mainWindow ||
     mainWindow.isDestroyed() ||
@@ -207,7 +223,7 @@ function configureSession(): void {
           developmentUrl
             ? productionCsp.replace(
                 "script-src 'self'",
-                "script-src 'self' 'unsafe-eval'",
+                "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
               )
             : productionCsp,
         ],
@@ -276,24 +292,29 @@ function configureSession(): void {
   });
 }
 
-async function createWindow(): Promise<void> {
+async function createWindow(authenticated?: boolean): Promise<void> {
   const settings = await storage.getSettings();
+  const hasAuthenticatedSession = authenticated ?? (await storage.getAuthSession()) !== null;
+  compactAuthWindow = !hasAuthenticatedSession;
   mainWindow = new BrowserWindow({
     title: APP_NAME,
-    width: settings.windowBounds?.width ?? 1280,
-    height: settings.windowBounds?.height ?? 800,
-    ...(settings.windowBounds?.x === undefined
+    width: compactAuthWindow ? AUTH_WINDOW_SIZE.width : settings.windowBounds?.width ?? 1280,
+    height: compactAuthWindow ? AUTH_WINDOW_SIZE.height : settings.windowBounds?.height ?? 800,
+    ...(compactAuthWindow || settings.windowBounds?.x === undefined
       ? {}
       : { x: settings.windowBounds.x }),
-    ...(settings.windowBounds?.y === undefined
+    ...(compactAuthWindow || settings.windowBounds?.y === undefined
       ? {}
       : { y: settings.windowBounds.y }),
-    minWidth: 1100,
-    minHeight: 680,
+    minWidth: compactAuthWindow ? AUTH_WINDOW_SIZE.width : APP_WINDOW_MIN_SIZE.width,
+    minHeight: compactAuthWindow ? AUTH_WINDOW_SIZE.height : APP_WINDOW_MIN_SIZE.height,
+    resizable: !compactAuthWindow,
+    frame: !compactAuthWindow,
+    transparent: compactAuthWindow,
     show: false,
-    backgroundColor: "#090d18",
+    backgroundColor: compactAuthWindow ? "#00000000" : "#090d18",
     autoHideMenuBar: true,
-    ...(process.platform === "win32"
+    ...(!compactAuthWindow && process.platform === "win32"
       ? {
           titleBarStyle: "hidden" as const,
           titleBarOverlay: {
@@ -314,21 +335,48 @@ async function createWindow(): Promise<void> {
       spellcheck: false,
     },
   });
-  mainWindow.setMenu(null);
+  const window = mainWindow;
+  window.setMenu(null);
+  // A compact auth window deliberately does not inherit the saved position of
+  // the full application window. It is a standalone modal-like entry point.
+  if (compactAuthWindow) window.center();
 
-  mainWindow.webContents.on("will-navigate", (event, url) => {
+  window.webContents.on("will-navigate", (event, url) => {
     if (!isTrustedUrl(url)) event.preventDefault();
   });
-  mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  mainWindow.webContents.on("will-attach-webview", (event) =>
+  window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  window.webContents.on("will-attach-webview", (event) =>
     event.preventDefault(),
   );
-  mainWindow.once("ready-to-show", () => mainWindow?.show());
-  mainWindow.webContents.on("did-finish-load", () => {
-    if (!pendingDeepLink || !mainWindow || mainWindow.isDestroyed()) return;
+  if (developmentUrl) {
+    window.webContents.on(
+      "console-message",
+      (_event, level, message, line, sourceId) => {
+        console.error(
+          `[renderer:${level}] ${sourceId}:${line} ${message}`,
+        );
+      },
+    );
+    window.webContents.on(
+      "did-fail-load",
+      (_event, errorCode, errorDescription, validatedUrl) => {
+        console.error(
+          `[renderer:load] ${errorCode} ${errorDescription}: ${validatedUrl}`,
+        );
+      },
+    );
+    window.webContents.on("render-process-gone", (_event, details) => {
+      console.error(
+        `[renderer:gone] ${details.reason}: exit ${details.exitCode}`,
+      );
+    });
+  }
+  window.once("ready-to-show", () => window.show());
+  window.webContents.on("did-finish-load", () => {
+    if (compactAuthWindow || !pendingDeepLink || !mainWindow || mainWindow.isDestroyed()) return;
     const inviteToken = pendingDeepLink;
     pendingDeepLink = null;
-    mainWindow.webContents.send(IPC_CHANNELS.deepLink, inviteToken);
+    window.webContents.send(IPC_CHANNELS.deepLink, inviteToken);
   });
 
   let saveBoundsTimer: NodeJS.Timeout | undefined;
@@ -336,13 +384,13 @@ async function createWindow(): Promise<void> {
     if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
     saveBoundsTimer = setTimeout(() => {
       if (
-        !mainWindow ||
-        mainWindow.isDestroyed() ||
-        mainWindow.isMaximized() ||
-        mainWindow.isFullScreen()
+        window.isDestroyed() ||
+        compactAuthWindow ||
+        window.isMaximized() ||
+        window.isFullScreen()
       )
         return;
-      const bounds = mainWindow.getBounds();
+      const bounds = window.getBounds();
       void storage
         .getSettings()
         .then((current) =>
@@ -350,21 +398,21 @@ async function createWindow(): Promise<void> {
         );
     }, 400);
   };
-  mainWindow.on("resize", scheduleBoundsSave);
-  mainWindow.on("move", scheduleBoundsSave);
-  mainWindow.on("close", (event) => {
+  window.on("resize", scheduleBoundsSave);
+  window.on("move", scheduleBoundsSave);
+  window.on("close", (event) => {
     if (isQuitting) return;
     event.preventDefault();
-    mainWindow?.hide();
+    window.hide();
   });
-  mainWindow.on("closed", () => {
+  window.on("closed", () => {
     if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
-    mainWindow = null;
+    if (mainWindow === window) mainWindow = null;
   });
 
-  if (developmentUrl) await mainWindow.loadURL(developmentUrl);
+  if (developmentUrl) await window.loadURL(developmentUrl);
   else
-    await mainWindow.loadFile(join(productionRendererDirectory, "index.html"));
+    await window.loadFile(join(productionRendererDirectory, "index.html"));
 }
 
 const hasLock = app.requestSingleInstanceLock();
@@ -410,6 +458,7 @@ if (!hasLock) {
     });
     removeIpcHandlers = registerIpc({
       isTrustedSender,
+      onAuthWindowModeChange: setMainWindowAuthMode,
       storage,
       setSelectedSource(selection) {
         selectedSource = selection;
@@ -434,6 +483,10 @@ process.on("uncaughtException", (error) => captureMainHawk(error, "uncaught-exce
 process.on("unhandledRejection", (reason) => captureMainHawk(reason, "unhandled-rejection"));
 
 app.on("activate", showMainWindow);
+// The auth window is intentionally replaced with the main application window
+// after a successful login (and vice versa on logout). Keeping this listener
+// prevents Electron from terminating the process in the brief gap between them.
+app.on("window-all-closed", () => undefined);
 app.on("browser-window-focus", checkForUpdatesIfDue);
 app.on("before-quit", () => {
   isQuitting = true;

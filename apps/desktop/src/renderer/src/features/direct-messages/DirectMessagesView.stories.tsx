@@ -44,8 +44,14 @@ type Story = StoryObj<typeof meta>;
 export const ActiveConversation: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getAllByText('Макеты уже готовы').length).toBeGreaterThan(0);
-    await userEvent.click(canvas.getByRole('button', { name: 'Добавить реакцию' }));
+    const message = within(canvas.getByRole('feed'))
+      .getByText('Макеты уже готовы')
+      .closest('article');
+    await expect(message).not.toBeNull();
+    const reactionButton = canvas.getByRole('button', { name: 'Добавить реакцию' });
+    reactionButton.focus();
+    await expect(reactionButton).toHaveFocus();
+    await userEvent.click(reactionButton);
     const documentBody = within(canvasElement.ownerDocument.body);
     await userEvent.click(await documentBody.findByRole('menuitem', { name: 'Реакция 👍' }));
     await expect(args.onMessageReaction).toHaveBeenCalledWith('dm-message-1', '👍');

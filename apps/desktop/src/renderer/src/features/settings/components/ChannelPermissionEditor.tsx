@@ -82,7 +82,7 @@ export function ChannelPermissionEditor({ onSave, server }: ChannelPermissionEdi
 
   return (
     <article className="vui-server-settings-card vui-channel-permissions">
-      <div>
+      <div className="vui-server-settings-card__heading">
         <h2>Права конкретного канала</h2>
         <p>«Наследовать» использует права роли сервера. Персональная настройка участника применяется последней.</p>
       </div>
@@ -93,8 +93,8 @@ export function ChannelPermissionEditor({ onSave, server }: ChannelPermissionEdi
       </div>
       <div className="vui-channel-permissions__groups">
         {channelPermissionGroups.map((group) => (
-          <section key={group.id}>
-            <h3>{group.label}</h3>
+          <section aria-labelledby={`permission-group-${group.id}`} key={group.id}>
+            <h3 id={`permission-group-${group.id}`}>{group.label}</h3>
             {group.permissions.map((definition) => (
               <div className="vui-channel-permissions__row" key={definition.permission}>
                 <span><strong>{definition.label}</strong><small>{definition.description}</small></span>

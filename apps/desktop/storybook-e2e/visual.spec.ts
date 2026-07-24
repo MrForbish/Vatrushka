@@ -78,7 +78,7 @@ test.describe('Vatrushka design system visual baseline', () => {
     await page.setViewportSize({ width: 1024, height: 680 });
     await openStory(page, 'layouts-app-shell--visual-full-server');
     await page.getByRole('button', { name: 'Открыть список серверов' }).click();
-    await expect(page.getByRole('dialog', { name: 'Серверы' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Навигация' })).toBeVisible();
     await settlePortalAnimations(page);
     await expect(page).toHaveScreenshot('app-shell-minimum.png', { animations: 'disabled', fullPage: true });
   });
@@ -129,9 +129,10 @@ test.describe('Vatrushka design system visual baseline', () => {
   test('personal Home dashboard', async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await openStory(page, 'home-homepage--returning-user');
-    await expect(page.getByRole('heading', { name: 'Быстрый возврат' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Активные пространства' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Друзья в игре' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Быстрый возврат' })).toBeVisible();
+    await expect(page.getByText('Активные пространства')).toBeVisible();
+    await expect(page.getByLabel('Поиск тиммейтов')).toBeVisible();
+    await expect(page.getByLabel('Друзья в сети')).toBeVisible();
     await expect(page).toHaveScreenshot('home-dashboard.png', {
       animations: 'disabled',
       fullPage: true,
@@ -146,7 +147,7 @@ test.describe('Vatrushka design system visual baseline', () => {
     await openStory(page, 'home-homepage--profile-drawer-mode');
     await expect(page.getByRole('button', { name: 'Открыть профиль' })).toHaveCount(0);
     await expect(page.getByRole('dialog', { name: 'Профиль' })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'Активные пространства' })).toBeVisible();
+    await expect(page.getByText('Активные пространства')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1100);
     await expect(page).toHaveScreenshot('home-dashboard-compact.png', { animations: 'disabled', fullPage: true });
   });
@@ -175,7 +176,7 @@ test.describe('Vatrushka design system visual baseline', () => {
     await page.setViewportSize({ width: 1100, height: 760 });
     await openStory(page, 'layouts-app-shell--visual-full-server');
     await page.getByRole('button', { name: 'Открыть список серверов' }).click();
-    await expect(page.getByRole('dialog', { name: 'Серверы' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Навигация' })).toBeVisible();
     await settlePortalAnimations(page);
     await expect(page).toHaveScreenshot('app-shell-compact.png', { animations: 'disabled', fullPage: true });
   });
@@ -212,7 +213,7 @@ test.describe('Vatrushka design system visual baseline', () => {
 
   test('voice room device controls', async ({ page }) => {
     await openStory(page, 'features-voice-room--visual-room');
-    await page.getByRole('button', { name: 'Устройства' }).click();
+    await page.getByRole('button', { name: 'Выбрать устройство: Микрофон' }).click();
     await expect(page).toHaveScreenshot('voice-room-devices.png', {
       animations: 'disabled',
       fullPage: true,
@@ -245,11 +246,32 @@ test.describe('Vatrushka design system visual baseline', () => {
     await openStory(page, 'screens-server--connected-voice');
     await expect(page.getByRole('button', { name: 'общий' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Переговорная' })).toBeVisible();
-    await expect(page.getByText('Голосовая связь подключена', { exact: true })).toBeVisible();
+    await expect(page.getByRole('status')).toHaveText('Вы подключены31 мс');
     await expect(page).toHaveScreenshot('server-connected-voice.png', {
       animations: 'disabled',
       fullPage: true,
       maxDiffPixels: 100,
+    });
+  });
+
+  test('single voice participant is centered in the stage', async ({ page }) => {
+    await openStory(page, 'features-voice-room--single-participant');
+    const participant = page.locator('.vui-room__participant-grid > .vui-voice-participant');
+    await expect(participant).toHaveCount(1);
+    await expect(page).toHaveScreenshot('voice-room-single-participant.png', {
+      animations: 'disabled',
+      fullPage: true,
+      maxDiffPixels: 100,
+    });
+  });
+
+  test('server text channel uses the community workspace composition', async ({ page }) => {
+    await openStory(page, 'screens-server--text-channel');
+    await expect(page.getByRole('complementary', { name: 'Навигация сервера' })).toBeVisible();
+    await expect(page.locator('.vui-server-context__title strong')).toHaveText('Команда разработки');
+    await expect(page).toHaveScreenshot('server-text-channel.png', {
+      animations: 'disabled',
+      fullPage: true,
     });
   });
 
@@ -292,10 +314,58 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('server-settings-overview.png', { animations: 'disabled', fullPage: true });
   });
 
+  test('routed server appearance settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--server-appearance');
+    await expect(page.getByRole('heading', { name: 'Оформление' })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-settings-appearance.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('routed server members settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--server-members');
+    await expect(page.getByRole('heading', { name: 'Участники' })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-settings-members.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('routed server channels settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--server-channels');
+    await expect(page.getByRole('heading', { name: 'Каналы и категории' })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-settings-channels.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('routed server invites settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--server-invites');
+    await expect(page.getByRole('heading', { name: 'Приглашения' })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-settings-invites.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('routed server moderation settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--server-moderation');
+    await expect(page.getByRole('heading', { name: 'Модерация' })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-settings-moderation.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('routed server audit settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--server-audit-log');
+    await expect(page.getByRole('heading', { name: 'Журнал аудита' })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-settings-audit-log.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('routed server danger settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--server-danger-zone');
+    await expect(page.getByRole('heading', { name: 'Опасная зона' })).toBeVisible();
+    await expect(page).toHaveScreenshot('server-settings-danger-zone.png', { animations: 'disabled', fullPage: true });
+  });
+
   test('routed user notification settings', async ({ page }) => {
     await openStory(page, 'features-settings-settings-shell--user-notifications');
     await expect(page.getByRole('heading', { name: 'Уведомления' })).toBeVisible();
     await expect(page).toHaveScreenshot('user-settings-notifications.png', { animations: 'disabled', fullPage: true });
+  });
+
+  test('routed user account settings', async ({ page }) => {
+    await openStory(page, 'features-settings-settings-shell--user-account');
+    await expect(page.getByRole('heading', { name: 'Управление аккаунтом' })).toBeVisible();
+    await expect(page).toHaveScreenshot('user-settings-account.png', { animations: 'disabled', fullPage: true });
   });
 
   test('routed channel permission overrides', async ({ page }) => {

@@ -3,6 +3,7 @@ import {
   expect,
   test,
   type ElectronApplication,
+  type Page,
 } from "@playwright/test";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -23,6 +24,20 @@ async function launchElectron(
     cwd: process.cwd(),
     env: electronEnvironment(),
   });
+}
+
+async function waitForApplicationWindow(
+  previousWindow: Page,
+): Promise<Page> {
+  await expect.poll(
+    () => application.windows().some((window) => window !== previousWindow && !window.isClosed()),
+  ).toBe(true);
+  const window = application.windows().find(
+    (candidate) => candidate !== previousWindow && !candidate.isClosed(),
+  );
+  if (!window) throw new Error("Application window was not created after authentication.");
+  await window.waitForLoadState("domcontentloaded");
+  return window;
 }
 
 function electronEnvironment(): Record<string, string> {
@@ -57,6 +72,40 @@ test("launches the secure auth shell with an allowlisted preload API", async () 
     window.getByRole("heading", { name: "Добро пожаловать" }),
   ).toBeVisible();
   await expect(window.getByLabel("Email")).toBeVisible();
+  expect(
+    await window.evaluate(() => ({
+      clientHeight: document.documentElement.clientHeight,
+      clientWidth: document.documentElement.clientWidth,
+      scrollHeight: document.documentElement.scrollHeight,
+      scrollWidth: document.documentElement.scrollWidth,
+    })),
+  ).toEqual({
+    clientHeight: 680,
+    clientWidth: 520,
+    scrollHeight: 680,
+    scrollWidth: 520,
+  });
+  const authWindowBounds = await application.evaluate(
+    ({ BrowserWindow, screen }) => {
+      const authWindow = BrowserWindow.getAllWindows()[0];
+      if (!authWindow) throw new Error("Auth window is not available");
+      const bounds = authWindow.getBounds();
+      const workArea = screen.getDisplayMatching(bounds).workArea;
+      return { bounds, workArea };
+    },
+  );
+  expect(
+    Math.abs(
+      authWindowBounds.bounds.x + authWindowBounds.bounds.width / 2 -
+        (authWindowBounds.workArea.x + authWindowBounds.workArea.width / 2),
+    ),
+  ).toBeLessThanOrEqual(1);
+  expect(
+    Math.abs(
+      authWindowBounds.bounds.y + authWindowBounds.bounds.height / 2 -
+        (authWindowBounds.workArea.y + authWindowBounds.workArea.height / 2),
+    ),
+  ).toBeLessThanOrEqual(1);
 
   expect(
     await window.evaluate(
@@ -316,6 +365,24 @@ test("revokes another device without exposing its refresh token to the renderer"
       response.end("[]");
       return;
     }
+    if (request.method === "POST" && url.pathname === "/api/v1/auth/refresh") {
+      response.end(
+        JSON.stringify({
+          accessToken: "refreshed-access-token-for-e2e-user",
+          refreshToken: "refreshed-refresh-token-for-e2e-user",
+          expiresIn: 900,
+          user: {
+            id: "user-e2e",
+            email: "owner@myvatrushka.ru",
+            displayName: "Илья",
+            platformRole: "owner",
+            hasPassword: true,
+            twoFactorEnabled: true,
+          },
+        }),
+      );
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/api/v1/servers") {
       response.end("[]");
       return;
@@ -335,7 +402,7 @@ test("revokes another device without exposing its refresh token to the renderer"
   );
 
   application = await launchElectron();
-  const window = await application.firstWindow();
+  let window = await application.firstWindow();
   await window
     .getByRole("textbox", { name: "Email" })
     .fill("owner@myvatrushka.ru");
@@ -344,7 +411,12 @@ test("revokes another device without exposing its refresh token to the renderer"
     .fill("secure-vatrushka-42");
   await window.getByRole("button", { name: /Продолжить/u }).click();
   await window.getByLabel("Код из письма").fill("123456");
+  const applicationWindow = waitForApplicationWindow(window);
   await window.getByRole("button", { name: /Подтвердить вход/u }).click();
+  window = await applicationWindow;
+  await window
+    .getByRole("button", { name: "Настройки пользователя" })
+    .click();
   await expect(
     window.getByRole("button", { name: "Безопасность" }),
   ).toBeVisible();
@@ -604,16 +676,18 @@ test("opens the routed settings shell without replacing the application controll
   );
 
   application = await launchElectron(["--use-fake-device-for-media-stream"]);
-  const window = await application.firstWindow();
+  let window = await application.firstWindow();
   await window.getByRole("textbox", { name: "Email" }).fill(user.email);
   await window
     .getByRole("textbox", { name: "Пароль", exact: true })
     .fill("secure-vatrushka-42");
   await window.getByRole("button", { name: /Продолжить/u }).click();
   await window.getByLabel("Код из письма").fill("123456");
+  const applicationWindow = waitForApplicationWindow(window);
   await window.getByRole("button", { name: /Подтвердить вход/u }).click();
+  window = await applicationWindow;
   await expect(
-    window.getByRole("heading", { name: "Быстрый возврат" }),
+    window.getByRole("region", { name: "Быстрый возврат" }),
   ).toBeVisible();
 
   await window.evaluate(() => {
@@ -710,10 +784,10 @@ test("opens the routed settings shell without replacing the application controll
   ).toBeVisible();
   await window.getByRole("button", { name: "Вернуться" }).click();
   await expect(
-    window.getByRole("heading", { name: "Быстрый возврат" }),
+    window.getByRole("region", { name: "Быстрый возврат" }),
   ).toBeVisible();
   await window
-    .locator(".home-navigation")
+    .getByRole("complementary", { name: "Глобальная навигация" })
     .getByRole("button", { name: "Выйти из аккаунта" })
     .click();
   const logoutDialog = window.getByRole("dialog", { name: "Выйти из аккаунта?" });
@@ -810,6 +884,17 @@ test("opens the redesigned Home, creates the first server, and restores it after
       );
       return;
     }
+    if (request.method === "POST" && url.pathname === "/api/v1/auth/refresh") {
+      response.end(
+        JSON.stringify({
+          accessToken: "home-refreshed-access-token-for-e2e-user",
+          refreshToken: "home-refreshed-refresh-token-for-e2e-user",
+          expiresIn: 900,
+          user,
+        }),
+      );
+      return;
+    }
     if (request.method === "GET" && url.pathname === "/api/v1/servers") {
       response.end(JSON.stringify(serverCreated ? [server] : []));
       return;
@@ -881,6 +966,17 @@ test("opens the redesigned Home, creates the first server, and restores it after
               },
             ],
           },
+          gaming: {
+            voiceStatus: {
+              microphone: { available: true, enabled: true, label: null },
+              output: { available: true, label: null },
+              pingMs: null,
+              connectionQuality: "excellent",
+            },
+            quickReturn: [],
+            activeSpaces: [],
+            friendsInGame: [],
+          },
         }),
       );
       return;
@@ -907,23 +1003,25 @@ test("opens the redesigned Home, creates the first server, and restores it after
   );
 
   application = await launchElectron(["--use-fake-device-for-media-stream"]);
-  const window = await application.firstWindow();
+  let window = await application.firstWindow();
   await window.getByRole("textbox", { name: "Email" }).fill(user.email);
   await window
     .getByRole("textbox", { name: "Пароль", exact: true })
     .fill("secure-vatrushka-42");
   await window.getByRole("button", { name: /Продолжить/u }).click();
   await window.getByLabel("Код из письма").fill("123456");
+  const applicationWindow = waitForApplicationWindow(window);
   await window.getByRole("button", { name: /Подтвердить вход/u }).click();
+  window = await applicationWindow;
   await expect(
-    window.getByRole("heading", { name: "Быстрый возврат" }),
+    window.getByRole("region", { name: "Быстрый возврат" }),
   ).toBeVisible();
-  await expect(window.getByLabel("Статус голоса")).toBeVisible();
+  await expect(window.getByRole("region", { name: "Поиск тиммейтов" })).toBeVisible();
   await expect(window.getByText(/Войти по коду/u)).toHaveCount(0);
 
   await window
-    .locator(".home-navigation__create")
-    .getByRole("button", { name: "Создать сервер" })
+    .getByRole("complementary", { name: "Глобальная навигация" })
+    .getByRole("button", { name: "Сообщество" })
     .click();
   const dialog = window.getByRole("dialog", { name: "Новый сервер" });
   await dialog.getByLabel("Название").fill(server.name);
@@ -934,23 +1032,16 @@ test("opens the redesigned Home, creates the first server, and restores it after
     if (!browserWindow) throw new Error("Main window is unavailable");
     browserWindow.setSize(900, 700);
   });
-  const desktopHome = window
-    .locator(".vui-app-shell__workspaces")
-    .getByRole("button", { name: "Главная" });
-  if (await desktopHome.isVisible()) {
-    await desktopHome.click();
-  } else {
-    await window
-      .getByRole("button", { name: "Открыть список серверов" })
-      .click();
-    await window
-      .getByRole("dialog", { name: "Серверы" })
-      .getByRole("button", { name: "Главная" })
-      .click();
-  }
+  await window
+    .getByRole("button", { name: "Открыть список серверов" })
+    .click();
+  await window
+    .getByRole("dialog", { name: "Навигация" })
+    .getByRole("button", { name: "Главная" })
+    .click();
   await expect(window.getByText(server.name).first()).toBeVisible();
   await expect(
-    window.getByRole("heading", { name: "Быстрый возврат" }),
+    window.getByRole("region", { name: "Быстрый возврат" }),
   ).toBeVisible();
 });
 
@@ -1032,6 +1123,24 @@ test("accepts a validated invite link after authentication without exposing a ma
       );
       return;
     }
+    if (request.method === "POST" && url.pathname === "/api/v1/auth/refresh") {
+      response.end(
+        JSON.stringify({
+          accessToken: "invite-refreshed-access-token-for-e2e-user",
+          refreshToken: "invite-refreshed-refresh-token-for-e2e-user",
+          expiresIn: 900,
+          user: {
+            id: "invite-user",
+            email: "invitee@myvatrushka.ru",
+            displayName: "Гость по ссылке",
+            platformRole: "member",
+            hasPassword: true,
+            twoFactorEnabled: true,
+          },
+        }),
+      );
+      return;
+    }
     if (
       request.method === "POST" &&
       url.pathname === `/api/v1/invites/${inviteToken}/accept`
@@ -1077,7 +1186,7 @@ test("accepts a validated invite link after authentication without exposing a ma
   expect(await application.evaluate(() => process.argv)).toContain(
     "vatrushka://invite/ABCD2345test",
   );
-  const window = await application.firstWindow();
+  let window = await application.firstWindow();
   await expect(
     window.getByRole("heading", { name: "Добро пожаловать" }),
   ).toBeVisible();
@@ -1091,7 +1200,9 @@ test("accepts a validated invite link after authentication without exposing a ma
     .fill("secure-vatrushka-42");
   await window.getByRole("button", { name: /Продолжить/u }).click();
   await window.getByLabel("Код из письма").fill("123456");
+  const applicationWindow = waitForApplicationWindow(window);
   await window.getByRole("button", { name: /Подтвердить вход/u }).click();
+  window = await applicationWindow;
   const serverNavigation = window.getByRole("complementary", {
     name: "Навигация сервера",
   });

@@ -9,6 +9,7 @@ import { WorkspaceLibrary, type WorkspaceNavigationItem } from '../../../ui';
 import { SettingsPageState } from '../components/SettingsPageState';
 import { SettingsSaveBar } from '../components/SettingsSaveBar';
 import { UserAudioSettingsPage } from '../pages/UserAudioSettingsPage';
+import { UserAccountSettingsPage } from '../pages/UserAccountSettingsPage';
 import { UserNotificationSettingsPage } from '../pages/UserNotificationSettingsPage';
 import { UserProfileSettingsPage } from '../pages/UserProfileSettingsPage';
 import { UserPresenceSettingsPage } from '../pages/UserPresenceSettingsPage';
@@ -46,6 +47,7 @@ const audioDevices: AudioDevices = {
 const dndPresence = { preference: 'do_not_disturb' as const, effectiveStatus: 'dnd' as const, customText: 'Фокус до релиза', customTextExpiresAt: null, updatedAt: '2026-07-17T10:00:00.000Z' };
 const privacySettings = { directMessages: 'shared_servers' as const, presenceVisibility: 'shared_servers' as const, activityVisible: true, updatedAt: '2026-07-17T10:00:00.000Z' };
 const notificationSettings = { desktopEnabled: true, soundEnabled: true, previewMode: 'full' as const, directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: '22:00', quietHoursEnd: '08:00', quietHoursTimezone: 'Europe/Moscow', updatedAt: '2026-07-17T10:00:00.000Z' };
+const accountSettings = { email: securityUser.email, emailVerified: true, pendingEmail: null, deactivationScheduledAt: null, deletionAt: null, ownsServers: false };
 const securityClient: SecurityClient = {
   requestPasswordSetup: fn(() => Promise.resolve({ retryAfterSeconds: 60 })),
   setPassword: fn(() => Promise.resolve(securityUser)),
@@ -91,6 +93,34 @@ export const ServerOverview: Story = {
   },
 };
 
+export const ServerAppearance: Story = {
+  render: (args) => <SettingsShell activeSection="appearance" entityLabel="Настройки сервера" entityName={storyServer.name} items={serverSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary activeWorkspaceId={storyServer.id} onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><ServerSettingsPage onChanged={() => Promise.resolve()} onDeleted={() => undefined} section="appearance" server={storyServer} /></SettingsShell>,
+};
+
+export const ServerMembers: Story = {
+  render: (args) => <SettingsShell activeSection="members" entityLabel="Настройки сервера" entityName={storyServer.name} items={serverSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary activeWorkspaceId={storyServer.id} onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><ServerSettingsPage onChanged={() => Promise.resolve()} onDeleted={() => undefined} section="members" server={storyServer} /></SettingsShell>,
+};
+
+export const ServerChannels: Story = {
+  render: (args) => <SettingsShell activeSection="channels" entityLabel="Настройки сервера" entityName={storyServer.name} items={serverSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary activeWorkspaceId={storyServer.id} onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><ServerSettingsPage onChanged={() => Promise.resolve()} onDeleted={() => undefined} section="channels" server={storyServer} /></SettingsShell>,
+};
+
+export const ServerInvites: Story = {
+  render: (args) => <SettingsShell activeSection="invites" entityLabel="Настройки сервера" entityName={storyServer.name} items={serverSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary activeWorkspaceId={storyServer.id} onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><ServerSettingsPage onChanged={() => Promise.resolve()} onDeleted={() => undefined} section="invites" server={storyServer} /></SettingsShell>,
+};
+
+export const ServerModeration: Story = {
+  render: (args) => <SettingsShell activeSection="moderation" entityLabel="Настройки сервера" entityName={storyServer.name} items={serverSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary activeWorkspaceId={storyServer.id} onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><ServerSettingsPage onChanged={() => Promise.resolve()} onDeleted={() => undefined} section="moderation" server={storyServer} /></SettingsShell>,
+};
+
+export const ServerAuditLog: Story = {
+  render: (args) => <SettingsShell activeSection="audit-log" entityLabel="Настройки сервера" entityName={storyServer.name} items={serverSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary activeWorkspaceId={storyServer.id} onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><ServerSettingsPage onChanged={() => Promise.resolve()} onDeleted={() => undefined} section="audit-log" server={storyServer} /></SettingsShell>,
+};
+
+export const ServerDangerZone: Story = {
+  render: (args) => <SettingsShell activeSection="danger" entityLabel="Настройки сервера" entityName={storyServer.name} items={serverSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary activeWorkspaceId={storyServer.id} onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><ServerSettingsPage onChanged={() => Promise.resolve()} onDeleted={() => undefined} section="danger" server={storyServer} /></SettingsShell>,
+};
+
 export const UserProfile: Story = { args: { scope: 'user' } };
 
 export const ServerRoles: Story = {
@@ -115,6 +145,11 @@ export const UserPrivacy: Story = {
 export const UserNotifications: Story = {
   args: { scope: 'user' },
   render: (args) => <SettingsShell activeSection="notifications" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserNotificationSettingsPage dndActive={false} onDirtyChange={() => undefined} onLoad={() => Promise.resolve(notificationSettings)} onPreviewSound={() => undefined} onSave={() => Promise.resolve(notificationSettings)} /></SettingsShell>,
+};
+
+export const UserAccount: Story = {
+  args: { scope: 'user' },
+  render: (args) => <SettingsShell activeSection="account" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserAccountSettingsPage onCancelDeactivation={() => Promise.resolve(accountSettings)} onConfirmEmail={() => Promise.resolve(securityUser)} onDeactivate={() => Promise.resolve(accountSettings)} onExport={() => Promise.resolve({ profile: securityUser })} onLoad={() => Promise.resolve(accountSettings)} onLogout={() => undefined} onRequestEmail={() => Promise.resolve()} onUserChange={() => undefined} user={securityUser} /></SettingsShell>,
 };
 
 export const UserSecurityLiveSection: Story = {

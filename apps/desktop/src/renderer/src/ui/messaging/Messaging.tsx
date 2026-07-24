@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
 import { createPortal } from 'react-dom';
 
@@ -47,14 +47,6 @@ export interface MessageViewModel {
   deliveryState?: MessageDeliveryState;
   deleted?: boolean;
 }
-
-const deliveryLabels: Record<MessageDeliveryState, string> = {
-  sending: 'Отправляем…',
-  sent: 'Отправлено',
-  delivered: 'Доставлено',
-  read: 'Прочитано',
-  failed: 'Не удалось отправить',
-};
 
 const emojiShortcodes: Record<string, string> = {
   angry: '😡',
@@ -167,6 +159,62 @@ export interface MessageListProps {
 
 const reactionChoices = ['👍', '👎', '❤️', '🔥', '😂', '🤣', '😊', '😍', '🥰', '😎', '🤩', '🥳', '😮', '😱', '🤯', '😢', '😭', '😡', '🤬', '🤔', '🫡', '🤝', '🙏', '👏', '🙌', '💪', '👀', '✅', '❌', '💯', '🎉', '🚀', '✨', '💡', '⚡', '⭐', '🎯', '🏆', '🐱', '🐶', '🍰', '🧇', '☕', '🍕', '🎮', '💻', '🛠️'];
 
+type ComposerEmojiCategory = 'recent' | 'smileys' | 'people' | 'animals' | 'food' | 'activities' | 'objects' | 'symbols' | 'flags';
+
+interface ComposerEmoji {
+  value: string;
+  label: string;
+  keywords: string;
+}
+
+const emojiCategories: Array<{ id: Exclude<ComposerEmojiCategory, 'recent'>; label: string; icon: string; emojis: ComposerEmoji[] }> = [
+  { id: 'smileys', label: 'Смайлы', icon: '😀', emojis: [
+    ['😀', 'улыбка', 'улыбка радость'], ['😃', 'радость', 'радость улыбка'], ['😄', 'смеюсь', 'смех радость'], ['😁', 'улыбка', 'улыбка зубы'], ['😆', 'смех', 'смех хохот'], ['😅', 'нервный смех', 'смех пот'], ['😂', 'слёзы радости', 'смех слезы'], ['🤣', 'катаюсь от смеха', 'смех'], ['😊', 'доволен', 'улыбка приятно'], ['😍', 'влюблён', 'любовь глаза'], ['🥰', 'любовь', 'сердца'], ['😘', 'поцелуй', 'любовь'], ['😎', 'круто', 'очки'], ['🤩', 'восхищение', 'звезда'], ['🥳', 'праздник', 'вечеринка'], ['🤔', 'думаю', 'мысль'], ['🫡', 'принято', 'салют'], ['😮', 'удивлён', 'вау'], ['😢', 'грусть', 'слеза'], ['😭', 'плачу', 'слезы'], ['😡', 'злюсь', 'гнев'], ['🤯', 'взрыв мозга', 'шок'], ['😴', 'сон', 'спать'], ['🤗', 'обнимаю', 'объятия'], ['🙃', 'перевёрнутый', 'ирония'], ['😏', 'ухмылка', 'хитрый'], ['🤭', 'смущение', 'рука рот'], ['🫠', 'таю', 'растаял'], ['🫶', 'сердце руками', 'любовь'], ['🥹', 'трогательно', 'слезы'], ['🚀', 'ракета', 'запуск космос'],
+  ].map(([value = '', label = '', keywords = '']) => ({ value, label, keywords })) },
+  { id: 'people', label: 'Жесты и люди', icon: '👋', emojis: [
+    ['👋', 'привет', 'махать'], ['🤚', 'ладонь', 'стоп'], ['✌️', 'победа', 'два'], ['🤞', 'удача', 'пальцы'], ['🤟', 'люблю тебя', 'жест'], ['🤘', 'рок', 'музыка'], ['👌', 'окей', 'ok хорошо'], ['🤌', 'идеально', 'жест'], ['🤏', 'чуть-чуть', 'мало'], ['👍', 'палец вверх', 'лайк хорошо'], ['👎', 'палец вниз', 'дизлайк плохо'], ['👏', 'аплодисменты', 'хлопать'], ['🙌', 'ура', 'руки'], ['🫶', 'сердце руками', 'любовь'], ['🤝', 'рукопожатие', 'договор'], ['🙏', 'спасибо', 'мольба'], ['💪', 'сила', 'мускул'], ['👀', 'глаза', 'смотрю'], ['🧠', 'мозг', 'мысли'], ['👑', 'корона', 'лидер'], ['🧑‍💻', 'разработчик', 'код компьютер'], ['🧑‍🎮', 'геймер', 'игра'], ['🕺', 'танцую', 'танец'], ['💃', 'танцую', 'танец'], ['🤦', 'фейспалм', 'лицо'], ['🤷', 'не знаю', 'плечи'], ['🙅', 'нельзя', 'нет'], ['🙆', 'можно', 'да'], ['🫂', 'объятия', 'обнимаю'], ['👻', 'призрак', 'хэллоуин'],
+  ].map(([value = '', label = '', keywords = '']) => ({ value, label, keywords })) },
+  { id: 'animals', label: 'Животные и природа', icon: '🐱', emojis: [
+    ['🐶', 'собака', 'пёс'], ['🐱', 'кот', 'кошка'], ['🐭', 'мышь', 'мышка'], ['🐹', 'хомяк', 'грызун'], ['🐰', 'кролик', 'заяц'], ['🦊', 'лиса', 'лисичка'], ['🐻', 'медведь', 'мишка'], ['🐼', 'панда', 'медведь'], ['🐨', 'коала', 'животное'], ['🐯', 'тигр', 'кошка'], ['🦁', 'лев', 'царь'], ['🐮', 'корова', 'животное'], ['🐷', 'свинья', 'животное'], ['🐸', 'лягушка', 'животное'], ['🐵', 'обезьяна', 'животное'], ['🦄', 'единорог', 'магия'], ['🐝', 'пчела', 'насекомое'], ['🦋', 'бабочка', 'насекомое'], ['🐙', 'осьминог', 'море'], ['🦈', 'акула', 'море'], ['🐳', 'кит', 'море'], ['🌲', 'ёлка', 'лес'], ['🌸', 'цветок', 'весна'], ['🌙', 'луна', 'ночь'], ['☀️', 'солнце', 'день'], ['🌈', 'радуга', 'цвета'], ['🔥', 'огонь', 'пламя'], ['❄️', 'снег', 'зима'], ['⚡', 'молния', 'энергия'], ['🌊', 'волна', 'вода'],
+  ].map(([value = '', label = '', keywords = '']) => ({ value, label, keywords })) },
+  { id: 'food', label: 'Еда и напитки', icon: '🍕', emojis: [
+    ['🍏', 'яблоко', 'фрукт'], ['🍌', 'банан', 'фрукт'], ['🍇', 'виноград', 'фрукт'], ['🍓', 'клубника', 'ягода'], ['🍒', 'вишня', 'ягода'], ['🥑', 'авокадо', 'еда'], ['🍔', 'бургер', 'еда'], ['🍟', 'картофель фри', 'еда'], ['🍕', 'пицца', 'еда'], ['🌭', 'хот-дог', 'еда'], ['🌮', 'тако', 'еда'], ['🍣', 'суши', 'еда'], ['🍜', 'лапша', 'еда'], ['🍝', 'паста', 'еда'], ['🍰', 'торт', 'десерт'], ['🧇', 'вафли', 'десерт'], ['🍪', 'печенье', 'десерт'], ['🍫', 'шоколад', 'сладкое'], ['🍿', 'попкорн', 'кино'], ['☕', 'кофе', 'напиток'], ['🍵', 'чай', 'напиток'], ['🥤', 'напиток', 'стакан'], ['🍺', 'пиво', 'напиток'], ['🍷', 'вино', 'напиток'], ['🥂', 'бокалы', 'праздник'], ['🍾', 'шампанское', 'праздник'], ['🥛', 'молоко', 'напиток'], ['🧊', 'лёд', 'холод'], ['🍯', 'мёд', 'сладкое'], ['🥨', 'крендель', 'еда'],
+  ].map(([value = '', label = '', keywords = '']) => ({ value, label, keywords })) },
+  { id: 'activities', label: 'Игры и активность', icon: '🎮', emojis: [
+    ['🎮', 'игры', 'геймпад игра'], ['🕹️', 'джойстик', 'игра'], ['🎲', 'кубик', 'игра'], ['♟️', 'шахматы', 'игра'], ['🎯', 'цель', 'дартс'], ['🏆', 'кубок', 'победа'], ['🥇', 'золото', 'первое место'], ['🥈', 'серебро', 'второе место'], ['🥉', 'бронза', 'третье место'], ['⚽', 'футбол', 'спорт'], ['🏀', 'баскетбол', 'спорт'], ['🎾', 'теннис', 'спорт'], ['🏐', 'волейбол', 'спорт'], ['🏓', 'настольный теннис', 'спорт'], ['🥊', 'бокс', 'спорт'], ['🎸', 'гитара', 'музыка'], ['🎹', 'пианино', 'музыка'], ['🎤', 'микрофон', 'пение голос'], ['🎧', 'наушники', 'музыка'], ['🎬', 'кино', 'фильм'], ['🎨', 'рисование', 'арт'], ['🎭', 'театр', 'маски'], ['🎪', 'цирк', 'шоу'], ['🎰', 'слоты', 'казино'], ['🧩', 'пазл', 'головоломка'], ['🪩', 'диско шар', 'танец'], ['🎆', 'фейерверк', 'праздник'], ['🎉', 'праздник', 'конфетти'], ['🎁', 'подарок', 'сюрприз'], ['🏎️', 'гонки', 'машина'],
+  ].map(([value = '', label = '', keywords = '']) => ({ value, label, keywords })) },
+  { id: 'objects', label: 'Объекты', icon: '💡', emojis: [
+    ['💡', 'идея', 'лампочка'], ['📱', 'телефон', 'смартфон'], ['💻', 'ноутбук', 'компьютер'], ['🖥️', 'монитор', 'экран'], ['⌨️', 'клавиатура', 'компьютер'], ['🖱️', 'мышь', 'компьютер'], ['🕹️', 'джойстик', 'игра'], ['📷', 'камера', 'фото'], ['📸', 'фото', 'камера'], ['🔊', 'громко', 'звук'], ['🔇', 'без звука', 'тихо'], ['🎙️', 'микрофон', 'голос'], ['📺', 'телевизор', 'экран'], ['💾', 'сохранить', 'дискета'], ['🔋', 'батарея', 'заряд'], ['🔌', 'вилка', 'питание'], ['🛠️', 'инструменты', 'ремонт'], ['🔧', 'гаечный ключ', 'настройки'], ['🔨', 'молоток', 'инструмент'], ['🧰', 'ящик инструментов', 'ремонт'], ['🔑', 'ключ', 'доступ'], ['🔒', 'замок', 'безопасность'], ['📌', 'закрепить', 'пин'], ['📎', 'скрепка', 'вложение'], ['✉️', 'письмо', 'сообщение'], ['📦', 'коробка', 'посылка'], ['🗑️', 'удалить', 'корзина'], ['🚀', 'ракета', 'запуск'], ['🛸', 'нло', 'космос'], ['💎', 'алмаз', 'ценность'],
+  ].map(([value = '', label = '', keywords = '']) => ({ value, label, keywords })) },
+  { id: 'symbols', label: 'Символы', icon: '❤️', emojis: [
+    ['❤️', 'красное сердце', 'любовь'], ['🧡', 'оранжевое сердце', 'любовь'], ['💛', 'жёлтое сердце', 'любовь'], ['💚', 'зелёное сердце', 'любовь'], ['💙', 'синее сердце', 'любовь'], ['💜', 'фиолетовое сердце', 'любовь'], ['🖤', 'чёрное сердце', 'любовь'], ['🤍', 'белое сердце', 'любовь'], ['💔', 'разбитое сердце', 'грусть'], ['💯', 'сто', 'отлично'], ['✅', 'готово', 'да'], ['❌', 'ошибка', 'нет'], ['❗', 'важно', 'восклицание'], ['❓', 'вопрос', 'помощь'], ['⚠️', 'предупреждение', 'опасность'], ['🚫', 'запрещено', 'нет'], ['⭕', 'круг', 'выбор'], ['🔴', 'красный круг', 'статус'], ['🟠', 'оранжевый круг', 'статус'], ['🟡', 'жёлтый круг', 'статус'], ['🟢', 'зелёный круг', 'статус'], ['🔵', 'синий круг', 'статус'], ['🟣', 'фиолетовый круг', 'статус'], ['⭐', 'звезда', 'избранное'], ['✨', 'искры', 'магия'], ['💤', 'сон', 'спать'], ['💬', 'сообщение', 'чат'], ['🔔', 'уведомление', 'колокольчик'], ['♻️', 'обновить', 'повтор'], ['🔞', 'только взрослым', 'возраст'],
+  ].map(([value = '', label = '', keywords = '']) => ({ value, label, keywords })) },
+  { id: 'flags', label: 'Флаги', icon: '🏳️', emojis: [
+    ['🇷🇺', 'Россия', 'флаг ru'], ['🇺🇦', 'Украина', 'флаг ua'], ['🇧🇾', 'Беларусь', 'флаг by'], ['🇰🇿', 'Казахстан', 'флаг kz'], ['🇦🇲', 'Армения', 'флаг am'], ['🇬🇪', 'Грузия', 'флаг ge'], ['🇺🇸', 'США', 'флаг us америка'], ['🇬🇧', 'Великобритания', 'флаг uk англия'], ['🇩🇪', 'Германия', 'флаг de'], ['🇫🇷', 'Франция', 'флаг fr'], ['🇮🇹', 'Италия', 'флаг it'], ['🇪🇸', 'Испания', 'флаг es'], ['🇯🇵', 'Япония', 'флаг jp'], ['🇰🇷', 'Корея', 'флаг kr'], ['🇨🇳', 'Китай', 'флаг cn'], ['🇹🇷', 'Турция', 'флаг tr'], ['🇨🇦', 'Канада', 'флаг ca'], ['🇦🇺', 'Австралия', 'флаг au'], ['🇧🇷', 'Бразилия', 'флаг br'], ['🇺🇳', 'ООН', 'флаг united nations'],
+  ].map(([value = '', label = '', keywords = '']) => ({ value, label, keywords })) },
+];
+
+const recentEmojiStorageKey = 'vatrushka:recent-unicode-emoji';
+
+function loadRecentEmoji(): ComposerEmoji[] {
+  try {
+    const values = JSON.parse(window.localStorage.getItem(recentEmojiStorageKey) ?? '[]') as unknown;
+    if (!Array.isArray(values)) return [];
+    return values.filter((value): value is string => typeof value === 'string').slice(0, 24).map((value) => ({ value, label: value, keywords: value }));
+  } catch {
+    return [];
+  }
+}
+
+function storeRecentEmoji(emoji: string): void {
+  try {
+    const values = [emoji, ...loadRecentEmoji().map((entry) => entry.value).filter((value) => value !== emoji)].slice(0, 24);
+    window.localStorage.setItem(recentEmojiStorageKey, JSON.stringify(values));
+  } catch {
+    // Local history is a convenience only. Browsing can continue when storage is unavailable.
+  }
+}
+
 function formatFileSize(size: number): string {
   if (size < 1024) return `${size} Б`;
   if (size < 1024 * 1024) return `${Math.ceil(size / 1024)} КБ`;
@@ -180,17 +228,21 @@ function isGroupedWithPrevious(message: MessageViewModel, previous: MessageViewM
 }
 
 export function MessageList({ channelName, conversationId, emptyDescription = 'Здесь появится первая история вашего сервера.', emptyTitle, firstUnreadMessageId = null, hasOlder = false, loadingOlder = false, messages, onDelete, onDeleteAttachment, onDownloadAttachment, onEdit, onLoadAttachment, onLoadOlder, onMention, onReaction, onReply, onRetry, targetMessageId = null }: MessageListProps): React.JSX.Element {
+  const visibleMessages = useMemo(
+    () => messages.filter((message) => message.deleted !== true),
+    [messages],
+  );
   const scrollElement = useRef<HTMLDivElement>(null);
   const stickToLatest = useRef(true);
   const previousLatestId = useRef<string | null>(null);
   const [unseenCount, setUnseenCount] = useState(0);
   const prependSnapshot = useRef<{ height: number; top: number } | null>(null);
-  const virtualized = messages.length > 50;
-  const getItemKey = useCallback((index: number) => messages[index]?.id ?? index, [messages]);
+  const virtualized = visibleMessages.length > 50;
+  const getItemKey = useCallback((index: number) => visibleMessages[index]?.id ?? index, [visibleMessages]);
   const virtualizer = useVirtualizer({
-    count: messages.length,
+    count: visibleMessages.length,
     enabled: virtualized,
-    estimateSize: (index) => (messages[index]?.attachments?.length ? 148 : messages[index]?.replyPreview ? 108 : 78),
+    estimateSize: (index) => (visibleMessages[index]?.attachments?.length ? 148 : visibleMessages[index]?.replyPreview ? 108 : 78),
     getItemKey,
     getScrollElement: () => scrollElement.current,
     overscan: 8,
@@ -203,17 +255,17 @@ export function MessageList({ channelName, conversationId, emptyDescription = '�
   }, [conversationId]);
 
   useEffect(() => {
-    const latestId = messages.at(-1)?.id ?? null;
+    const latestId = visibleMessages.at(-1)?.id ?? null;
     if (previousLatestId.current !== null && latestId !== previousLatestId.current && !stickToLatest.current) setUnseenCount((current) => current + 1);
     previousLatestId.current = latestId;
-  }, [messages]);
+  }, [visibleMessages]);
 
   useLayoutEffect(() => {
-    if (messages.length === 0 || !stickToLatest.current || targetMessageId !== null) return undefined;
+    if (visibleMessages.length === 0 || !stickToLatest.current || targetMessageId !== null) return undefined;
     let nestedFrame = 0;
     const frame = window.requestAnimationFrame(() => {
       nestedFrame = window.requestAnimationFrame(() => {
-        if (virtualized) virtualizer.scrollToIndex(messages.length - 1, { align: 'end' });
+        if (virtualized) virtualizer.scrollToIndex(visibleMessages.length - 1, { align: 'end' });
         else if (scrollElement.current) scrollElement.current.scrollTop = scrollElement.current.scrollHeight;
       });
     });
@@ -221,7 +273,7 @@ export function MessageList({ channelName, conversationId, emptyDescription = '�
       window.cancelAnimationFrame(frame);
       window.cancelAnimationFrame(nestedFrame);
     };
-  }, [channelName, messages.length, targetMessageId, virtualized, virtualizer]);
+  }, [channelName, visibleMessages.length, targetMessageId, virtualized, virtualizer]);
 
   useLayoutEffect(() => {
     const snapshot = prependSnapshot.current;
@@ -229,11 +281,11 @@ export function MessageList({ channelName, conversationId, emptyDescription = '�
     if (snapshot === null || element === null || loadingOlder) return;
     element.scrollTop = snapshot.top + element.scrollHeight - snapshot.height;
     prependSnapshot.current = null;
-  }, [loadingOlder, messages.length]);
+  }, [loadingOlder, visibleMessages.length]);
 
   useEffect(() => {
     if (targetMessageId === null) return;
-    const index = messages.findIndex((message) => message.id === targetMessageId);
+    const index = visibleMessages.findIndex((message) => message.id === targetMessageId);
     if (index < 0) return;
     if (virtualized) virtualizer.scrollToIndex(index, { align: 'center' });
     const frame = window.requestAnimationFrame(() => {
@@ -242,9 +294,9 @@ export function MessageList({ channelName, conversationId, emptyDescription = '�
       element?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [messages, targetMessageId, virtualized, virtualizer]);
+  }, [visibleMessages, targetMessageId, virtualized, virtualizer]);
 
-  if (messages.length === 0) {
+  if (visibleMessages.length === 0) {
     return (
       <div className="vui-message-empty">
         <span>
@@ -256,7 +308,7 @@ export function MessageList({ channelName, conversationId, emptyDescription = '�
     );
   }
   const renderMessage = (message: MessageViewModel, index: number, virtualItem?: VirtualItem): React.JSX.Element => {
-    const grouped = isGroupedWithPrevious(message, messages[index - 1]);
+    const grouped = isGroupedWithPrevious(message, visibleMessages[index - 1]);
     return (
       <article
         {...(virtualItem === undefined
@@ -267,11 +319,12 @@ export function MessageList({ channelName, conversationId, emptyDescription = '�
               style: { transform: `translateY(${virtualItem.start}px)` },
             })}
         aria-posinset={index + 1}
-        aria-setsize={messages.length}
+        aria-setsize={visibleMessages.length}
         className="vui-message"
         data-author-badge={message.authorBadge}
         data-grouped={grouped || undefined}
         data-message-id={message.id}
+        data-own={message.own || undefined}
         data-targeted={message.id === targetMessageId || undefined}
         data-virtualized={virtualItem === undefined ? undefined : true}
         key={message.id}
@@ -304,8 +357,8 @@ export function MessageList({ channelName, conversationId, emptyDescription = '�
               {message.edited === true ? <small>изменено</small> : null}
             </header>
           )}
-          {message.deleted === true ? <p className="vui-message__tombstone">Сообщение удалено</p> : message.content.trim().length === 0 ? null : <p>{renderMessageContent(message.content, message.mentions, onMention)}</p>}
-          {message.deleted === true || message.attachments === undefined || message.attachments.length === 0 ? null : (
+          {message.content.trim().length === 0 ? null : <p>{renderMessageContent(message.content, message.mentions, onMention)}</p>}
+          {message.attachments === undefined || message.attachments.length === 0 ? null : (
             <div className="vui-message__attachments">
               {message.attachments.map((attachment) => (
                 <MessageAttachmentCard attachment={attachment} key={attachment.id} onDelete={onDeleteAttachment} onDownload={onDownloadAttachment} onLoad={onLoadAttachment} />
@@ -322,9 +375,20 @@ export function MessageList({ channelName, conversationId, emptyDescription = '�
               ))}
             </div>
           )}
-          {message.deliveryState === undefined ? null : (
+          {message.deliveryState === undefined || message.deliveryState === 'sending' || (message.own !== true && message.deliveryState !== 'failed') ? null : (
             <div className="vui-message__delivery" data-state={message.deliveryState}>
-              <span>{deliveryLabels[message.deliveryState]}</span>
+              {message.deliveryState === 'failed' ? (
+                <span>Не удалось отправить</span>
+              ) : (
+                <span
+                  aria-label={message.deliveryState === 'read' ? 'Прочитано' : 'Отправлено'}
+                  className="vui-message__delivery-checks"
+                  role="img"
+                >
+                  <Icon name="check" size={14} />
+                  {message.deliveryState === 'read' ? <Icon name="check" size={14} /> : null}
+                </span>
+              )}
               {message.deliveryState !== 'failed' || onRetry === undefined ? null : (
                 <button onClick={() => onRetry(message.id)} type="button">
                   Повторить
@@ -333,23 +397,21 @@ export function MessageList({ channelName, conversationId, emptyDescription = '�
             </div>
           )}
         </div>
-        {message.deleted === true ? null : (
-          <div aria-label={`Действия с сообщением ${message.authorName}`} className="vui-message__actions" role="group">
+        <div aria-label={`Действия с сообщением ${message.authorName}`} className="vui-message__actions" role="group">
             {onReply === undefined ? null : <IconButton icon="reply" label="Ответить" onClick={() => onReply(message)} size="sm" type="button" />}
             {onReaction === undefined ? null : <ReactionPicker messageId={message.id} onReaction={onReaction} />}
             {message.canEdit === true && onEdit !== undefined ? <IconButton icon="edit" label="Редактировать сообщение" onClick={() => onEdit(message)} size="sm" type="button" /> : null}
             {message.canDelete === true && onDelete !== undefined ? <IconButton icon="close" label="Удалить сообщение" onClick={() => onDelete(message.id)} size="sm" type="button" /> : null}
-          </div>
-        )}
+        </div>
       </article>
     );
   };
   const content = virtualized ? (
     <div className="vui-message-list__virtual" style={{ height: virtualizer.getTotalSize() }}>
-      {virtualizer.getVirtualItems().map((virtualItem) => renderMessage(messages[virtualItem.index]!, virtualItem.index, virtualItem))}
+      {virtualizer.getVirtualItems().map((virtualItem) => renderMessage(visibleMessages[virtualItem.index]!, virtualItem.index, virtualItem))}
     </div>
   ) : (
-    messages.map((message, index) => renderMessage(message, index))
+    visibleMessages.map((message, index) => renderMessage(message, index))
   );
   return (
     <div
@@ -363,7 +425,8 @@ export function MessageList({ channelName, conversationId, emptyDescription = '�
       ref={scrollElement}
       role="feed"
     >
-      {firstUnreadMessageId && messages.some((message) => message.id === firstUnreadMessageId) ? (
+      <div className="vui-message-list__content">
+      {firstUnreadMessageId && visibleMessages.some((message) => message.id === firstUnreadMessageId) ? (
         <button className="vui-message-list__jump-unread" onClick={() => scrollElement.current?.querySelector<HTMLElement>(`[data-message-id="${firstUnreadMessageId}"]`)?.scrollIntoView({ block: 'center' })} type="button">
           К новым сообщениям
         </button>
@@ -405,6 +468,7 @@ export function MessageList({ channelName, conversationId, emptyDescription = '�
         </button>
       ) : null}
       {content}
+      </div>
     </div>
   );
 }
@@ -605,10 +669,23 @@ export function MessageComposer({ attachments = [], busy = false, canSend = true
   } | null>(null);
   const [activeCandidate, setActiveCandidate] = useState(0);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [emojiCategory, setEmojiCategory] = useState<ComposerEmojiCategory>('smileys');
+  const [emojiQuery, setEmojiQuery] = useState('');
+  const [recentEmoji, setRecentEmoji] = useState<ComposerEmoji[]>(loadRecentEmoji);
   const emojiRoot = useRef<HTMLDivElement>(null);
   const hasPayload = value.trim().length > 0 || (context?.mode !== 'edit' && attachments.length > 0);
   const uniqueMentioned = new Set(mentions.map(mentionKey));
   const candidates = trigger === null ? [] : mentionCandidates.filter((candidate) => (uniqueMentioned.size < 10 || uniqueMentioned.has(mentionKey(candidate))) && candidate.displayName.toLocaleLowerCase('ru-RU').includes(trigger.query.toLocaleLowerCase('ru-RU'))).slice(0, 8);
+  const activeEmojiCategory = emojiCategories.find((category) => category.id === emojiCategory);
+  const visibleEmoji = useMemo(() => {
+    const source = emojiQuery.trim().length > 0
+      ? emojiCategories.flatMap((category) => category.emojis)
+      : emojiCategory === 'recent'
+        ? recentEmoji
+        : activeEmojiCategory?.emojis ?? [];
+    const query = emojiQuery.trim().toLocaleLowerCase('ru-RU');
+    return query.length === 0 ? source : source.filter((emoji) => `${emoji.label} ${emoji.keywords} ${emoji.value}`.toLocaleLowerCase('ru-RU').includes(query));
+  }, [activeEmojiCategory?.emojis, emojiCategory, emojiQuery, recentEmoji]);
   useEffect(() => {
     setActiveCandidate(0);
   }, [trigger?.query]);
@@ -618,7 +695,10 @@ export function MessageComposer({ attachments = [], busy = false, canSend = true
       if (!emojiRoot.current?.contains(event.target as Node)) setEmojiOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setEmojiOpen(false);
+      if (event.key === 'Escape') {
+        setEmojiOpen(false);
+        requestAnimationFrame(() => emojiRoot.current?.querySelector<HTMLButtonElement>('.vui-icon-button')?.focus());
+      }
     };
     document.addEventListener('pointerdown', close);
     document.addEventListener('keydown', closeOnEscape);
@@ -641,6 +721,8 @@ export function MessageComposer({ attachments = [], busy = false, canSend = true
     const end = textarea.current?.selectionEnd ?? start;
     const next = `${value.slice(0, start)}${emoji}${value.slice(end)}`;
     updateValue(next, start + emoji.length);
+    storeRecentEmoji(emoji);
+    setRecentEmoji(loadRecentEmoji());
     setEmojiOpen(false);
     window.requestAnimationFrame(() => {
       textarea.current?.focus();
@@ -736,12 +818,27 @@ export function MessageComposer({ attachments = [], busy = false, canSend = true
           <div className="vui-message-composer__emoji" ref={emojiRoot}>
             <IconButton active={emojiOpen} disabled={!canSend || busy} icon="emoji" label="Выбрать emoji" onClick={() => setEmojiOpen((current) => !current)} size="sm" type="button" />
             {emojiOpen ? (
-              <div aria-label="Emoji" className="vui-message-composer__emoji-menu" role="menu">
-                {reactionChoices.map((emoji) => (
+              <div aria-label="Emoji" className="vui-message-composer__emoji-menu" role="dialog">
+                <label className="vui-message-composer__emoji-search">
+                  <Icon name="search" size={14} />
+                  <input aria-label="Поиск эмодзи" autoFocus onChange={(event) => setEmojiQuery(event.target.value)} placeholder="Поиск эмодзи" type="search" value={emojiQuery} />
+                </label>
+                <div aria-label="Категории эмодзи" className="vui-message-composer__emoji-tabs" role="tablist">
+                  <button aria-label="Недавние эмодзи" aria-selected={emojiCategory === 'recent'} onClick={() => setEmojiCategory('recent')} role="tab" type="button">🕘</button>
+                  {emojiCategories.map((category) => (
+                    <button aria-label={category.label} aria-selected={emojiCategory === category.id} key={category.id} onClick={() => setEmojiCategory(category.id)} role="tab" type="button">{category.icon}</button>
+                  ))}
+                </div>
+                <strong className="vui-message-composer__emoji-heading">
+                  {emojiQuery.trim().length > 0 ? 'Результаты поиска' : emojiCategory === 'recent' ? 'Недавние' : activeEmojiCategory?.label}
+                </strong>
+                <div aria-label="Список эмодзи" className="vui-message-composer__emoji-grid" role="list">
+                {visibleEmoji.length > 0 ? visibleEmoji.map(({ value: emoji }) => (
                   <button aria-label={`Вставить ${emoji}`} key={emoji} onClick={() => insertEmoji(emoji)} role="menuitem" type="button">
                     {emoji}
                   </button>
-                ))}
+                )) : <p>Недавние эмодзи появятся здесь после выбора.</p>}
+                </div>
               </div>
             ) : null}
           </div>

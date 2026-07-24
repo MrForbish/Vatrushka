@@ -20,7 +20,7 @@ describe('SettingsShell', () => {
   it('navigates between sections and returns without rendering a members toggle', async () => {
     const onSelect = vi.fn();
     const onBack = vi.fn();
-    render(<SettingsShell activeSection="profile" entityLabel="Личные настройки" entityName="Илья" items={sections} onBack={onBack} onSelect={onSelect} workspaceLibrary={workspace()}><h1>Мой профиль</h1></SettingsShell>);
+    render(<SettingsShell activeSection="profile" entityLabel="Личные настройки" entityName="Илья" globalSidebar={workspace()} items={sections} onBack={onBack} onSelect={onSelect}><h1>Мой профиль</h1></SettingsShell>);
 
     expect(screen.getByRole('button', { name: /Мой профиль/u })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('button', { name: 'Открыть участников' })).not.toBeInTheDocument();

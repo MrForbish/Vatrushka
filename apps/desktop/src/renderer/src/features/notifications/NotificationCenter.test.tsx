@@ -83,7 +83,7 @@ it('renders its panel in the document portal and restores focus after Escape', (
 
   const trigger = screen.getByRole('button', { name: /Уведомления/u });
   fireEvent.click(trigger);
-  const panel = screen.getByRole('dialog', { name: 'Центр уведомлений' });
+  const panel = screen.getByRole('dialog', { name: 'Уведомления' });
 
   expect(panel.parentElement).toBe(document.body);
   fireEvent.keyDown(document, { key: 'Escape' });

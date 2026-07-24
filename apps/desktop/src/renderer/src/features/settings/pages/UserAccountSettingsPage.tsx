@@ -212,7 +212,7 @@ export function UserAccountSettingsPage(props: Props): React.JSX.Element {
       <article className="vui-user-settings-card vui-user-account-danger">
         <header>
           <div>
-            <h2>Danger Zone</h2>
+              <h2>Опасная зона</h2>
             <p>
               После подтверждения аккаунт будет анонимизирован через 14 дней.
               Сообщения сохранятся с автором «Удалённый пользователь».
