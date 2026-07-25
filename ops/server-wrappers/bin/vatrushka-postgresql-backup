@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+set -eu
+set -f
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+umask 077
+. /usr/local/lib/vatrushka/vatrushka-wrapper-common.sh
+
+test "$#" -eq 0 || {
+  printf '%s\n' 'PostgreSQL backup does not accept arguments.' >&2
+  exit 64
+}
+
+driver=/usr/local/lib/vatrushka/drivers/postgresql-backup.py
+test -x "$driver" || {
+  printf '%s\n' 'Approved PostgreSQL backup driver is not installed.' >&2
+  exit 64
+}
+
+exec "$driver"

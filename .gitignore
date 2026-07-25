@@ -12,6 +12,8 @@ updates/
 !.env.e2e
 *.log
 *.local
+__pycache__/
+*.pyc
 apps/desktop/build/icon.ico
 apps/desktop/build/icon.png
 apps/desktop/.e2e-user-data*/

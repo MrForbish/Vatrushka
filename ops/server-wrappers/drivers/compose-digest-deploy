@@ -1,0 +1,254 @@
+#!/usr/bin/env sh
+set -eu
+set -f
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+umask 077
+
+readonly RUNTIME_CONFIG=/etc/vatrushka/runtime.env
+readonly SOURCE_ROOT=/var/lib/vatrushka/sources
+readonly MANIFEST_ROOT=/var/lib/vatrushka/manifests
+readonly ACTIVE_CANDIDATE_FILE=/var/lib/vatrushka/manifests/active-candidate
+
+operation=${VATRUSHKA_DEPLOY_OPERATION:-deploy}
+case "$operation" in deploy|rollback) ;; *) printf '%s\n' 'Delivery operation is invalid.' >&2; exit 64 ;; esac
+
+fail() {
+  printf '%s\n' "$1" >&2
+  exit 64
+}
+
+require_root_file() {
+  file=$1
+  expected=$2
+  test -f "$file" || fail "Required runtime file is missing."
+  owner=$(stat -c '%U:%G:%a' -- "$file") || fail "Runtime file metadata cannot be read."
+  test "$owner" = "$expected" || fail "Runtime file permissions are unsafe."
+}
+
+read_runtime_config() {
+  require_root_file "$RUNTIME_CONFIG" root:root:600
+  python3 - "$RUNTIME_CONFIG" <<'PY'
+import re
+import sys
+
+required = {
+    "VATRUSHKA_RUNTIME_ENVIRONMENT": r"(?:staging|production)",
+    "VATRUSHKA_APP_DIR": r"/[A-Za-z0-9._/-]+",
+    "VATRUSHKA_RUNTIME_RELEASES_DIR": r"/[A-Za-z0-9._/-]+",
+    "VATRUSHKA_ENV_FILE": r"/[A-Za-z0-9._/-]+",
+    "VATRUSHKA_API_IMAGE_REPOSITORY": r"[a-z0-9./:_-]+",
+    "VATRUSHKA_REGISTRY_AUTH_DIR": r"/[A-Za-z0-9._/-]+",
+}
+values = {}
+with open(sys.argv[1], encoding="utf-8") as source:
+    for raw in source:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            raise SystemExit("Runtime configuration is malformed")
+        key, value = line.split("=", 1)
+        if key in required:
+            if not re.fullmatch(required[key], value):
+                raise SystemExit("Runtime configuration value is invalid")
+            values[key] = value
+missing = set(required) - set(values)
+if missing:
+    raise SystemExit("Runtime configuration is incomplete")
+for key in required:
+    print(values[key])
+PY
+}
+
+validate_production_application_config() {
+  test "$#" -eq 1 || fail "Production configuration path is invalid."
+  require_root_file "$1" root:root:600
+  /usr/local/lib/vatrushka/drivers/production-runtime-readiness.py || fail "Production application configuration is invalid."
+}
+
+test "$#" -eq 1 || fail "Exactly one canonical manifest path is required."
+manifest=$1
+case "$manifest" in
+  /var/lib/vatrushka/manifests/candidate-[0-9a-f]*.json) ;;
+  *) fail "Manifest path is not canonical." ;;
+esac
+require_root_file "$manifest" root:root:640
+require_root_file "$manifest.sha256" root:root:640
+(cd /var/lib/vatrushka/manifests && sha256sum --check --status "$(basename "$manifest.sha256")") || fail "Manifest checksum does not match."
+manifest_checksum=$(sha256sum -- "$manifest" | awk '{print $1}') || fail "Manifest checksum cannot be calculated."
+
+set -- $(read_runtime_config) || fail "Runtime configuration is invalid."
+runtime_environment=$1
+app_dir=$2
+runtime_releases_dir=$3
+env_file=$4
+image_repository=$5
+registry_auth_dir=$6
+
+set -- $(python3 - "$manifest" <<'PY'
+import json
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    manifest = json.load(source)
+
+digest = manifest.get("images", {}).get("api")
+commit = manifest.get("commitSha")
+environment = manifest.get("apiEnvironment")
+source_archive_sha = manifest.get("sourceArchiveSha256")
+dependency_lock_sha = manifest.get("dependencyLockSha256")
+migration = manifest.get("migration", {"required": False, "compatibility": "none"})
+if not isinstance(digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", digest, re.I):
+    raise SystemExit("API digest is invalid")
+if not isinstance(commit, str) or not re.fullmatch(r"[a-f0-9]{40}", commit, re.I):
+    raise SystemExit("Commit is invalid")
+if environment not in {"staging", "production"}:
+    raise SystemExit("Manifest environment is invalid")
+if not isinstance(source_archive_sha, str) or not re.fullmatch(r"[a-f0-9]{64}", source_archive_sha, re.I):
+    raise SystemExit("Source archive checksum is invalid")
+if not isinstance(dependency_lock_sha, str) or not re.fullmatch(r"[a-f0-9]{64}", dependency_lock_sha, re.I):
+    raise SystemExit("Dependency lock checksum is invalid")
+if not isinstance(migration, dict) or migration.get("compatibility") not in {"none", "backward-compatible"}:
+    raise SystemExit("Manifest requires manual migration review")
+print(digest)
+print(commit)
+print(environment)
+print(source_archive_sha)
+print(dependency_lock_sha)
+PY
+) || fail "Candidate manifest is invalid."
+api_digest=$1
+commit=$2
+manifest_environment=$3
+source_archive_sha=$4
+dependency_lock_sha=$5
+
+test "$runtime_environment" = "$manifest_environment" || fail "Manifest environment does not match runtime environment."
+require_root_file "$SOURCE_ROOT/$source_archive_sha.tar.gz" root:root:640
+stored_source_archive_sha=$(sha256sum -- "$SOURCE_ROOT/$source_archive_sha.tar.gz" | awk '{print $1}') || fail "Stored source archive cannot be verified."
+test "$stored_source_archive_sha" = "$source_archive_sha" || fail "Stored source archive does not match candidate manifest."
+require_root_file "$env_file" root:root:600
+if test "$runtime_environment" = production; then
+  validate_production_application_config "$env_file" || fail "Production application configuration is invalid."
+fi
+test -d "$runtime_releases_dir" || fail "Runtime releases directory is missing."
+releases_owner=$(stat -c '%U:%G:%a' -- "$runtime_releases_dir") || fail "Runtime releases directory metadata cannot be read."
+test "$releases_owner" = root:root:750 || fail "Runtime releases directory permissions are unsafe."
+release_dir="$runtime_releases_dir/$commit"
+if test -e "$release_dir"; then
+  test -d "$release_dir" || fail "Existing runtime release is invalid."
+else
+  release_temp=$(mktemp -d "$runtime_releases_dir/.candidate-$commit.XXXXXX") || fail "Runtime source extraction failed."
+  trap 'rm -rf -- "$release_temp"' EXIT HUP INT TERM
+  tar -xzf "$SOURCE_ROOT/$source_archive_sha.tar.gz" --no-same-owner --no-same-permissions -C "$release_temp" || fail "Runtime source extraction failed."
+  install -m 0640 -o root -g root /dev/null "$release_temp/.vatrushka-source.sha256"
+  printf '%s\n' "$source_archive_sha" >"$release_temp/.vatrushka-source.sha256"
+  actual_dependency_lock_sha=$(sha256sum -- "$release_temp/package-lock.json" | awk '{print $1}') || fail "Runtime dependency lock cannot be verified."
+  test "$actual_dependency_lock_sha" = "$dependency_lock_sha" || fail "Runtime dependency lock does not match candidate manifest."
+  test -f "$release_temp/infra/docker/docker-compose.yml" || fail "Runtime Compose file is missing."
+  chmod -R go-w "$release_temp"
+  chown -R root:root "$release_temp"
+  mv -- "$release_temp" "$release_dir"
+  trap - EXIT HUP INT TERM
+fi
+require_root_file "$release_dir/.vatrushka-source.sha256" root:root:640
+actual_source_archive_sha=$(tr -d '[:space:]' < "$release_dir/.vatrushka-source.sha256")
+test "$actual_source_archive_sha" = "$source_archive_sha" || fail "Runtime source does not match candidate manifest."
+actual_dependency_lock_sha=$(sha256sum -- "$release_dir/package-lock.json" | awk '{print $1}') || fail "Runtime dependency lock cannot be verified."
+test "$actual_dependency_lock_sha" = "$dependency_lock_sha" || fail "Runtime dependency lock does not match candidate manifest."
+test -f "$release_dir/infra/docker/docker-compose.yml" || fail "Runtime Compose file is missing."
+test -f "$release_dir/infra/livekit/docker-compose.self-hosted.yml" || fail "Runtime LiveKit Compose file is missing."
+require_root_file "$env_file" root:root:600
+# Validate the self-hosted media topology before replacing the active runtime
+# symlink. This consumes only the root-owned environment and never prints it.
+VATRUSHKA_APP_ENV_FILE="$env_file" docker compose --env-file "$env_file" -p vatrushka-livekit -f "$release_dir/infra/livekit/docker-compose.self-hosted.yml" config --quiet || fail "Runtime LiveKit configuration is invalid."
+# Prepare the previous runtime as a rollback target before changing the active
+# symlink. If this evidence cannot be preserved, leave the current runtime
+# untouched rather than completing a deployment with no bounded rollback.
+if test "$operation" = deploy && test -f "$ACTIVE_CANDIDATE_FILE"; then
+  require_root_file "$ACTIVE_CANDIDATE_FILE" root:root:640
+  previous_candidate_checksum=$(tr -d '[:space:]' < "$ACTIVE_CANDIDATE_FILE")
+  case "$previous_candidate_checksum" in *[!0-9a-f]*|'') fail "Active candidate checksum is invalid." ;; esac
+  test "${#previous_candidate_checksum}" -eq 64 || fail "Active candidate checksum is invalid."
+  previous_manifest="$MANIFEST_ROOT/candidate-$previous_candidate_checksum.json"
+  require_root_file "$previous_manifest" root:root:640
+  require_root_file "$previous_manifest.sha256" root:root:640
+  (cd "$MANIFEST_ROOT" && sha256sum --check --status "$(basename "$previous_manifest.sha256")") || fail "Active candidate checksum does not match."
+  rollback_manifest="$MANIFEST_ROOT/rollback-$manifest_checksum.json"
+  if test ! -e "$rollback_manifest"; then
+    python3 - "$previous_manifest" "$previous_candidate_checksum" "$rollback_manifest" <<'PY'
+import json
+import os
+import sys
+
+previous_path, previous_checksum, output_path = sys.argv[1:]
+with open(previous_path, encoding="utf-8") as source:
+    previous = json.load(source)
+rollback = {
+    "releaseVersion": previous["version"],
+    "previousCandidateSha256": previous_checksum,
+    "commitSha": previous["commitSha"],
+    "dependencyLockSha256": previous["dependencyLockSha256"],
+    "images": previous["images"],
+}
+temporary = f"{output_path}.tmp"
+with open(temporary, "x", encoding="utf-8") as target:
+    json.dump(rollback, target, indent=2, sort_keys=True)
+    target.write("\n")
+os.chmod(temporary, 0o640)
+os.replace(temporary, output_path)
+PY
+    chown root:root "$rollback_manifest"
+    rollback_checksum=$(sha256sum -- "$rollback_manifest" | awk '{print $1}') || fail "Rollback manifest checksum cannot be calculated."
+    printf '%s  %s\n' "$rollback_checksum" "$(basename "$rollback_manifest")" >"$rollback_manifest.sha256"
+    chmod 0640 "$rollback_manifest.sha256"
+    chown root:root "$rollback_manifest.sha256"
+  fi
+fi
+
+if test -e "$app_dir" && test ! -L "$app_dir"; then
+  fail "Runtime application path must be a symlink."
+fi
+install -d -m 0750 -o root -g root "$(dirname "$app_dir")"
+ln -s "$release_dir" "$app_dir.next"
+mv -Tf "$app_dir.next" "$app_dir"
+test -d "$registry_auth_dir" || fail "Registry credential directory is missing."
+auth_owner=$(stat -c '%U:%G:%a' -- "$registry_auth_dir") || fail "Registry credential metadata cannot be read."
+test "$auth_owner" = root:root:700 || fail "Registry credential permissions are unsafe."
+require_root_file "$registry_auth_dir/config.json" root:root:600
+
+api_image="$image_repository@$api_digest"
+docker --config "$registry_auth_dir" pull "$api_image" >/dev/null
+cd "$app_dir"
+VATRUSHKA_APP_ENV_FILE="$env_file" API_IMAGE="$api_image" BUILD_COMMIT="$commit" docker compose --env-file "$env_file" -p vatrushka -f infra/docker/docker-compose.yml up -d --no-build postgres redis api caddy
+
+attempt=0
+until curl -fsS http://127.0.0.1:3001/health/live >/dev/null; do
+  attempt=$((attempt + 1))
+  test "$attempt" -lt 30 || { VATRUSHKA_APP_ENV_FILE="$env_file" docker compose --env-file "$env_file" -p vatrushka -f infra/docker/docker-compose.yml ps >&2; exit 1; }
+  sleep 2
+done
+
+# API must be live before it can validate authenticated LiveKit webhooks. The
+# final readiness check below verifies the complete API + media dependency set.
+VATRUSHKA_APP_ENV_FILE="$env_file" docker compose --env-file "$env_file" -p vatrushka-livekit -f infra/livekit/docker-compose.self-hosted.yml up -d --no-build livekit
+VATRUSHKA_APP_ENV_FILE="$env_file" docker compose --env-file "$env_file" -p vatrushka-livekit -f infra/livekit/docker-compose.self-hosted.yml ps --status running --services | grep -Fx livekit >/dev/null || fail "LiveKit did not reach the running state."
+
+attempt=0
+until curl -fsS http://127.0.0.1:3001/health/ready >/dev/null; do
+  attempt=$((attempt + 1))
+  test "$attempt" -lt 30 || { VATRUSHKA_APP_ENV_FILE="$env_file" docker compose --env-file "$env_file" -p vatrushka -f infra/docker/docker-compose.yml ps >&2; VATRUSHKA_APP_ENV_FILE="$env_file" docker compose --env-file "$env_file" -p vatrushka-livekit -f infra/livekit/docker-compose.self-hosted.yml ps >&2; exit 1; }
+  sleep 2
+done
+
+active_temp=$(mktemp "$MANIFEST_ROOT/.active-candidate.XXXXXX") || fail "Active candidate update failed."
+trap 'rm -f -- "$active_temp"' EXIT HUP INT TERM
+printf '%s\n' "$manifest_checksum" >"$active_temp"
+chmod 0640 "$active_temp"
+chown root:root "$active_temp"
+mv -f -- "$active_temp" "$ACTIVE_CANDIDATE_FILE"
+trap - EXIT HUP INT TERM
+
+printf 'Runtime deployment completed for commit %s\n' "$commit"

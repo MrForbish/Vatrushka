@@ -1,0 +1,102 @@
+#!/usr/bin/env sh
+set -eu
+. /usr/local/lib/vatrushka/vatrushka-wrapper-common.sh
+
+test "$#" -eq 1 || fail 'Exactly one updater manifest path is required.'
+manifest=$1
+case "$manifest" in
+  "$VATRUSHKA_INBOX_ROOT"/updater-v[0-9]*.json) ;;
+  *) fail 'Updater manifest path is not allowlisted.' ;;
+esac
+test ! -L "$manifest" || fail 'Updater manifest must not be a symlink.'
+test -f "$manifest" || fail 'Updater manifest is not a regular file.'
+owner=$(stat -c '%U:%G:%a' -- "$manifest") || fail 'Updater manifest metadata cannot be read.'
+case "$owner" in
+  vatrushka_deploy:vatrushka_deploy:600|vatrushka_deploy:vatrushka_deploy:640|vatrushka_deploy:vatrushka_deploy:644) ;;
+  *) fail 'Updater manifest must be owned by the deploy user and not writable by others.' ;;
+esac
+
+python3 - "$manifest" "$VATRUSHKA_INBOX_ROOT" <<'PY'
+import hashlib
+import json
+from pathlib import Path
+import re
+import sys
+
+manifest_path = Path(sys.argv[1])
+inbox = Path(sys.argv[2]).resolve()
+data = json.loads(manifest_path.read_text(encoding="utf-8"))
+required = {"version", "files"}
+if set(data) != required or not re.fullmatch(r"\d+\.\d+\.\d+", data["version"]):
+    raise SystemExit("Updater manifest is invalid")
+files = data["files"]
+if not isinstance(files, dict) or set(files) != {"setup", "blockmap", "latest", "checksums", "metadata"}:
+    raise SystemExit("Updater manifest file set is invalid")
+for role, item in files.items():
+    if not isinstance(item, dict) or set(item) != {"name", "sha256"}:
+        raise SystemExit("Updater manifest entry is invalid")
+    name = item["name"]
+    digest = item["sha256"]
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]*", name):
+        raise SystemExit("Updater file name is invalid")
+    if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest, re.I):
+        raise SystemExit("Updater file checksum is invalid")
+    path = (inbox / name).resolve()
+    if path.parent != inbox or path.is_symlink() or not path.is_file():
+        raise SystemExit("Updater file is unsafe")
+    metadata = path.stat()
+    if metadata.st_uid != manifest_path.stat().st_uid or metadata.st_gid != manifest_path.stat().st_gid or metadata.st_mode & 0o022:
+        raise SystemExit("Updater file ownership is unsafe")
+    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+    if actual.lower() != digest.lower():
+        raise SystemExit("Updater file checksum does not match")
+if files["latest"]["name"] != "latest.yml" or files["checksums"]["name"] != "SHA256SUMS.txt" or files["metadata"]["name"] != "release-metadata.json":
+    raise SystemExit("Updater metadata names are invalid")
+if not re.fullmatch(rf"Vatrushka-Setup-{re.escape(data['version'])}-x64\.exe", files["setup"]["name"]):
+    raise SystemExit("Updater setup name does not match version")
+if files["blockmap"]["name"] != files["setup"]["name"] + ".blockmap":
+    raise SystemExit("Updater blockmap name does not match setup")
+latest = (inbox / "latest.yml").read_text(encoding="utf-8")
+if not re.search(rf"^version:\s*['\"]?{re.escape(data['version'])}['\"]?\s*$", latest, re.M):
+    raise SystemExit("Updater latest manifest version does not match")
+PY
+
+. /etc/vatrushka/runtime.env
+update_dir=${VATRUSHKA_UPDATE_FEED_DIR-}
+case "$update_dir" in
+  /opt/vatrushka/updates) ;;
+  *) fail 'Updater feed directory is unsafe.' ;;
+esac
+
+release=$(python3 - "$manifest" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["version"])
+PY
+)
+install -d -m 0750 -o root -g root "$update_dir"
+staging=$(mktemp -d "$update_dir/.updater.XXXXXX") || fail 'Updater staging directory cannot be created.'
+cleanup() { rm -rf -- "$staging"; }
+trap cleanup EXIT HUP INT TERM
+for name in $(python3 - "$manifest" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+for item in data["files"].values(): print(item["name"])
+PY
+); do
+  install -m 0644 -o root -g root "$VATRUSHKA_INBOX_ROOT/$name" "$staging/$name"
+done
+for name in $(find "$staging" -maxdepth 1 -type f -printf '%f\n' | grep -v '^latest.yml$'); do
+  mv -f -- "$staging/$name" "$update_dir/$name"
+done
+mv -f -- "$staging/latest.yml" "$update_dir/latest.yml"
+for name in $(python3 - "$manifest" <<'PY'
+import json, sys
+data = json.load(open(sys.argv[1], encoding="utf-8"))
+for item in data["files"].values(): print(item["name"])
+PY
+); do
+  rm -f -- "$VATRUSHKA_INBOX_ROOT/$name"
+done
+rm -f -- "$manifest"
+audit "vatrushka-publish-updater" "$release" succeeded
+printf '%s\n' "updater=published version=$release"

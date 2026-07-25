@@ -27,6 +27,7 @@ export default defineConfig({
       'process.env.HAWK_DESKTOP_MAIN_ENABLED': JSON.stringify(process.env.HAWK_DESKTOP_MAIN_ENABLED ?? 'false'),
       'process.env.HAWK_DESKTOP_MAIN_TOKEN': JSON.stringify(hawkMainToken ?? ''),
       'process.env.HAWK_DESKTOP_RELEASE': JSON.stringify(hawkRelease),
+      'process.env.VATRUSHKA_UPDATES_ENABLED': JSON.stringify(process.env.VATRUSHKA_UPDATES_ENABLED ?? 'true'),
     },
     build: { sourcemap: true },
   },

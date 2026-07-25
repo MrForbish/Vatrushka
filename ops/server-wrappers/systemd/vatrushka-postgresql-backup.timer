@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Vatrushka encrypted PostgreSQL backup
+
+[Timer]
+OnCalendar=*-*-* 03:17:00 UTC
+Persistent=true
+RandomizedDelaySec=15m
+Unit=vatrushka-postgresql-backup.service
+
+[Install]
+WantedBy=timers.target

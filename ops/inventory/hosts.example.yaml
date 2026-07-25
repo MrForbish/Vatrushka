@@ -1,0 +1,49 @@
+# This file is intentionally redacted. Copy it outside the repository or use
+# GitLab protected variables for live host names and keys.
+schemaVersion: 1
+hosts:
+  - id: production
+    role: product-runtime
+    lifecycle: planned
+    environment: production
+    owner: platform
+    publicDnsAliases: []
+    privateNetworkRef: wireguard-production
+    deployWrapperDirectory: /usr/local/lib/vatrushka
+    observabilityAgent: product-alloy
+    backupClass: production-postgresql
+    lastAuditedAt: null
+  - id: staging
+    role: product-runtime
+    lifecycle: planned
+    environment: staging
+    prerequisite: "new production migrated and observed; former production OS reinstalled"
+    owner: platform
+    publicDnsAliases: []
+    privateNetworkRef: wireguard-staging
+    deployWrapperDirectory: /usr/local/lib/vatrushka
+    observabilityAgent: product-alloy
+    backupClass: none
+    lastAuditedAt: null
+  - id: observer
+    role: observability
+    lifecycle: active
+    environment: shared
+    owner: platform
+    publicDnsAliases: []
+    privateNetworkRef: wireguard-observer
+    deployWrapperDirectory: /usr/local/lib/vatrushka
+    observabilityAgent: platform-alloy
+    backupClass: loki-object-storage
+    lastAuditedAt: null
+  - id: linux-runner
+    role: ci-runner
+    lifecycle: active
+    environment: shared
+    owner: platform
+    publicDnsAliases: []
+    privateNetworkRef: wireguard-runner
+    deployWrapperDirectory: null
+    observabilityAgent: runner-alloy
+    backupClass: none
+    lastAuditedAt: null

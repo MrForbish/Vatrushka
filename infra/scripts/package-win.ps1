@@ -79,13 +79,18 @@ foreach ($artifact in $toolchain.builderArtifacts) {
 
 Push-Location $desktopRoot
 try {
+  $delivery = & node (Join-Path $desktopRoot 'scripts\desktop-delivery-config.mjs') | ConvertFrom-Json
+  if ($LASTEXITCODE -ne 0) {
+    throw "Desktop delivery configuration validation failed with exit code $LASTEXITCODE"
+  }
+  $env:VATRUSHKA_UPDATES_ENABLED = if ($delivery.updatesEnabled) { 'true' } else { 'false' }
   & npm run build:production
   if ($LASTEXITCODE -ne 0) {
     throw "Desktop production build failed with exit code $LASTEXITCODE"
   }
 
   $builder = Join-Path $repoRoot 'node_modules\.bin\electron-builder.cmd'
-  & $builder --win nsis portable --x64 "--config.electronDist=$electronZip"
+  & $builder --win nsis portable --x64 "--config.electronDist=$electronZip" "--config.publish.provider=generic" "--config.publish.url=$($delivery.updateFeed)" "--config.publish.channel=latest" "--config.extraMetadata.version=$($delivery.version)"
   if ($LASTEXITCODE -ne 0) {
     throw "electron-builder failed with exit code $LASTEXITCODE"
   }

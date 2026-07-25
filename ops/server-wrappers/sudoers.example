@@ -1,0 +1,13 @@
+# Root-owned example: install as /etc/sudoers.d/vatrushka-deploy after host review.
+# Replace deploy account names during host provisioning. Do not permit sh, bash,
+# docker, compose or arbitrary arguments through sudo.
+Cmnd_Alias VATRUSHKA_WRAPPERS = \
+  /usr/local/lib/vatrushka/vatrushka-preflight, \
+  /usr/local/lib/vatrushka/vatrushka-deploy, \
+  /usr/local/lib/vatrushka/vatrushka-rollback, \
+  /usr/local/lib/vatrushka/vatrushka-runtime-status
+
+vatrushka_deploy ALL=(root) NOPASSWD: VATRUSHKA_WRAPPERS
+
+# Observer uses a distinct account and only its fixed readiness wrapper.
+vatrushka_observer_deploy ALL=(root) NOPASSWD: /usr/local/lib/vatrushka/vatrushka-observability-verify production
