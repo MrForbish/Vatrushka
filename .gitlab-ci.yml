@@ -142,7 +142,7 @@ build-api-immutable-image:
   script:
     - export IMAGE_REF="$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHA"
     - docker buildx build --pull --push --metadata-file image-metadata.json --tag "$IMAGE_REF" --build-arg "BUILD_COMMIT=$CI_COMMIT_SHA" -f infra/docker/Dockerfile.api .
-    - export API_IMAGE_DIGEST="$(jq -er '.\"containerimage.digest\"' image-metadata.json)"
+    - export API_IMAGE_DIGEST="$(jq -er '."containerimage.digest"' image-metadata.json)"
     - echo "$API_IMAGE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$'
     - printf 'API_IMAGE_REF=%s@%s\nAPI_IMAGE_DIGEST=%s\n' "$CI_REGISTRY_IMAGE/api" "$API_IMAGE_DIGEST" "$API_IMAGE_DIGEST" > candidate-image.env
   artifacts:
