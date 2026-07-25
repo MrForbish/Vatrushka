@@ -340,6 +340,12 @@ test("observability driver starts only the active candidate through private coll
     new URL("observability.env.example", root),
     "utf8",
   );
+  assert.match(driver, /config_values=\$\(python3/u);
+  assert.match(
+    driver,
+    /set -- \$config_values\ntest "\$#" -eq 8 \|\| fail "Observability configuration returned an invalid value count\."/u,
+  );
+  assert.doesNotMatch(driver, /set -- \$\(python3/u);
   assert.match(
     driver,
     /Observability manifest is not the active runtime candidate/,
