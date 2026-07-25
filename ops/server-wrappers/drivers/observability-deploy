@@ -34,7 +34,7 @@ active_candidate="$MANIFEST_ROOT/active-candidate"
 require_root_file "$active_candidate" root:root:640
 test "$(tr -d '[:space:]' < "$active_candidate")" = "$manifest_checksum" || fail "Observability manifest is not the active runtime candidate."
 
-set -- $(python3 - "$RUNTIME_CONFIG" "$OBSERVABILITY_CONFIG" <<'PY'
+config_values=$(python3 - "$RUNTIME_CONFIG" "$OBSERVABILITY_CONFIG" <<'PY'
 import re
 import sys
 
@@ -76,6 +76,11 @@ for key in observability_required:
     print(observability[key])
 PY
 ) || fail "Observability configuration is invalid."
+
+# Do not combine command substitution with `set --`: POSIX sh reports the
+# successful `set` status and can silently discard a failed validator.
+set -- $config_values
+test "$#" -eq 8 || fail "Observability configuration returned an invalid value count."
 app_dir=$1
 env_file=$2
 observability_host=$3
