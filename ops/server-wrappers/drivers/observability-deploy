@@ -106,4 +106,4 @@ for service in alloy node-exporter cadvisor postgres-exporter redis-exporter; do
   docker compose --env-file "$env_file" -p vatrushka-observability-agent -f infra/observability/agents/docker-compose.yml --profile product --profile docker ps --status running --services | grep -Fx "$service" >/dev/null || fail "Observability service is not running."
 done
 
-printf '%s\n' 'observability=ready environment=production'
+printf '%s\n' "observability=ready environment=$observability_environment"

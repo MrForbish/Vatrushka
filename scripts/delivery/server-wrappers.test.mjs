@@ -341,6 +341,7 @@ test("observability driver starts only the active candidate through private coll
     driver,
     /for service in alloy node-exporter cadvisor postgres-exporter redis-exporter/,
   );
+  assert.match(driver, /observability=ready environment=\$observability_environment/);
   assert.doesNotMatch(driver, /eval\b|sh -c|bash -c/);
   assert.match(example, /OBSERVABILITY_ENVIRONMENT=production/);
   assert.match(

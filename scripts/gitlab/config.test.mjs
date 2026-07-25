@@ -67,12 +67,13 @@ test('develop produces an immutable staging candidate without exposing an update
     pipeline.indexOf('deploy-staging-candidate:'),
     pipeline.indexOf('merge-request-policy:'),
   );
-  assert.match(pipeline, /when: manual[\s\S]*allow_failure: true/u);
+  assert.doesNotMatch(stagingDeploy, /when: manual|allow_failure: true/u);
   assert.match(pipeline, /STAGING_SSH_PRIVATE_KEY/u);
   assert.match(pipeline, /STAGING_SSH_HOST_KEY/u);
   assert.match(stagingDeploy, /vatrushka-preflight/u);
   assert.match(stagingDeploy, /vatrushka-deploy/u);
   assert.match(stagingDeploy, /vatrushka-runtime-status/u);
+  assert.match(stagingDeploy, /vatrushka-observability-deploy/u);
   assert.doesNotMatch(stagingDeploy, /StrictHostKeyChecking=no|ssh-keyscan/u);
   assert.doesNotMatch(stagingDeploy, /PRODUCTION_SSH_|sudo -n sh|docker compose|--build/u);
 });
