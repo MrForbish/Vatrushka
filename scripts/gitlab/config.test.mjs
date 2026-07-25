@@ -112,7 +112,10 @@ test('protected tags promote an existing immutable image through the root-owned 
   assert.match(manifest, /channel == "stable"/u);
   assert.match(manifest, /apiEnvironment == "production"/u);
   assert.match(pipeline, /^resolve-production-desktop-package:[\s\S]*packages\/generic\/vatrushka-production-desktop/mu);
-  assert.match(pipeline, /^resolve-production-desktop-package:[\s\S]*sha256sum --check/mu);
+  assert.match(pipeline, /^resolve-production-desktop-package:[\s\S]*sha256sum -c/mu);
+  assert.match(pipeline, /\.production-ssh:[\s\S]*tr -d '\\r' < "\$PRODUCTION_SSH_PRIVATE_KEY"/u);
+  assert.match(pipeline, /\.production-ssh:[\s\S]*ssh-keygen -lf ~\/\.ssh\/id_ed25519/u);
+  assert.match(pipeline, /\.production-ssh:[\s\S]*ssh-keygen -F "\$PRODUCTION_SSH_HOST" -f ~\/\.ssh\/known_hosts/u);
   assert.match(productionDeploy, /when: manual[\s\S]*allow_failure: false/u);
   assert.match(productionDeploy, /job: preflight-production-runtime/u);
   assert.match(productionDeploy, /job: backup-production-postgresql/u);
