@@ -1,6 +1,6 @@
 {
   "name": "vatrushka",
-  "version": "0.8.21",
+  "version": "0.8.22",
   "private": true,
   "description": "«Ватрушка» — настольные серверы, текстовые и голосовые каналы",
   "type": "module",
@@ -39,7 +39,7 @@
     "db:migrate": "npm run db:migrate -w @vatrushka/api",
     "db:studio": "npm run db:studio -w @vatrushka/api",
     "capacity:check": "npm run capacity:check -w @vatrushka/api",
-    "repo-policy:test": "node --test scripts/ci/*.test.mjs scripts/gitlab/*.test.mjs scripts/observability/*.test.mjs scripts/policy/*.test.mjs scripts/release/*.test.mjs",
+    "repo-policy:test": "node --test scripts/ci/*.test.mjs scripts/delivery/*.test.mjs scripts/gitlab/*.test.mjs scripts/observability/*.test.mjs scripts/policy/*.test.mjs scripts/release/*.test.mjs",
     "version:check": "node scripts/release/version-check.mjs",
     "release:validate": "node scripts/release/validate.mjs",
     "release:prepare": "node scripts/release/prepare.mjs"

@@ -12,7 +12,8 @@ export async function validateRelease({ branch = process.env.RELEASE_BRANCH ?? g
   const version = versionResult.version;
   const prod = productionBranch();
   const allowed = [
-    /^develop$/,
+    new RegExp(`^assemble/${version}$`),
+    new RegExp(`^release/${version}$`),
     new RegExp(`^hotfix/${version}-[a-z0-9][a-z0-9-]*$`),
     new RegExp(`^${prod.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
   ];

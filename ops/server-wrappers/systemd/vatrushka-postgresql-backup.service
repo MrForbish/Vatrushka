@@ -1,0 +1,15 @@
+[Unit]
+Description=Vatrushka encrypted PostgreSQL backup
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/local/lib/vatrushka/vatrushka-postgresql-backup
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/vatrushka/backups

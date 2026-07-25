@@ -1,0 +1,59 @@
+#!/usr/bin/env sh
+set -eu
+
+test "$#" -eq 0 || { echo "Runtime status does not accept arguments." >&2; exit 64; }
+readonly runtime_config=/etc/vatrushka/runtime.env
+
+metadata=$(stat -c '%U:%G:%a' -- "$runtime_config") || { echo "Runtime configuration is missing." >&2; exit 1; }
+test "$metadata" = root:root:600 || { echo "Runtime configuration permissions are unsafe." >&2; exit 1; }
+
+set -- $(python3 - "$runtime_config" <<'PY'
+import re
+import sys
+
+required = {
+    "VATRUSHKA_APP_DIR": r"/[A-Za-z0-9._/-]+",
+    "VATRUSHKA_RUNTIME_RELEASES_DIR": r"/[A-Za-z0-9._/-]+",
+    "VATRUSHKA_ENV_FILE": r"/[A-Za-z0-9._/-]+",
+}
+values = {}
+for raw in open(sys.argv[1], encoding="utf-8"):
+    line = raw.strip()
+    if not line or line.startswith("#"):
+        continue
+    if "=" not in line:
+        raise SystemExit(1)
+    key, value = line.split("=", 1)
+    if key in required:
+        if not re.fullmatch(required[key], value):
+            raise SystemExit(1)
+        values[key] = value
+if set(values) != set(required):
+    raise SystemExit(1)
+print(values["VATRUSHKA_APP_DIR"], values["VATRUSHKA_RUNTIME_RELEASES_DIR"], values["VATRUSHKA_ENV_FILE"])
+PY
+) || { echo "Runtime configuration is invalid." >&2; exit 1; }
+app_dir=$1
+releases_dir=$2
+env_file=$3
+
+test -L "$app_dir" || { echo "Runtime application path is not a symlink." >&2; exit 1; }
+release_dir=$(readlink -f -- "$app_dir") || { echo "Runtime application path is unresolved." >&2; exit 1; }
+case "$release_dir" in
+  "$releases_dir"/*) ;;
+  *) echo "Runtime application path is outside the release directory." >&2; exit 1 ;;
+esac
+test -f "$release_dir/infra/docker/docker-compose.yml" || { echo "Runtime Compose file is missing." >&2; exit 1; }
+env_metadata=$(stat -c '%U:%G:%a' -- "$env_file") || { echo "Runtime application environment is missing." >&2; exit 1; }
+test "$env_metadata" = root:root:600 || { echo "Runtime application environment permissions are unsafe." >&2; exit 1; }
+
+cd "$app_dir"
+VATRUSHKA_APP_ENV_FILE="$env_file" docker compose --env-file "$env_file" -p vatrushka -f infra/docker/docker-compose.yml ps --status running --services | grep -qx api || {
+  echo "API container is not running." >&2
+  exit 1
+}
+curl -fsS http://127.0.0.1:3001/health/ready >/dev/null || {
+  echo "API readiness check failed." >&2
+  exit 1
+}
+printf 'runtime=ready release=%s\n' "$(basename -- "$release_dir")"

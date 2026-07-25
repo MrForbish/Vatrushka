@@ -1,0 +1,5 @@
+# Linux runtime wrappers are copied and executed by Ubuntu hosts.  Keep their
+# shebangs and shell syntax LF-terminated even when a Windows developer has
+# core.autocrlf enabled.
+ops/server-wrappers/** text eol=lf
+ops/observer-wrappers/** text eol=lf

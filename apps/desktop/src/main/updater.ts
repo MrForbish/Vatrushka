@@ -14,6 +14,7 @@ import {
   UPDATE_RETRY_DELAY_MS,
   UPDATE_START_DELAY_MS,
 } from "./updater-schedule.js";
+import { desktopUpdatesAreEnabled } from "./updater-policy.js";
 
 const { autoUpdater } = electronUpdater;
 
@@ -34,11 +35,12 @@ export class DesktopUpdater {
   start(): void {
     if (this.started) return;
     this.started = true;
-    if (
-      !app.isPackaged ||
-      process.platform !== "win32" ||
-      Boolean(process.env.PORTABLE_EXECUTABLE_FILE)
-    ) {
+    if (!desktopUpdatesAreEnabled({
+      isPackaged: app.isPackaged,
+      platform: process.platform,
+      isPortable: Boolean(process.env.PORTABLE_EXECUTABLE_FILE),
+      buildEnabled: process.env.VATRUSHKA_UPDATES_ENABLED !== "false",
+    })) {
       this.setState({
         status: "unsupported",
         currentVersion: app.getVersion(),

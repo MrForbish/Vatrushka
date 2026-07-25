@@ -30,6 +30,7 @@ RUN npm ci --omit=dev --workspace @vatrushka/api --workspace @vatrushka/shared -
 COPY --from=build --chown=nodeapp:nodeapp /app/apps/api/dist apps/api/dist
 COPY --from=build --chown=nodeapp:nodeapp /app/apps/api/drizzle apps/api/drizzle
 COPY --from=build --chown=nodeapp:nodeapp /app/packages/shared/dist packages/shared/dist
+COPY --chown=nodeapp:nodeapp infra/docker/api-start.sh infra/docker/runtime-connection-urls.mjs infra/docker/
 
 USER nodeapp
 EXPOSE 3000
