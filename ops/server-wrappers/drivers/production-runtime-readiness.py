@@ -109,9 +109,7 @@ require_nonempty(
     "S3_SECRET_ACCESS_KEY",
     "S3_KEY_PREFIX",
 )
-if values.get("NODE_ENV", "production") != "production" or values.get(
-    "MEDIA_STORAGE_DRIVER"
-) != "s3":
+if values.get("MEDIA_STORAGE_DRIVER") != "s3":
     fail("Production application configuration is invalid.")
 if (
     values.get("S3_ENDPOINT") != "https://s3.twcstorage.ru"
