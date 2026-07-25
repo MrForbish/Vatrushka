@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.23] - 2026-07-26
+
+### Fixed
+
+- makes protected-tag checksum validation portable to the Alpine/BusyBox runner and normalizes protected SSH key material before production preflight;
+- preserves immutable candidate promotion, checksum verification and the stable-updater final gate without changing application, database, Redis or media contracts.
+
 ## [0.8.22] - 2026-07-25
 
 ### Changed
