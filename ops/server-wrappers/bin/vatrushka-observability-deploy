@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+set -eu
+. /usr/local/lib/vatrushka/vatrushka-wrapper-common.sh
+
+manifest=$(require_manifest "$@")
+require_manifest_type "$manifest" candidate
+release=$(manifest_release_id "$manifest")
+run_fixed_driver observability-deploy "$manifest" "$release"

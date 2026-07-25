@@ -4,6 +4,14 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.22] - 2026-07-25
+
+### Changed
+
+- delivers the first immutable infrastructure migration candidate: API image and Windows installer are built from the release candidate SHA and promoted by the protected tag without rebuilding;
+- deploys the approved candidate through root-owned, checksum-verified runtime wrappers, with PostgreSQL backup, readiness, smoke and Observer verification before stable updater publication;
+- keeps the stable updater manifest as the final exposure gate and leaves database, Redis and media contracts unchanged.
+
 ## [0.8.21] - 2026-07-24
 
 ### Changed

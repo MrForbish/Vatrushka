@@ -1,0 +1,76 @@
+#!/usr/bin/env sh
+set -eu
+set -f
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+umask 077
+
+readonly WRAPPER_ROOT=/usr/local/lib/vatrushka
+readonly MANIFEST_ROOT=/var/lib/vatrushka/manifests
+
+fail() {
+  printf '%s\n' "$1" >&2
+  exit 64
+}
+
+require_root_file() {
+  file=$1
+  expected=$2
+  test -f "$file" || fail "Required protected file is missing."
+  owner=$(stat -c '%U:%G:%a' -- "$file") || fail "Protected file metadata cannot be read."
+  test "$owner" = "$expected" || fail "Protected file permissions are unsafe."
+}
+
+test "$#" -eq 1 || fail "Exactly one canonical rollback manifest path is required."
+rollback_manifest=$1
+case "$rollback_manifest" in
+  "$MANIFEST_ROOT"/rollback-[0-9a-f]*.json) ;;
+  *) fail "Rollback manifest path is not canonical." ;;
+esac
+require_root_file "$rollback_manifest" root:root:640
+require_root_file "$rollback_manifest.sha256" root:root:640
+(cd "$MANIFEST_ROOT" && sha256sum --check --status "$(basename "$rollback_manifest.sha256")") || fail "Rollback manifest checksum does not match."
+
+set -- $(python3 - "$rollback_manifest" <<'PY'
+import json
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    rollback = json.load(source)
+required = {"releaseVersion", "previousCandidateSha256", "commitSha", "dependencyLockSha256", "images"}
+if set(rollback) != required:
+    raise SystemExit("Rollback manifest has unsupported fields")
+for field, expression in {
+    "previousCandidateSha256": r"[a-f0-9]{64}",
+    "commitSha": r"[a-f0-9]{40}",
+    "dependencyLockSha256": r"[a-f0-9]{64}",
+}.items():
+    if not isinstance(rollback[field], str) or not re.fullmatch(expression, rollback[field], re.I):
+        raise SystemExit("Rollback manifest is invalid")
+print(rollback["previousCandidateSha256"].lower())
+print(rollback["commitSha"].lower())
+print(rollback["dependencyLockSha256"].lower())
+PY
+) || fail "Rollback manifest is invalid."
+previous_checksum=$1
+expected_commit=$2
+expected_lock=$3
+candidate_manifest="$MANIFEST_ROOT/candidate-$previous_checksum.json"
+require_root_file "$candidate_manifest" root:root:640
+require_root_file "$candidate_manifest.sha256" root:root:640
+(cd "$MANIFEST_ROOT" && sha256sum --check --status "$(basename "$candidate_manifest.sha256")") || fail "Rollback candidate checksum does not match."
+
+python3 - "$candidate_manifest" "$expected_commit" "$expected_lock" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    candidate = json.load(source)
+if candidate.get("commitSha") != sys.argv[2] or candidate.get("dependencyLockSha256") != sys.argv[3]:
+    raise SystemExit("Rollback target does not match its candidate")
+if candidate.get("migration", {}).get("compatibility", "none") not in {"none", "backward-compatible"}:
+    raise SystemExit("Rollback target requires manual migration review")
+PY
+
+exec env VATRUSHKA_DEPLOY_OPERATION=rollback "$WRAPPER_ROOT/drivers/compose-digest-deploy" "$candidate_manifest"

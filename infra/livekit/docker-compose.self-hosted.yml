@@ -6,7 +6,7 @@ services:
     restart: unless-stopped
     network_mode: host
     env_file:
-      - ../../.env
+      - ${VATRUSHKA_APP_ENV_FILE:-../../.env}
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
       LIVEKIT_CONFIG: |
@@ -28,15 +28,15 @@ services:
         webhook:
           api_key: "${LIVEKIT_API_KEY}"
           urls:
-            - https://api.myvatrushka.ru/api/v1/webhooks/livekit
+            - "${LIVEKIT_WEBHOOK_URL:?LIVEKIT_WEBHOOK_URL is required}"
 
         turn:
           enabled: true
-          domain: turn.myvatrushka.ru
+          domain: "${TURN_DOMAIN:?TURN_DOMAIN is required}"
           udp_port: 3478
           tls_port: 5349
-          cert_file: /etc/letsencrypt/live/turn.myvatrushka.ru/fullchain.pem
-          key_file: /etc/letsencrypt/live/turn.myvatrushka.ru/privkey.pem
+          cert_file: "${TURN_CERT_DIRECTORY:-/etc/letsencrypt/live}/${TURN_DOMAIN}/fullchain.pem"
+          key_file: "${TURN_CERT_DIRECTORY:-/etc/letsencrypt/live}/${TURN_DOMAIN}/privkey.pem"
 
         logging:
           level: info

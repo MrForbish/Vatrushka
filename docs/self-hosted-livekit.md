@@ -37,8 +37,13 @@ LiveKit рекомендует host networking для VM и предупрежд
 
    ```bash
    docker compose --env-file .env -f infra/docker/docker-compose.yml up -d postgres api caddy
-   TURN_DOMAIN=turn.example.com docker compose -f infra/livekit/docker-compose.self-hosted.yml up -d
+   VATRUSHKA_APP_ENV_FILE=/etc/vatrushka/app.env docker compose --env-file /etc/vatrushka/app.env -f infra/livekit/docker-compose.self-hosted.yml up -d
    ```
+
+The root-owned runtime environment must set `LIVEKIT_WEBHOOK_URL` to
+`https://<api-domain>/api/v1/integrations/livekit/webhook`, `TURN_DOMAIN`, and
+`TURN_CERT_DIRECTORY`. Staging values must use staging domains only; do not
+reuse the production API, TURN domain or certificate path.
 
 ## Диагностика
 

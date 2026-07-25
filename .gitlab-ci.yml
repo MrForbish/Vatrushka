@@ -2,15 +2,19 @@ workflow:
   rules:
     - if: '$CI_COMMIT_TAG'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\/\d+\.\d+\.\d+$/'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
     - if: '$CI_PIPELINE_SOURCE == "web"'
     - when: never
 
 stages:
   - policy
   - quality
+  - candidate
   - release
-  - deploy
   - package
+  - deploy
   - publish
 
 variables:
@@ -80,6 +84,257 @@ variables:
       changes: [infra/observability/**/*, scripts/observability/**/*]
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"'
 
+.develop-candidate-rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop"'
+
+.immutable-image-rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\/\d+\.\d+\.\d+$/'
+
+.release-candidate-rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\/\d+\.\d+\.\d+$/'
+
+.staging-candidate-rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop"'
+
+.staging-ssh:
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:3.22
+    pull_policy: if-not-present
+  tags: [vatrushka-linux]
+  before_script:
+    - apk add --no-cache jq openssh-client
+    - test -n "${STAGING_SSH_PRIVATE_KEY_B64:-}" || { echo 'STAGING_SSH_PRIVATE_KEY_B64 is required.' >&2; exit 1; }
+    - test -n "${STAGING_SSH_HOST_KEY:-}" || { echo 'STAGING_SSH_HOST_KEY is required.' >&2; exit 1; }
+    - test -n "${STAGING_SSH_HOST:-}" || { echo 'STAGING_SSH_HOST is required.' >&2; exit 1; }
+    - test -n "${STAGING_SSH_USER:-}" || { echo 'STAGING_SSH_USER is required.' >&2; exit 1; }
+    - test -f "$STAGING_SSH_HOST_KEY" || { echo 'STAGING_SSH_HOST_KEY must be a file variable.' >&2; exit 1; }
+    - echo "$STAGING_SSH_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || { echo 'STAGING_SSH_HOST has unsafe characters.' >&2; exit 1; }
+    - echo "$STAGING_SSH_USER" | grep -Eq '^[a-z_][a-z0-9_-]*$' || { echo 'STAGING_SSH_USER has unsafe characters.' >&2; exit 1; }
+    - install -d -m 700 ~/.ssh
+    # Keep the private key as a one-line protected variable. This avoids text
+    # encoding changes to multiline file variables created from Windows.
+    - printf '%s' "$STAGING_SSH_PRIVATE_KEY_B64" | base64 -d > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+    - ssh-keygen -lf ~/.ssh/id_ed25519 >/dev/null
+    - install -m 600 "$STAGING_SSH_HOST_KEY" ~/.ssh/known_hosts
+
+build-api-immutable-image:
+  extends: .immutable-image-rules
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:28-cli
+    pull_policy: if-not-present
+  services:
+    - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:28-dind
+      alias: docker
+      pull_policy: if-not-present
+  tags: [vatrushka-linux]
+  stage: candidate
+  timeout: 15m
+  variables:
+    DOCKER_HOST: tcp://docker:2376
+    DOCKER_TLS_CERTDIR: /certs
+    DOCKER_TLS_VERIFY: '1'
+    DOCKER_CERT_PATH: $DOCKER_TLS_CERTDIR/client
+  before_script:
+    - apk add --no-cache jq
+    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" --username "$CI_REGISTRY_USER" --password-stdin
+    - docker context create vatrushka-dind --docker "host=$DOCKER_HOST,ca=$DOCKER_CERT_PATH/ca.pem,cert=$DOCKER_CERT_PATH/cert.pem,key=$DOCKER_CERT_PATH/key.pem"
+    - docker buildx create --name vatrushka-candidate --driver docker-container --use vatrushka-dind
+  script:
+    - export IMAGE_REF="$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHA"
+    - docker buildx build --pull --push --metadata-file image-metadata.json --tag "$IMAGE_REF" --build-arg "BUILD_COMMIT=$CI_COMMIT_SHA" -f infra/docker/Dockerfile.api .
+    - export API_IMAGE_DIGEST="$(jq -er '."containerimage.digest"' image-metadata.json)"
+    - echo "$API_IMAGE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$'
+    - printf 'API_IMAGE_REF=%s@%s\nAPI_IMAGE_DIGEST=%s\n' "$CI_REGISTRY_IMAGE/api" "$API_IMAGE_DIGEST" "$API_IMAGE_DIGEST" > candidate-image.env
+  artifacts:
+    expire_in: 30 days
+    reports:
+      dotenv: candidate-image.env
+    paths: [image-metadata.json, candidate-image.env]
+
+create-staging-candidate-manifest:
+  extends:
+    - .node-linux
+    - .develop-candidate-rules
+  stage: candidate
+  timeout: 4m
+  needs:
+    - job: build-api-immutable-image
+      artifacts: true
+  script:
+    - mkdir -p candidate
+    - git archive --format=tar "$CI_COMMIT_SHA" | gzip -n > candidate-source.tar.gz
+    - test -s candidate-source.tar.gz
+    - export SOURCE_ARCHIVE_SHA256="$(sha256sum candidate-source.tar.gz | awk '{print $1}')"
+    - echo "$SOURCE_ARCHIVE_SHA256" | grep -Eq '^[a-f0-9]{64}$'
+    - mv candidate-source.tar.gz "candidate/$SOURCE_ARCHIVE_SHA256.tar.gz"
+    - |
+      migration_required=false
+      migration_compatibility=none
+      if [ "$CI_COMMIT_BEFORE_SHA" != "0000000000000000000000000000000000000000" ] && \
+         git diff --name-only "$CI_COMMIT_BEFORE_SHA" "$CI_COMMIT_SHA" -- apps/api/drizzle | grep -q .; then
+        migration_required=true
+        migration_compatibility=manual-review
+      fi
+      node scripts/delivery/create-candidate-manifest.mjs \
+        --version "$(node -p "require('./package.json').version")" \
+        --commit-sha "$CI_COMMIT_SHA" \
+        --source-archive "candidate/$SOURCE_ARCHIVE_SHA256.tar.gz" \
+        --dependency-lock package-lock.json \
+        --channel beta \
+        --api-environment staging \
+        --image "api=$API_IMAGE_DIGEST" \
+        --migration-required "$migration_required" \
+        --migration-compatibility "$migration_compatibility" \
+        --output candidate/candidate.json
+    - sha256sum candidate/candidate.json "candidate/$SOURCE_ARCHIVE_SHA256.tar.gz" package-lock.json > candidate/SHA256SUMS
+  artifacts:
+    expire_in: 30 days
+    paths: [candidate/]
+
+create-release-candidate-manifest:
+  extends:
+    - .node-linux
+    - .release-candidate-rules
+  stage: candidate
+  timeout: 5m
+  interruptible: false
+  needs:
+    - job: build-api-immutable-image
+      artifacts: true
+  script:
+    - mkdir -p release-candidate
+    - git archive --format=tar "$CI_COMMIT_SHA" | gzip -n > release-source.tar.gz
+    - test -s release-source.tar.gz
+    - export SOURCE_ARCHIVE_SHA256="$(sha256sum release-source.tar.gz | awk '{print $1}')"
+    - echo "$SOURCE_ARCHIVE_SHA256" | grep -Eq '^[a-f0-9]{64}$'
+    - mv release-source.tar.gz "release-candidate/$SOURCE_ARCHIVE_SHA256.tar.gz"
+    - |
+      previous_tag="$(git tag --merged "$CI_COMMIT_SHA" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1 || true)"
+      migration_required=false
+      migration_compatibility=none
+      if [ -n "$previous_tag" ] && git diff --name-only "$previous_tag" "$CI_COMMIT_SHA" -- apps/api/drizzle | grep -q .; then
+        migration_required=true
+        migration_compatibility=manual-review
+      fi
+      node scripts/delivery/create-candidate-manifest.mjs \
+        --version "$(node -p "require('./package.json').version")" \
+        --commit-sha "$CI_COMMIT_SHA" \
+        --source-archive "release-candidate/$SOURCE_ARCHIVE_SHA256.tar.gz" \
+        --dependency-lock package-lock.json \
+        --channel stable \
+        --api-environment production \
+        --image "api=$API_IMAGE_DIGEST" \
+        --migration-required "$migration_required" \
+        --migration-compatibility "$migration_compatibility" \
+        --output release-candidate/candidate.json
+    - cp package-lock.json release-candidate/package-lock.json
+    - (cd release-candidate && sha256sum candidate.json "$SOURCE_ARCHIVE_SHA256.tar.gz" package-lock.json > SHA256SUMS)
+    - |
+      package_base="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/vatrushka-release-candidate/$CI_COMMIT_SHA"
+      for file in candidate.json "$SOURCE_ARCHIVE_SHA256.tar.gz" package-lock.json SHA256SUMS; do
+        status="$(curl --silent --output /dev/null --write-out '%{http_code}' --header "JOB-TOKEN: $CI_JOB_TOKEN" "$package_base/$file")"
+        test "$status" = 404 || { echo "Immutable release candidate asset already exists or cannot be checked: $file (HTTP $status)" >&2; exit 1; }
+        curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "release-candidate/$file" "$package_base/$file"
+      done
+  artifacts:
+    expire_in: 90 days
+    paths: [release-candidate/]
+
+resolve-production-api-image:
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:3.22
+    pull_policy: if-not-present
+  tags: [vatrushka-linux]
+  stage: candidate
+  timeout: 5m
+  interruptible: false
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+  needs:
+    - job: verify-tag
+      artifacts: true
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - |
+      test -n "${RELEASE_CANDIDATE_SHA:-}" || { echo 'Release candidate SHA is missing.' >&2; exit 1; }
+      package_base="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/vatrushka-release-candidate/$RELEASE_CANDIDATE_SHA"
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o release-candidate.json "$package_base/candidate.json"
+      jq -e --arg version "$VERSION" --arg sha "$RELEASE_CANDIDATE_SHA" '.version == $version and .commitSha == $sha and .channel == "stable" and .apiEnvironment == "production"' release-candidate.json >/dev/null
+      export API_IMAGE_DIGEST="$(jq -er '.images.api' release-candidate.json)"
+      echo "$API_IMAGE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$'
+      printf 'API_IMAGE_DIGEST=%s\nRELEASE_CANDIDATE_SHA=%s\n' "$API_IMAGE_DIGEST" "$RELEASE_CANDIDATE_SHA" > production-image.env
+  artifacts:
+    expire_in: 30 days
+    reports:
+      dotenv: production-image.env
+    paths: [production-image.env]
+
+create-production-candidate-manifest:
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:3.22
+    pull_policy: if-not-present
+  stage: candidate
+  timeout: 5m
+  interruptible: false
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+  needs:
+    - job: verify-tag
+      artifacts: true
+    - job: resolve-production-api-image
+      artifacts: true
+  before_script:
+    - apk add --no-cache curl jq
+  script:
+    - |
+      test -n "${RELEASE_CANDIDATE_SHA:-}" || { echo 'Release candidate SHA is missing.' >&2; exit 1; }
+      package_base="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/vatrushka-release-candidate/$RELEASE_CANDIDATE_SHA"
+      mkdir -p production-candidate
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o production-candidate/candidate.json "$package_base/candidate.json"
+      source_archive_sha="$(jq -er '.sourceArchiveSha256' production-candidate/candidate.json)"
+      echo "$source_archive_sha" | grep -Eq '^[a-f0-9]{64}$'
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "production-candidate/$source_archive_sha.tar.gz" "$package_base/$source_archive_sha.tar.gz"
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o production-candidate/package-lock.json "$package_base/package-lock.json"
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o production-candidate/SHA256SUMS "$package_base/SHA256SUMS"
+      (cd production-candidate && sha256sum --check SHA256SUMS)
+      jq -e --arg version "$VERSION" --arg sha "$RELEASE_CANDIDATE_SHA" --arg digest "$API_IMAGE_DIGEST" '.version == $version and .commitSha == $sha and .images.api == $digest and .channel == "stable" and .apiEnvironment == "production"' production-candidate/candidate.json >/dev/null
+  artifacts:
+    expire_in: 90 days
+    paths: [production-candidate/]
+
+deploy-staging-candidate:
+  extends:
+    - .staging-ssh
+    - .staging-candidate-rules
+  stage: candidate
+  timeout: 8m
+  interruptible: false
+  resource_group: staging-candidate
+  environment:
+    name: staging
+  needs:
+    - job: create-staging-candidate-manifest
+      artifacts: true
+  script:
+    - source_archive_sha="$(jq -er '.sourceArchiveSha256' candidate/candidate.json)"
+    - echo "$source_archive_sha" | grep -Eq '^[a-f0-9]{64}$'
+    - source_archive="candidate/$source_archive_sha.tar.gz"
+    - test -f "$source_archive" || { echo 'Candidate source archive is missing.' >&2; exit 1; }
+    - remote="$STAGING_SSH_USER@$STAGING_SSH_HOST"
+    - scp candidate/candidate.json "$source_archive" "$remote:/var/lib/vatrushka/inbox/"
+    - manifest="$(ssh "$remote" 'sudo -n /usr/local/lib/vatrushka/vatrushka-preflight /var/lib/vatrushka/inbox/candidate.json')"
+    - echo "$manifest" | grep -Eq '^/var/lib/vatrushka/manifests/candidate-[a-f0-9]{64}\.json$' || { echo 'Preflight returned an invalid manifest path.' >&2; exit 1; }
+    - ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-deploy '$manifest'"
+    - ssh "$remote" 'sudo -n /usr/local/lib/vatrushka/vatrushka-runtime-status'
+    - ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-observability-deploy '$manifest'"
+
 merge-request-policy:
   extends: .node-linux
   stage: policy
@@ -110,8 +365,12 @@ verify-tag:
       version="${CI_COMMIT_TAG#v}"
       git fetch origin "$PRODUCTION_BRANCH"
       git merge-base --is-ancestor "$CI_COMMIT_SHA" "origin/$PRODUCTION_BRANCH" || { echo 'Tagged commit is not in the production branch.' >&2; exit 1; }
+      set -- $(git show -s --format=%P "$CI_COMMIT_SHA")
+      test "$#" = 2 || { echo 'Stable tag must point to a merge commit from release/X.Y.Z.' >&2; exit 1; }
+      release_candidate_sha="$2"
+      echo "$release_candidate_sha" | grep -Eq '^[a-f0-9]{40}$' || { echo 'Release candidate parent is invalid.' >&2; exit 1; }
       test "$(node -p "require('./package.json').version")" = "$version" || { echo 'Tag and package version differ.' >&2; exit 1; }
-      printf 'VERSION=%s\n' "$version" > release.env
+      printf 'VERSION=%s\nRELEASE_CANDIDATE_SHA=%s\n' "$version" "$release_candidate_sha" > release.env
   artifacts:
     reports:
       dotenv: release.env
@@ -405,23 +664,6 @@ release-auth-smoke:
   script:
     - glab release view v0.6.6 >/dev/null
 
-prepare-production-source:
-  extends: .node-linux
-  stage: deploy
-  timeout: 3m
-  interruptible: false
-  rules:
-    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
-  needs:
-    - job: verify-tag
-      artifacts: true
-  script:
-    - git archive --format=tar "$CI_COMMIT_SHA" | gzip -n > release-source.tar.gz
-    - test -s release-source.tar.gz
-  artifacts:
-    expire_in: 1 day
-    paths: [release-source.tar.gz]
-
 .production-ssh:
   image:
     name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:3.22
@@ -432,17 +674,68 @@ prepare-production-source:
     url: https://api.myvatrushka.ru
   interruptible: false
   before_script:
-    - apk add --no-cache openssh-client
+    - apk add --no-cache jq openssh-client
     - |
-      for name in PRODUCTION_SSH_PRIVATE_KEY PRODUCTION_SSH_HOST_KEY PRODUCTION_SSH_HOST PRODUCTION_SSH_USER PRODUCTION_UPDATE_PATH; do
+      for name in PRODUCTION_SSH_PRIVATE_KEY PRODUCTION_SSH_HOST_KEY PRODUCTION_SSH_HOST PRODUCTION_SSH_USER; do
         test -n "$(eval "printf '%s' \"\$$name\"")" || { echo "Required production setting is missing: $name" >&2; exit 1; }
       done
-      echo "$PRODUCTION_UPDATE_PATH" | grep -Eq '^/[A-Za-z0-9._/-]+$' || { echo 'PRODUCTION_UPDATE_PATH has unsafe characters.' >&2; exit 1; }
       install -d -m 700 ~/.ssh
       install -m 600 "$PRODUCTION_SSH_PRIVATE_KEY" ~/.ssh/id_ed25519
       install -m 600 "$PRODUCTION_SSH_HOST_KEY" ~/.ssh/known_hosts
 
+.observer-ssh:
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:3.22
+    pull_policy: if-not-present
+  tags: [vatrushka-linux]
+  environment:
+    name: production
+  interruptible: false
+  before_script:
+    - apk add --no-cache openssh-client
+    - |
+      for name in OBSERVER_SSH_PRIVATE_KEY OBSERVER_SSH_HOST_KEY OBSERVER_SSH_HOST OBSERVER_SSH_USER; do
+        test -n "$(eval "printf '%s' \"\$$name\"")" || { echo "Required observer setting is missing: $name" >&2; exit 1; }
+      done
+      test -f "$OBSERVER_SSH_PRIVATE_KEY" || { echo 'OBSERVER_SSH_PRIVATE_KEY must be a file variable.' >&2; exit 1; }
+      test -f "$OBSERVER_SSH_HOST_KEY" || { echo 'OBSERVER_SSH_HOST_KEY must be a file variable.' >&2; exit 1; }
+      echo "$OBSERVER_SSH_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || { echo 'OBSERVER_SSH_HOST has unsafe characters.' >&2; exit 1; }
+      echo "$OBSERVER_SSH_USER" | grep -Eq '^[a-z_][a-z0-9_-]*$' || { echo 'OBSERVER_SSH_USER has unsafe characters.' >&2; exit 1; }
+      install -d -m 700 ~/.ssh
+      install -m 600 "$OBSERVER_SSH_PRIVATE_KEY" ~/.ssh/id_ed25519
+      install -m 600 "$OBSERVER_SSH_HOST_KEY" ~/.ssh/known_hosts
+
 deploy-production-runtime:
+  extends: .production-ssh
+  stage: deploy
+  timeout: 20m
+  resource_group: production-runtime
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+      when: manual
+      allow_failure: false
+  needs:
+    - job: verify-tag
+      artifacts: true
+    - job: preflight-production-runtime
+    - job: backup-production-postgresql
+    - job: create-production-candidate-manifest
+      artifacts: true
+    - job: resolve-production-desktop-package
+      artifacts: true
+  script:
+    - source_archive_sha="$(jq -er '.sourceArchiveSha256' production-candidate/candidate.json)"
+    - echo "$source_archive_sha" | grep -Eq '^[a-f0-9]{64}$'
+    - source_archive="production-candidate/$source_archive_sha.tar.gz"
+    - test -f "$source_archive" || { echo 'Production candidate source archive is missing.' >&2; exit 1; }
+    - remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
+    - scp production-candidate/candidate.json "$source_archive" "$remote:/var/lib/vatrushka/inbox/"
+    - manifest="$(ssh "$remote" 'sudo -n /usr/local/lib/vatrushka/vatrushka-preflight /var/lib/vatrushka/inbox/candidate.json')"
+    - echo "$manifest" | grep -Eq '^/var/lib/vatrushka/manifests/candidate-[a-f0-9]{64}\.json$' || { echo 'Preflight returned an invalid manifest path.' >&2; exit 1; }
+    - ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-deploy '$manifest'"
+    - ssh "$remote" 'sudo -n /usr/local/lib/vatrushka/vatrushka-runtime-status'
+
+backup-production-postgresql:
   extends: .production-ssh
   stage: deploy
   timeout: 20m
@@ -452,56 +745,87 @@ deploy-production-runtime:
   needs:
     - job: verify-tag
       artifacts: true
-    - job: prepare-production-source
-      artifacts: true
+    - job: preflight-production-runtime
   script:
     - remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
-    - archive="/tmp/vatrushka-${CI_COMMIT_TAG}.tar.gz"
-    - scp release-source.tar.gz "$remote:$archive"
-    - ssh "$remote" "sudo -n sh -s -- '$archive' '$VERSION' '$CI_COMMIT_SHA' '$PRODUCTION_UPDATE_PATH'" < scripts/deploy/apply-product-release.sh
+    - ssh "$remote" 'sudo -n /usr/local/lib/vatrushka/vatrushka-postgresql-backup'
 
-deploy-observability-runtime:
+preflight-production-runtime:
   extends: .production-ssh
   stage: deploy
-  timeout: 20m
-  resource_group: observability-runtime
+  timeout: 5m
+  resource_group: production-runtime
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
   needs:
     - job: verify-tag
       artifacts: true
-    - job: deploy-production-runtime
-    - job: prepare-production-source
-      artifacts: true
   script:
     - remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
-    - archive="/tmp/vatrushka-observability-${CI_COMMIT_TAG}.tar.gz"
-    - scp release-source.tar.gz infra/deploy/monitoring-known_hosts "$remote:/tmp/"
-    - |
-      ssh "$remote" "sudo -n sh -s -- '$archive' '$OBSERVABILITY_SSH_HOST'" <<'REMOTE_SETUP'
-      set -eu
-      install -d -m 700 /root/.ssh
-      touch /root/.ssh/known_hosts
-      grep -qxF "$(cat /tmp/monitoring-known_hosts)" /root/.ssh/known_hosts || cat /tmp/monitoring-known_hosts >> /root/.ssh/known_hosts
-      chmod 600 /root/.ssh/known_hosts
-      mv /tmp/release-source.tar.gz "$1"
-      scp -o StrictHostKeyChecking=yes "$1" "root@$2:$1"
-      REMOTE_SETUP
-    - ssh "$remote" "sudo -n ssh -o StrictHostKeyChecking=yes root@$OBSERVABILITY_SSH_HOST 'sh -s -- \"$archive\" \"$VERSION\"'" < scripts/deploy/apply-observability-release.sh
+    - ssh "$remote" 'sudo -n /usr/local/lib/vatrushka/vatrushka-production-readiness'
 
-windows-production-package:
-  extends: .node-windows-package
-  stage: package
-  timeout: 25m
-  interruptible: false
+deploy-production-observability-agent:
+  extends: .production-ssh
+  stage: deploy
+  timeout: 10m
+  resource_group: production-observability-agent
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
   needs:
-    - verify-tag
-    - deploy-observability-runtime
+    - job: deploy-production-runtime
+    - job: create-production-candidate-manifest
+      artifacts: true
+  script:
+    - manifest_checksum="$(sha256sum production-candidate/candidate.json | awk '{print $1}')"
+    - echo "$manifest_checksum" | grep -Eq '^[a-f0-9]{64}$'
+    - remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
+    - manifest="/var/lib/vatrushka/manifests/candidate-$manifest_checksum.json"
+    - ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-observability-deploy '$manifest'"
+
+verify-production-observability:
+  extends: .observer-ssh
+  stage: deploy
+  timeout: 5m
+  resource_group: production-observability-verification
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+  needs:
+    - job: deploy-production-observability-agent
+  script:
+    - observer="$OBSERVER_SSH_USER@$OBSERVER_SSH_HOST"
+    - ssh "$observer" 'sudo -n /usr/local/lib/vatrushka/vatrushka-observability-verify production'
+
+rollback-production-runtime:
+  extends: .production-ssh
+  stage: publish
+  timeout: 20m
+  resource_group: production-runtime
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+      when: manual
+      allow_failure: true
+  needs:
+    - job: deploy-production-runtime
+    - job: create-production-candidate-manifest
+      artifacts: true
+  script:
+    - manifest_checksum="$(sha256sum production-candidate/candidate.json | awk '{print $1}')"
+    - echo "$manifest_checksum" | grep -Eq '^[a-f0-9]{64}$'
+    - remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
+    - rollback_manifest="/var/lib/vatrushka/manifests/rollback-$manifest_checksum.json"
+    - ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-rollback '$rollback_manifest'"
+    - ssh "$remote" 'sudo -n /usr/local/lib/vatrushka/vatrushka-runtime-status'
+
+windows-production-package:
+  stage: package
+  timeout: 25m
+  interruptible: false
+  extends:
+    - .node-windows-package
+    - .release-candidate-rules
   variables:
     VITE_PUBLIC_API_BASE_URL: '$PRODUCTION_API_BASE_URL'
-    RELEASE_BRANCH: '$PRODUCTION_BRANCH'
+    RELEASE_BRANCH: '$CI_COMMIT_BRANCH'
     CSC_LINK: '$WINDOWS_CSC_LINK'
     CSC_KEY_PASSWORD: '$WINDOWS_CSC_KEY_PASSWORD'
     CSC_IDENTITY_AUTO_DISCOVERY: '$WINDOWS_CSC_ENABLED'
@@ -538,12 +862,14 @@ windows-production-package:
       # a literal string and the packager then receives an invalid Hawk token.
       # The protected variables stay inherited; only distinct build-time aliases are
       # exported here for the Electron main and renderer bundles.
+      $env:VERSION = node -p "require('./package.json').version"
+      $release = if ([string]::IsNullOrWhiteSpace($env:CI_COMMIT_TAG)) { "main-$env:CI_COMMIT_SHORT_SHA" } else { $env:CI_COMMIT_TAG }
       $env:HAWK_DESKTOP_MAIN_ENABLED = 'true'
       $env:HAWK_DESKTOP_RENDERER_ENABLED = 'true'
       $env:VITE_HAWK_DESKTOP_RENDERER_ENABLED = 'true'
       $env:VITE_HAWK_DESKTOP_RENDERER_TOKEN = $env:HAWK_DESKTOP_RENDERER_TOKEN
-      $env:HAWK_DESKTOP_RELEASE = $env:CI_COMMIT_TAG
-      $env:VITE_HAWK_DESKTOP_RELEASE = $env:CI_COMMIT_TAG
+      $env:HAWK_DESKTOP_RELEASE = $release
+      $env:VITE_HAWK_DESKTOP_RELEASE = $release
     - npm run release:validate
     - npm run package:win
     - |
@@ -559,12 +885,65 @@ windows-production-package:
         pipelineId = $env:CI_PIPELINE_ID
       }
       $metadata | ConvertTo-Json | Set-Content apps/desktop/release/release-metadata.json
+      $archive = "production-desktop-$env:CI_COMMIT_SHA.tar.gz"
+      tar.exe -czf $archive -C apps/desktop/release .
+      $archiveHash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+      "$archiveHash  $archive" | Set-Content "$archive.sha256"
+      $packageBase = "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/packages/generic/vatrushka-production-desktop/$env:CI_COMMIT_SHA"
+      $archiveUrl = "$packageBase/$archive"
+      $existing = & curl.exe --silent --output NUL --write-out '%{http_code}' --header "JOB-TOKEN: $env:CI_JOB_TOKEN" $archiveUrl
+      if ($existing -eq '200') {
+        Write-Error 'Immutable production desktop package already exists for this commit.'
+        exit 1
+      }
+      if ($existing -ne '404') {
+        Write-Error "Cannot verify immutable package availability (HTTP $existing)."
+        exit 1
+      }
+      & curl.exe --fail --show-error --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file $archive $archiveUrl
+      & curl.exe --fail --show-error --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file "$archive.sha256" "$packageBase/$archive.sha256"
   artifacts:
     expire_in: 90 days
     name: 'vatrushka-production-$VERSION'
-    paths: [apps/desktop/release/]
+    paths: [apps/desktop/release/, production-desktop-*.tar.gz, production-desktop-*.tar.gz.sha256]
+
+resolve-production-desktop-package:
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:3.22
+    pull_policy: if-not-present
+  tags: [vatrushka-linux]
+  stage: candidate
+  timeout: 5m
+  interruptible: false
+  rules:
+    - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
+  needs:
+    - job: verify-tag
+      artifacts: true
+  before_script:
+    - apk add --no-cache curl jq tar
+  script:
+    - |
+      test -n "${RELEASE_CANDIDATE_SHA:-}" || { echo 'Release candidate SHA is missing.' >&2; exit 1; }
+      archive="production-desktop-$RELEASE_CANDIDATE_SHA.tar.gz"
+      package_base="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/vatrushka-production-desktop/$RELEASE_CANDIDATE_SHA"
+      mkdir -p production-desktop/release
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "production-desktop/$archive" "$package_base/$archive"
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "production-desktop/$archive.sha256" "$package_base/$archive.sha256"
+      (cd production-desktop && sha256sum --check "$archive.sha256")
+      tar -xzf "production-desktop/$archive" -C production-desktop/release
+      test -f production-desktop/release/latest.yml
+      test -f production-desktop/release/SHA256SUMS.txt
+      test -f production-desktop/release/release-metadata.json
+      find production-desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-x64.exe' -print -quit | grep -q .
+      metadata_sha="$(jq -er '.commitSha' production-desktop/release/release-metadata.json)"
+      test "$metadata_sha" = "$RELEASE_CANDIDATE_SHA" || { echo 'Desktop package does not match the approved release candidate.' >&2; exit 1; }
+  artifacts:
+    expire_in: 90 days
+    paths: [production-desktop/release/]
 
 publish-production:
+  extends: .production-ssh
   image: registry.gitlab.com/gitlab-org/cli:v1.108.0
   tags: [vatrushka-linux]
   stage: publish
@@ -580,34 +959,46 @@ publish-production:
     - job: verify-tag
       artifacts: true
     - job: deploy-production-runtime
-    - job: deploy-observability-runtime
-    - job: windows-production-package
+    - job: verify-production-observability
+    - job: resolve-production-desktop-package
       artifacts: true
   variables:
     GLAB_ENABLE_CI_AUTOLOGIN: 'true'
   before_script:
-    - apk add --no-cache openssh-client
+    - apk add --no-cache jq openssh-client
   script:
     - |
-      for name in PRODUCTION_SSH_PRIVATE_KEY PRODUCTION_SSH_HOST_KEY PRODUCTION_SSH_HOST PRODUCTION_SSH_USER PRODUCTION_UPDATE_PATH; do
+      for name in PRODUCTION_SSH_PRIVATE_KEY PRODUCTION_SSH_HOST_KEY PRODUCTION_SSH_HOST PRODUCTION_SSH_USER; do
         test -n "$(eval "printf '%s' \"\$$name\"")" || { echo "Required production setting is missing: $name" >&2; exit 1; }
       done
-      echo "$PRODUCTION_UPDATE_PATH" | grep -Eq '^/[A-Za-z0-9._/-]+$' || { echo 'PRODUCTION_UPDATE_PATH has unsafe characters.' >&2; exit 1; }
     - |
       install -d -m 700 ~/.ssh
       install -m 600 "$PRODUCTION_SSH_PRIVATE_KEY" ~/.ssh/id_ed25519
       install -m 600 "$PRODUCTION_SSH_HOST_KEY" ~/.ssh/known_hosts
-      setup=$(find apps/desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-x64.exe' -print -quit)
-      blockmap=$(find apps/desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-x64.exe.blockmap' -print -quit)
-      test -f "$setup" && test -f "$blockmap" && test -f apps/desktop/release/latest.yml || { echo 'Stable feed artifacts are incomplete.' >&2; exit 1; }
+      setup=$(find production-desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-x64.exe' -print -quit)
+      blockmap=$(find production-desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-x64.exe.blockmap' -print -quit)
+      latest=production-desktop/release/latest.yml
+      checksums=production-desktop/release/SHA256SUMS.txt
+      metadata=production-desktop/release/release-metadata.json
+      test -f "$setup" && test -f "$blockmap" && test -f "$latest" && test -f "$checksums" && test -f "$metadata" || { echo 'Stable feed artifacts are incomplete.' >&2; exit 1; }
+      setup_name=$(basename "$setup")
+      blockmap_name=$(basename "$blockmap")
+      jq -n \
+        --arg version "$VERSION" \
+        --arg setup_name "$setup_name" --arg setup_sha "$(sha256sum "$setup" | awk '{print $1}')" \
+        --arg blockmap_name "$blockmap_name" --arg blockmap_sha "$(sha256sum "$blockmap" | awk '{print $1}')" \
+        --arg latest_sha "$(sha256sum "$latest" | awk '{print $1}')" \
+        --arg checksums_sha "$(sha256sum "$checksums" | awk '{print $1}')" \
+        --arg metadata_sha "$(sha256sum "$metadata" | awk '{print $1}')" \
+        '{version: $version, files: {setup: {name: $setup_name, sha256: $setup_sha}, blockmap: {name: $blockmap_name, sha256: $blockmap_sha}, latest: {name: "latest.yml", sha256: $latest_sha}, checksums: {name: "SHA256SUMS.txt", sha256: $checksums_sha}, metadata: {name: "release-metadata.json", sha256: $metadata_sha}}}' \
+        > "production-desktop/release/updater-$CI_COMMIT_TAG.json"
       remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
-      scp "$setup" "$blockmap" apps/desktop/release/SHA256SUMS.txt apps/desktop/release/release-metadata.json "$remote:$PRODUCTION_UPDATE_PATH/"
-      scp apps/desktop/release/latest.yml "$remote:$PRODUCTION_UPDATE_PATH/latest.yml.next"
-      ssh "$remote" "mv -- '$PRODUCTION_UPDATE_PATH/latest.yml.next' '$PRODUCTION_UPDATE_PATH/latest.yml'"
+      scp "$setup" "$blockmap" "$latest" "$checksums" "$metadata" "production-desktop/release/updater-$CI_COMMIT_TAG.json" "$remote:/var/lib/vatrushka/inbox/"
+      ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-publish-updater '/var/lib/vatrushka/inbox/updater-$CI_COMMIT_TAG.json'"
     - |
-      find apps/desktop/release -maxdepth 1 -type f -print -quit | grep -q . || { echo 'Release artifact contains no publishable files.' >&2; exit 1; }
+      find production-desktop/release -maxdepth 1 -type f -print -quit | grep -q . || { echo 'Release artifact contains no publishable files.' >&2; exit 1; }
       if ! glab release view "$CI_COMMIT_TAG" >/dev/null 2>&1; then
         glab release create "$CI_COMMIT_TAG" --name "Vatrushka $VERSION" --notes "Production release $CI_COMMIT_TAG"
       fi
-      find apps/desktop/release -maxdepth 1 -type f \
+      find production-desktop/release -maxdepth 1 -type f \
         -exec glab release upload "$CI_COMMIT_TAG" --use-package-registry --package-name "vatrushka-$VERSION" {} +
