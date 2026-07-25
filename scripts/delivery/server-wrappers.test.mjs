@@ -346,6 +346,15 @@ test("observability driver starts only the active candidate through private coll
     /set -- \$config_values\ntest "\$#" -eq 8 \|\| fail "Observability configuration returned an invalid value count\."/u,
   );
   assert.doesNotMatch(driver, /set -- \$\(python3/u);
+  assert.match(driver, /if key in required:/u);
+  assert.match(
+    driver,
+    /while safely ignoring settings outside its fixed contract\./u,
+  );
+  assert.doesNotMatch(
+    driver,
+    /if key not in required or not re\.fullmatch\(required\[key\], value\):/u,
+  );
   assert.match(
     driver,
     /Observability manifest is not the active runtime candidate/,

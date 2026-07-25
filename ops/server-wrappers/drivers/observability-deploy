@@ -61,9 +61,13 @@ def parse(path, required):
             if "=" not in line:
                 raise SystemExit("Observability configuration is malformed")
             key, value = line.split("=", 1)
-            if key not in required or not re.fullmatch(required[key], value):
-                raise SystemExit("Observability configuration is invalid")
-            values[key] = value
+            # Runtime configuration carries additional root-owned delivery
+            # settings. This driver must validate every setting it consumes,
+            # while safely ignoring settings outside its fixed contract.
+            if key in required:
+                if not re.fullmatch(required[key], value):
+                    raise SystemExit("Observability configuration is invalid")
+                values[key] = value
     if set(values) != set(required):
         raise SystemExit("Observability configuration is incomplete")
     return values
