@@ -100,8 +100,6 @@ variables:
 .staging-candidate-rules:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop"'
-      when: manual
-      allow_failure: true
 
 .staging-ssh:
   image:
@@ -332,6 +330,7 @@ deploy-staging-candidate:
     - echo "$manifest" | grep -Eq '^/var/lib/vatrushka/manifests/candidate-[a-f0-9]{64}\.json$' || { echo 'Preflight returned an invalid manifest path.' >&2; exit 1; }
     - ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-deploy '$manifest'"
     - ssh "$remote" 'sudo -n /usr/local/lib/vatrushka/vatrushka-runtime-status'
+    - ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-observability-deploy '$manifest'"
 
 merge-request-policy:
   extends: .node-linux
