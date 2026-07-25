@@ -112,7 +112,7 @@ test("production readiness is root-only, redacted and requires S3 plus TURN cert
   assert.match(wrapper, /production-runtime-readiness\.py/);
   assert.match(driver, /\/etc\/vatrushka\/runtime\.env/);
   assert.match(driver, /MEDIA_STORAGE_DRIVER/);
-  assert.match(driver, /values\.get\("NODE_ENV", "production"\)/);
+  assert.doesNotMatch(driver, /NODE_ENV/);
   assert.match(driver, /S3_SECRET_ACCESS_KEY/);
   assert.match(driver, /S3_BUCKET"\) != "media-vatrushka"/);
   assert.match(driver, /S3_FORCE_PATH_STYLE"\) != "true"/);
