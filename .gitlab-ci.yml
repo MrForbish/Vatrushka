@@ -3,6 +3,7 @@ workflow:
     - if: '$CI_COMMIT_TAG'
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\/\d+\.\d+\.\d+$/'
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
     - if: '$CI_PIPELINE_SOURCE == "web"'
     - when: never
@@ -90,7 +91,11 @@ variables:
 .immutable-image-rules:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop"'
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $PRODUCTION_BRANCH'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\/\d+\.\d+\.\d+$/'
+
+.release-candidate-rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\/\d+\.\d+\.\d+$/'
 
 .staging-candidate-rules:
   rules:
@@ -191,36 +196,79 @@ create-staging-candidate-manifest:
     expire_in: 30 days
     paths: [candidate/]
 
+create-release-candidate-manifest:
+  extends:
+    - .node-linux
+    - .release-candidate-rules
+  stage: candidate
+  timeout: 5m
+  interruptible: false
+  needs:
+    - job: build-api-immutable-image
+      artifacts: true
+  script:
+    - mkdir -p release-candidate
+    - git archive --format=tar "$CI_COMMIT_SHA" | gzip -n > release-source.tar.gz
+    - test -s release-source.tar.gz
+    - export SOURCE_ARCHIVE_SHA256="$(sha256sum release-source.tar.gz | awk '{print $1}')"
+    - echo "$SOURCE_ARCHIVE_SHA256" | grep -Eq '^[a-f0-9]{64}$'
+    - mv release-source.tar.gz "release-candidate/$SOURCE_ARCHIVE_SHA256.tar.gz"
+    - |
+      previous_tag="$(git tag --merged "$CI_COMMIT_SHA" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1 || true)"
+      migration_required=false
+      migration_compatibility=none
+      if [ -n "$previous_tag" ] && git diff --name-only "$previous_tag" "$CI_COMMIT_SHA" -- apps/api/drizzle | grep -q .; then
+        migration_required=true
+        migration_compatibility=manual-review
+      fi
+      node scripts/delivery/create-candidate-manifest.mjs \
+        --version "$(node -p "require('./package.json').version")" \
+        --commit-sha "$CI_COMMIT_SHA" \
+        --source-archive "release-candidate/$SOURCE_ARCHIVE_SHA256.tar.gz" \
+        --dependency-lock package-lock.json \
+        --channel stable \
+        --api-environment production \
+        --image "api=$API_IMAGE_DIGEST" \
+        --migration-required "$migration_required" \
+        --migration-compatibility "$migration_compatibility" \
+        --output release-candidate/candidate.json
+    - cp package-lock.json release-candidate/package-lock.json
+    - (cd release-candidate && sha256sum candidate.json "$SOURCE_ARCHIVE_SHA256.tar.gz" package-lock.json > SHA256SUMS)
+    - |
+      package_base="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/vatrushka-release-candidate/$CI_COMMIT_SHA"
+      for file in candidate.json "$SOURCE_ARCHIVE_SHA256.tar.gz" package-lock.json SHA256SUMS; do
+        status="$(curl --silent --output /dev/null --write-out '%{http_code}' --header "JOB-TOKEN: $CI_JOB_TOKEN" "$package_base/$file")"
+        test "$status" = 404 || { echo "Immutable release candidate asset already exists or cannot be checked: $file (HTTP $status)" >&2; exit 1; }
+        curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" --upload-file "release-candidate/$file" "$package_base/$file"
+      done
+  artifacts:
+    expire_in: 90 days
+    paths: [release-candidate/]
+
 resolve-production-api-image:
   image:
-    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:28-cli
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:3.22
     pull_policy: if-not-present
-  services:
-    - name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/docker:28-dind
-      alias: docker
-      pull_policy: if-not-present
   tags: [vatrushka-linux]
   stage: candidate
   timeout: 5m
   interruptible: false
-  variables:
-    DOCKER_HOST: tcp://docker:2376
-    DOCKER_TLS_CERTDIR: /certs
-    DOCKER_TLS_VERIFY: '1'
-    DOCKER_CERT_PATH: $DOCKER_TLS_CERTDIR/client
   rules:
     - if: '$CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/'
   needs:
     - job: verify-tag
       artifacts: true
   before_script:
-    - apk add --no-cache jq
-    - echo "$CI_REGISTRY_PASSWORD" | docker login "$CI_REGISTRY" --username "$CI_REGISTRY_USER" --password-stdin
+    - apk add --no-cache curl jq
   script:
-    - export IMAGE_REF="$CI_REGISTRY_IMAGE/api:$CI_COMMIT_SHA"
-    - export API_IMAGE_DIGEST="$(docker buildx imagetools inspect "$IMAGE_REF" | awk '/^Digest:/ {print $2; exit}')"
-    - echo "$API_IMAGE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$' || { echo 'The tagged production commit has no immutable API image.' >&2; exit 1; }
-    - printf 'API_IMAGE_DIGEST=%s\n' "$API_IMAGE_DIGEST" > production-image.env
+    - |
+      test -n "${RELEASE_CANDIDATE_SHA:-}" || { echo 'Release candidate SHA is missing.' >&2; exit 1; }
+      package_base="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/vatrushka-release-candidate/$RELEASE_CANDIDATE_SHA"
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o release-candidate.json "$package_base/candidate.json"
+      jq -e --arg version "$VERSION" --arg sha "$RELEASE_CANDIDATE_SHA" '.version == $version and .commitSha == $sha and .channel == "stable" and .apiEnvironment == "production"' release-candidate.json >/dev/null
+      export API_IMAGE_DIGEST="$(jq -er '.images.api' release-candidate.json)"
+      echo "$API_IMAGE_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$'
+      printf 'API_IMAGE_DIGEST=%s\nRELEASE_CANDIDATE_SHA=%s\n' "$API_IMAGE_DIGEST" "$RELEASE_CANDIDATE_SHA" > production-image.env
   artifacts:
     expire_in: 30 days
     reports:
@@ -228,7 +276,9 @@ resolve-production-api-image:
     paths: [production-image.env]
 
 create-production-candidate-manifest:
-  extends: .node-linux
+  image:
+    name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:3.22
+    pull_policy: if-not-present
   stage: candidate
   timeout: 5m
   interruptible: false
@@ -239,33 +289,21 @@ create-production-candidate-manifest:
       artifacts: true
     - job: resolve-production-api-image
       artifacts: true
+  before_script:
+    - apk add --no-cache curl jq
   script:
-    - mkdir -p production-candidate
-    - git archive --format=tar "$CI_COMMIT_SHA" | gzip -n > production-source.tar.gz
-    - test -s production-source.tar.gz
-    - export SOURCE_ARCHIVE_SHA256="$(sha256sum production-source.tar.gz | awk '{print $1}')"
-    - echo "$SOURCE_ARCHIVE_SHA256" | grep -Eq '^[a-f0-9]{64}$'
-    - mv production-source.tar.gz "production-candidate/$SOURCE_ARCHIVE_SHA256.tar.gz"
     - |
-      previous_tag="$(git tag --merged "$CI_COMMIT_SHA" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -vx "$CI_COMMIT_TAG" | head -1 || true)"
-      migration_required=false
-      migration_compatibility=none
-      if [ -n "$previous_tag" ] && git diff --name-only "$previous_tag" "$CI_COMMIT_SHA" -- apps/api/drizzle | grep -q .; then
-        migration_required=true
-        migration_compatibility=manual-review
-      fi
-      node scripts/delivery/create-candidate-manifest.mjs \
-        --version "$VERSION" \
-        --commit-sha "$CI_COMMIT_SHA" \
-        --source-archive "production-candidate/$SOURCE_ARCHIVE_SHA256.tar.gz" \
-        --dependency-lock package-lock.json \
-        --channel stable \
-        --api-environment production \
-        --image "api=$API_IMAGE_DIGEST" \
-        --migration-required "$migration_required" \
-        --migration-compatibility "$migration_compatibility" \
-        --output production-candidate/candidate.json
-    - sha256sum production-candidate/candidate.json "production-candidate/$SOURCE_ARCHIVE_SHA256.tar.gz" package-lock.json > production-candidate/SHA256SUMS
+      test -n "${RELEASE_CANDIDATE_SHA:-}" || { echo 'Release candidate SHA is missing.' >&2; exit 1; }
+      package_base="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/vatrushka-release-candidate/$RELEASE_CANDIDATE_SHA"
+      mkdir -p production-candidate
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o production-candidate/candidate.json "$package_base/candidate.json"
+      source_archive_sha="$(jq -er '.sourceArchiveSha256' production-candidate/candidate.json)"
+      echo "$source_archive_sha" | grep -Eq '^[a-f0-9]{64}$'
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "production-candidate/$source_archive_sha.tar.gz" "$package_base/$source_archive_sha.tar.gz"
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o production-candidate/package-lock.json "$package_base/package-lock.json"
+      curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o production-candidate/SHA256SUMS "$package_base/SHA256SUMS"
+      (cd production-candidate && sha256sum --check SHA256SUMS)
+      jq -e --arg version "$VERSION" --arg sha "$RELEASE_CANDIDATE_SHA" --arg digest "$API_IMAGE_DIGEST" '.version == $version and .commitSha == $sha and .images.api == $digest and .channel == "stable" and .apiEnvironment == "production"' production-candidate/candidate.json >/dev/null
   artifacts:
     expire_in: 90 days
     paths: [production-candidate/]
@@ -325,8 +363,12 @@ verify-tag:
       version="${CI_COMMIT_TAG#v}"
       git fetch origin "$PRODUCTION_BRANCH"
       git merge-base --is-ancestor "$CI_COMMIT_SHA" "origin/$PRODUCTION_BRANCH" || { echo 'Tagged commit is not in the production branch.' >&2; exit 1; }
+      set -- $(git show -s --format=%P "$CI_COMMIT_SHA")
+      test "$#" = 2 || { echo 'Stable tag must point to a merge commit from release/X.Y.Z.' >&2; exit 1; }
+      release_candidate_sha="$2"
+      echo "$release_candidate_sha" | grep -Eq '^[a-f0-9]{40}$' || { echo 'Release candidate parent is invalid.' >&2; exit 1; }
       test "$(node -p "require('./package.json').version")" = "$version" || { echo 'Tag and package version differ.' >&2; exit 1; }
-      printf 'VERSION=%s\n' "$version" > release.env
+      printf 'VERSION=%s\nRELEASE_CANDIDATE_SHA=%s\n' "$version" "$release_candidate_sha" > release.env
   artifacts:
     reports:
       dotenv: release.env
@@ -773,15 +815,15 @@ rollback-production-runtime:
     - ssh "$remote" 'sudo -n /usr/local/lib/vatrushka/vatrushka-runtime-status'
 
 windows-production-package:
-  extends: .node-windows-package
   stage: package
   timeout: 25m
   interruptible: false
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == $PRODUCTION_BRANCH'
+  extends:
+    - .node-windows-package
+    - .release-candidate-rules
   variables:
     VITE_PUBLIC_API_BASE_URL: '$PRODUCTION_API_BASE_URL'
-    RELEASE_BRANCH: '$PRODUCTION_BRANCH'
+    RELEASE_BRANCH: '$CI_COMMIT_BRANCH'
     CSC_LINK: '$WINDOWS_CSC_LINK'
     CSC_KEY_PASSWORD: '$WINDOWS_CSC_KEY_PASSWORD'
     CSC_IDENTITY_AUTO_DISCOVERY: '$WINDOWS_CSC_ENABLED'
@@ -877,11 +919,12 @@ resolve-production-desktop-package:
     - job: verify-tag
       artifacts: true
   before_script:
-    - apk add --no-cache curl tar
+    - apk add --no-cache curl jq tar
   script:
     - |
-      archive="production-desktop-$CI_COMMIT_SHA.tar.gz"
-      package_base="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/vatrushka-production-desktop/$CI_COMMIT_SHA"
+      test -n "${RELEASE_CANDIDATE_SHA:-}" || { echo 'Release candidate SHA is missing.' >&2; exit 1; }
+      archive="production-desktop-$RELEASE_CANDIDATE_SHA.tar.gz"
+      package_base="$CI_API_V4_URL/projects/$CI_PROJECT_ID/packages/generic/vatrushka-production-desktop/$RELEASE_CANDIDATE_SHA"
       mkdir -p production-desktop/release
       curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "production-desktop/$archive" "$package_base/$archive"
       curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "production-desktop/$archive.sha256" "$package_base/$archive.sha256"
@@ -891,6 +934,8 @@ resolve-production-desktop-package:
       test -f production-desktop/release/SHA256SUMS.txt
       test -f production-desktop/release/release-metadata.json
       find production-desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-x64.exe' -print -quit | grep -q .
+      metadata_sha="$(jq -er '.commitSha' production-desktop/release/release-metadata.json)"
+      test "$metadata_sha" = "$RELEASE_CANDIDATE_SHA" || { echo 'Desktop package does not match the approved release candidate.' >&2; exit 1; }
   artifacts:
     expire_in: 90 days
     paths: [production-desktop/release/]

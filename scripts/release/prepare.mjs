@@ -17,14 +17,17 @@ export function buildReleasePlan(version, prod = productionBranch()) {
     version,
     productionBranch: prod,
     developRef: 'origin/develop',
+    assemblyRef: `assemble/${version}`,
+    releaseRef: `release/${version}`,
     productionRef: `origin/${prod}`,
   };
 }
 
 function printPlan(plan) {
   console.log(`Release preparation plan for ${plan.version}:`);
-  console.log(`- release MR: develop -> ${plan.productionBranch}`);
-  console.log(`- version ${plan.version} must already be committed on develop`);
+  console.log(`- assembly MR: ${plan.assemblyRef} -> ${plan.releaseRef}`);
+  console.log(`- release MR: ${plan.releaseRef} -> ${plan.productionBranch}`);
+  console.log(`- version ${plan.version} must already be committed before assembly`);
 }
 
 function main() {
@@ -43,10 +46,10 @@ function main() {
   }
   printPlan(plan);
   if (!execute) {
-    console.log('Dry run only. Open one [RELEASE] MR from develop to the production branch after local validation.');
+    console.log('Dry run only. Create assemble/<version> and release/<version>, then open [ASSEMBLE] and [RELEASE] MRs after local validation.');
     return;
   }
-  console.log(`No branches were created. Open [RELEASE] Vatrushka v${version}: develop -> ${plan.productionBranch}.`);
+  console.log(`No branches were created. Open [ASSEMBLE] Vatrushka v${version}: assemble/${version} -> release/${version}, then [RELEASE] release/${version} -> ${plan.productionBranch}.`);
 }
 
 if (fileURLToPath(import.meta.url) === resolve(process.argv[1])) {

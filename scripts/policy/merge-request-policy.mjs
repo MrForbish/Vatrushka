@@ -12,10 +12,6 @@ function taskBranch(source) {
   const ticketed = source.match(/^(feat|fix)\/([A-Za-z]+-\d+)-([a-z0-9][a-z0-9-]*)$/u);
   if (ticketed) return { titlePrefix: `[${ticketed[2].toUpperCase()}]` };
 
-  // SemVer dots are accepted only for this explicitly versioned maintenance branch.
-  const releasePreparation = source.match(/^chore\/release-(\d+\.\d+\.\d+)-preparation$/u);
-  if (releasePreparation) return { titlePrefix: '[CHORE]' };
-
   const unticketed = source.match(/^(chore|refactor|test|docs)\/([a-z0-9][a-z0-9-]*)$/u);
   if (unticketed) return { titlePrefix: `[${unticketed[1].toUpperCase()}]` };
 
@@ -28,35 +24,53 @@ function policyTitle(title) {
 
 export function validateMergeRequest({ source, target, title, productionBranch = 'main' }) {
   const errors = [];
-  const task = taskBranch(source);
   const normalizedTitle = policyTitle(title);
+  const task = taskBranch(source);
 
   if (task) {
-    addError(errors, target === 'develop', `${source} разрешено вливать только в develop`);
-    addError(errors, normalizedTitle.startsWith(task.titlePrefix), `Название MR должно начинаться с ${task.titlePrefix}`);
+    addError(errors, target === 'develop', `${source} may only merge into develop`);
+    addError(errors, normalizedTitle.startsWith(task.titlePrefix), `MR title must start with ${task.titlePrefix}`);
     return { valid: errors.length === 0, errors };
   }
 
-  if (source === 'develop' && target === productionBranch) {
-    addError(errors, normalizedTitle.startsWith('[RELEASE]'), 'Название production MR должно начинаться с [RELEASE]');
+  const assembly = source.match(new RegExp(`^assemble/${SEMVER}$`, 'u'));
+  if (assembly) {
+    const version = assembly[1];
+    addError(errors, target === `release/${version}`, `${source} may only merge into release/${version}`);
+    addError(errors, normalizedTitle.startsWith('[ASSEMBLE]'), 'Assembly MR title must start with [ASSEMBLE]');
+    return { valid: errors.length === 0, errors };
+  }
+
+  const release = source.match(new RegExp(`^release/${SEMVER}$`, 'u'));
+  if (release) {
+    addError(errors, target === productionBranch, `${source} may only merge into ${productionBranch}`);
+    addError(errors, normalizedTitle.startsWith('[RELEASE]'), 'Release MR title must start with [RELEASE]');
+    return { valid: errors.length === 0, errors };
+  }
+
+  const releaseFix = source.match(new RegExp(`^release-fix/${SEMVER}-[a-z0-9][a-z0-9-]*$`, 'u'));
+  if (releaseFix) {
+    const version = releaseFix[1];
+    addError(errors, target === `release/${version}`, `${source} may only merge into release/${version}`);
+    addError(errors, normalizedTitle.startsWith('[RELEASE FIX]'), 'Release-fix MR title must start with [RELEASE FIX]');
     return { valid: errors.length === 0, errors };
   }
 
   const hotfix = source.match(new RegExp(`^hotfix/${SEMVER}-[a-z0-9][a-z0-9-]*$`, 'u'));
   if (hotfix) {
-    addError(errors, target === productionBranch, `${source} разрешено вливать только в ${productionBranch}`);
-    addError(errors, normalizedTitle.startsWith('[HOTFIX]'), 'Название hotfix MR должно начинаться с [HOTFIX]');
+    addError(errors, target === productionBranch, `${source} may only merge into ${productionBranch}`);
+    addError(errors, normalizedTitle.startsWith('[HOTFIX]'), 'Hotfix MR title must start with [HOTFIX]');
     return { valid: errors.length === 0, errors };
   }
 
   if (source === productionBranch) {
-    const validTarget = target === 'develop';
-    addError(errors, validTarget, `${productionBranch} разрешено синхронизировать только в develop`);
-    addError(errors, normalizedTitle.startsWith('[SYNC]'), 'Название sync MR должно начинаться с [SYNC]');
+    const validTarget = target === 'develop' || new RegExp(`^release/${SEMVER}$`, 'u').test(target);
+    addError(errors, validTarget, `${productionBranch} may only sync into develop or an active release branch`);
+    addError(errors, normalizedTitle.startsWith('[SYNC]'), 'Sync MR title must start with [SYNC]');
     return { valid: errors.length === 0, errors };
   }
 
-  errors.push(`Недопустимая или неверно названная source-ветка: ${source}`);
+  errors.push(`Invalid or incorrectly named source branch: ${source}`);
   return { valid: false, errors };
 }
 
