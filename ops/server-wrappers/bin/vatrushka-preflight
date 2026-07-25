@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+set -eu
+. /usr/local/lib/vatrushka/vatrushka-wrapper-common.sh
+
+manifest=$(stage_candidate_manifest "$@")
+require_manifest_type "$manifest" candidate
+stage_candidate_source_archive "$manifest"
+release=$(manifest_release_id "$manifest")
+audit "vatrushka-preflight" "$release" "succeeded"
+printf '%s\n' "$manifest"

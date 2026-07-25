@@ -39,6 +39,10 @@ services:
     logging: *logging
 
   api:
+    # Local development may still build this image from the checkout. Delivery
+    # wrappers set API_IMAGE to an immutable registry digest and invoke Compose
+    # with --no-build, so a release never rebuilds code on a VPS.
+    image: ${API_IMAGE:-vatrushka-api:local}
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.api
@@ -46,7 +50,7 @@ services:
         BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
     restart: unless-stopped
     network_mode: host
-    env_file: ../../.env
+    env_file: ${VATRUSHKA_APP_ENV_FILE:-../../.env}
     environment:
       NODE_ENV: production
       HOST: 127.0.0.1

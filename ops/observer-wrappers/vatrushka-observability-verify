@@ -1,0 +1,71 @@
+#!/usr/bin/env sh
+set -eu
+
+PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+umask 077
+
+readonly OBSERVABILITY_ROOT=/opt/vatrushka/infra/observability/platform
+readonly OBSERVABILITY_PROJECT=vatrushka-observability-platform
+readonly PRODUCT_OBSERVABILITY_HOST=vtr-prod-1
+
+fail() {
+  printf '%s\n' "$1" >&2
+  exit 64
+}
+
+audit() {
+  logger -t vatrushka-observer-wrapper -- "wrapper=vatrushka-observability-verify environment=$1 result=$2" 2>/dev/null || true
+}
+
+test "$#" -eq 1 || fail 'Exactly one environment is required.'
+environment=$1
+test "$environment" = production || fail 'Only the production observer environment is allowed.'
+test -d "$OBSERVABILITY_ROOT" || fail 'Observability runtime directory is missing.'
+test -f "$OBSERVABILITY_ROOT/docker-compose.yml" || fail 'Observability compose file is missing.'
+
+audit "$environment" started
+
+for service in caddy grafana prometheus alertmanager loki alloy; do
+  container_id=$(docker ps --quiet --filter "label=com.docker.compose.project=$OBSERVABILITY_PROJECT" --filter "label=com.docker.compose.service=$service") || { audit "$environment" failed; fail 'Observability service state cannot be read.'; }
+  test -n "$container_id" || { audit "$environment" failed; fail 'Required observability service is absent.'; }
+  state=$(docker inspect --format '{{.State.Status}}' "$container_id") || { audit "$environment" failed; fail 'Observability container state cannot be read.'; }
+  test "$state" = running || { audit "$environment" failed; fail 'Required observability service is not running.'; }
+done
+
+curl --fail --silent --show-error --max-time 5 http://10.90.0.1:3000/api/health >/dev/null || { audit "$environment" failed; fail 'Grafana readiness check failed.'; }
+curl --fail --silent --show-error --max-time 5 http://10.90.0.1:9090/-/ready >/dev/null || { audit "$environment" failed; fail 'Prometheus readiness check failed.'; }
+curl --fail --silent --show-error --max-time 5 http://10.90.0.1:3100/ready >/dev/null || { audit "$environment" failed; fail 'Loki readiness check failed.'; }
+
+# Alloy sends its own health metric every 30 seconds. Wait only for the bounded
+# post-deploy propagation window; an empty result is a delivery failure, not a
+# successful observer health check.
+attempt=0
+while :; do
+  result_file=$(mktemp) || { audit "$environment" failed; fail 'Prometheus verification cannot create a temporary file.'; }
+  if curl --fail --silent --show-error --max-time 5 --get \
+    --data-urlencode "query=max(up{environment=\"production\",host=\"$PRODUCT_OBSERVABILITY_HOST\",job=\"alloy-agent\"})" \
+    http://10.90.0.1:9090/api/v1/query >"$result_file" \
+    && python3 - "$result_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    payload = json.load(source)
+
+result = payload.get("data", {}).get("result", [])
+if not result or result[0].get("value", [None, "0"])[1] != "1":
+    raise SystemExit(1)
+PY
+  then
+    rm -f -- "$result_file"
+    break
+  fi
+  rm -f -- "$result_file"
+  attempt=$((attempt + 1))
+  test "$attempt" -lt 45 || { audit "$environment" failed; fail 'Product Alloy telemetry did not reach Prometheus.'; }
+  sleep 2
+done
+
+audit "$environment" succeeded
+printf '%s\n' "observability=ready environment=$environment"

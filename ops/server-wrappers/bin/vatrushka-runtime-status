@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+set -eu
+. /usr/local/lib/vatrushka/vatrushka-wrapper-common.sh
+
+require_no_arguments "$@"
+path="$VATRUSHKA_WRAPPER_ROOT/drivers/runtime-status"
+test -x "$path" || fail "Approved runtime status driver is not installed."
+exec "$path"

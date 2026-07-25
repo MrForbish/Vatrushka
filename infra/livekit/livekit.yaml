@@ -22,15 +22,15 @@ room:
 webhook:
   api_key: replace-me-key
   urls:
-    - https://api.myvatrushka.ru/api/v1/webhooks/livekit
+    - https://api.example.com/api/v1/integrations/livekit/webhook
 
 turn:
   enabled: true
-  domain: turn.myvatrushka.ru
+  domain: turn.example.com
   udp_port: 3478
   tls_port: 5349
-  cert_file: /etc/letsencrypt/live/turn.myvatrushka.ru/fullchain.pem
-  key_file: /etc/letsencrypt/live/turn.myvatrushka.ru/privkey.pem
+  cert_file: /etc/letsencrypt/live/turn.example.com/fullchain.pem
+  key_file: /etc/letsencrypt/live/turn.example.com/privkey.pem
 
 logging:
   level: info

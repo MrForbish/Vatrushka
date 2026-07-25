@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Vatrushka immutable delivery candidate",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "commitSha", "sourceArchiveSha256", "dependencyLockSha256", "channel", "apiEnvironment", "images"],
+  "properties": {
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "commitSha": { "type": "string", "pattern": "^[a-fA-F0-9]{40}$" },
+    "sourceArchiveSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "dependencyLockSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+    "channel": { "enum": ["beta", "rc", "stable"] },
+    "apiEnvironment": { "enum": ["staging", "production"] },
+    "images": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "type": "string", "pattern": "^sha256:[a-fA-F0-9]{64}$" }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "required": { "type": "boolean" },
+        "compatibility": { "enum": ["none", "backward-compatible", "manual-review"] }
+      }
+    },
+    "desktop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "installerSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" },
+        "blockmapSha256": { "type": "string", "pattern": "^[a-fA-F0-9]{64}$" }
+      }
+    }
+  },
+  "not": {
+    "anyOf": [
+      { "required": ["token"] },
+      { "required": ["secret"] },
+      { "required": ["password"] },
+      { "required": ["privateKey"] }
+    ]
+  }
+}
