@@ -103,11 +103,11 @@ test('protected tags promote an existing immutable image through the root-owned 
     pipeline.indexOf('rollback-production-runtime:'),
     pipeline.indexOf('windows-production-package:'),
   );
-  assert.match(pipeline, /CI_COMMIT_BRANCH == \$PRODUCTION_BRANCH/u);
-  assert.match(resolver, /docker buildx imagetools inspect/u);
-  assert.match(resolver, /CI_REGISTRY_IMAGE\/api:\$CI_COMMIT_SHA/u);
-  assert.match(manifest, /--channel stable/u);
-  assert.match(manifest, /--api-environment production/u);
+  assert.match(pipeline, /\.release-candidate-rules:/u);
+  assert.match(resolver, /vatrushka-release-candidate/u);
+  assert.match(resolver, /RELEASE_CANDIDATE_SHA/u);
+  assert.match(manifest, /channel == "stable"/u);
+  assert.match(manifest, /apiEnvironment == "production"/u);
   assert.match(pipeline, /^resolve-production-desktop-package:[\s\S]*packages\/generic\/vatrushka-production-desktop/mu);
   assert.match(pipeline, /^resolve-production-desktop-package:[\s\S]*sha256sum --check/mu);
   assert.match(productionDeploy, /when: manual[\s\S]*allow_failure: false/u);
@@ -219,7 +219,7 @@ test('production publication is tag-only and uses protected file variables', asy
   assert.doesNotMatch(publish, /PRODUCTION_UPDATE_PATH|latest\.yml\.next/u);
   assert.match(pipeline, /verify-production-observability:[\s\S]*deploy-production-runtime/u);
   const windowsPackage = pipeline.slice(pipeline.indexOf('windows-production-package:'), pipeline.indexOf('resolve-production-desktop-package:'));
-  assert.match(pipeline, /windows-production-package:[\s\S]*CI_COMMIT_BRANCH == \$PRODUCTION_BRANCH/u);
+  assert.match(pipeline, /windows-production-package:[\s\S]*\.release-candidate-rules/u);
   assert.match(pipeline, /windows-production-package:[\s\S]*packages\/generic\/vatrushka-production-desktop/u);
   assert.doesNotMatch(windowsPackage, /CI_COMMIT_TAG =~/u);
   assert.match(pipeline, /resolve-production-desktop-package:[\s\S]*CI_COMMIT_TAG =~/u);
@@ -256,7 +256,9 @@ test('GitLab repository metadata replaces GitHub automation', async () => {
   assert.match(agentRules, /Do not create a new branch\/MR for a failed pre-merge pipeline/u);
   assert.match(agentRules, /Immediately set and read back `squash=false`/u);
   assert.match(releaseProcess, /release-auth-smoke/u);
-  assert.match(releaseProcess, /latest\.yml.*готового API/u);
+  assert.match(releaseProcess, /последним[\s\S]*latest\.yml/u);
+  assert.match(releaseProcess, /assemble\/X\.Y\.Z/u);
+  assert.match(releaseProcess, /Tag pipeline не пересобирает API или Windows installer/u);
   assert.match(hotfixTemplate, /^## Release evidence$/mu);
   assert.match(hotfixTemplate, /^## Rollback$/mu);
   assert.match(hotfixTemplate, /^## Миграции и совместимость$/mu);
