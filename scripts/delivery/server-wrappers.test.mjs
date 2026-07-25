@@ -49,6 +49,10 @@ test("server wrappers are fail-closed and avoid arbitrary shell entry points", a
   assert.match(common, /Candidate source archive contains an unsafe entry/);
   assert.match(common, /candidate-\$checksum\.json/);
   assert.match(common, /root:root:640/);
+  assert.match(
+    common,
+    /install -m 0640 -o root -g root \/dev\/null "\$temp\.sha256"/,
+  );
   assert.doesNotMatch(common, /eval\b|sh -c|bash -c/);
 
   for (const name of wrappers) {

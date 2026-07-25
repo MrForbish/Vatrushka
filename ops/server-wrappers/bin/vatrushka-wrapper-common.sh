@@ -91,6 +91,10 @@ stage_candidate_manifest() {
     temp=$(mktemp "$VATRUSHKA_MANIFEST_ROOT/.candidate.XXXXXX") || fail "Candidate manifest staging failed."
     trap 'rm -f -- "$temp" "$temp.sha256"' EXIT HUP INT TERM
     install -m 0640 -o root -g root "$candidate" "$temp"
+    # The checksum is trusted by every subsequent privileged wrapper, so give
+    # it the same explicit owner and mode as the staged manifest before it is
+    # atomically published.
+    install -m 0640 -o root -g root /dev/null "$temp.sha256"
     printf '%s  %s\n' "$checksum" "$(basename "$manifest")" >"$temp.sha256"
     mv -- "$temp" "$manifest"
     mv -- "$temp.sha256" "$checksum_file"
