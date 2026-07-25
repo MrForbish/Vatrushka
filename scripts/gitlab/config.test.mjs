@@ -68,9 +68,9 @@ test('develop produces an immutable staging candidate without exposing an update
     pipeline.indexOf('merge-request-policy:'),
   );
   assert.doesNotMatch(stagingDeploy, /when: manual|allow_failure: true/u);
-  assert.match(pipeline, /STAGING_SSH_PRIVATE_KEY/u);
+  assert.match(pipeline, /STAGING_SSH_PRIVATE_KEY_B64/u);
   assert.match(pipeline, /STAGING_SSH_HOST_KEY/u);
-  assert.match(pipeline, /tr -d '\\r' < "\$STAGING_SSH_PRIVATE_KEY" > ~\/\.ssh\/id_ed25519/u);
+  assert.match(pipeline, /printf '%s' "\$STAGING_SSH_PRIVATE_KEY_B64" \| base64 -d > ~\/\.ssh\/id_ed25519/u);
   assert.match(pipeline, /ssh-keygen -lf ~\/\.ssh\/id_ed25519/u);
   assert.match(stagingDeploy, /vatrushka-preflight/u);
   assert.match(stagingDeploy, /vatrushka-deploy/u);
