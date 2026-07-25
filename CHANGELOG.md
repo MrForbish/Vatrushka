@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.24] - 2026-07-26
+
+### Fixed
+
+- normalizes the Windows-generated desktop checksum sidecar before protected Linux tag validation;
+- keeps candidate checksum verification strict and uses the dedicated production CI deploy key before any production preflight.
+
 ## [0.8.23] - 2026-07-26
 
 ### Fixed
