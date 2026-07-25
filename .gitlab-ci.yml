@@ -117,8 +117,13 @@ variables:
     - echo "$STAGING_SSH_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || { echo 'STAGING_SSH_HOST has unsafe characters.' >&2; exit 1; }
     - echo "$STAGING_SSH_USER" | grep -Eq '^[a-z_][a-z0-9_-]*$' || { echo 'STAGING_SSH_USER has unsafe characters.' >&2; exit 1; }
     - install -d -m 700 ~/.ssh
-    - install -m 600 "$STAGING_SSH_PRIVATE_KEY" ~/.ssh/id_ed25519
-    - install -m 600 "$STAGING_SSH_HOST_KEY" ~/.ssh/known_hosts
+    # GitLab file variables may retain CRLF when they were created from
+    # Windows. OpenSSH rejects an Ed25519 private key with those bytes.
+    - tr -d '\r' < "$STAGING_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+    - chmod 600 ~/.ssh/id_ed25519
+    - ssh-keygen -lf ~/.ssh/id_ed25519 >/dev/null
+    - tr -d '\r' < "$STAGING_SSH_HOST_KEY" > ~/.ssh/known_hosts
+    - chmod 600 ~/.ssh/known_hosts
 
 build-api-immutable-image:
   extends: .immutable-image-rules
