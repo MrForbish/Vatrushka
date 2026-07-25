@@ -11,6 +11,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 - normalizes the Windows-generated desktop checksum sidecar before protected Linux tag validation;
 - keeps candidate checksum verification strict and uses the dedicated production CI deploy key before any production preflight.
 
+## [0.8.23] - 2026-07-26
+
+### Fixed
+
+- makes protected-tag checksum validation portable to the Alpine/BusyBox runner and normalizes protected SSH key material before production preflight;
+- preserves immutable candidate promotion, checksum verification and the stable-updater final gate without changing application, database, Redis or media contracts.
+
 ## [0.8.22] - 2026-07-25
 
 ### Changed
