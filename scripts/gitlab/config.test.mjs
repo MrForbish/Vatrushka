@@ -51,6 +51,8 @@ test('develop produces an immutable staging candidate without exposing an update
   );
   assert.match(pipeline, /CI_PIPELINE_SOURCE == "push" && \$CI_COMMIT_BRANCH == "develop"/u);
   assert.match(imageBuild, /docker buildx build[\s\S]*--push/u);
+  assert.match(imageBuild, /docker context create vatrushka-dind[\s\S]*ca=\$DOCKER_CERT_PATH\/ca\.pem/u);
+  assert.match(imageBuild, /docker buildx create --name vatrushka-candidate --driver docker-container --use vatrushka-dind/u);
   assert.match(imageBuild, /CI_REGISTRY_IMAGE\/api:\$CI_COMMIT_SHA/u);
   assert.match(imageBuild, /containerimage\.digest/u);
   assert.match(manifest, /SOURCE_ARCHIVE_SHA256/u);
