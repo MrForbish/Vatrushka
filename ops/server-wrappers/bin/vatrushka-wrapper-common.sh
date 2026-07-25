@@ -85,8 +85,18 @@ stage_candidate_manifest() {
   install -d -m 0750 -o root -g root "$VATRUSHKA_MANIFEST_ROOT"
 
   if test -e "$manifest"; then
+    test ! -L "$manifest" || fail "Existing candidate manifest must not be a symlink."
     test -f "$checksum_file" || fail "Existing candidate manifest checksum is missing."
+    test ! -L "$checksum_file" || fail "Existing candidate manifest checksum must not be a symlink."
     (cd "$VATRUSHKA_MANIFEST_ROOT" && sha256sum --check --status "$(basename "$checksum_file")") || fail "Existing candidate manifest checksum does not match."
+    existing_checksum=$(sha256sum -- "$manifest" | awk '{print $1}') || fail "Existing candidate manifest checksum cannot be calculated."
+    test "$existing_checksum" = "$checksum" || fail "Existing candidate manifest content does not match candidate checksum."
+
+    # A prior interrupted or older deployment may have left valid,
+    # content-addressed files with unsafe metadata. Once both checksums agree,
+    # restore the fixed root-owned invariant rather than letting a retry fail.
+    chown root:root "$manifest" "$checksum_file"
+    chmod 0640 "$manifest" "$checksum_file"
   else
     temp=$(mktemp "$VATRUSHKA_MANIFEST_ROOT/.candidate.XXXXXX") || fail "Candidate manifest staging failed."
     trap 'rm -f -- "$temp" "$temp.sha256"' EXIT HUP INT TERM

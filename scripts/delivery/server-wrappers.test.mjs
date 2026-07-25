@@ -53,6 +53,14 @@ test("server wrappers are fail-closed and avoid arbitrary shell entry points", a
     common,
     /install -m 0640 -o root -g root \/dev\/null "\$temp\.sha256"/,
   );
+  assert.match(common, /Existing candidate manifest must not be a symlink/);
+  assert.match(common, /Existing candidate manifest checksum must not be a symlink/);
+  assert.match(
+    common,
+    /Existing candidate manifest content does not match candidate checksum/,
+  );
+  assert.match(common, /chown root:root "\$manifest" "\$checksum_file"/);
+  assert.match(common, /chmod 0640 "\$manifest" "\$checksum_file"/);
   assert.doesNotMatch(common, /eval\b|sh -c|bash -c/);
 
   for (const name of wrappers) {
