@@ -303,7 +303,7 @@ create-production-candidate-manifest:
       curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "production-candidate/$source_archive_sha.tar.gz" "$package_base/$source_archive_sha.tar.gz"
       curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o production-candidate/package-lock.json "$package_base/package-lock.json"
       curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o production-candidate/SHA256SUMS "$package_base/SHA256SUMS"
-      (cd production-candidate && sha256sum --check SHA256SUMS)
+      (cd production-candidate && sha256sum -c SHA256SUMS)
       jq -e --arg version "$VERSION" --arg sha "$RELEASE_CANDIDATE_SHA" --arg digest "$API_IMAGE_DIGEST" '.version == $version and .commitSha == $sha and .images.api == $digest and .channel == "stable" and .apiEnvironment == "production"' production-candidate/candidate.json >/dev/null
   artifacts:
     expire_in: 90 days
@@ -679,9 +679,17 @@ release-auth-smoke:
       for name in PRODUCTION_SSH_PRIVATE_KEY PRODUCTION_SSH_HOST_KEY PRODUCTION_SSH_HOST PRODUCTION_SSH_USER; do
         test -n "$(eval "printf '%s' \"\$$name\"")" || { echo "Required production setting is missing: $name" >&2; exit 1; }
       done
+      test -f "$PRODUCTION_SSH_PRIVATE_KEY" || { echo 'PRODUCTION_SSH_PRIVATE_KEY must be a file variable.' >&2; exit 1; }
+      test -f "$PRODUCTION_SSH_HOST_KEY" || { echo 'PRODUCTION_SSH_HOST_KEY must be a file variable.' >&2; exit 1; }
+      echo "$PRODUCTION_SSH_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || { echo 'PRODUCTION_SSH_HOST has unsafe characters.' >&2; exit 1; }
+      echo "$PRODUCTION_SSH_USER" | grep -Eq '^[a-z_][a-z0-9_-]*$' || { echo 'PRODUCTION_SSH_USER has unsafe characters.' >&2; exit 1; }
       install -d -m 700 ~/.ssh
-      install -m 600 "$PRODUCTION_SSH_PRIVATE_KEY" ~/.ssh/id_ed25519
-      install -m 600 "$PRODUCTION_SSH_HOST_KEY" ~/.ssh/known_hosts
+      tr -d '\r' < "$PRODUCTION_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+      chmod 600 ~/.ssh/id_ed25519
+      ssh-keygen -lf ~/.ssh/id_ed25519 >/dev/null
+      tr -d '\r' < "$PRODUCTION_SSH_HOST_KEY" > ~/.ssh/known_hosts
+      chmod 600 ~/.ssh/known_hosts
+      ssh-keygen -F "$PRODUCTION_SSH_HOST" -f ~/.ssh/known_hosts >/dev/null || { echo 'PRODUCTION_SSH_HOST_KEY does not contain the configured host.' >&2; exit 1; }
 
 .observer-ssh:
   image:
@@ -930,7 +938,7 @@ resolve-production-desktop-package:
       mkdir -p production-desktop/release
       curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "production-desktop/$archive" "$package_base/$archive"
       curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "production-desktop/$archive.sha256" "$package_base/$archive.sha256"
-      (cd production-desktop && sha256sum --check "$archive.sha256")
+      (cd production-desktop && sha256sum -c "$archive.sha256")
       tar -xzf "production-desktop/$archive" -C production-desktop/release
       test -f production-desktop/release/latest.yml
       test -f production-desktop/release/SHA256SUMS.txt
@@ -973,8 +981,12 @@ publish-production:
       done
     - |
       install -d -m 700 ~/.ssh
-      install -m 600 "$PRODUCTION_SSH_PRIVATE_KEY" ~/.ssh/id_ed25519
-      install -m 600 "$PRODUCTION_SSH_HOST_KEY" ~/.ssh/known_hosts
+      tr -d '\r' < "$PRODUCTION_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+      chmod 600 ~/.ssh/id_ed25519
+      ssh-keygen -lf ~/.ssh/id_ed25519 >/dev/null
+      tr -d '\r' < "$PRODUCTION_SSH_HOST_KEY" > ~/.ssh/known_hosts
+      chmod 600 ~/.ssh/known_hosts
+      ssh-keygen -F "$PRODUCTION_SSH_HOST" -f ~/.ssh/known_hosts >/dev/null || { echo 'PRODUCTION_SSH_HOST_KEY does not contain the configured host.' >&2; exit 1; }
       setup=$(find production-desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-x64.exe' -print -quit)
       blockmap=$(find production-desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-x64.exe.blockmap' -print -quit)
       latest=production-desktop/release/latest.yml
