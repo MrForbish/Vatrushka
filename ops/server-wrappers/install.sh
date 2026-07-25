@@ -29,6 +29,7 @@ source_dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)/bin
 driver_dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)/drivers
 installer_dir=$(CDPATH= cd -- "$(dirname "$0")" && pwd)
 install -d -m 0750 -o root -g root "$root" "$root/drivers"
+install -d -m 0711 -o root -g root /var/lib/vatrushka
 install -d -m 0750 -o root -g root /var/lib/vatrushka/manifests
 install -d -m 0750 -o root -g root /var/lib/vatrushka/sources
 install -d -m 0750 -o root -g root /opt/vatrushka /opt/vatrushka/releases

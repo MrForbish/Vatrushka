@@ -67,6 +67,8 @@ test "$registry_metadata" = root:root:700 || fail 'Registry credential directory
 require_metadata "$registry_directory/config.json" root:root:600
 
 test -d /var/lib/vatrushka/inbox || fail 'Deploy inbox is missing.'
+runtime_root_metadata=$(stat -c '%U:%G:%a' -- /var/lib/vatrushka)
+test "$runtime_root_metadata" = 'root:root:711' || fail 'Deploy runtime root permissions are unsafe.'
 inbox_metadata=$(stat -c '%U:%G:%a' -- /var/lib/vatrushka/inbox)
 test "$inbox_metadata" = "$deploy_user:$deploy_user:700" || fail 'Deploy inbox ownership or permissions are unsafe.'
 visudo -cf /etc/sudoers.d/vatrushka-deploy >/dev/null || fail 'Deploy sudoers validation failed.'

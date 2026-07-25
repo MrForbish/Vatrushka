@@ -53,6 +53,8 @@ test("server wrappers are fail-closed and avoid arbitrary shell entry points", a
     common,
     /install -m 0640 -o root -g root \/dev\/null "\$temp\.sha256"/,
   );
+  assert.match(common, /chown root:root "\$temp\.sha256"/);
+  assert.match(common, /chmod 0640 "\$temp\.sha256"/);
   assert.match(common, /Existing candidate manifest must not be a symlink/);
   assert.match(common, /Existing candidate manifest checksum must not be a symlink/);
   assert.match(
@@ -72,12 +74,22 @@ test("server wrappers are fail-closed and avoid arbitrary shell entry points", a
 
 test("installer grants no shell or docker authority to the deploy account", async () => {
   const installer = await readFile(new URL("install.sh", root), "utf8");
+  const bootstrapVerifier = await readFile(
+    new URL("verify-host-bootstrap.sh", root),
+    "utf8",
+  );
   assert.match(installer, /visudo -cf \/etc\/sudoers\.d\/vatrushka-deploy/);
   assert.match(installer, /vatrushka-preflight \*/);
   assert.match(installer, /vatrushka-deploy \*/);
   assert.match(installer, /vatrushka-rollback \*/);
   assert.match(installer, /vatrushka-publish-updater \*/);
   assert.match(installer, /\/var\/lib\/vatrushka\/inbox/);
+  assert.match(installer, /install -d -m 0711 -o root -g root \/var\/lib\/vatrushka/);
+  assert.match(
+    bootstrapVerifier,
+    /Deploy runtime root permissions are unsafe/,
+  );
+  assert.match(bootstrapVerifier, /root:root:711/);
   assert.match(installer, /\/var\/lib\/vatrushka\/sources/);
   assert.match(installer, /drivers\/compose-digest-deploy/);
   assert.match(installer, /verify-host-bootstrap\.sh/);
