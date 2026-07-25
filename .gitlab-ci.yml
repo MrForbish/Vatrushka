@@ -280,6 +280,7 @@ create-production-candidate-manifest:
   image:
     name: ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/alpine:3.22
     pull_policy: if-not-present
+  tags: [vatrushka-linux]
   stage: candidate
   timeout: 5m
   interruptible: false
@@ -710,8 +711,12 @@ release-auth-smoke:
       echo "$OBSERVER_SSH_HOST" | grep -Eq '^[A-Za-z0-9.-]+$' || { echo 'OBSERVER_SSH_HOST has unsafe characters.' >&2; exit 1; }
       echo "$OBSERVER_SSH_USER" | grep -Eq '^[a-z_][a-z0-9_-]*$' || { echo 'OBSERVER_SSH_USER has unsafe characters.' >&2; exit 1; }
       install -d -m 700 ~/.ssh
-      install -m 600 "$OBSERVER_SSH_PRIVATE_KEY" ~/.ssh/id_ed25519
-      install -m 600 "$OBSERVER_SSH_HOST_KEY" ~/.ssh/known_hosts
+      tr -d '\r' < "$OBSERVER_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+      chmod 600 ~/.ssh/id_ed25519
+      ssh-keygen -lf ~/.ssh/id_ed25519 >/dev/null
+      tr -d '\r' < "$OBSERVER_SSH_HOST_KEY" > ~/.ssh/known_hosts
+      chmod 600 ~/.ssh/known_hosts
+      ssh-keygen -F "$OBSERVER_SSH_HOST" -f ~/.ssh/known_hosts >/dev/null || { echo 'OBSERVER_SSH_HOST_KEY does not contain the configured host.' >&2; exit 1; }
 
 deploy-production-runtime:
   extends: .production-ssh
@@ -1006,6 +1011,10 @@ publish-production:
         --arg metadata_sha "$(sha256sum "$metadata" | awk '{print $1}')" \
         '{version: $version, files: {setup: {name: $setup_name, sha256: $setup_sha}, blockmap: {name: $blockmap_name, sha256: $blockmap_sha}, latest: {name: "latest.yml", sha256: $latest_sha}, checksums: {name: "SHA256SUMS.txt", sha256: $checksums_sha}, metadata: {name: "release-metadata.json", sha256: $metadata_sha}}}' \
         > "production-desktop/release/updater-$CI_COMMIT_TAG.json"
+      # The receiving wrapper rejects group/other writable inputs. Artifacts can
+      # retain executable modes from the Windows packaging archive, so normalize
+      # every file that crosses the unprivileged SSH boundary before scp.
+      chmod 0644 "$setup" "$blockmap" "$latest" "$checksums" "$metadata" "production-desktop/release/updater-$CI_COMMIT_TAG.json"
       remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
       scp "$setup" "$blockmap" "$latest" "$checksums" "$metadata" "production-desktop/release/updater-$CI_COMMIT_TAG.json" "$remote:/var/lib/vatrushka/inbox/"
       ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-publish-updater '/var/lib/vatrushka/inbox/updater-$CI_COMMIT_TAG.json'"

@@ -212,6 +212,9 @@ test('production publication is tag-only and uses protected file variables', asy
   );
   assert.match(pipeline, /OBSERVER_SSH_PRIVATE_KEY/u);
   assert.match(pipeline, /OBSERVER_SSH_HOST_KEY/u);
+  assert.match(pipeline, /tr -d '\\r' < "\$OBSERVER_SSH_PRIVATE_KEY"/u);
+  assert.match(pipeline, /ssh-keygen -lf ~\/\.ssh\/id_ed25519/u);
+  assert.match(pipeline, /ssh-keygen -F "\$OBSERVER_SSH_HOST"/u);
   assert.doesNotMatch(pipeline, /root@\$OBSERVABILITY_SSH_HOST/u);
   assert.doesNotMatch(pipeline, /5\.42\.107\.9/u);
   assert.match(publish, /GLAB_ENABLE_CI_AUTOLOGIN: 'true'/u);
@@ -222,6 +225,7 @@ test('production publication is tag-only and uses protected file variables', asy
   assert.match(publish, /find production-desktop\/release[\s\S]+-exec glab release upload/u);
   assert.match(publish, /vatrushka-publish-updater/u);
   assert.match(publish, /\/var\/lib\/vatrushka\/inbox/u);
+  assert.match(publish, /chmod 0644 "\$setup" "\$blockmap" "\$latest" "\$checksums" "\$metadata"/u);
   assert.doesNotMatch(publish, /PRODUCTION_UPDATE_PATH|latest\.yml\.next/u);
   assert.match(pipeline, /verify-production-observability:[\s\S]*deploy-production-runtime/u);
   const windowsPackage = pipeline.slice(pipeline.indexOf('windows-production-package:'), pipeline.indexOf('resolve-production-desktop-package:'));

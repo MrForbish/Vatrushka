@@ -106,6 +106,11 @@ stage_candidate_manifest() {
     # atomically published.
     install -m 0640 -o root -g root /dev/null "$temp.sha256"
     printf '%s  %s\n' "$checksum" "$(basename "$manifest")" >"$temp.sha256"
+    # The shell keeps the restrictive wrapper umask while writing the checksum.
+    # Restore the contract explicitly so the first deploy does not depend on a
+    # retry through the existing-candidate recovery branch.
+    chown root:root "$temp.sha256"
+    chmod 0640 "$temp.sha256"
     mv -- "$temp" "$manifest"
     mv -- "$temp.sha256" "$checksum_file"
     trap - EXIT HUP INT TERM
