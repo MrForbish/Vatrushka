@@ -5,6 +5,7 @@ import type { RoomConnection } from "@vatrushka/shared";
 
 import { ClientError, type ApiClient } from "./api";
 import { MediaSession } from "./media";
+import { MicrophoneGainProcessor } from "./microphone-gain";
 
 interface DeviceSwitchRoom {
   switchActiveDevice(
@@ -21,6 +22,15 @@ function sessionWithRoom(room: DeviceSwitchRoom): MediaSession {
 }
 
 describe("MediaSession audio devices", () => {
+  it("does not dereference an absent LiveKit audio context in the optional gain processor", async () => {
+    const processor = new MicrophoneGainProcessor(0.6);
+
+    await expect(
+      processor.init({ track: {} } as never),
+    ).resolves.toBeUndefined();
+    expect(processor.processedTrack).toBeUndefined();
+  });
+
   it("switches LiveKit input and output devices immediately", async () => {
     const switchActiveDevice = vi.fn().mockResolvedValue(true);
     const session = sessionWithRoom({ switchActiveDevice });
@@ -55,7 +65,7 @@ describe("MediaSession audio devices", () => {
     );
   });
 
-  it("keeps a microphone enabled when optional gain processing is unavailable", async () => {
+  it("keeps a microphone enabled when LiveKit has not assigned a WebAudio context", async () => {
     const session = new MediaSession({} as ApiClient);
     const setMicrophoneEnabled = vi.fn().mockResolvedValue(undefined);
     const setProcessor = vi.fn().mockRejectedValue(new Error("Audio context unavailable"));
@@ -90,7 +100,7 @@ describe("MediaSession audio devices", () => {
       true,
       expect.objectContaining({ echoCancellation: true }),
     );
-    expect(setProcessor).toHaveBeenCalledTimes(1);
+    expect(setProcessor).not.toHaveBeenCalled();
   });
 });
 
