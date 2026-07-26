@@ -1037,6 +1037,7 @@ publish-production:
       chmod 0644 "$setup" "$blockmap" "$latest" "$checksums" "$metadata" "production-desktop/release/updater-$CI_COMMIT_TAG.json"
       remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
       scp "$setup" "$blockmap" "$latest" "$checksums" "$metadata" "production-desktop/release/updater-$CI_COMMIT_TAG.json" "$remote:/var/lib/vatrushka/inbox/"
+      ssh "$remote" "chmod 0644 '/var/lib/vatrushka/inbox/$setup_name' '/var/lib/vatrushka/inbox/$blockmap_name' '/var/lib/vatrushka/inbox/latest.yml' '/var/lib/vatrushka/inbox/SHA256SUMS.txt' '/var/lib/vatrushka/inbox/release-metadata.json' '/var/lib/vatrushka/inbox/updater-$CI_COMMIT_TAG.json'"
       ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-publish-updater '/var/lib/vatrushka/inbox/updater-$CI_COMMIT_TAG.json'"
     - |
       find production-desktop/release -maxdepth 1 -type f -print -quit | grep -q . || { echo 'Release artifact contains no publishable files.' >&2; exit 1; }

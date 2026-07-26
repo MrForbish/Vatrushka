@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.28] - 2026-07-26
+
+### Fixed
+
+- Normalize updater inbox file modes on the receiving production host before
+  the root-owned publication wrapper validates and promotes them.
+
 ## [0.8.27] - 2026-07-26
 
 ### Fixed
