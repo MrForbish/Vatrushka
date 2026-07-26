@@ -1030,17 +1030,42 @@ windows-production-package:
       "$archiveHash  $archive" | Set-Content "$archive.sha256"
       $packageBase = "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/packages/generic/vatrushka-production-desktop/$env:CI_COMMIT_SHA"
       $archiveUrl = "$packageBase/$archive"
-      $existing = & curl.exe --silent --output NUL --write-out '%{http_code}' --header "JOB-TOKEN: $env:CI_JOB_TOKEN" $archiveUrl
-      if ($existing -eq '200') {
-        Write-Error 'Immutable production desktop package already exists for this commit.'
-        exit 1
+      function Get-PackageAssetStatus([string] $url) {
+        return (& curl.exe --silent --output NUL --write-out '%{http_code}' --header "JOB-TOKEN: $env:CI_JOB_TOKEN" $url).Trim()
       }
-      if ($existing -ne '404') {
-        Write-Error "Cannot verify immutable package availability (HTTP $existing)."
-        exit 1
+
+      function Publish-ImmutablePackageAsset([string] $source, [string] $url) {
+        $existing = Get-PackageAssetStatus $url
+        if ($existing -eq '200') {
+          Write-Host "Using existing immutable package asset: $([IO.Path]::GetFileName($source))"
+          return
+        }
+        if ($existing -ne '404') {
+          throw "Cannot verify immutable package asset availability (HTTP $existing): $([IO.Path]::GetFileName($source))"
+        }
+
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+          & curl.exe --fail --show-error --retry 2 --retry-all-errors --retry-delay 2 --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file $source $url
+          if ($LASTEXITCODE -eq 0) {
+            return
+          }
+
+          # GitLab can persist an upload yet return a transient 5xx response.
+          # A successful read makes this retry idempotent instead of abandoning a
+          # valid immutable archive after its sidecar upload failed.
+          if ((Get-PackageAssetStatus $url) -eq '200') {
+            Write-Warning "GitLab returned an upload error after persisting $([IO.Path]::GetFileName($source)); continuing with the immutable asset."
+            return
+          }
+          if ($attempt -lt 3) {
+            Start-Sleep -Seconds (2 * $attempt)
+          }
+        }
+        throw "Could not publish immutable package asset: $([IO.Path]::GetFileName($source))"
       }
-      & curl.exe --fail --show-error --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file $archive $archiveUrl
-      & curl.exe --fail --show-error --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file "$archive.sha256" "$packageBase/$archive.sha256"
+
+      Publish-ImmutablePackageAsset $archive $archiveUrl
+      Publish-ImmutablePackageAsset "$archive.sha256" "$packageBase/$archive.sha256"
   artifacts:
     expire_in: 90 days
     name: 'vatrushka-production-$VERSION'
