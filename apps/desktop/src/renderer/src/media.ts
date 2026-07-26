@@ -294,10 +294,18 @@ export class MediaSession {
       return;
 
     const microphoneTrack = track as LocalAudioTrack;
+    // `setProcessor` is experimental in LiveKit and requires a context which
+    // the Room assigns asynchronously. Microphone publication remains the
+    // source of truth; local gain is applied only when that enhancement is
+    // actually available.
+    const audioContext = (
+      microphoneTrack as unknown as { audioContext?: AudioContext }
+    ).audioContext;
+    if (!audioContext || audioContext.state === "closed") return;
     if (microphoneTrack === this.microphoneGainTrack) return;
     try {
       await microphoneTrack.setProcessor(processor);
-      this.microphoneGainTrack = microphoneTrack;
+      if (processor.processedTrack) this.microphoneGainTrack = microphoneTrack;
     } catch (error) {
       // Gain is an enhancement. A WebAudio failure must never turn a working
       // microphone into a failed call.

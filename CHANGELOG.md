@@ -4,6 +4,14 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.31] - 2026-07-26
+
+### Fixed
+
+- Prevented optional microphone gain processing from dereferencing an absent
+  LiveKit WebAudio context. Voice connection now keeps the microphone enabled
+  and transparently skips local gain until the context is available.
+
 ## [0.8.30] - 2026-07-26
 
 ### Fixed
@@ -14,8 +22,8 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ### Changed
 
-- New local profiles start with microphone gain at 125%; users can adjust it
-  from 0% to 150% in the existing device controls.
+- Restored the standard 0–100% microphone range. Notification sound volume is
+  now a separate local setting, defaulting to 60%.
 
 ## [0.8.29] - 2026-07-26
 
