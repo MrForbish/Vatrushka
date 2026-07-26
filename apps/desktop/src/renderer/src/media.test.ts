@@ -5,6 +5,7 @@ import type { RoomConnection } from "@vatrushka/shared";
 
 import { ClientError, type ApiClient } from "./api";
 import { MediaSession } from "./media";
+import { MicrophoneGainProcessor } from "./microphone-gain";
 
 interface DeviceSwitchRoom {
   switchActiveDevice(
@@ -21,6 +22,15 @@ function sessionWithRoom(room: DeviceSwitchRoom): MediaSession {
 }
 
 describe("MediaSession audio devices", () => {
+  it("does not dereference an absent LiveKit audio context in the optional gain processor", async () => {
+    const processor = new MicrophoneGainProcessor(0.6);
+
+    await expect(
+      processor.init({ track: {} } as never),
+    ).resolves.toBeUndefined();
+    expect(processor.processedTrack).toBeUndefined();
+  });
+
   it("switches LiveKit input and output devices immediately", async () => {
     const switchActiveDevice = vi.fn().mockResolvedValue(true);
     const session = sessionWithRoom({ switchActiveDevice });
@@ -53,6 +63,44 @@ describe("MediaSession audio devices", () => {
     await expect(session.switchOutput("missing-output")).rejects.toThrow(
       "Не удалось выбрать устройство вывода",
     );
+  });
+
+  it("keeps a microphone enabled when LiveKit has not assigned a WebAudio context", async () => {
+    const session = new MediaSession({} as ApiClient);
+    const setMicrophoneEnabled = vi.fn().mockResolvedValue(undefined);
+    const setProcessor = vi.fn().mockRejectedValue(new Error("Audio context unavailable"));
+    const internals = session as unknown as {
+      room: {
+        localParticipant: {
+          setMicrophoneEnabled: typeof setMicrophoneEnabled;
+          getTrackPublication(source: Track.Source): { track: { kind: Track.Kind; setProcessor: typeof setProcessor } } | undefined;
+        };
+      };
+      microphoneGainProcessor: object;
+      microphoneEnabledBeforeDeafen: boolean;
+      refreshSnapshot(): void;
+      syncOwnVoiceState(): Promise<void>;
+    };
+    internals.room = {
+      localParticipant: {
+        setMicrophoneEnabled,
+        getTrackPublication: (source) =>
+          source === Track.Source.Microphone
+            ? { track: { kind: Track.Kind.Audio, setProcessor } }
+            : undefined,
+      },
+    };
+    internals.microphoneGainProcessor = {};
+    vi.spyOn(internals, "refreshSnapshot").mockImplementation(() => undefined);
+    vi.spyOn(internals, "syncOwnVoiceState").mockResolvedValue(undefined);
+
+    await expect(session.setMuted(false)).resolves.toBeUndefined();
+
+    expect(setMicrophoneEnabled).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({ echoCancellation: true }),
+    );
+    expect(setProcessor).not.toHaveBeenCalled();
   });
 });
 

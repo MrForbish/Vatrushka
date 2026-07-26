@@ -428,7 +428,7 @@ export default function App(): ReactNode {
     microphoneVolume: 1,
     outputVolume: 1,
     volume: 1,
-    appSoundVolume: 1,
+    appSoundVolume: 0.6,
     desktopNotificationsEnabled: true,
     messageSoundsEnabled: true,
   });
@@ -436,6 +436,8 @@ export default function App(): ReactNode {
     inputs: [],
     outputs: [],
   });
+  const [audioDeviceCatalogAuthorized, setAudioDeviceCatalogAuthorized] =
+    useState(false);
   const [version, setVersion] = useState("0.4.0");
   const [updateState, setUpdateState] = useState<DesktopUpdateState>({
     status: "idle",
@@ -1066,6 +1068,7 @@ export default function App(): ReactNode {
           });
         const all = await navigator.mediaDevices.enumerateDevices();
         setDevices(splitAudioDevices(all));
+        if (requestPermission) setAudioDeviceCatalogAuthorized(true);
       } catch (caught) {
         if (requestPermission)
           throw new Error(
@@ -1157,6 +1160,7 @@ export default function App(): ReactNode {
   }, [retrySeconds]);
 
   useEffect(() => {
+    if (!audioDeviceCatalogAuthorized) return;
     const microphoneMissing =
       settings.microphoneDeviceId !== undefined &&
       devices.inputs.length > 0 &&
@@ -1185,7 +1189,7 @@ export default function App(): ReactNode {
         setError(userMessage(caught)),
       );
     }
-  }, [connection, devices.inputs, devices.outputs, settings]);
+  }, [audioDeviceCatalogAuthorized, connection, devices.inputs, devices.outputs, settings]);
 
   useEffect(() => {
     if (connection === null) {

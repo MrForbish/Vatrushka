@@ -21,10 +21,17 @@ export class MicrophoneGainProcessor
 
   init(options: AudioProcessorOptions): Promise<void> {
     this.destroyGraph();
-    const source = options.audioContext.createMediaStreamSource(new MediaStream([options.track]));
-    const gain = options.audioContext.createGain();
-    const destination = options.audioContext.createMediaStreamDestination();
-    gain.gain.setValueAtTime(this.volume, options.audioContext.currentTime);
+    // LiveKit's processor contract types this as required, but a local track
+    // can be created before Room finishes assigning its WebAudio context.
+    // Treat that short-lived state as an optional-gain fallback rather than
+    // dereferencing undefined and breaking microphone activation.
+    const audioContext = (options as { audioContext?: AudioContext }).audioContext;
+    if (!audioContext || audioContext.state === "closed") return Promise.resolve();
+
+    const source = audioContext.createMediaStreamSource(new MediaStream([options.track]));
+    const gain = audioContext.createGain();
+    const destination = audioContext.createMediaStreamDestination();
+    gain.gain.setValueAtTime(this.volume, audioContext.currentTime);
     source.connect(gain);
     gain.connect(destination);
     this.source = source;

@@ -9,7 +9,7 @@ const defaultSettings: LocalSettings = {
   microphoneVolume: 1,
   outputVolume: 1,
   volume: 1,
-  appSoundVolume: 1,
+  appSoundVolume: 0.6,
   desktopNotificationsEnabled: true,
   messageSoundsEnabled: true,
 };
