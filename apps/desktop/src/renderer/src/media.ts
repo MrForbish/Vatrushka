@@ -79,7 +79,7 @@ const initialSnapshot: MediaSnapshot = {
   screenShareIsLocal: false,
   hasScreenShareAudio: false,
   screenShareAudioMuted: false,
-  screenShareAudioVolume: 1,
+  screenShareAudioVolume: 0.5,
   screenAnnotations: [],
   canPlayAudio: true,
   error: null,
@@ -115,7 +115,10 @@ export class MediaSession {
   private voiceStateSyncTimer: ReturnType<typeof setTimeout> | null = null;
   private lastSyncedVoiceState: string | null = null;
   private snapshot: MediaSnapshot = initialSnapshot;
-  private screenShareAudioVolume = 1;
+  private screenShareAudioVolume = 0.5;
+  // The persisted settings are applied at connect time. Keep the session's
+  // pre-connect baseline neutral so reconnect/track attachment cannot halve
+  // participant gain before those settings are available.
   private outputVolume = 1;
   private microphoneGainProcessor: MicrophoneGainProcessor | null = null;
   private microphoneGainTrack: LocalAudioTrack | null = null;
@@ -154,10 +157,10 @@ export class MediaSession {
     this.connection = connection;
     this.isDeafened = false;
     this.screenShareAudioVolume = settings.volume;
-    this.outputVolume = settings.outputVolume ?? 1;
+    this.outputVolume = settings.outputVolume ?? 0.5;
     const { MicrophoneGainProcessor } = await import("./microphone-gain");
     this.microphoneGainProcessor = new MicrophoneGainProcessor(
-      settings.microphoneVolume ?? 1,
+      settings.microphoneVolume ?? 0.5,
     );
     this.screenShareAudioMuted = false;
     this.screenAnnotations = [];

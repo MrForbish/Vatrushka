@@ -75,7 +75,9 @@ describe('routed user settings pages', () => {
     const onOutput = vi.fn();
     const onOutputVolume = vi.fn();
     const onAppSoundVolume = vi.fn();
-    render(<UserAudioSettingsPage appSoundVolume={1} busy={false} devices={{ inputs: [device('audioinput', 'default', 'Default - Studio Mic'), device('audioinput', 'mic-2', 'USB Microphone')], outputs: [device('audiooutput', 'default', 'Default - Headphones'), device('audiooutput', 'speaker-2', 'Monitor Speakers')] }} inputLevel={0.3} microphoneId="default" microphoneVolume={1} onAppSoundVolume={onAppSoundVolume} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onRefresh={vi.fn()} onTestOutput={vi.fn()} outputId="default" outputVolume={1} voiceConnected />);
+    const onTestNotification = vi.fn();
+    const onTestOutput = vi.fn();
+    render(<UserAudioSettingsPage appSoundVolume={0.5} busy={false} devices={{ inputs: [device('audioinput', 'default', 'Default - Studio Mic'), device('audioinput', 'mic-2', 'USB Microphone')], outputs: [device('audiooutput', 'default', 'Default - Headphones'), device('audiooutput', 'speaker-2', 'Monitor Speakers')] }} inputLevel={0.3} microphoneId="default" microphoneVolume={0.5} onAppSoundVolume={onAppSoundVolume} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onRefresh={vi.fn()} onTestNotification={onTestNotification} onTestOutput={onTestOutput} outputId="default" outputVolume={0.5} voiceConnected />);
 
     expect(screen.getByText('Системное · Studio Mic')).toBeInTheDocument();
     expect(screen.getByText('Системное · Headphones')).toBeInTheDocument();
@@ -91,6 +93,10 @@ describe('routed user settings pages', () => {
     expect(onMicrophoneVolume).toHaveBeenCalledWith(0.55);
     expect(onOutputVolume).toHaveBeenCalledWith(0.65);
     await userEvent.click(screen.getByRole('slider', { name: 'Громкость уведомлений' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Проверить звук вывода' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Проверить уведомление' }));
+    expect(onTestOutput).toHaveBeenCalledOnce();
+    expect(onTestNotification).toHaveBeenCalledOnce();
     expect(screen.getByText(/Системный toast остаётся без отдельного звука/u)).toBeInTheDocument();
   });
 

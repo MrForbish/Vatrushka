@@ -220,7 +220,7 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
             selectLabel="Устройство ввода"
             testId="mute-control"
             value={props.microphoneId ?? "default"}
-            volume={props.microphoneVolume ?? 1}
+            volume={props.microphoneVolume ?? 0.5}
             volumeLabel="Громкость микрофона"
           />
           <VoiceDeviceControl
@@ -242,7 +242,7 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
             selectLabel="Устройство вывода"
             testId="deafen-control"
             value={props.outputId ?? "default"}
-            volume={props.outputVolume ?? 1}
+            volume={props.outputVolume ?? 0.5}
             volumeLabel="Громкость вывода"
           />
           <VoiceDockAction
