@@ -168,9 +168,19 @@ export class PostgresStore implements DataStore {
     return row ?? null;
   }
 
+  async findUserByUsername(username: string): Promise<UserRecord | null> {
+    const [row] = await this.db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.username, username))
+      .limit(1);
+    return row ?? null;
+  }
+
   async createUserWithPassword(
     email: string,
     passwordHash: string,
+    username: string,
     now: Date,
   ): Promise<UserRecord | null> {
     const [row] = await this.db
@@ -178,13 +188,14 @@ export class PostgresStore implements DataStore {
       .values({
         id: crypto.randomUUID(),
         email,
+        username,
         displayName: null,
         passwordHash,
         emailVerifiedAt: now,
         createdAt: now,
         updatedAt: now,
       })
-      .onConflictDoNothing({ target: schema.users.email })
+      .onConflictDoNothing()
       .returning();
     return row ?? null;
   }

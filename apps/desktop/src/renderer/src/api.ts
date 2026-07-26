@@ -189,20 +189,23 @@ export class ApiClient {
   requestRegistration(
     email: string,
     password: string,
+    username: string,
   ): Promise<{ status: "CODE_SENT"; retryAfterSeconds: number }> {
     return this.request("/auth/register/request-code", {
       method: "POST",
-      body: { email, password },
+      body: { email, password, username },
     });
   }
 
   async verifyRegistration(
     email: string,
     code: string,
+    username: string,
   ): Promise<DesktopAuthSession & { isNewUser: boolean }> {
     return this.completeAuth("/auth/register/verify-code", {
       email,
       code,
+      username,
       deviceName: await this.deviceName(),
     }, true);
   }

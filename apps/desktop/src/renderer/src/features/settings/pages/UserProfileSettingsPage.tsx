@@ -259,12 +259,8 @@ export function UserProfileSettingsPage({
             }}
           />
           <Input
-            hint={
-              saved.usernameChangedAt
-                ? `Последняя смена: ${new Date(saved.usernameChangedAt).toLocaleDateString("ru-RU")}`
-                : "Латиница, цифры и подчёркивание"
-            }
-            label="Username"
+            hint="Username уникален и меняется не чаще одного раза в 7 дней."
+            label="Имя пользователя"
             maxLength={32}
             value={username}
             onChange={(event) => {

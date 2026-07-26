@@ -20,6 +20,7 @@ import {
   messageContentSchema,
   passwordSchema,
   serverNameSchema,
+  usernameSchema,
   type ConversationMemberReadState,
   type ConversationMentionDraft,
   type ConversationMessage,
@@ -402,6 +403,7 @@ export default function App(): ReactNode {
     "credentials",
   );
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [otp, setOtp] = useState("");
   const [password, setPasswordValue] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
@@ -1856,9 +1858,14 @@ export default function App(): ReactNode {
         setSecondFactor("email");
       } else if (authMode === "register") {
         const validPassword = passwordSchema.parse(password);
+        const validUsername = usernameSchema.parse(username);
         if (validPassword !== passwordConfirmation)
           throw new Error("Пароли не совпадают");
-        response = await apiClient.requestRegistration(email, validPassword);
+        response = await apiClient.requestRegistration(
+          email,
+          validPassword,
+          validUsername,
+        );
         setSecondFactor("email");
       } else {
         const validPassword = passwordSchema.parse(password);
@@ -1893,7 +1900,11 @@ export default function App(): ReactNode {
       }
       const response =
         authMode === "register"
-          ? await apiClient.verifyRegistration(email, otp)
+          ? await apiClient.verifyRegistration(
+              email,
+              otp,
+              usernameSchema.parse(username),
+            )
           : await apiClient.completePasswordLogin(
               email,
               password,
@@ -3372,6 +3383,7 @@ export default function App(): ReactNode {
         code={otp}
         password={password}
         passwordConfirmation={passwordConfirmation}
+        username={username}
         rememberSession={rememberSession}
         retrySeconds={retrySeconds}
         busy={busy}
@@ -3383,6 +3395,7 @@ export default function App(): ReactNode {
           setOtp("");
           setPasswordValue("");
           setPasswordConfirmation("");
+          setUsername("");
           setError(null);
           setAuthNotice(null);
         }}
@@ -3392,10 +3405,12 @@ export default function App(): ReactNode {
           setOtp("");
           setPasswordValue("");
           setPasswordConfirmation("");
+          setUsername("");
           setError(null);
           setAuthNotice(null);
         }}
         onEmailChange={setEmail}
+        onUsernameChange={setUsername}
         onCodeChange={setOtp}
         onPasswordChange={setPasswordValue}
         onPasswordConfirmationChange={setPasswordConfirmation}
