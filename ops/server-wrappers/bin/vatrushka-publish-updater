@@ -53,7 +53,8 @@ for role, item in files.items():
         raise SystemExit("Updater file checksum does not match")
 if files["latest"]["name"] != "latest.yml" or files["checksums"]["name"] != "SHA256SUMS.txt" or files["metadata"]["name"] != "release-metadata.json":
     raise SystemExit("Updater metadata names are invalid")
-if not re.fullmatch(rf"Vatrushka-Setup-{re.escape(data['version'])}-x64\.exe", files["setup"]["name"]):
+setup_prefix = "Vatrushka-Beta-Setup" if "-beta." in data["version"] else "Vatrushka-Setup"
+if not re.fullmatch(rf"{setup_prefix}-{re.escape(data['version'])}-x64\.exe", files["setup"]["name"]):
     raise SystemExit("Updater setup name does not match version")
 if files["blockmap"]["name"] != files["setup"]["name"] + ".blockmap":
     raise SystemExit("Updater blockmap name does not match setup")
