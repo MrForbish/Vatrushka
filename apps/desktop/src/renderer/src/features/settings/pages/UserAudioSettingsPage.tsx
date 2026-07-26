@@ -35,8 +35,8 @@ export function UserAudioSettingsPage({ appSoundVolume, busy, devices, inputLeve
       <div className="vui-user-audio-settings__grid">
         <AudioReadinessCard busy={busy} devices={devices} error={readiness.error} inputLevel={effectiveLevel} microphoneId={microphoneId} microphoneVolume={microphoneVolume} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onRefresh={() => { onRefresh(); setTestRevision((value) => value + 1); }} onTestOutput={onTestOutput} outputId={outputId} outputVolume={outputVolume} permission={readiness.permission} signalDetected={effectiveLevel > 0.025} testing={voiceConnected || readiness.testing} />
         <article className="vui-user-settings-card vui-user-audio-settings__volume">
-          <header><div><h2>Громкость звуков приложения</h2><p>Вход и выход из голоса, старт и остановка демонстрации, сообщения и обновления.</p></div></header>
-          <Slider label="Громкость звуков приложения" max={100} min={0} onChange={(event) => onAppSoundVolume(Number(event.target.value) / 100)} value={Math.round(appSoundVolume * 100)} valueLabel={`${Math.round(appSoundVolume * 100)}%`} />
+          <header><div><h2>Громкость уведомлений</h2><p>Короткие сигналы Ватрушки для сообщений, голоса, демонстрации и обновлений. Системный toast остаётся без отдельного звука.</p></div></header>
+          <Slider label="Громкость уведомлений" max={100} min={0} onChange={(event) => onAppSoundVolume(Number(event.target.value) / 100)} value={Math.round(appSoundVolume * 100)} valueLabel={`${Math.round(appSoundVolume * 100)}%`} />
         </article>
       </div>
       <aside className="vui-user-settings-note">Во время активного голосового подключения проверка использует уже открытый микрофон и не создаёт второй поток захвата.</aside>

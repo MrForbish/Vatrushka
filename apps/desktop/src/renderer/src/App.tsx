@@ -425,10 +425,10 @@ export default function App(): ReactNode {
   const [connectedVoiceChannelName, setConnectedVoiceChannelName] =
     useState("");
   const [settings, setSettings] = useState<LocalSettings>({
-    microphoneVolume: 1.25,
+    microphoneVolume: 1,
     outputVolume: 1,
     volume: 1,
-    appSoundVolume: 1,
+    appSoundVolume: 0.6,
     desktopNotificationsEnabled: true,
     messageSoundsEnabled: true,
   });
@@ -2853,7 +2853,7 @@ export default function App(): ReactNode {
   const setMicrophoneVolume = (value: number): void => {
     const next = {
       ...settings,
-      microphoneVolume: Math.max(0, Math.min(1.5, value)),
+      microphoneVolume: Math.max(0, Math.min(1, value)),
     };
     setSettings(next);
     media.setMicrophoneVolume(next.microphoneVolume);
@@ -3271,7 +3271,7 @@ export default function App(): ReactNode {
       }
       devices={devices}
       microphoneId={settings.microphoneDeviceId}
-      microphoneVolume={settings.microphoneVolume ?? 1.25}
+      microphoneVolume={settings.microphoneVolume ?? 1}
       outputId={settings.outputDeviceId}
       outputVolume={settings.outputVolume ?? 1}
       busy={busy}

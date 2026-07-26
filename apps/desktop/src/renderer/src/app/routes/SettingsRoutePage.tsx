@@ -243,7 +243,7 @@ export function SettingsRoutePage(
           inputLevel={props.inputLevel}
           microphoneId={props.microphoneId}
           onMicrophone={props.onMicrophone}
-          microphoneVolume={props.settings.microphoneVolume ?? 1.25}
+          microphoneVolume={props.settings.microphoneVolume ?? 1}
           onMicrophoneVolume={props.onMicrophoneVolume}
           onAppSoundVolume={props.onAppSoundVolume}
           onOutput={props.onOutput}

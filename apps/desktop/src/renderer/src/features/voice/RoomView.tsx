@@ -220,7 +220,7 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
             selectLabel="Устройство ввода"
             testId="mute-control"
             value={props.microphoneId ?? "default"}
-            volume={props.microphoneVolume ?? 1.25}
+            volume={props.microphoneVolume ?? 1}
             volumeLabel="Громкость микрофона"
           />
           <VoiceDeviceControl
@@ -408,7 +408,7 @@ function VoiceDeviceControl({
             </div>
             <Slider
               label={volumeLabel}
-              max={volumeLabel === "Громкость микрофона" ? 150 : 100}
+              max={100}
               min={0}
               onChange={(event) => onVolumeChange(Number(event.target.value) / 100)}
               value={Math.round(volume * 100)}
