@@ -57,7 +57,7 @@ export class VoiceCuePlayer {
       oscillator.type = 'sine';
       oscillator.frequency.setValueAtTime(note.frequency, noteStart);
       gain.gain.setValueAtTime(0.0001, noteStart);
-      gain.gain.exponentialRampToValueAtTime(0.14 * normalizedVolume, noteStart + 0.014);
+      gain.gain.exponentialRampToValueAtTime(0.56 * normalizedVolume, noteStart + 0.014);
       gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.145);
       oscillator.connect(gain);
       gain.connect(context.destination);

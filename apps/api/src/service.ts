@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { errors as joseErrors } from "jose";
 import { TrackSource } from "livekit-server-sdk";
@@ -447,9 +447,27 @@ export class VatrushkaService {
     objectKey: string | null | undefined,
   ): Promise<string | null> {
     if (!objectKey) return null;
-    return this.objectStorage
-      ? this.objectStorage.createGetUrl(objectKey, 900)
-      : mediaUrl(objectKey);
+    if (!this.objectStorage) return mediaUrl(objectKey);
+    if (this.config.MEDIA_CDN_BASE_URL && this.config.MEDIA_CDN_TOKEN_SECRET)
+      return this.createCdnUrl(objectKey, 900);
+    return this.objectStorage.createGetUrl(objectKey, 900);
+  }
+
+  private createCdnUrl(objectKey: string, expiresInSeconds: number): string {
+    const tokenSecret = this.config.MEDIA_CDN_TOKEN_SECRET;
+    const configuredBaseUrl = this.config.MEDIA_CDN_BASE_URL;
+    if (!tokenSecret) throw new Error("CDN token secret is not configured");
+    if (!configuredBaseUrl) throw new Error("CDN base URL is not configured");
+    const baseUrl = configuredBaseUrl.replace(/\/$/u, "");
+    const path = `/${objectKey.split("/").map(encodeURIComponent).join("/")}`;
+    const expires = Math.floor(this.now().getTime() / 1_000) + expiresInSeconds;
+    const signature = createHash("md5")
+      .update(`${tokenSecret}${path}${expires}`)
+      .digest("base64")
+      .replace(/\+/gu, "-")
+      .replace(/\//gu, "_")
+      .replace(/=/gu, "");
+    return `${baseUrl}/md5(${signature},${expires})${path}`;
   }
 
   private async resolveMediaUrl(
@@ -1114,7 +1132,7 @@ export class VatrushkaService {
   ): Promise<UserProfileSettings> {
     const user = await this.authenticate(authorization);
     const profile = await this.identity().getProfile(user.id, async (key) =>
-      this.objectStorage ? this.objectStorage.createGetUrl(key, 900) : "",
+      (await this.publicMediaUrl(key)) ?? "",
     );
     if (!profile) throw new AppError("PROFILE_INCOMPLETE", 409);
     return profile;
@@ -1806,14 +1824,8 @@ export class VatrushkaService {
         ownerUserId: server.ownerUserId,
         memberCount: server.memberCount,
         createdAt: server.createdAt.toISOString(),
-        iconUrl:
-          server.iconObjectKey && this.objectStorage
-            ? await this.objectStorage.createGetUrl(server.iconObjectKey, 900)
-            : null,
-        bannerUrl:
-          server.bannerObjectKey && this.objectStorage
-            ? await this.objectStorage.createGetUrl(server.bannerObjectKey, 900)
-            : null,
+        iconUrl: await this.publicMediaUrl(server.iconObjectKey),
+        bannerUrl: await this.publicMediaUrl(server.bannerObjectKey),
         accentColor: server.accentColor ?? null,
         visibility: server.visibility ?? "private",
       })),
@@ -1838,14 +1850,8 @@ export class VatrushkaService {
         id: server.id,
         name: server.name,
         description: server.description,
-        iconUrl:
-          server.iconObjectKey && this.objectStorage
-            ? await this.objectStorage.createGetUrl(server.iconObjectKey, 900)
-            : null,
-        bannerUrl:
-          server.bannerObjectKey && this.objectStorage
-            ? await this.objectStorage.createGetUrl(server.bannerObjectKey, 900)
-            : null,
+        iconUrl: await this.publicMediaUrl(server.iconObjectKey),
+        bannerUrl: await this.publicMediaUrl(server.bannerObjectKey),
         accentColor: server.accentColor,
         memberCount: server.memberCount,
         featured: Boolean(
@@ -2084,13 +2090,7 @@ export class VatrushkaService {
           const gameName = customStatusActive
             ? (contact.customStatusText ?? null)
             : null;
-          const avatarUrl =
-            contact.avatarObjectKey && this.objectStorage
-              ? await this.objectStorage.createGetUrl(
-                  contact.avatarObjectKey,
-                  900,
-                )
-              : null;
+          const avatarUrl = await this.publicMediaUrl(contact.avatarObjectKey);
           return {
             userId: contact.id,
             displayName: contact.displayName ?? contact.email,
@@ -5292,8 +5292,7 @@ export class VatrushkaService {
     await this.requireServerPermission(server, user, "VIEW_SERVER");
     const settings = await this.settings().getAppearance(
       serverId,
-      async (key) =>
-        this.objectStorage ? this.objectStorage.createGetUrl(key, 900) : "",
+      async (key) => (await this.publicMediaUrl(key)) ?? "",
     );
     if (!settings) throw new AppError("SERVER_NOT_FOUND", 404);
     return settings;
@@ -7157,13 +7156,7 @@ export class VatrushkaService {
           serverDisplayName: member.nickname ?? null,
           privateAlias: privateAliases.get(member.userId) ?? null,
           platformRole: member.platformRole,
-          avatarUrl:
-            member.avatarObjectKey && this.objectStorage
-              ? await this.objectStorage.createGetUrl(
-                  member.avatarObjectKey,
-                  900,
-                )
-              : null,
+          avatarUrl: await this.publicMediaUrl(member.avatarObjectKey),
           joinedAt: member.joinedAt.toISOString(),
           roles: [
             ...defaultRoles,
@@ -7218,14 +7211,8 @@ export class VatrushkaService {
       ownerUserId: server.ownerUserId,
       memberCount: members.length,
       createdAt: server.createdAt.toISOString(),
-      iconUrl:
-        server.iconObjectKey && this.objectStorage
-          ? await this.objectStorage.createGetUrl(server.iconObjectKey, 900)
-          : null,
-      bannerUrl:
-        server.bannerObjectKey && this.objectStorage
-          ? await this.objectStorage.createGetUrl(server.bannerObjectKey, 900)
-          : null,
+      iconUrl: await this.publicMediaUrl(server.iconObjectKey),
+      bannerUrl: await this.publicMediaUrl(server.bannerObjectKey),
       accentColor: server.accentColor ?? null,
       visibility: server.visibility ?? "private",
       channels: visibleChannels.map((channel) =>
