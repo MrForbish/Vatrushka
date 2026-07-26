@@ -4,6 +4,18 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.25] - 2026-07-26
+
+### Fixed
+
+- preserves the root-owned updater publication contract by normalizing all
+  staged Windows feed inputs to non-writable artifact modes before transfer;
+- binds the protected production candidate job to the dedicated Linux runner,
+  validates normalized Observer SSH material, and corrects root-owned
+  candidate-manifest permissions;
+- refreshes the deterministic Windows compact-shell visual baseline after a
+  verified 24-pixel rendering drift on the self-managed runner.
+
 ## [0.8.24] - 2026-07-26
 
 ### Fixed
