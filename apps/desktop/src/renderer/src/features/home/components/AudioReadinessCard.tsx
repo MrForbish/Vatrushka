@@ -19,6 +19,7 @@ export interface AudioReadinessCardProps {
   onOutput: (value: string) => void;
   onOutputVolume?: (value: number) => void;
   onRefresh: () => void;
+  onTestMicrophone?: (() => void) | undefined;
   onTestOutput?: (() => void) | undefined;
 }
 
@@ -28,15 +29,16 @@ export function AudioReadinessCard({
   error = null,
   inputLevel = 0,
   microphoneId,
-  microphoneVolume = 1,
+  microphoneVolume = 0.5,
   onMicrophone,
   onMicrophoneVolume = () => undefined,
   onOutput,
   onOutputVolume = () => undefined,
   onRefresh,
+  onTestMicrophone,
   onTestOutput,
   outputId,
-  outputVolume = 1,
+  outputVolume = 0.5,
   permission = 'prompt',
   signalDetected = false,
   testing = false,
@@ -69,14 +71,14 @@ export function AudioReadinessCard({
           <Select label="Устройство ввода" onValueChange={onMicrophone} options={inputOptions} value={microphoneId ?? 'default'} />
           <Slider label="Громкость микрофона" max={100} min={0} onChange={(event) => onMicrophoneVolume(Number(event.target.value) / 100)} value={Math.round(microphoneVolume * 100)} valueLabel={`${Math.round(microphoneVolume * 100)}%`} />
           <div className="home-audio-readiness__meter"><AudioLevelMeter label="Уровень сигнала микрофона" value={inputLevel} /><span>{signalDetected ? 'Сигнал есть' : testing ? 'Говорите в микрофон' : 'Проверка не запущена'}</span></div>
-          <Button disabled={busy} onClick={onRefresh} size="sm" variant="secondary">Проверить микрофон</Button>
+          <Button disabled={busy || onTestMicrophone === undefined} onClick={onTestMicrophone} size="sm" variant="secondary">{testing ? 'Остановить проверку' : 'Проверить микрофон'}</Button>
         </article>
         <article>
           <header><span className="home-card-icon home-card-icon--cyan"><Icon name="headphones" size={18} /></span><div><strong>Вывод звука</strong><small>{hasOutput ? 'Устройство доступно' : 'Устройство не найдено'}</small></div></header>
           <Select label="Динамики / наушники" onValueChange={onOutput} options={outputOptions} value={outputId ?? 'default'} />
           <Slider label="Громкость вывода" max={100} min={0} onChange={(event) => onOutputVolume(Number(event.target.value) / 100)} value={Math.round(outputVolume * 100)} valueLabel={`${Math.round(outputVolume * 100)}%`} />
           <div className="home-audio-readiness__output"><Icon name="volume" size={17} /><span>Регулирует голос участников и звук демонстраций в Ватрушке</span></div>
-          <Button disabled={busy || !hasOutput || onTestOutput === undefined} onClick={onTestOutput} size="sm" variant="secondary">Воспроизвести сигнал</Button>
+          <Button disabled={busy || !hasOutput || onTestOutput === undefined} onClick={onTestOutput} size="sm" variant="secondary">Проверить звук вывода</Button>
         </article>
       </div>
       <p className="home-audio-readiness__summary" data-ready={ready || undefined}><Icon name={ready ? 'check' : 'warning'} size={16} />{ready ? 'Устройства настроены и готовы к работе' : 'Проверьте доступ к микрофону и устройству вывода'}</p>

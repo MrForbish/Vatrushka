@@ -21,6 +21,27 @@ function cx(...classes: Array<string | false | null | undefined>): string {
 
 type ControlSize = 'sm' | 'md' | 'lg';
 
+const stableImageSources = new Map<string, string>();
+
+function stableImageKey(source: string): string {
+  try {
+    const url = new URL(source);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return source;
+  }
+}
+
+function rememberStableImageSource(source: string): void {
+  const key = stableImageKey(source);
+  stableImageSources.delete(key);
+  stableImageSources.set(key, source);
+  if (stableImageSources.size > 128) {
+    const oldestKey = stableImageSources.keys().next().value;
+    if (typeof oldestKey === 'string') stableImageSources.delete(oldestKey);
+  }
+}
+
 export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'size'> {
   variant?: 'primary' | 'secondary' | 'quiet' | 'danger';
   size?: ControlSize;
@@ -610,7 +631,10 @@ export function StableImage({
   src,
   ...props
 }: StableImageProps): React.JSX.Element {
-  const [displayedSrc, setDisplayedSrc] = useState<string | null>(src ?? null);
+  const initialSource = src === null || src === undefined
+    ? null
+    : stableImageSources.get(stableImageKey(src)) ?? src;
+  const [displayedSrc, setDisplayedSrc] = useState<string | null>(initialSource);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const [retryAttempt, setRetryAttempt] = useState(0);
   const requestedSrcRef = useRef(src ?? null);
@@ -629,7 +653,10 @@ export function StableImage({
       setRetryAttempt(0);
       return undefined;
     }
-    if (requestedSrc === displayedSrc) return undefined;
+    if (requestedSrc === displayedSrc) {
+      rememberStableImageSource(requestedSrc);
+      return undefined;
+    }
     if (requestedSrc === failedSrc) {
       if (retryAttempt > 0) return undefined;
       const retry = window.setTimeout(() => {
@@ -646,6 +673,7 @@ export function StableImage({
     image.decoding = 'async';
     image.onload = () => {
       if (active && requestedSrcRef.current === requestedSrc) {
+        rememberStableImageSource(requestedSrc);
         setFailedSrc(null);
         setDisplayedSrc(requestedSrc);
         setRetryAttempt(0);

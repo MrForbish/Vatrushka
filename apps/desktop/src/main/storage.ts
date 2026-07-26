@@ -6,10 +6,10 @@ import { app, safeStorage } from 'electron';
 import { localSettingsSchema, type LocalSettings } from '@vatrushka/shared';
 
 const defaultSettings: LocalSettings = {
-  microphoneVolume: 1,
-  outputVolume: 1,
-  volume: 1,
-  appSoundVolume: 0.6,
+  microphoneVolume: 0.5,
+  outputVolume: 0.5,
+  volume: 0.5,
+  appSoundVolume: 0.5,
   desktopNotificationsEnabled: true,
   messageSoundsEnabled: true,
 };
@@ -84,7 +84,7 @@ export class DesktopStorage {
     try {
       const raw = await fs.readFile(this.settingsPath, 'utf8');
       const parsed = localSettingsSchema.safeParse(JSON.parse(raw));
-      return parsed.success ? parsed.data : defaultSettings;
+      return parsed.success ? { ...defaultSettings, ...parsed.data } : defaultSettings;
     } catch {
       return defaultSettings;
     }
