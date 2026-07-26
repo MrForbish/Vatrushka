@@ -105,7 +105,7 @@ discovery.relabel "product" {
   }
 }
 
-loki.process "sanitize" {
+loki.process "sanitize_docker" {
   stage.json {
     expressions = {
       level = "level",
@@ -121,6 +121,14 @@ loki.process "sanitize" {
     values = {
       level = "",
     }
+  }
+
+  // Pack every container line into a JSON envelope. This keeps third-party
+  // plain text queryable without an invalid line-regexp match and preserves
+  // structured fields without turning them into labels.
+  stage.pack {
+    labels           = []
+    ingest_timestamp = false
   }
 
   stage.drop {
@@ -145,11 +153,37 @@ loki.process "sanitize" {
   forward_to = [loki.write.central.receiver]
 }
 
+loki.process "sanitize_journal" {
+  stage.replace {
+    expression = "(?i)(authorization|cookie|password|access[_-]?token|refresh[_-]?token|secret)([=:]\\s*)([^\\s,;]+)"
+    replace    = "$1$2[REDACTED]"
+  }
+
+  stage.static_labels {
+    values = {
+      environment = sys.env("OBSERVABILITY_ENVIRONMENT"),
+      host        = sys.env("OBSERVABILITY_HOST"),
+      level       = "info",
+      region      = sys.env("OBSERVABILITY_REGION"),
+      source      = "journald",
+    }
+  }
+
+  // Journald messages are not guaranteed to be JSON. Pack them without
+  // promoting message content into labels, keeping Loki queries structured.
+  stage.pack {
+    labels           = []
+    ingest_timestamp = false
+  }
+
+  forward_to = [loki.write.central.receiver]
+}
+
 loki.source.docker "product" {
   host          = "unix:///var/run/docker.sock"
   targets       = discovery.docker.product.targets
   relabel_rules = discovery.relabel.product.rules
-  forward_to    = [loki.process.sanitize.receiver]
+  forward_to    = [loki.process.sanitize_docker.receiver]
 }
 
 loki.source.journal "system" {
@@ -159,7 +193,7 @@ loki.source.journal "system" {
     service = "ssh",
     source  = "journald",
   }
-  forward_to = [loki.process.sanitize.receiver]
+  forward_to = [loki.process.sanitize_journal.receiver]
 }
 
 loki.write "central" {

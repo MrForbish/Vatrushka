@@ -76,6 +76,46 @@ describe('authentication screens', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Неверный код');
   });
 
+  it('requires a username when registering an account', async () => {
+    const onUsernameChange = vi.fn();
+    render(
+      <AuthPanel
+        mode="register"
+        stage="credentials"
+        factor="email"
+        totpAvailable={false}
+        email="new@example.com"
+        username=""
+        code=""
+        password="secure-pass-42"
+        passwordConfirmation="secure-pass-42"
+        rememberSession
+        retrySeconds={0}
+        busy={false}
+        error={null}
+        notice={null}
+        onMode={noop}
+        onReset={noop}
+        onEmailChange={noop}
+        onUsernameChange={onUsernameChange}
+        onCodeChange={noop}
+        onPasswordChange={noop}
+        onPasswordConfirmationChange={noop}
+        onRememberSessionChange={noop}
+        onRequest={noop}
+        onVerify={noop}
+        onFactor={noop}
+        onBack={noop}
+      />,
+    );
+
+    const username = screen.getByLabelText('Имя пользователя');
+    expect(username).toHaveAttribute('autocomplete', 'username');
+    expect(screen.getByText('Username уникален и меняется не чаще одного раза в 7 дней.')).toBeInTheDocument();
+    await userEvent.type(username, 'new_player');
+    expect(onUsernameChange).toHaveBeenCalledWith('n');
+  });
+
   it('renders password reset without disclosing account existence', async () => {
     const onVerify = vi.fn();
     render(<AuthPanel mode="reset" stage="otp" factor="email" totpAvailable={false} email="test@example.com" code="123456" password="new-password-42" passwordConfirmation="new-password-42" rememberSession retrySeconds={0} busy={false} error={null} notice={null} onMode={noop} onReset={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRememberSessionChange={noop} onRequest={noop} onVerify={onVerify} onFactor={noop} onBack={noop} />);
@@ -223,7 +263,9 @@ describe('room UI', () => {
     const onParticipantMute = vi.fn();
     const onMicrophone = vi.fn();
     const onOutput = vi.fn();
-    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={voiceDevices} microphoneId="microphone-studio" outputId={undefined} busy={false} error={null} onMute={noop} onShare={noop} onLeave={noop} onKick={noop} onMicrophone={onMicrophone} onOutput={onOutput} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={onParticipantMute} onParticipantVolume={noop} />);
+    const onMicrophoneVolume = vi.fn();
+    const onOutputVolume = vi.fn();
+    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={voiceDevices} microphoneId="microphone-studio" outputId={undefined} busy={false} error={null} microphoneVolume={0.8} outputVolume={0.6} onMute={noop} onShare={noop} onLeave={noop} onKick={noop} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={onParticipantMute} onParticipantVolume={noop} />);
     expect(screen.getAllByText('Owner (вы)').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Visitor/u).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/говорит/ui).length).toBeGreaterThan(0);
@@ -243,6 +285,12 @@ describe('room UI', () => {
     await userEvent.click(screen.getByRole('option', { name: 'USB Headphones' }));
     expect(onMicrophone).toHaveBeenCalledWith('microphone-studio');
     expect(onOutput).toHaveBeenCalledWith('headphones-usb');
+    await userEvent.click(screen.getByRole('button', { name: 'Выбрать устройство: Микрофон' }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Громкость микрофона' }), { target: { value: '45' } });
+    expect(onMicrophoneVolume).toHaveBeenCalledWith(0.45);
+    await userEvent.click(screen.getByRole('button', { name: 'Выбрать устройство: Звук' }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Громкость вывода' }), { target: { value: '35' } });
+    expect(onOutputVolume).toHaveBeenCalledWith(0.35);
   });
 
   it('keeps the participant volume control mounted when the active speaker changes', () => {

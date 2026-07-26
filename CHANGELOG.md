@@ -4,6 +4,23 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.29] - 2026-07-26
+
+### Changed
+
+- Added independent microphone and output-volume controls that stay in sync
+  between local audio settings and the voice-channel device menus.
+- Registration now requires a unique username; the existing seven-day rename
+  limit is enforced consistently.
+- The notification center displays the installed application version.
+
+### Fixed
+
+- Normalized structured and fallback log ingestion, including JSON parsing
+  diagnostics in the Logs overview dashboard.
+- Profile avatars and covers refresh without restarting the client and retain
+  the last successfully loaded image during a transient load failure.
+
 ## [0.8.28] - 2026-07-26
 
 ### Fixed

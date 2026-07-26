@@ -209,9 +209,12 @@ test("updater publication imports only checksum-bound inbox assets and publishes
   );
   const example = await readFile(new URL("runtime.env.example", root), "utf8");
   assert.match(wrapper, /Updater manifest path is not allowlisted/);
+  assert.match(wrapper, /updater-beta-\[0-9\]\*\.json/);
+  assert.match(wrapper, /setup_prefix = "Vatrushka-Beta-Setup" if "-beta\." in data\["version"\]/);
   assert.match(wrapper, /Updater file checksum does not match/);
   assert.match(wrapper, /Updater latest manifest version does not match/);
   assert.match(wrapper, /VATRUSHKA_UPDATE_FEED_DIR/);
+  assert.match(wrapper, /beta\) update_dir=\$update_root\/beta/);
   assert.match(
     wrapper,
     /mv -f -- "\$staging\/latest\.yml" "\$update_dir\/latest\.yml"/,

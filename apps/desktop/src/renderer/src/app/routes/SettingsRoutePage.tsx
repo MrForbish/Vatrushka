@@ -8,6 +8,7 @@ import type {
   ServerSummary,
   UserNotificationPreferences,
   UserPresence,
+  UserProfileSettings,
   UserPrivacySettings,
 } from "@vatrushka/shared";
 
@@ -62,6 +63,7 @@ export interface SettingsRoutePageProps {
   onHome(): void;
   onNavigate(path: string): void;
   onMicrophone(deviceId: string): void;
+  onMicrophoneVolume(value: number): void;
   onNotificationSettingsChange(
     settings: Pick<
       LocalSettings,
@@ -72,6 +74,7 @@ export interface SettingsRoutePageProps {
   onServerChanged(): Promise<void>;
   onServerDeleted(): void;
   onOutput(deviceId: string): void;
+  onOutputVolume(value: number): void;
   onRefreshDevices(): void;
   onTestOutput(): void;
   onAppSoundVolume(value: number): void;
@@ -95,6 +98,7 @@ export interface SettingsRoutePageProps {
   ): Promise<UserPrivacySettings>;
   onCurrentSessionRevoked(): void;
   onLogout(): void;
+  onProfileMediaChange(profile: UserProfileSettings): void;
   onUserChange(user: PublicUser): void;
 }
 
@@ -218,6 +222,7 @@ export function SettingsRoutePage(
           onLoad={loadUserProfileSettings}
           onResetAvatar={() => apiClient.resetUserAvatar()}
           onResetCover={() => apiClient.resetUserProfileCover()}
+          onProfileMediaChange={props.onProfileMediaChange}
           onSave={(input) => apiClient.updateUserProfileSettings(input)}
           onUserChange={props.onUserChange}
           user={props.user}
@@ -238,8 +243,12 @@ export function SettingsRoutePage(
           inputLevel={props.inputLevel}
           microphoneId={props.microphoneId}
           onMicrophone={props.onMicrophone}
+          microphoneVolume={props.settings.microphoneVolume ?? 1}
+          onMicrophoneVolume={props.onMicrophoneVolume}
           onAppSoundVolume={props.onAppSoundVolume}
           onOutput={props.onOutput}
+          outputVolume={props.settings.outputVolume ?? 1}
+          onOutputVolume={props.onOutputVolume}
           onRefresh={props.onRefreshDevices}
           onTestOutput={props.onTestOutput}
           outputId={props.outputId}

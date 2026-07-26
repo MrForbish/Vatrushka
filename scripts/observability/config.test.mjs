@@ -239,7 +239,7 @@ test('cAdvisor labels and restart alerts use bounded container semantics', async
 });
 
 test('Alloy normalizes bounded log levels without labeling correlation fields', async () => {
-  for (const file of ['infra/observability/platform/alloy/platform.alloy', 'infra/observability/agents/alloy/product.alloy', 'infra/observability/agents/alloy/runner.alloy']) {
+  for (const file of ['infra/observability/platform/alloy/platform.alloy', 'infra/observability/agents/alloy/product.alloy']) {
     const config = await read(file);
     assert.match(config, /stage\.json/u);
     assert.match(config, /stage\.template[\s\S]+source\s*=\s*"level"/u);
@@ -247,6 +247,10 @@ test('Alloy normalizes bounded log levels without labeling correlation fields', 
     assert.match(config, /stage\.labels[\s\S]+level\s*=\s*""/u);
     assert.doesNotMatch(config, /stage\.labels[\s\S]+(request_id|trace_id|user_id|session_id|error_code|exception_type)\s*=/u);
   }
+  const runner = await read('infra/observability/agents/alloy/runner.alloy');
+  assert.match(runner, /loki\.process "sanitize_journal"/u);
+  assert.match(runner, /stage\.pack[\s\S]+labels\s*=\s*\[\]/u);
+  assert.match(runner, /level\s*=\s*"info"/u);
 });
 
 test('logs and Loki dashboards use structured levels and TSDB-compatible diagnostics', async () => {
@@ -261,6 +265,8 @@ test('logs and Loki dashboards use structured levels and TSDB-compatible diagnos
   assert.match(logsText, /level=~\\"warn\|error\|fatal/u);
   assert.match(logsText, /request_id/u);
   assert.match(logsText, /__error__/u);
+  assert.match(logsText, /source=\\"docker\\"/u);
+  assert.match(logsText, /Системные журналы/u);
   const logExpressions = logs.panels
     .flatMap((panel) => panel.targets ?? [])
     .map((target) => target.expr)
@@ -269,7 +275,7 @@ test('logs and Loki dashboards use structured levels and TSDB-compatible diagnos
   for (const expression of logExpressions)
     assert.match(
       expression,
-      /source=~"\.\+"/u,
+      /source=(?:~"\.\+"|"(?:docker|journald)")/u,
       `LogQL selector must retain a non-empty matcher: ${expression}`,
     );
   for (const variable of logs.templating.list.filter((item) => item.datasource?.uid === 'loki')) {

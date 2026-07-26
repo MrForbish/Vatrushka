@@ -84,13 +84,15 @@ try {
     throw "Desktop delivery configuration validation failed with exit code $LASTEXITCODE"
   }
   $env:VATRUSHKA_UPDATES_ENABLED = if ($delivery.updatesEnabled) { 'true' } else { 'false' }
+  $env:VATRUSHKA_APP_NAME = $delivery.appName
+  $env:VATRUSHKA_APP_PROTOCOL = $delivery.protocol
   & npm run build:production
   if ($LASTEXITCODE -ne 0) {
     throw "Desktop production build failed with exit code $LASTEXITCODE"
   }
 
   $builder = Join-Path $repoRoot 'node_modules\.bin\electron-builder.cmd'
-  & $builder --win nsis portable --x64 "--config.electronDist=$electronZip" "--config.publish.provider=generic" "--config.publish.url=$($delivery.updateFeed)" "--config.publish.channel=latest" "--config.extraMetadata.version=$($delivery.version)"
+  & $builder --config electron-builder.config.mjs --win nsis portable --x64 "--config.electronDist=$electronZip" "--config.publish.provider=generic" "--config.publish.url=$($delivery.updateFeed)" "--config.publish.channel=latest"
   if ($LASTEXITCODE -ne 0) {
     throw "electron-builder failed with exit code $LASTEXITCODE"
   }

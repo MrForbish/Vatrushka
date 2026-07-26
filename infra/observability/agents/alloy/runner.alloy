@@ -37,24 +37,7 @@ prometheus.scrape "cadvisor" {
   forward_to      = [prometheus.remote_write.central.receiver]
 }
 
-loki.process "sanitize" {
-  stage.json {
-    expressions = {
-      level = "level",
-    }
-  }
-
-  stage.template {
-    source   = "level"
-    template = "{{- $level := printf \"%v\" .Value -}}{{- if or (eq $level \"10\") (eq $level \"trace\") -}}trace{{- else if or (eq $level \"20\") (eq $level \"debug\") -}}debug{{- else if or (eq $level \"30\") (eq $level \"info\") -}}info{{- else if or (eq $level \"40\") (eq $level \"warn\") (eq $level \"warning\") -}}warn{{- else if or (eq $level \"50\") (eq $level \"error\") -}}error{{- else if or (eq $level \"60\") (eq $level \"fatal\") -}}fatal{{- else -}}unknown{{- end -}}"
-  }
-
-  stage.labels {
-    values = {
-      level = "",
-    }
-  }
-
+loki.process "sanitize_journal" {
   stage.replace {
     expression = "(?i)(authorization|cookie|password|access[_-]?token|refresh[_-]?token|secret)([=:]\\s*)([^\\s,;]+)"
     replace    = "$1$2[REDACTED]"
@@ -66,7 +49,13 @@ loki.process "sanitize" {
       host        = sys.env("OBSERVABILITY_HOST"),
       region      = sys.env("OBSERVABILITY_REGION"),
       source      = "journald",
+      level       = "info",
     }
+  }
+
+  stage.pack {
+    labels           = []
+    ingest_timestamp = false
   }
 
   forward_to = [loki.write.central.receiver]
@@ -78,7 +67,7 @@ loki.source.journal "runner" {
   labels = {
     service = "gitlab-runner",
   }
-  forward_to = [loki.process.sanitize.receiver]
+  forward_to = [loki.process.sanitize_journal.receiver]
 }
 
 loki.source.journal "docker" {
@@ -87,7 +76,7 @@ loki.source.journal "docker" {
   labels = {
     service = "docker",
   }
-  forward_to = [loki.process.sanitize.receiver]
+  forward_to = [loki.process.sanitize_journal.receiver]
 }
 
 loki.source.journal "ssh" {
@@ -96,7 +85,7 @@ loki.source.journal "ssh" {
   labels = {
     service = "ssh",
   }
-  forward_to = [loki.process.sanitize.receiver]
+  forward_to = [loki.process.sanitize_journal.receiver]
 }
 
 loki.write "central" {

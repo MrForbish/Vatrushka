@@ -5,7 +5,14 @@ import { app, safeStorage } from 'electron';
 
 import { localSettingsSchema, type LocalSettings } from '@vatrushka/shared';
 
-const defaultSettings: LocalSettings = { volume: 1, appSoundVolume: 1, desktopNotificationsEnabled: true, messageSoundsEnabled: true };
+const defaultSettings: LocalSettings = {
+  microphoneVolume: 1,
+  outputVolume: 1,
+  volume: 1,
+  appSoundVolume: 1,
+  desktopNotificationsEnabled: true,
+  messageSoundsEnabled: true,
+};
 
 export interface StoredAuthSession {
   refreshToken: string;

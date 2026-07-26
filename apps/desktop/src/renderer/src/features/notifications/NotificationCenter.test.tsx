@@ -2,6 +2,13 @@ import { fireEvent, render, screen } from '@testing-library/react';
 
 import { NotificationCenter } from './NotificationCenter';
 
+it('shows the installed application version', () => {
+  render(<NotificationCenter appVersion="0.8.28-beta.1" items={[]} onDismiss={vi.fn()} onMarkAllRead={vi.fn()} onOpen={vi.fn()} onRead={vi.fn()} />);
+
+  fireEvent.click(screen.getByRole('button', { name: /Уведомления/u }));
+  expect(screen.getByText('Версия приложения 0.8.28-beta.1')).toBeInTheDocument();
+});
+
 it('filters, reads and dismisses notifications', () => {
   const onRead = vi.fn();
   const onDismiss = vi.fn();
