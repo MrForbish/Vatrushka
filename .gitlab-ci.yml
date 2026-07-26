@@ -24,6 +24,8 @@ variables:
   PRODUCTION_BRANCH: "main"
   PRODUCTION_API_BASE_URL: "https://api.myvatrushka.ru"
   PRODUCTION_UPDATE_FEED: "https://api.myvatrushka.ru/updates"
+  STAGING_API_BASE_URL: "https://api-staging.myvatrushka.ru"
+  STAGING_UPDATE_FEED: "https://api-staging.myvatrushka.ru/updates/beta"
   OBSERVABILITY_SSH_HOST: "201.51.4.24"
   WINDOWS_TOOLCHAIN_MIRROR: "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/windows-toolchain/43.1.1"
   WINDOWS_CSC_ENABLED: "false"
@@ -108,6 +110,18 @@ variables:
 .staging-candidate-rules:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop"'
+
+.staging-desktop-beta-rules:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop"'
+      changes:
+        - apps/desktop/**/*
+        - packages/shared/**/*
+        - infra/scripts/package-win.ps1
+        - infra/windows-toolchain-lock.json
+        - package.json
+        - package-lock.json
+        - .gitlab-ci.yml
 
 .staging-ssh:
   image:
@@ -836,6 +850,97 @@ rollback-production-runtime:
     - rollback_manifest="/var/lib/vatrushka/manifests/rollback-$manifest_checksum.json"
     - ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-rollback '$rollback_manifest'"
     - ssh "$remote" 'sudo -n /usr/local/lib/vatrushka/vatrushka-runtime-status'
+
+windows-staging-beta-package:
+  stage: package
+  timeout: 25m
+  extends:
+    - .node-windows-package
+    - .staging-desktop-beta-rules
+  variables:
+    VITE_PUBLIC_API_BASE_URL: '$STAGING_API_BASE_URL'
+    VATRUSHKA_UPDATE_FEED: '$STAGING_UPDATE_FEED'
+    CSC_LINK: '$WINDOWS_CSC_LINK'
+    CSC_KEY_PASSWORD: '$WINDOWS_CSC_KEY_PASSWORD'
+    CSC_IDENTITY_AUTO_DISCOVERY: '$WINDOWS_CSC_ENABLED'
+  script:
+    - |
+      $env:VATRUSHKA_DESKTOP_CHANNEL = 'beta'
+      $env:VATRUSHKA_DESKTOP_BUILD_NUMBER = $env:CI_PIPELINE_IID
+      $delivery = & node apps/desktop/scripts/desktop-delivery-config.mjs | ConvertFrom-Json
+      if ($LASTEXITCODE -ne 0) {
+        Write-Error "Desktop beta delivery configuration validation failed with exit code $LASTEXITCODE"
+        exit 1
+      }
+      $env:VERSION = [string] $delivery.version
+    - npm run package:win
+    - |
+      Get-ChildItem apps/desktop/release/* -File | Get-FileHash -Algorithm SHA256 |
+        ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } |
+        Set-Content apps/desktop/release/SHA256SUMS.txt
+      $metadata = [ordered]@{
+        version = $env:VERSION
+        commitSha = $env:CI_COMMIT_SHA
+        channel = 'beta'
+        apiBaseUrl = $env:VITE_PUBLIC_API_BASE_URL
+        builtAt = (Get-Date).ToUniversalTime().ToString('o')
+        pipelineId = $env:CI_PIPELINE_ID
+      }
+      $metadata | ConvertTo-Json | Set-Content apps/desktop/release/release-metadata.json
+      $archive = "staging-desktop-$env:CI_PIPELINE_ID.tar.gz"
+      tar.exe -czf $archive -C apps/desktop/release .
+      $archiveHash = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+      "$archiveHash  $archive" | Set-Content "$archive.sha256"
+      $packageBase = "$env:CI_API_V4_URL/projects/$env:CI_PROJECT_ID/packages/generic/vatrushka-staging-desktop/$env:CI_PIPELINE_ID"
+      & curl.exe --fail --show-error --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file $archive "$packageBase/$archive"
+      & curl.exe --fail --show-error --header "JOB-TOKEN: $env:CI_JOB_TOKEN" --upload-file "$archive.sha256" "$packageBase/$archive.sha256"
+  artifacts:
+    expire_in: 30 days
+    name: 'vatrushka-beta-$VERSION'
+    paths: [apps/desktop/release/]
+
+publish-staging-beta:
+  extends:
+    - .staging-ssh
+    - .staging-desktop-beta-rules
+  stage: publish
+  timeout: 8m
+  interruptible: false
+  resource_group: staging-beta-updater
+  environment:
+    name: staging
+    url: https://api-staging.myvatrushka.ru
+  needs:
+    - job: deploy-staging-candidate
+    - job: windows-staging-beta-package
+      artifacts: true
+  script:
+    - setup="$(find apps/desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-beta.*-x64.exe' -print -quit)"
+    - blockmap="${setup}.blockmap"
+    - latest=apps/desktop/release/latest.yml
+    - checksums=apps/desktop/release/SHA256SUMS.txt
+    - metadata=apps/desktop/release/release-metadata.json
+    - test -n "$setup" && test -f "$blockmap" && test -f "$latest" && test -f "$checksums" && test -f "$metadata" || { echo 'Beta feed artifacts are incomplete.' >&2; exit 1; }
+    - VERSION="$(jq -er '.version' "$metadata")"
+    - echo "$VERSION" | grep -Eq '^\d+\.\d+\.\d+-beta\.\d+$'
+    - setup_name="$(basename "$setup")"
+    - blockmap_name="$(basename "$blockmap")"
+    - |
+      jq -n \
+        --arg version "$VERSION" \
+        --arg setup_name "$setup_name" --arg setup_sha "$(sha256sum "$setup" | awk '{print $1}')" \
+        --arg blockmap_name "$blockmap_name" --arg blockmap_sha "$(sha256sum "$blockmap" | awk '{print $1}')" \
+        --arg latest_sha "$(sha256sum "$latest" | awk '{print $1}')" \
+        --arg checksums_sha "$(sha256sum "$checksums" | awk '{print $1}')" \
+        --arg metadata_sha "$(sha256sum "$metadata" | awk '{print $1}')" \
+        '{version: $version, files: {setup: {name: $setup_name, sha256: $setup_sha}, blockmap: {name: $blockmap_name, sha256: $blockmap_sha}, latest: {name: "latest.yml", sha256: $latest_sha}, checksums: {name: "SHA256SUMS.txt", sha256: $checksums_sha}, metadata: {name: "release-metadata.json", sha256: $metadata_sha}}}' \
+        > "apps/desktop/release/updater-beta-$CI_PIPELINE_IID.json"
+    - manifest="apps/desktop/release/updater-beta-$CI_PIPELINE_IID.json"
+    - chmod 0644 "$setup" "$blockmap" "$latest" "$checksums" "$metadata" "$manifest"
+    - remote="$STAGING_SSH_USER@$STAGING_SSH_HOST"
+    - scp "$setup" "$blockmap" "$latest" "$checksums" "$metadata" "$manifest" "$remote:/var/lib/vatrushka/inbox/"
+    - ssh "$remote" "chmod 0644 '/var/lib/vatrushka/inbox/$setup_name' '/var/lib/vatrushka/inbox/$blockmap_name' '/var/lib/vatrushka/inbox/latest.yml' '/var/lib/vatrushka/inbox/SHA256SUMS.txt' '/var/lib/vatrushka/inbox/release-metadata.json' '/var/lib/vatrushka/inbox/updater-beta-$CI_PIPELINE_IID.json'"
+    - ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-publish-updater '/var/lib/vatrushka/inbox/updater-beta-$CI_PIPELINE_IID.json'"
 
 windows-production-package:
   stage: package
