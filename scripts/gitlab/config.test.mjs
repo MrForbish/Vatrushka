@@ -188,8 +188,9 @@ test('Windows packaging uses verified local Electron and builder archives', asyn
   assert.match(packaging, /Get-FileHash -Algorithm SHA256/u);
   assert.match(packaging, /--config\.electronDist=\$electronZip/u);
   assert.match(packaging, /desktop-delivery-config\.mjs/u);
+  assert.match(packaging, /--config electron-builder\.config\.mjs/u);
   assert.match(packaging, /--config\.publish\.url=\$\(\$delivery\.updateFeed\)/u);
-  assert.match(packaging, /--config\.extraMetadata\.version=\$\(\$delivery\.version\)/u);
+  assert.match(packaging, /VATRUSHKA_APP_PROTOCOL = \$delivery\.protocol/u);
   assert.match(packaging, /JOB-TOKEN: \$env:CI_JOB_TOKEN/u);
   assert.match(packaging, /windows-toolchain-lock\.json/u);
   assert.match(pipeline, /WINDOWS_TOOLCHAIN_MIRROR:/u);

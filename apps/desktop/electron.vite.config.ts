@@ -28,6 +28,8 @@ export default defineConfig({
       'process.env.HAWK_DESKTOP_MAIN_TOKEN': JSON.stringify(hawkMainToken ?? ''),
       'process.env.HAWK_DESKTOP_RELEASE': JSON.stringify(hawkRelease),
       'process.env.VATRUSHKA_UPDATES_ENABLED': JSON.stringify(process.env.VATRUSHKA_UPDATES_ENABLED ?? 'true'),
+      'process.env.VATRUSHKA_APP_NAME': JSON.stringify(process.env.VATRUSHKA_APP_NAME ?? ''),
+      'process.env.VATRUSHKA_APP_PROTOCOL': JSON.stringify(process.env.VATRUSHKA_APP_PROTOCOL ?? ''),
     },
     build: { sourcemap: true },
   },

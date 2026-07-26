@@ -4,9 +4,33 @@ import { fileURLToPath, URL } from "node:url";
 
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 const CHANNELS = {
-  stable: { feedPath: "/updates", updatesEnabled: true },
-  beta: { feedPath: "/updates/beta", updatesEnabled: true },
-  rc: { feedPath: "/updates/rc", updatesEnabled: false },
+  stable: {
+    feedPath: "/updates",
+    updatesEnabled: true,
+    appId: "ru.vatrushka.desktop",
+    appName: "vatrushka",
+    productName: "Ватрушка",
+    protocol: "vatrushka",
+    artifactPrefix: "Vatrushka",
+  },
+  beta: {
+    feedPath: "/updates/beta",
+    updatesEnabled: true,
+    appId: "ru.vatrushka.desktop.beta",
+    appName: "vatrushka-beta",
+    productName: "Ватрушка Beta",
+    protocol: "vatrushka-beta",
+    artifactPrefix: "Vatrushka-Beta",
+  },
+  rc: {
+    feedPath: "/updates/rc",
+    updatesEnabled: false,
+    appId: "ru.vatrushka.desktop.rc",
+    appName: "vatrushka-rc",
+    productName: "Ватрушка RC",
+    protocol: "vatrushka-rc",
+    artifactPrefix: "Vatrushka-RC",
+  },
 };
 
 function requiredHttpsUrl(value, label) {
@@ -47,6 +71,11 @@ export function resolveDesktopDeliveryConfig({ apiBaseUrl, updateFeed, channel =
     updateFeed: normalizedFeed,
     updatesEnabled: definition.updatesEnabled,
     version: channel === "stable" ? baseVersion : `${baseVersion}-${channel}.${buildNumber}`,
+    appId: definition.appId,
+    appName: definition.appName,
+    productName: definition.productName,
+    protocol: definition.protocol,
+    artifactPrefix: definition.artifactPrefix,
   };
 }
 

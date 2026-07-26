@@ -27,6 +27,11 @@ import { DesktopStorage } from "./storage.js";
 import { DesktopUpdater } from "./updater.js";
 import { captureMainHawk, initializeMainHawk } from "./hawk.js";
 
+const desktopAppName = process.env.VATRUSHKA_APP_NAME;
+const desktopProtocol = process.env.VATRUSHKA_APP_PROTOCOL || APP_PROTOCOL;
+
+if (desktopAppName) app.setName(desktopAppName);
+
 const currentDirectory = dirname(fileURLToPath(import.meta.url));
 const productionRendererDirectory = normalize(
   join(currentDirectory, "../renderer"),
@@ -35,7 +40,7 @@ const developmentUrl = process.env.ELECTRON_RENDERER_URL;
 const storage = new DesktopStorage();
 
 let mainWindow: BrowserWindow | null = null;
-let pendingDeepLink = findDeepLink(process.argv, APP_PROTOCOL);
+let pendingDeepLink = findDeepLink(process.argv, desktopProtocol);
 let selectedSource: { sourceId: string; includeAudio: boolean } | null = null;
 let removeIpcHandlers: (() => void) | null = null;
 let desktopUpdater: DesktopUpdater | null = null;
@@ -147,11 +152,11 @@ function showMessageNotification(message: DesktopMessageNotification): void {
 
 function registerProtocol(): void {
   if (process.defaultApp && process.argv[1]) {
-    app.setAsDefaultProtocolClient(APP_PROTOCOL, process.execPath, [
+    app.setAsDefaultProtocolClient(desktopProtocol, process.execPath, [
       resolve(process.argv[1]),
     ]);
   } else {
-    app.setAsDefaultProtocolClient(APP_PROTOCOL);
+    app.setAsDefaultProtocolClient(desktopProtocol);
   }
 }
 
@@ -421,7 +426,7 @@ if (!hasLock) {
   app.quit();
 } else {
   app.on("second-instance", (_event, argv) => {
-    const inviteToken = findDeepLink(argv, APP_PROTOCOL);
+    const inviteToken = findDeepLink(argv, desktopProtocol);
     if (inviteToken) sendDeepLink(inviteToken);
     else {
       if (mainWindow?.isMinimized()) mainWindow.restore();
@@ -431,7 +436,7 @@ if (!hasLock) {
   });
   app.on("open-url", (event, url) => {
     event.preventDefault();
-    const inviteToken = findDeepLink([url], APP_PROTOCOL);
+    const inviteToken = findDeepLink([url], desktopProtocol);
     if (inviteToken) sendDeepLink(inviteToken);
   });
 

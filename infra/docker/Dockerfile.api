@@ -1,11 +1,11 @@
 FROM node:24-alpine AS build
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-COPY apps/api/package.json apps/api/package.json
-COPY apps/desktop/package.json apps/desktop/package.json
-COPY packages/shared/package.json packages/shared/package.json
-COPY packages/config/package.json packages/config/package.json
+COPY --chown=nodeapp:nodeapp package.json package-lock.json ./
+COPY --chown=nodeapp:nodeapp apps/api/package.json apps/api/package.json
+COPY --chown=nodeapp:nodeapp apps/desktop/package.json apps/desktop/package.json
+COPY --chown=nodeapp:nodeapp packages/shared/package.json packages/shared/package.json
+COPY --chown=nodeapp:nodeapp packages/config/package.json packages/config/package.json
 RUN npm ci --no-audit --no-fund
 
 COPY tsconfig.base.json ./
