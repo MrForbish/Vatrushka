@@ -57,7 +57,6 @@ import {
 } from "./app/routes";
 import { splitAudioDevices, type AudioDevices } from "./audio-devices.js";
 import { AuthPanel, ProfilePanel } from "./components.js";
-import { DirectMessagesView } from "./features/direct-messages/index.js";
 import {
   HomePage,
   homeDashboardQueryKey,
@@ -93,6 +92,10 @@ const realtime = new RealtimeClient((forceRefresh) =>
 const SettingsRoutePage = lazy(async () => {
   const module = await import("./app/routes/SettingsRoutePage");
   return { default: module.SettingsRoutePage };
+});
+const DirectMessagesView = lazy(async () => {
+  const module = await import("./features/direct-messages/index.js");
+  return { default: module.DirectMessagesView };
 });
 
 function toTextMessage(
@@ -212,7 +215,9 @@ function projectServerVoiceState(
     voiceState.version === 0
   )
     return server;
-  const memberById = new Map(server.members.map((member) => [member.userId, member]));
+  const memberById = new Map(
+    server.members.map((member) => [member.userId, member]),
+  );
   return {
     ...server,
     channels: server.channels.map((channel) =>
@@ -240,7 +245,10 @@ function projectServerVoiceState(
                     : {}),
                 };
               })
-              .filter((participant): participant is NonNullable<typeof participant> => participant !== null),
+              .filter(
+                (participant): participant is NonNullable<typeof participant> =>
+                  participant !== null,
+              ),
           },
     ),
   };
@@ -1207,7 +1215,8 @@ export default function App(): ReactNode {
   }, [mediaSnapshot.screenTrack, playVoiceCue]);
 
   useEffect(() => {
-    const key = updateState.status === "ready" ? updateState.version ?? "ready" : null;
+    const key =
+      updateState.status === "ready" ? (updateState.version ?? "ready") : null;
     if (key === null || announcedUpdateRef.current === key) return;
     announcedUpdateRef.current = key;
     playVoiceCue("update");
@@ -2567,7 +2576,9 @@ export default function App(): ReactNode {
           (candidate) =>
             candidate.id !== channelId && candidate.type === "text",
         ) ??
-        serverDetail?.channels.find((candidate) => candidate.id !== channelId) ??
+        serverDetail?.channels.find(
+          (candidate) => candidate.id !== channelId,
+        ) ??
         null;
       if (activeChannelId === channelId) {
         setActiveChannelId(replacementChannel?.id ?? null);
@@ -2746,12 +2757,15 @@ export default function App(): ReactNode {
     void run(async () => {
       if (!serverDetail) return;
       const sourceChannelId = serverVoiceState?.channelByUserId[userId];
-      const voiceSessionId = serverVoiceState?.memberStateByUserId[userId]?.sessionId;
+      const voiceSessionId =
+        serverVoiceState?.memberStateByUserId[userId]?.sessionId;
       const accepted = await apiClient.moveVoiceMember(serverDetail.id, {
         clientRequestId: window.crypto.randomUUID(),
         subjectUserId: userId,
         targetChannelId: channelId,
-        ...(sourceChannelId ? { expectedSourceChannelId: sourceChannelId } : {}),
+        ...(sourceChannelId
+          ? { expectedSourceChannelId: sourceChannelId }
+          : {}),
         ...(voiceSessionId ? { expectedVoiceSessionId: voiceSessionId } : {}),
       });
       setServerVoiceState((current) => {
@@ -2820,7 +2834,6 @@ export default function App(): ReactNode {
     else void apply().catch((caught) => setError(userMessage(caught)));
   };
 
-
   const setScreenShareVolume = (value: number): void => {
     const next = { ...settings, volume: value };
     setSettings(next);
@@ -2829,13 +2842,19 @@ export default function App(): ReactNode {
   };
 
   const setAppSoundVolume = (value: number): void => {
-    const next = { ...settings, appSoundVolume: Math.max(0, Math.min(1, value)) };
+    const next = {
+      ...settings,
+      appSoundVolume: Math.max(0, Math.min(1, value)),
+    };
     setSettings(next);
     void window.desktop.updateLocalSettings(next);
   };
 
   const setMicrophoneVolume = (value: number): void => {
-    const next = { ...settings, microphoneVolume: Math.max(0, Math.min(1, value)) };
+    const next = {
+      ...settings,
+      microphoneVolume: Math.max(0, Math.min(1, value)),
+    };
     setSettings(next);
     media.setMicrophoneVolume(next.microphoneVolume);
     void window.desktop.updateLocalSettings(next);
@@ -3107,39 +3126,43 @@ export default function App(): ReactNode {
     <>
       {content}
       {voiceLeaveNotice ? (
-        <div aria-live="polite" className="vui-voice-leave-notice" role="status">
+        <div
+          aria-live="polite"
+          className="vui-voice-leave-notice"
+          role="status"
+        >
           {voiceLeaveNotice}
         </div>
       ) : null}
       {user ? (
         <SystemToolbar>
           <NotificationCenter
-          appVersion={version}
-          hasMore={notificationHistory.hasMore}
-          items={notifications}
-          loadingMore={notificationHistory.loading}
-          onDismiss={dismissNotification}
-          onLoadMore={loadOlderNotifications}
-          onMarkAllRead={markAllNotificationsRead}
-          onOpen={openNotification}
-          onRead={markNotificationRead}
-          updateInstallBlocked={connection !== null}
-          updateState={updateState}
-          onInstallUpdate={() =>
-            void window.desktop
-              .installUpdate()
-              .catch((caught) => setError(userMessage(caught)))
-          }
-          onRetryUpdate={() =>
-            void window.desktop
-              .checkForUpdates()
-              .catch((caught) => setError(userMessage(caught)))
-          }
-          onCheckUpdate={() =>
-            void window.desktop
-              .checkForUpdates()
-              .catch((caught) => setError(userMessage(caught)))
-          }
+            appVersion={version}
+            hasMore={notificationHistory.hasMore}
+            items={notifications}
+            loadingMore={notificationHistory.loading}
+            onDismiss={dismissNotification}
+            onLoadMore={loadOlderNotifications}
+            onMarkAllRead={markAllNotificationsRead}
+            onOpen={openNotification}
+            onRead={markNotificationRead}
+            updateInstallBlocked={connection !== null}
+            updateState={updateState}
+            onInstallUpdate={() =>
+              void window.desktop
+                .installUpdate()
+                .catch((caught) => setError(userMessage(caught)))
+            }
+            onRetryUpdate={() =>
+              void window.desktop
+                .checkForUpdates()
+                .catch((caught) => setError(userMessage(caught)))
+            }
+            onCheckUpdate={() =>
+              void window.desktop
+                .checkForUpdates()
+                .catch((caught) => setError(userMessage(caught)))
+            }
           />
         </SystemToolbar>
       ) : null}
@@ -3271,7 +3294,9 @@ export default function App(): ReactNode {
         media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)
       }
       onScreenAudioVolume={setScreenShareVolume}
-      onScreenAnnotationStroke={(stroke) => void media.addScreenAnnotationStroke(stroke)}
+      onScreenAnnotationStroke={(stroke) =>
+        void media.addScreenAnnotationStroke(stroke)
+      }
       onScreenAnnotationUndo={() => void media.undoScreenAnnotation()}
       onScreenAnnotationClear={() => void media.clearScreenAnnotations()}
       onParticipantMute={(identity, muted) =>
@@ -3300,7 +3325,8 @@ export default function App(): ReactNode {
         mediaSnapshot.connectionState === ConnectionState.Connected
           ? "connected"
           : mediaSnapshot.connectionState === ConnectionState.Reconnecting ||
-              mediaSnapshot.connectionState === ConnectionState.SignalReconnecting
+              mediaSnapshot.connectionState ===
+                ConnectionState.SignalReconnecting
             ? "reconnecting"
             : "connecting"
       }
@@ -3615,35 +3641,38 @@ export default function App(): ReactNode {
           voiceStage={voiceStage}
           voiceProfileConnection={voiceProfileConnection}
           voiceConnectionStatus={
-            connection === null
-              ? undefined
-              : (
-                  <span
-                    className="vui-server-topbar__connection-status"
-                    data-state={
-                      mediaSnapshot.connectionState === ConnectionState.Connected
-                        ? "connected"
-                        : mediaSnapshot.connectionState === ConnectionState.Reconnecting ||
-                            mediaSnapshot.connectionState === ConnectionState.SignalReconnecting
-                          ? "reconnecting"
-                          : "disconnected"
-                    }
-                    role="status"
-                  >
-                    <i aria-hidden="true" />
-                    <strong>
-                      {mediaSnapshot.connectionState === ConnectionState.Connected
-                        ? "Вы подключены"
-                        : mediaSnapshot.connectionState === ConnectionState.Reconnecting ||
-                            mediaSnapshot.connectionState === ConnectionState.SignalReconnecting
-                          ? "Переподключение…"
-                          : "Подключение…"}
-                    </strong>
-                    {mediaSnapshot.pingMs === null || mediaSnapshot.pingMs === undefined ? null : (
-                      <small>{mediaSnapshot.pingMs} мс</small>
-                    )}
-                  </span>
-                )
+            connection === null ? undefined : (
+              <span
+                className="vui-server-topbar__connection-status"
+                data-state={
+                  mediaSnapshot.connectionState === ConnectionState.Connected
+                    ? "connected"
+                    : mediaSnapshot.connectionState ===
+                          ConnectionState.Reconnecting ||
+                        mediaSnapshot.connectionState ===
+                          ConnectionState.SignalReconnecting
+                      ? "reconnecting"
+                      : "disconnected"
+                }
+                role="status"
+              >
+                <i aria-hidden="true" />
+                <strong>
+                  {mediaSnapshot.connectionState === ConnectionState.Connected
+                    ? "Вы подключены"
+                    : mediaSnapshot.connectionState ===
+                          ConnectionState.Reconnecting ||
+                        mediaSnapshot.connectionState ===
+                          ConnectionState.SignalReconnecting
+                      ? "Переподключение…"
+                      : "Подключение…"}
+                </strong>
+                {mediaSnapshot.pingMs === null ||
+                mediaSnapshot.pingMs === undefined ? null : (
+                  <small>{mediaSnapshot.pingMs} мс</small>
+                )}
+              </span>
+            )
           }
           onBack={() => setScreen("home")}
           onDirectMessages={openDirectMessages}
@@ -3710,53 +3739,55 @@ export default function App(): ReactNode {
     );
   if (screen === "direct" && user)
     return withNotifications(
-      <DirectMessagesView
-        user={user}
-        servers={servers}
-        conversations={directConversations}
-        candidates={directCandidates}
-        activeConversationId={activeDirectConversationId}
-        messages={directMessages}
-        messageDraft={directMessageDraft}
-        serverName={serverName}
-        busy={busy}
-        error={error}
-        typingText={directTypingText}
-        blockedParticipantIds={blockedDirectUserIds}
-        firstUnreadMessageId={directFirstUnreadMessageId}
-        targetMessageId={targetMessageId}
-        hasOlderMessages={
-          directMessageHistory.conversationId === activeDirectConversationId &&
-          directMessageHistory.hasMore
-        }
-        loadingOlderMessages={directMessageHistory.loading}
-        onHome={() => setScreen("home")}
-        onSwitchServer={openServer}
-        onConversation={selectDirectConversation}
-        onCreateConversation={createDirectConversation}
-        onBlockParticipant={blockDirectParticipant}
-        onUnblockParticipant={unblockDirectParticipant}
-        onMessageDraft={setDirectMessageDraft}
-        onSendMessage={sendDirectMessage}
-        onUpdateMessage={updateDirectMessage}
-        onMessageReaction={toggleDirectMessageReaction}
-        onDeleteMessage={deleteDirectMessage}
-        onDeleteAttachment={deleteDirectAttachment}
-        onDownloadAttachment={downloadDirectAttachment}
-        onLoadAttachment={loadDirectAttachment}
-        onLoadOlderMessages={loadOlderDirectMessages}
-        onRetryMessage={(messageId) =>
-          directMessageRetryRef.current.get(messageId)?.()
-        }
-        onServerName={setServerName}
-        onCreateServer={createServer}
-        onSecurity={openUserSettings}
-        onLogout={requestLogout}
-        profileCoverUrl={profileCoverUrl}
-        presenceStatus={presence?.effectiveStatus}
-        onStatus={updateProfilePresence}
-        voiceProfileConnection={voiceProfileConnection}
-      />,
+      <Suspense fallback={<main className="bootScreen" aria-busy="true" />}>
+        <DirectMessagesView
+          user={user}
+          servers={servers}
+          conversations={directConversations}
+          candidates={directCandidates}
+          activeConversationId={activeDirectConversationId}
+          messages={directMessages}
+          messageDraft={directMessageDraft}
+          serverName={serverName}
+          busy={busy}
+          error={error}
+          typingText={directTypingText}
+          blockedParticipantIds={blockedDirectUserIds}
+          firstUnreadMessageId={directFirstUnreadMessageId}
+          targetMessageId={targetMessageId}
+          hasOlderMessages={
+            directMessageHistory.conversationId ===
+              activeDirectConversationId && directMessageHistory.hasMore
+          }
+          loadingOlderMessages={directMessageHistory.loading}
+          onHome={() => setScreen("home")}
+          onSwitchServer={openServer}
+          onConversation={selectDirectConversation}
+          onCreateConversation={createDirectConversation}
+          onBlockParticipant={blockDirectParticipant}
+          onUnblockParticipant={unblockDirectParticipant}
+          onMessageDraft={setDirectMessageDraft}
+          onSendMessage={sendDirectMessage}
+          onUpdateMessage={updateDirectMessage}
+          onMessageReaction={toggleDirectMessageReaction}
+          onDeleteMessage={deleteDirectMessage}
+          onDeleteAttachment={deleteDirectAttachment}
+          onDownloadAttachment={downloadDirectAttachment}
+          onLoadAttachment={loadDirectAttachment}
+          onLoadOlderMessages={loadOlderDirectMessages}
+          onRetryMessage={(messageId) =>
+            directMessageRetryRef.current.get(messageId)?.()
+          }
+          onServerName={setServerName}
+          onCreateServer={createServer}
+          onSecurity={openUserSettings}
+          onLogout={requestLogout}
+          profileCoverUrl={profileCoverUrl}
+          presenceStatus={presence?.effectiveStatus}
+          onStatus={updateProfilePresence}
+          voiceProfileConnection={voiceProfileConnection}
+        />
+      </Suspense>,
     );
   return withNotifications(
     <main className="bootScreen">
@@ -3781,7 +3812,12 @@ function supportsOwnAudioExclusion(): boolean {
 function isEffectivePresenceStatus(
   value: unknown,
 ): value is EffectivePresenceStatus {
-  return value === "online" || value === "idle" || value === "dnd" || value === "offline";
+  return (
+    value === "online" ||
+    value === "idle" ||
+    value === "dnd" ||
+    value === "offline"
+  );
 }
 
 function userMessage(error: unknown): string {
