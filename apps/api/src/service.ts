@@ -542,9 +542,15 @@ export class VatrushkaService {
   async requestRegistration(
     email: string,
     password: string,
+    username: string,
   ): Promise<{ status: "CODE_SENT"; retryAfterSeconds: number }> {
     if (await this.store.findUserByEmail(email))
       throw new AppError("ACCOUNT_EXISTS", 409);
+    if (await this.store.findUserByUsername(username))
+      throw new AppError("VALIDATION_ERROR", 409, undefined, {
+        field: "username",
+        message: "Username уже занят",
+      });
     return this.issueEmailCode(
       email,
       "registration",
@@ -556,7 +562,13 @@ export class VatrushkaService {
     email: string,
     code: string,
     deviceName: string,
+    username: string,
   ): Promise<AuthResponse> {
+    if (await this.store.findUserByUsername(username))
+      throw new AppError("VALIDATION_ERROR", 409, undefined, {
+        field: "username",
+        message: "Username уже занят",
+      });
     const now = this.now();
     const authCode = await this.consumeEmailCode(
       email,
@@ -568,9 +580,17 @@ export class VatrushkaService {
     let user = await this.store.createUserWithPassword(
       email,
       authCode.credentialHash,
+      username,
       now,
     );
-    if (!user) throw new AppError("ACCOUNT_EXISTS", 409);
+    if (!user) {
+      if (await this.store.findUserByUsername(username))
+        throw new AppError("VALIDATION_ERROR", 409, undefined, {
+          field: "username",
+          message: "Username уже занят",
+        });
+      throw new AppError("ACCOUNT_EXISTS", 409);
+    }
     user = await this.promotePlatformOwner(user, now);
     const tokens = await this.createSessionTokens(user, deviceName, now);
     return { ...tokens, user: publicUser(user), isNewUser: true };

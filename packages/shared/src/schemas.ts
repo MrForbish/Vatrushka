@@ -42,16 +42,25 @@ export const passwordSchema = z
     (value) => /\p{L}/u.test(value) && /\p{N}/u.test(value),
     "Пароль должен содержать букву и цифру",
   );
+export const usernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(
+    /^[a-z0-9_]{3,32}$/u,
+    "Username: 3–32 символа, латиница, цифры и подчёркивание",
+  );
 export const uuidSchema = z.uuid();
 
 export const requestRegistrationSchema = z
-  .object({ email: emailSchema, password: passwordSchema })
+  .object({ email: emailSchema, password: passwordSchema, username: usernameSchema })
   .strict();
 export const verifyRegistrationSchema = z
   .object({
     email: emailSchema,
     code: otpCodeSchema,
     deviceName: z.string().trim().min(1).max(100),
+    username: usernameSchema,
   })
   .strict();
 export const requestPasswordResetSchema = z
@@ -99,14 +108,6 @@ export const refreshSchema = z
 export const updateProfileSchema = z
   .object({ displayName: displayNameSchema })
   .strict();
-export const usernameSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .regex(
-    /^[a-z0-9_]{3,32}$/u,
-    "Username: 3–32 символа, латиница, цифры и подчёркивание",
-  );
 export const updateUserProfileSettingsSchema = z
   .object({
     displayName: displayNameSchema,
@@ -648,6 +649,8 @@ export const localSettingsSchema = z
   .object({
     microphoneDeviceId: z.string().max(512).optional(),
     outputDeviceId: z.string().max(512).optional(),
+    microphoneVolume: z.number().min(0).max(1).optional(),
+    outputVolume: z.number().min(0).max(1).optional(),
     volume: z.number().min(0).max(1).default(1),
     appSoundVolume: z.number().min(0).max(1).default(1),
     desktopNotificationsEnabled: z.boolean().default(true),

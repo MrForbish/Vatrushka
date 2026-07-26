@@ -39,7 +39,7 @@ test('GitLab pipeline preserves Linux, integration and Windows quality gates', a
   assert.match(pipeline, /\.cache\/electron-dist\//u);
 });
 
-test('develop produces an immutable staging candidate without exposing an updater feed', async () => {
+test('develop produces an immutable staging candidate and publishes beta desktop updates only for desktop-contract changes', async () => {
   const pipeline = await read('.gitlab-ci.yml');
   const imageBuild = pipeline.slice(
     pipeline.indexOf('build-api-immutable-image:'),
@@ -78,6 +78,24 @@ test('develop produces an immutable staging candidate without exposing an update
   assert.match(stagingDeploy, /vatrushka-observability-deploy/u);
   assert.doesNotMatch(stagingDeploy, /StrictHostKeyChecking=no|ssh-keyscan/u);
   assert.doesNotMatch(stagingDeploy, /PRODUCTION_SSH_|sudo -n sh|docker compose|--build/u);
+
+  const betaPackage = pipeline.slice(
+    pipeline.indexOf('windows-staging-beta-package:'),
+    pipeline.indexOf('publish-staging-beta:'),
+  );
+  const betaPublish = pipeline.slice(
+    pipeline.indexOf('publish-staging-beta:'),
+    pipeline.indexOf('windows-production-package:'),
+  );
+  assert.match(betaPackage, /\.staging-desktop-beta-rules/u);
+  assert.match(betaPackage, /VITE_PUBLIC_API_BASE_URL: '\$STAGING_API_BASE_URL'/u);
+  assert.match(betaPackage, /VATRUSHKA_UPDATE_FEED: '\$STAGING_UPDATE_FEED'/u);
+  assert.match(betaPackage, /VATRUSHKA_DESKTOP_CHANNEL = 'beta'/u);
+  assert.match(betaPackage, /VATRUSHKA_DESKTOP_BUILD_NUMBER = \$env:CI_PIPELINE_IID/u);
+  assert.match(betaPackage, /vatrushka-staging-desktop/u);
+  assert.match(betaPublish, /vatrushka-publish-updater/u);
+  assert.match(betaPublish, /updater-beta-\$CI_PIPELINE_IID\.json/u);
+  assert.doesNotMatch(betaPublish, /PRODUCTION_SSH_|StrictHostKeyChecking=no|ssh-keyscan/u);
 });
 
 test('protected tags promote an existing immutable image through the root-owned runtime wrapper', async () => {
@@ -170,8 +188,9 @@ test('Windows packaging uses verified local Electron and builder archives', asyn
   assert.match(packaging, /Get-FileHash -Algorithm SHA256/u);
   assert.match(packaging, /--config\.electronDist=\$electronZip/u);
   assert.match(packaging, /desktop-delivery-config\.mjs/u);
+  assert.match(packaging, /--config electron-builder\.config\.mjs/u);
   assert.match(packaging, /--config\.publish\.url=\$\(\$delivery\.updateFeed\)/u);
-  assert.match(packaging, /--config\.extraMetadata\.version=\$\(\$delivery\.version\)/u);
+  assert.match(packaging, /VATRUSHKA_APP_PROTOCOL = \$delivery\.protocol/u);
   assert.match(packaging, /JOB-TOKEN: \$env:CI_JOB_TOKEN/u);
   assert.match(packaging, /windows-toolchain-lock\.json/u);
   assert.match(pipeline, /WINDOWS_TOOLCHAIN_MIRROR:/u);
@@ -186,6 +205,7 @@ test('runtime keeps local builds separate from immutable delivery images', async
   const compose = await read('infra/docker/docker-compose.yml');
   const runtimeGuide = await read('infra/docker/README.md');
   assert.match(compose, /image: \$\{API_IMAGE:-vatrushka-api:local\}/u);
+  assert.match(compose, /\$\{UPDATE_FEED_PATH:-\/opt\/vatrushka\/updates\}:\/srv\/updates:ro/u);
   assert.match(compose, /api:[\s\S]*image: \$\{API_IMAGE:-vatrushka-api:local\}[\s\S]*build:/u);
   assert.match(runtimeGuide, /--no-build/u);
   assert.match(runtimeGuide, /@sha256/u);

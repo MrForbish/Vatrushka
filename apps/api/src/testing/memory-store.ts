@@ -113,11 +113,17 @@ export class MemoryStore implements DataStore {
     return row ? structuredClone(row) : null;
   }
 
-  async createUserWithPassword(email: string, passwordHash: string, now: Date): Promise<UserRecord | null> {
-    if ([...this.users.values()].some((user) => user.email === email)) return null;
+  async findUserByUsername(username: string): Promise<UserRecord | null> {
+    const row = [...this.users.values()].find((user) => user.username === username);
+    return row ? structuredClone(row) : null;
+  }
+
+  async createUserWithPassword(email: string, passwordHash: string, username: string, now: Date): Promise<UserRecord | null> {
+    if ([...this.users.values()].some((user) => user.email === email || user.username === username)) return null;
     const user: UserRecord = {
       id: crypto.randomUUID(),
       email,
+      username,
       displayName: null,
       platformRole: 'member',
       passwordHash,

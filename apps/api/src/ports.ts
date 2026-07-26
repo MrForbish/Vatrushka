@@ -58,9 +58,11 @@ export interface DataStore {
   ): Promise<{ user: UserRecord; isNewUser: boolean }>;
   findUserById(id: string): Promise<UserRecord | null>;
   findUserByEmail(email: string): Promise<UserRecord | null>;
+  findUserByUsername(username: string): Promise<UserRecord | null>;
   createUserWithPassword(
     email: string,
     passwordHash: string,
+    username: string,
     now: Date,
   ): Promise<UserRecord | null>;
   updateDisplayName(

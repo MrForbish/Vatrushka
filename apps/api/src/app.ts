@@ -1270,7 +1270,11 @@ export async function buildApp(
       },
     },
     async (request) =>
-      service.requestRegistration(request.body.email, request.body.password),
+      service.requestRegistration(
+        request.body.email,
+        request.body.password,
+        request.body.username,
+      ),
   );
 
   api.post(
@@ -1288,6 +1292,7 @@ export async function buildApp(
         request.body.email,
         request.body.code,
         request.body.deviceName,
+        request.body.username,
       ),
   );
 

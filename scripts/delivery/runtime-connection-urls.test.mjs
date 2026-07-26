@@ -46,6 +46,7 @@ test("runtime entrypoint owns URL construction instead of Compose interpolation"
   assert.doesNotMatch(compose, /DATABASE_URL:\s*postgresql:\/\//u);
   assert.doesNotMatch(compose, /REDIS_URL:\s*redis:\/\//u);
   assert.match(dockerfile, /infra\/docker\/api-start\.sh/u);
+  assert.match(dockerfile, /COPY --chown=nodeapp:nodeapp package\.json package-lock\.json/u);
   assert.match(entrypoint, /runtime-connection-urls\.mjs postgres/u);
   assert.match(entrypoint, /runtime-connection-urls\.mjs redis/u);
 });

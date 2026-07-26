@@ -28,7 +28,7 @@ discovery.relabel "containers" {
   }
 }
 
-loki.process "sanitize" {
+loki.process "sanitize_docker" {
   stage.json {
     expressions = {
       level = "level",
@@ -44,6 +44,14 @@ loki.process "sanitize" {
     values = {
       level = "",
     }
+  }
+
+  // Pack every container line into a JSON envelope. This keeps plain-text
+  // output queryable without relying on an invalid line-regexp match and does
+  // not promote arbitrary content into Loki labels.
+  stage.pack {
+    labels           = []
+    ingest_timestamp = false
   }
 
   stage.drop {
@@ -68,11 +76,35 @@ loki.process "sanitize" {
   forward_to = [loki.write.central.receiver]
 }
 
+loki.process "sanitize_journal" {
+  stage.replace {
+    expression = "(?i)(authorization|cookie|password|access[_-]?token|refresh[_-]?token|secret)([=:]\\s*)([^\\s,;]+)"
+    replace    = "$1$2[REDACTED]"
+  }
+
+  stage.static_labels {
+    values = {
+      environment = sys.env("OBSERVABILITY_ENVIRONMENT"),
+      host        = sys.env("OBSERVABILITY_HOST"),
+      level       = "info",
+      region      = sys.env("OBSERVABILITY_REGION"),
+      source      = "journald",
+    }
+  }
+
+  stage.pack {
+    labels           = []
+    ingest_timestamp = false
+  }
+
+  forward_to = [loki.write.central.receiver]
+}
+
 loki.source.docker "containers" {
   host          = "unix:///var/run/docker.sock"
   targets       = discovery.docker.containers.targets
   relabel_rules = discovery.relabel.containers.rules
-  forward_to    = [loki.process.sanitize.receiver]
+  forward_to    = [loki.process.sanitize_docker.receiver]
 }
 
 loki.source.journal "system" {
@@ -82,7 +114,7 @@ loki.source.journal "system" {
     service = "ssh",
     source  = "journald",
   }
-  forward_to = [loki.process.sanitize.receiver]
+  forward_to = [loki.process.sanitize_journal.receiver]
 }
 
 loki.write "central" {

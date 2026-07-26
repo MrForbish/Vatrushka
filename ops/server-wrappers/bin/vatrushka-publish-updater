@@ -5,7 +5,8 @@ set -eu
 test "$#" -eq 1 || fail 'Exactly one updater manifest path is required.'
 manifest=$1
 case "$manifest" in
-  "$VATRUSHKA_INBOX_ROOT"/updater-v[0-9]*.json) ;;
+  "$VATRUSHKA_INBOX_ROOT"/updater-v[0-9]*.json) channel=stable ;;
+  "$VATRUSHKA_INBOX_ROOT"/updater-beta-[0-9]*.json) channel=beta ;;
   *) fail 'Updater manifest path is not allowlisted.' ;;
 esac
 test ! -L "$manifest" || fail 'Updater manifest must not be a symlink.'
@@ -27,7 +28,7 @@ manifest_path = Path(sys.argv[1])
 inbox = Path(sys.argv[2]).resolve()
 data = json.loads(manifest_path.read_text(encoding="utf-8"))
 required = {"version", "files"}
-if set(data) != required or not re.fullmatch(r"\d+\.\d+\.\d+", data["version"]):
+if set(data) != required or not re.fullmatch(r"\d+\.\d+\.\d+(?:-beta\.\d+)?", data["version"]):
     raise SystemExit("Updater manifest is invalid")
 files = data["files"]
 if not isinstance(files, dict) or set(files) != {"setup", "blockmap", "latest", "checksums", "metadata"}:
@@ -52,7 +53,8 @@ for role, item in files.items():
         raise SystemExit("Updater file checksum does not match")
 if files["latest"]["name"] != "latest.yml" or files["checksums"]["name"] != "SHA256SUMS.txt" or files["metadata"]["name"] != "release-metadata.json":
     raise SystemExit("Updater metadata names are invalid")
-if not re.fullmatch(rf"Vatrushka-Setup-{re.escape(data['version'])}-x64\.exe", files["setup"]["name"]):
+setup_prefix = "Vatrushka-Beta-Setup" if "-beta." in data["version"] else "Vatrushka-Setup"
+if not re.fullmatch(rf"{setup_prefix}-{re.escape(data['version'])}-x64\.exe", files["setup"]["name"]):
     raise SystemExit("Updater setup name does not match version")
 if files["blockmap"]["name"] != files["setup"]["name"] + ".blockmap":
     raise SystemExit("Updater blockmap name does not match setup")
@@ -62,10 +64,16 @@ if not re.search(rf"^version:\s*['\"]?{re.escape(data['version'])}['\"]?\s*$", l
 PY
 
 . /etc/vatrushka/runtime.env
-update_dir=${VATRUSHKA_UPDATE_FEED_DIR-}
-case "$update_dir" in
+update_root=${VATRUSHKA_UPDATE_FEED_DIR-}
+case "$update_root" in
   /opt/vatrushka/updates) ;;
   *) fail 'Updater feed directory is unsafe.' ;;
+esac
+
+case "$channel" in
+  stable) update_dir=$update_root ;;
+  beta) update_dir=$update_root/beta ;;
+  *) fail 'Updater channel is unsafe.' ;;
 esac
 
 release=$(python3 - "$manifest" <<'PY'

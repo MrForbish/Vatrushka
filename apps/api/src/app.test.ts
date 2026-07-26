@@ -79,6 +79,11 @@ async function makeContext(objectStorage: FakeObjectStorage | null = null): Prom
 
 async function login(email = 'anna@example.com', displayName = 'Anna'): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
   const password = 'secure-vatrushka-42';
+  const username = email
+    .split('@')[0]!
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/gu, '_')
+    .slice(0, 32);
   const existing = await context.store.findUserByEmail(email);
   const verified = existing
     ? await (async () => {
@@ -87,9 +92,9 @@ async function login(email = 'anna@example.com', displayName = 'Anna'): Promise<
         return context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/password/complete`, payload: { email, password, code: '123456', factor: 'email', deviceName: 'Test Desktop' } });
       })()
     : await (async () => {
-        const requested = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/request-code`, payload: { email, password } });
+        const requested = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/request-code`, payload: { email, password, username } });
         expect(requested.statusCode).toBe(200);
-        return context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/verify-code`, payload: { email, code: '123456', deviceName: 'Test Desktop' } });
+        return context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/verify-code`, payload: { email, code: '123456', username, deviceName: 'Test Desktop' } });
       })();
   expect(verified.statusCode).toBe(200);
   const auth = verified.json<{ accessToken: string; refreshToken: string; user: { id: string } }>();
@@ -210,18 +215,34 @@ describe('authentication API', () => {
   });
 
   it('verifies registration email and creates a password account', async () => {
-    const requested = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/request-code`, payload: { email: 'anna@example.com', password: 'secure-vatrushka-42' } });
+    const username = 'anna_player';
+    const requested = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/request-code`, payload: { email: 'anna@example.com', password: 'secure-vatrushka-42', username } });
     expect(requested.statusCode).toBe(200);
     const response = await context.app.inject({
       method: 'POST',
       url: `${API_PREFIX}/auth/register/verify-code`,
-      payload: { email: 'anna@example.com', code: '123456', deviceName: 'Windows Desktop' },
+      payload: { email: 'anna@example.com', code: '123456', username, deviceName: 'Windows Desktop' },
     });
     expect(response.statusCode).toBe(200);
     expect(response.json<{ isNewUser: boolean; user: { displayName: null; hasPassword: boolean } }>()).toEqual(expect.objectContaining({ isNewUser: true, user: expect.objectContaining({ displayName: null, hasPassword: true }) }));
     expect(context.mailer.messages).toEqual([{ email: 'anna@example.com', code: '123456' }]);
     expect([...context.store.authCodes.values()][0]?.codeHash).not.toContain('123456');
     expect([...context.store.sessions.values()][0]?.tokenHash).not.toBe(response.json<{ refreshToken: string }>().refreshToken);
+    expect((await context.store.findUserByEmail('anna@example.com'))?.username).toBe(username);
+  });
+
+  it('rejects registration when the username is already taken', async () => {
+    await login('owner@example.com', 'Owner');
+    const response = await context.app.inject({
+      method: 'POST',
+      url: `${API_PREFIX}/auth/register/request-code`,
+      payload: { email: 'another@example.com', password: 'secure-vatrushka-42', username: 'owner' },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json<{ code: string; details: { field: string } }>()).toEqual(
+      expect.objectContaining({ code: 'VALIDATION_ERROR', details: expect.objectContaining({ field: 'username' }) }),
+    );
   });
 
   it('resets a password without account enumeration and revokes every active session', async () => {
@@ -296,9 +317,10 @@ describe('authentication API', () => {
   });
 
   it('rejects an invalid, expired, and exhausted registration code', async () => {
-    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/request-code`, payload: { email: 'anna@example.com', password: 'secure-vatrushka-42' } });
+    const username = 'anna_player';
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/request-code`, payload: { email: 'anna@example.com', password: 'secure-vatrushka-42', username } });
     const invalid = await context.app.inject({
-      method: 'POST', url: `${API_PREFIX}/auth/register/verify-code`, payload: { email: 'anna@example.com', code: '999999', deviceName: 'Desktop' },
+      method: 'POST', url: `${API_PREFIX}/auth/register/verify-code`, payload: { email: 'anna@example.com', code: '999999', username, deviceName: 'Desktop' },
     });
     expect(invalid.statusCode).toBe(401);
     expect(invalid.json<{ code: string }>().code).toBe('INVALID_OTP');
@@ -307,7 +329,7 @@ describe('authentication API', () => {
     if (!code) throw new Error('Missing code');
     code.expiresAt = new Date(context.clock.now.getTime() - 1);
     const expired = await context.app.inject({
-      method: 'POST', url: `${API_PREFIX}/auth/register/verify-code`, payload: { email: 'anna@example.com', code: '123456', deviceName: 'Desktop' },
+      method: 'POST', url: `${API_PREFIX}/auth/register/verify-code`, payload: { email: 'anna@example.com', code: '123456', username, deviceName: 'Desktop' },
     });
     expect(expired.statusCode).toBe(401);
     expect(expired.json<{ code: string }>().code).toBe('OTP_EXPIRED');
@@ -315,7 +337,7 @@ describe('authentication API', () => {
     code.expiresAt = new Date(context.clock.now.getTime() + 60_000);
     code.attempts = 4;
     const exhausted = await context.app.inject({
-      method: 'POST', url: `${API_PREFIX}/auth/register/verify-code`, payload: { email: 'anna@example.com', code: '999999', deviceName: 'Desktop' },
+      method: 'POST', url: `${API_PREFIX}/auth/register/verify-code`, payload: { email: 'anna@example.com', code: '999999', username, deviceName: 'Desktop' },
     });
     expect(exhausted.statusCode).toBe(429);
     expect(exhausted.json<{ code: string }>().code).toBe('OTP_ATTEMPTS_EXCEEDED');
@@ -347,10 +369,11 @@ describe('authentication API', () => {
   it('registers with a password and requires a second factor for password login', async () => {
     const email = 'password@example.com';
     const password = 'secure-vatrushka-42';
+    const username = 'password_player';
     const requested = await context.app.inject({
       method: 'POST',
       url: `${API_PREFIX}/auth/register/request-code`,
-      payload: { email, password },
+      payload: { email, password, username },
     });
     expect(requested.statusCode).toBe(200);
     const storedCode = [...context.store.authCodes.values()][0];
@@ -360,7 +383,7 @@ describe('authentication API', () => {
     const registered = await context.app.inject({
       method: 'POST',
       url: `${API_PREFIX}/auth/register/verify-code`,
-      payload: { email, code: '123456', deviceName: 'Windows Desktop' },
+      payload: { email, code: '123456', username, deviceName: 'Windows Desktop' },
     });
     expect(registered.statusCode).toBe(200);
     expect(registered.json<{ user: { hasPassword: boolean } }>().user.hasPassword).toBe(true);
@@ -389,11 +412,12 @@ describe('authentication API', () => {
   it('enables TOTP and uses it for subsequent password login', async () => {
     const email = 'totp@example.com';
     const password = 'secure-vatrushka-73';
-    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/request-code`, payload: { email, password } });
+    const username = 'totp_player';
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/auth/register/request-code`, payload: { email, password, username } });
     const registered = await context.app.inject({
       method: 'POST',
       url: `${API_PREFIX}/auth/register/verify-code`,
-      payload: { email, code: '123456', deviceName: 'Windows Desktop' },
+      payload: { email, code: '123456', username, deviceName: 'Windows Desktop' },
     });
     const accessToken = registered.json<{ accessToken: string }>().accessToken;
     const setup = await context.app.inject({
