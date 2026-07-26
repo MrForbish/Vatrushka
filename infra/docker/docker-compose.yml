@@ -82,7 +82,10 @@ services:
       - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       # The release job keeps artifacts outside the source tree.  This avoids
       # serving an empty bind mount when the runtime checkout is replaced.
-      - ${UPDATE_FEED_PATH:-../../updates}:/srv/updates:ro
+      # Runtime releases live behind /opt/vatrushka/current. The feed must
+      # remain outside that symlink so a deploy never detaches Caddy from beta
+      # or stable updater artifacts when the release directory changes.
+      - ${UPDATE_FEED_PATH:-/opt/vatrushka/updates}:/srv/updates:ro
       - caddy_data:/data
       - caddy_config:/config
       - /var/www/certbot:/var/www/certbot:ro
