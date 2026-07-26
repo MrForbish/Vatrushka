@@ -107,8 +107,18 @@ test('protected tags promote an existing immutable image through the root-owned 
     pipeline.indexOf('windows-production-package:'),
   );
   assert.match(pipeline, /\.release-candidate-rules:/u);
+  assert.match(
+    pipeline,
+    /\.release-candidate-rules:[\s\S]*CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ \/\^hotfix\\\//u,
+  );
+  assert.match(
+    pipeline,
+    /\.immutable-image-rules:[\s\S]*CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ \/\^hotfix\\\//u,
+  );
   assert.match(resolver, /vatrushka-release-candidate/u);
   assert.match(resolver, /RELEASE_CANDIDATE_SHA/u);
+  const verifyTag = pipeline.slice(pipeline.indexOf('verify-tag:'), pipeline.indexOf('verify:'));
+  assert.match(verifyTag, /reviewed release or hotfix merge commit/u);
   assert.match(manifest, /channel == "stable"/u);
   assert.match(manifest, /apiEnvironment == "production"/u);
   assert.match(pipeline, /^resolve-production-desktop-package:[\s\S]*packages\/generic\/vatrushka-production-desktop/mu);

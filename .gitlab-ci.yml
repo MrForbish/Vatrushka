@@ -92,10 +92,18 @@ variables:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\/\d+\.\d+\.\d+$/'
+    # A hotfix is promoted from main through an immutable tag. Build its
+    # production candidate before merge so the tag pipeline can promote the
+    # exact reviewed parent commit rather than rebuilding it after approval.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^hotfix\/\d+\.\d+\.\d+-.+$/'
 
 .release-candidate-rules:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\/\d+\.\d+\.\d+$/'
+    # Hotfixes have the same stable-candidate contract as release branches.
+    # The tag pipeline verifies the merge parent and resolves these immutable
+    # artifacts by its SHA; it must never rebuild a reviewed hotfix.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^hotfix\/\d+\.\d+\.\d+-.+$/'
 
 .staging-candidate-rules:
   rules:
@@ -367,7 +375,7 @@ verify-tag:
       git fetch origin "$PRODUCTION_BRANCH"
       git merge-base --is-ancestor "$CI_COMMIT_SHA" "origin/$PRODUCTION_BRANCH" || { echo 'Tagged commit is not in the production branch.' >&2; exit 1; }
       set -- $(git show -s --format=%P "$CI_COMMIT_SHA")
-      test "$#" = 2 || { echo 'Stable tag must point to a merge commit from release/X.Y.Z.' >&2; exit 1; }
+      test "$#" = 2 || { echo 'Stable tag must point to a reviewed release or hotfix merge commit.' >&2; exit 1; }
       release_candidate_sha="$2"
       echo "$release_candidate_sha" | grep -Eq '^[a-f0-9]{40}$' || { echo 'Release candidate parent is invalid.' >&2; exit 1; }
       test "$(node -p "require('./package.json').version")" = "$version" || { echo 'Tag and package version differ.' >&2; exit 1; }

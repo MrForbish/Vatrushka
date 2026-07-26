@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.26] - 2026-07-26
+
+### Fixed
+
+- Hotfix branches now publish immutable delivery candidates before their
+  protected tag pipeline promotes the reviewed merge parent.
+
 ## [0.8.25] - 2026-07-26
 
 ### Fixed
