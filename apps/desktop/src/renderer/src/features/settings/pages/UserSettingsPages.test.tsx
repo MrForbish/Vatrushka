@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -70,9 +71,11 @@ describe('routed user settings pages', () => {
 
   it('renders real device labels and persists selected device identifiers', async () => {
     const onMicrophone = vi.fn();
+    const onMicrophoneVolume = vi.fn();
     const onOutput = vi.fn();
+    const onOutputVolume = vi.fn();
     const onAppSoundVolume = vi.fn();
-    render(<UserAudioSettingsPage appSoundVolume={1} busy={false} devices={{ inputs: [device('audioinput', 'default', 'Default - Studio Mic'), device('audioinput', 'mic-2', 'USB Microphone')], outputs: [device('audiooutput', 'default', 'Default - Headphones'), device('audiooutput', 'speaker-2', 'Monitor Speakers')] }} inputLevel={0.3} microphoneId="default" onAppSoundVolume={onAppSoundVolume} onMicrophone={onMicrophone} onOutput={onOutput} onRefresh={vi.fn()} onTestOutput={vi.fn()} outputId="default" voiceConnected />);
+    render(<UserAudioSettingsPage appSoundVolume={1} busy={false} devices={{ inputs: [device('audioinput', 'default', 'Default - Studio Mic'), device('audioinput', 'mic-2', 'USB Microphone')], outputs: [device('audiooutput', 'default', 'Default - Headphones'), device('audiooutput', 'speaker-2', 'Monitor Speakers')] }} inputLevel={0.3} microphoneId="default" microphoneVolume={1} onAppSoundVolume={onAppSoundVolume} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onRefresh={vi.fn()} onTestOutput={vi.fn()} outputId="default" outputVolume={1} voiceConnected />);
 
     expect(screen.getByText('Системное · Studio Mic')).toBeInTheDocument();
     expect(screen.getByText('Системное · Headphones')).toBeInTheDocument();
@@ -83,6 +86,10 @@ describe('routed user settings pages', () => {
 
     expect(onMicrophone).toHaveBeenCalledWith('mic-2');
     expect(onOutput).toHaveBeenCalledWith('speaker-2');
+    fireEvent.change(screen.getByRole('slider', { name: 'Громкость микрофона' }), { target: { value: '55' } });
+    fireEvent.change(screen.getByRole('slider', { name: 'Громкость вывода' }), { target: { value: '65' } });
+    expect(onMicrophoneVolume).toHaveBeenCalledWith(0.55);
+    expect(onOutputVolume).toHaveBeenCalledWith(0.65);
     await userEvent.click(screen.getByRole('slider', { name: 'Громкость звуков приложения' }));
     expect(screen.getByText(/Вход и выход из голоса/u)).toBeInTheDocument();
   });

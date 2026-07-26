@@ -37,7 +37,9 @@ export interface RoomViewProps {
   snapshot: MediaSnapshot;
   devices: AudioDevices;
   microphoneId: string | undefined;
+  microphoneVolume?: number;
   outputId: string | undefined;
+  outputVolume?: number;
   busy: boolean;
   error: string | null;
   participantNames?: Record<string, string> | undefined;
@@ -49,7 +51,9 @@ export interface RoomViewProps {
   onLeave(): void;
   onKick(identity: string): void;
   onMicrophone(value: string): void;
+  onMicrophoneVolume?(value: number): void;
   onOutput(value: string): void;
+  onOutputVolume?(value: number): void;
   onStartAudio(): void;
   onScreenAudioMute(): void;
   onScreenAudioVolume(value: number): void;
@@ -208,6 +212,7 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
             menuLabel="Выбрать устройство: Микрофон"
             onToggle={props.onMute}
             onValueChange={props.onMicrophone}
+            onVolumeChange={props.onMicrophoneVolume ?? (() => undefined)}
             options={prioritizeSelectedDevice(
               audioDeviceOptions(props.devices.inputs, "input"),
               props.microphoneId ?? "default",
@@ -215,6 +220,8 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
             selectLabel="Устройство ввода"
             testId="mute-control"
             value={props.microphoneId ?? "default"}
+            volume={props.microphoneVolume ?? 1}
+            volumeLabel="Громкость микрофона"
           />
           <VoiceDeviceControl
             active={props.snapshot.isDeafened}
@@ -227,6 +234,7 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
             menuLabel="Выбрать устройство: Звук"
             onToggle={props.onDeafen ?? (() => undefined)}
             onValueChange={props.onOutput}
+            onVolumeChange={props.onOutputVolume ?? (() => undefined)}
             options={prioritizeSelectedDevice(
               audioDeviceOptions(props.devices.outputs, "output"),
               props.outputId ?? "default",
@@ -234,6 +242,8 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
             selectLabel="Устройство вывода"
             testId="deafen-control"
             value={props.outputId ?? "default"}
+            volume={props.outputVolume ?? 1}
+            volumeLabel="Громкость вывода"
           />
           <VoiceDockAction
             active={props.snapshot.isScreenSharing}
@@ -315,10 +325,13 @@ interface VoiceDeviceControlProps {
   menuLabel: string;
   onToggle(): void;
   onValueChange(value: string): void;
+  onVolumeChange(value: number): void;
   options: Array<{ label: string; value: string }>;
   selectLabel: string;
   testId: string;
   value: string;
+  volume: number;
+  volumeLabel: string;
 }
 
 function prioritizeSelectedDevice<T extends { value: string }>(
@@ -339,10 +352,13 @@ function VoiceDeviceControl({
   menuLabel,
   onToggle,
   onValueChange,
+  onVolumeChange,
   options,
   selectLabel,
   testId,
   value,
+  volume,
+  volumeLabel,
 }: VoiceDeviceControlProps): React.JSX.Element {
   return (
     <div className="vui-room__device-control">
@@ -390,6 +406,14 @@ function VoiceDeviceControl({
                 </button>
               ))}
             </div>
+            <Slider
+              label={volumeLabel}
+              max={100}
+              min={0}
+              onChange={(event) => onVolumeChange(Number(event.target.value) / 100)}
+              value={Math.round(volume * 100)}
+              valueLabel={`${Math.round(volume * 100)}%`}
+            />
           </div>
           )}
         </Popover>
