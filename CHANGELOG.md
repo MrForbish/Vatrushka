@@ -4,6 +4,23 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.32] - 2026-07-27
+
+### Changed
+
+- Added independent persisted input, output and notification-volume settings,
+  with distinct output/notification test cues and 50% defaults.
+- Profile and server media now use short-lived Secure Token URLs when the
+  private CDN origin is configured.
+
+### Fixed
+
+- Prevented reconnect from applying a reduced remote-audio gain before local
+  output settings are restored.
+- Kept successfully rendered avatars and covers visible while their refreshed
+  signed media URL loads.
+- Made microphone test capture explicitly stoppable.
+
 ## [0.8.31] - 2026-07-26
 
 ### Fixed
