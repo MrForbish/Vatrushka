@@ -41,7 +41,8 @@ describe('routed user settings pages', () => {
     const updatedProfile = { ...profile, displayName: updatedUser.displayName };
     const onSave = vi.fn(async () => updatedProfile);
     const onUserChange = vi.fn();
-    render(<UserProfileSettingsPage onAvatar={vi.fn(async () => profile)} onDirtyChange={onDirtyChange} onLoad={vi.fn(async () => profile)} onResetAvatar={vi.fn(async () => profile)} onSave={onSave} onUserChange={onUserChange} user={user} />);
+    const onProfileMediaChange = vi.fn();
+    render(<UserProfileSettingsPage onAvatar={vi.fn(async () => profile)} onDirtyChange={onDirtyChange} onLoad={vi.fn(async () => profile)} onProfileMediaChange={onProfileMediaChange} onResetAvatar={vi.fn(async () => profile)} onSave={onSave} onUserChange={onUserChange} user={user} />);
 
     const input = await screen.findByLabelText('Отображаемое имя');
     await userEvent.clear(input);
@@ -51,6 +52,7 @@ describe('routed user settings pages', () => {
 
     await waitFor(() => expect(onSave).toHaveBeenCalledWith({ displayName: 'Илья Форбиш', username: 'ilya', bio: null }));
     expect(onUserChange).toHaveBeenCalledWith(updatedUser);
+    expect(onProfileMediaChange).toHaveBeenCalledWith(updatedProfile);
     expect(screen.getByText('Изменения сохранены')).toBeInTheDocument();
   });
 

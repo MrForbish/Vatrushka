@@ -8,6 +8,7 @@ import type {
   ServerSummary,
   UserNotificationPreferences,
   UserPresence,
+  UserProfileSettings,
   UserPrivacySettings,
 } from "@vatrushka/shared";
 
@@ -95,6 +96,7 @@ export interface SettingsRoutePageProps {
   ): Promise<UserPrivacySettings>;
   onCurrentSessionRevoked(): void;
   onLogout(): void;
+  onProfileMediaChange(profile: UserProfileSettings): void;
   onUserChange(user: PublicUser): void;
 }
 
@@ -218,6 +220,7 @@ export function SettingsRoutePage(
           onLoad={loadUserProfileSettings}
           onResetAvatar={() => apiClient.resetUserAvatar()}
           onResetCover={() => apiClient.resetUserProfileCover()}
+          onProfileMediaChange={props.onProfileMediaChange}
           onSave={(input) => apiClient.updateUserProfileSettings(input)}
           onUserChange={props.onUserChange}
           user={props.user}

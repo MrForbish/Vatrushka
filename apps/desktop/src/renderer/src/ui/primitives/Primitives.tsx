@@ -612,18 +612,34 @@ export function StableImage({
 }: StableImageProps): React.JSX.Element {
   const [displayedSrc, setDisplayedSrc] = useState<string | null>(src ?? null);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const requestedSrcRef = useRef(src ?? null);
 
   useEffect(() => {
     const requestedSrc = src ?? null;
+    const sourceChanged = requestedSrcRef.current !== requestedSrc;
     requestedSrcRef.current = requestedSrc;
+    if (sourceChanged && retryAttempt !== 0) {
+      setRetryAttempt(0);
+      return undefined;
+    }
     if (requestedSrc === null) {
       setDisplayedSrc(null);
       setFailedSrc(null);
+      setRetryAttempt(0);
       return undefined;
     }
-    if (requestedSrc === displayedSrc || requestedSrc === failedSrc)
-      return undefined;
+    if (requestedSrc === displayedSrc) return undefined;
+    if (requestedSrc === failedSrc) {
+      if (retryAttempt > 0) return undefined;
+      const retry = window.setTimeout(() => {
+        if (requestedSrcRef.current === requestedSrc) {
+          setFailedSrc(null);
+          setRetryAttempt(1);
+        }
+      }, 750);
+      return () => window.clearTimeout(retry);
+    }
 
     let active = true;
     const image = new Image();
@@ -632,12 +648,13 @@ export function StableImage({
       if (active && requestedSrcRef.current === requestedSrc) {
         setFailedSrc(null);
         setDisplayedSrc(requestedSrc);
+        setRetryAttempt(0);
       }
     };
     image.onerror = () => {
       if (active && requestedSrcRef.current === requestedSrc) {
         setFailedSrc(requestedSrc);
-        setDisplayedSrc(null);
+        setDisplayedSrc((current) => current === requestedSrc ? null : current);
       }
     };
     image.src = requestedSrc;
