@@ -204,6 +204,7 @@ test('runtime keeps local builds separate from immutable delivery images', async
   const compose = await read('infra/docker/docker-compose.yml');
   const runtimeGuide = await read('infra/docker/README.md');
   assert.match(compose, /image: \$\{API_IMAGE:-vatrushka-api:local\}/u);
+  assert.match(compose, /\$\{UPDATE_FEED_PATH:-\/opt\/vatrushka\/updates\}:\/srv\/updates:ro/u);
   assert.match(compose, /api:[\s\S]*image: \$\{API_IMAGE:-vatrushka-api:local\}[\s\S]*build:/u);
   assert.match(runtimeGuide, /--no-build/u);
   assert.match(runtimeGuide, /@sha256/u);
