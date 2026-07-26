@@ -112,6 +112,15 @@ describe("MediaSession incoming audio", () => {
     expect(setVolume).toHaveBeenCalledWith(0.6, Track.Source.ScreenShareAudio);
   });
 
+  it("applies the selected output gain without overwriting participant gain", () => {
+    const { session, setVolume } = deafeningSession();
+
+    session.setParticipantVolume("remote-1", 0.8);
+    session.setOutputVolume(0.5);
+
+    expect(setVolume).toHaveBeenCalledWith(0.4, Track.Source.Microphone);
+  });
+
   it("keeps the microphone muted after undeafening when it was muted before", async () => {
     const { session, setMicrophoneEnabled } = deafeningSession();
 

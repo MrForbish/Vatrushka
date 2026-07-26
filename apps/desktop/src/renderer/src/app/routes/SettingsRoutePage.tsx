@@ -63,6 +63,7 @@ export interface SettingsRoutePageProps {
   onHome(): void;
   onNavigate(path: string): void;
   onMicrophone(deviceId: string): void;
+  onMicrophoneVolume(value: number): void;
   onNotificationSettingsChange(
     settings: Pick<
       LocalSettings,
@@ -73,6 +74,7 @@ export interface SettingsRoutePageProps {
   onServerChanged(): Promise<void>;
   onServerDeleted(): void;
   onOutput(deviceId: string): void;
+  onOutputVolume(value: number): void;
   onRefreshDevices(): void;
   onTestOutput(): void;
   onAppSoundVolume(value: number): void;
@@ -241,8 +243,12 @@ export function SettingsRoutePage(
           inputLevel={props.inputLevel}
           microphoneId={props.microphoneId}
           onMicrophone={props.onMicrophone}
+          microphoneVolume={props.settings.microphoneVolume ?? 1}
+          onMicrophoneVolume={props.onMicrophoneVolume}
           onAppSoundVolume={props.onAppSoundVolume}
           onOutput={props.onOutput}
+          outputVolume={props.settings.outputVolume ?? 1}
+          onOutputVolume={props.onOutputVolume}
           onRefresh={props.onRefreshDevices}
           onTestOutput={props.onTestOutput}
           outputId={props.outputId}

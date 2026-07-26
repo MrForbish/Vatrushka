@@ -223,7 +223,9 @@ describe('room UI', () => {
     const onParticipantMute = vi.fn();
     const onMicrophone = vi.fn();
     const onOutput = vi.fn();
-    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={voiceDevices} microphoneId="microphone-studio" outputId={undefined} busy={false} error={null} onMute={noop} onShare={noop} onLeave={noop} onKick={noop} onMicrophone={onMicrophone} onOutput={onOutput} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={onParticipantMute} onParticipantVolume={noop} />);
+    const onMicrophoneVolume = vi.fn();
+    const onOutputVolume = vi.fn();
+    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={voiceDevices} microphoneId="microphone-studio" outputId={undefined} busy={false} error={null} microphoneVolume={0.8} outputVolume={0.6} onMute={noop} onShare={noop} onLeave={noop} onKick={noop} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={onParticipantMute} onParticipantVolume={noop} />);
     expect(screen.getAllByText('Owner (вы)').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Visitor/u).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/говорит/ui).length).toBeGreaterThan(0);
@@ -243,6 +245,12 @@ describe('room UI', () => {
     await userEvent.click(screen.getByRole('option', { name: 'USB Headphones' }));
     expect(onMicrophone).toHaveBeenCalledWith('microphone-studio');
     expect(onOutput).toHaveBeenCalledWith('headphones-usb');
+    await userEvent.click(screen.getByRole('button', { name: 'Выбрать устройство: Микрофон' }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Громкость микрофона' }), { target: { value: '45' } });
+    expect(onMicrophoneVolume).toHaveBeenCalledWith(0.45);
+    await userEvent.click(screen.getByRole('button', { name: 'Выбрать устройство: Звук' }));
+    fireEvent.change(screen.getByRole('slider', { name: 'Громкость вывода' }), { target: { value: '35' } });
+    expect(onOutputVolume).toHaveBeenCalledWith(0.35);
   });
 
   it('keeps the participant volume control mounted when the active speaker changes', () => {

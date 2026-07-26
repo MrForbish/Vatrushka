@@ -12,6 +12,7 @@ import {
   type RemoteTrackPublication,
   type RoomOptions,
 } from "livekit-client";
+import type { MicrophoneGainProcessor } from "./microphone-gain";
 
 import type {
   DesktopSourceInfo,
@@ -95,6 +96,10 @@ const screenShareHeartbeatRetryMs = 2_500;
 const screenShareHeartbeatGraceMs = 25_000;
 const latencySampleIntervalMs = 3_000;
 
+function clampVolume(volume: number): number {
+  return Math.max(0, Math.min(1, volume));
+}
+
 class UserFacingMediaError extends Error {}
 
 export class MediaSession {
@@ -110,6 +115,8 @@ export class MediaSession {
   private lastSyncedVoiceState: string | null = null;
   private snapshot: MediaSnapshot = initialSnapshot;
   private screenShareAudioVolume = 1;
+  private outputVolume = 1;
+  private microphoneGainProcessor: MicrophoneGainProcessor | null = null;
   private screenShareAudioMuted = false;
   private screenAnnotations: ScreenAnnotationStroke[] = [];
   private annotationScreenSharerIdentity: string | null = null;
@@ -145,6 +152,11 @@ export class MediaSession {
     this.connection = connection;
     this.isDeafened = false;
     this.screenShareAudioVolume = settings.volume;
+    this.outputVolume = settings.outputVolume ?? 1;
+    const { MicrophoneGainProcessor } = await import("./microphone-gain");
+    this.microphoneGainProcessor = new MicrophoneGainProcessor(
+      settings.microphoneVolume ?? 1,
+    );
     this.screenShareAudioMuted = false;
     this.screenAnnotations = [];
     this.annotationScreenSharerIdentity = null;
@@ -160,6 +172,7 @@ export class MediaSession {
         ...(settings.microphoneDeviceId
           ? { deviceId: settings.microphoneDeviceId }
           : {}),
+        processor: this.microphoneGainProcessor,
       },
       ...(settings.outputDeviceId
         ? { audioOutput: { deviceId: settings.outputDeviceId } }
@@ -192,6 +205,7 @@ export class MediaSession {
           ...(settings.microphoneDeviceId
             ? { deviceId: settings.microphoneDeviceId }
             : {}),
+          processor: this.microphoneGainProcessor,
         });
       } catch (error) {
         this.patch({ error: deviceErrorMessage(error), isMuted: true });
@@ -263,11 +277,11 @@ export class MediaSession {
   setParticipantVolume(identity: string, volume: number): void {
     const participant = this.room?.remoteParticipants.get(identity);
     if (!participant) return;
-    const normalized = Math.max(0, Math.min(1, volume));
+    const normalized = clampVolume(volume);
     this.participantVolumes.set(identity, normalized);
     if (normalized > 0) this.locallyMutedParticipants.delete(identity);
     participant.setVolume(
-      this.isDeafened ? 0 : normalized,
+      this.isDeafened ? 0 : normalized * this.outputVolume,
       Track.Source.Microphone,
     );
     this.refreshSnapshot();
@@ -281,20 +295,31 @@ export class MediaSession {
     participant.setVolume(
       this.isDeafened || muted
         ? 0
-        : (this.participantVolumes.get(identity) ?? 1),
+        : (this.participantVolumes.get(identity) ?? 1) * this.outputVolume,
       Track.Source.Microphone,
     );
     this.refreshSnapshot();
   }
 
   setScreenShareAudioVolume(volume: number): void {
-    this.screenShareAudioVolume = Math.max(0, Math.min(1, volume));
+    this.screenShareAudioVolume = clampVolume(volume);
     if (this.screenShareAudioVolume > 0) this.screenShareAudioMuted = false;
     this.applyScreenShareAudioPreferences();
     this.patch({
       screenShareAudioVolume: this.screenShareAudioVolume,
       screenShareAudioMuted: this.screenShareAudioMuted,
     });
+  }
+
+  setMicrophoneVolume(volume: number): void {
+    this.microphoneGainProcessor?.setVolume(volume);
+  }
+
+  setOutputVolume(volume: number): void {
+    this.outputVolume = clampVolume(volume);
+    for (const participant of this.room?.remoteParticipants.values() ?? [])
+      this.applyParticipantAudioPreferences(participant);
+    this.applyScreenShareAudioPreferences();
   }
 
   setScreenShareAudioMuted(muted: boolean): void {
@@ -503,6 +528,9 @@ export class MediaSession {
     this.locallyMutedParticipants.clear();
     this.screenAnnotations = [];
     this.annotationScreenSharerIdentity = null;
+    const microphoneGainProcessor = this.microphoneGainProcessor;
+    this.microphoneGainProcessor = null;
+    void microphoneGainProcessor?.destroy();
     this.removeRemoteAudioElements();
     this.snapshot.screenTrack?.detach().forEach((element) => element.remove());
     this.snapshot = initialSnapshot;
@@ -929,7 +957,7 @@ export class MediaSession {
     const volume =
       this.isDeafened || this.screenShareAudioMuted
         ? 0
-        : this.screenShareAudioVolume;
+        : this.screenShareAudioVolume * this.outputVolume;
     for (const participant of this.room?.remoteParticipants.values() ?? []) {
       participant.setVolume(volume, Track.Source.ScreenShareAudio);
     }
@@ -942,7 +970,10 @@ export class MediaSession {
       this.isDeafened ||
       this.locallyMutedParticipants.has(participant.identity);
     participant.setVolume(
-      muted ? 0 : (this.participantVolumes.get(participant.identity) ?? 1),
+      muted
+        ? 0
+        : (this.participantVolumes.get(participant.identity) ?? 1) *
+          this.outputVolume,
       Track.Source.Microphone,
     );
   }

@@ -415,6 +415,8 @@ export default function App(): ReactNode {
   const [connectedVoiceChannelName, setConnectedVoiceChannelName] =
     useState("");
   const [settings, setSettings] = useState<LocalSettings>({
+    microphoneVolume: 1,
+    outputVolume: 1,
     volume: 1,
     appSoundVolume: 1,
     desktopNotificationsEnabled: true,
@@ -2821,6 +2823,20 @@ export default function App(): ReactNode {
     void window.desktop.updateLocalSettings(next);
   };
 
+  const setMicrophoneVolume = (value: number): void => {
+    const next = { ...settings, microphoneVolume: Math.max(0, Math.min(1, value)) };
+    setSettings(next);
+    media.setMicrophoneVolume(next.microphoneVolume);
+    void window.desktop.updateLocalSettings(next);
+  };
+
+  const setOutputVolume = (value: number): void => {
+    const next = { ...settings, outputVolume: Math.max(0, Math.min(1, value)) };
+    setSettings(next);
+    media.setOutputVolume(next.outputVolume);
+    void window.desktop.updateLocalSettings(next);
+  };
+
   const showSourcePicker = (): void => {
     if (!connection) return;
     if (mediaSnapshot.isScreenSharing) {
@@ -3221,7 +3237,9 @@ export default function App(): ReactNode {
       }
       devices={devices}
       microphoneId={settings.microphoneDeviceId}
+      microphoneVolume={settings.microphoneVolume ?? 1}
       outputId={settings.outputDeviceId}
+      outputVolume={settings.outputVolume ?? 1}
       busy={busy}
       error={error}
       onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))}
@@ -3234,7 +3252,9 @@ export default function App(): ReactNode {
         void run(() => apiClient.kickMediaParticipant(connection, identity))
       }
       onMicrophone={(value) => persistDevice("microphoneDeviceId", value)}
+      onMicrophoneVolume={setMicrophoneVolume}
       onOutput={(value) => persistDevice("outputDeviceId", value)}
+      onOutputVolume={setOutputVolume}
       onStartAudio={() => void media.startAudio()}
       onScreenAudioMute={() =>
         media.setScreenShareAudioMuted(!mediaSnapshot.screenShareAudioMuted)
@@ -3454,6 +3474,7 @@ export default function App(): ReactNode {
             persistDevice("microphoneDeviceId", deviceId)
           }
           onAppSoundVolume={setAppSoundVolume}
+          onMicrophoneVolume={setMicrophoneVolume}
           onNavigate={(path) => {
             void navigate(path);
           }}
@@ -3462,6 +3483,7 @@ export default function App(): ReactNode {
           onServerChanged={refreshSettingsServer}
           onServerDeleted={handleSettingsServerDeleted}
           onOutput={(deviceId) => persistDevice("outputDeviceId", deviceId)}
+          onOutputVolume={setOutputVolume}
           onRefreshDevices={() => {
             void run(() => refreshDevices(true));
           }}
