@@ -4,6 +4,13 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.27] - 2026-07-26
+
+### Fixed
+
+- Restored the production PostgreSQL backup driver by importing the operating
+  system module used to set its protected backup-directory permissions.
+
 ## [0.8.26] - 2026-07-26
 
 ### Fixed
