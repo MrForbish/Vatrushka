@@ -77,6 +77,7 @@ export interface SettingsRoutePageProps {
   onOutputVolume(value: number): void;
   onRefreshDevices(): void;
   onTestOutput(): void;
+  onTestNotification(): void;
   onAppSoundVolume(value: number): void;
   onLoadPresence(): Promise<UserPresence>;
   onUpdatePresence(input: {
@@ -243,14 +244,15 @@ export function SettingsRoutePage(
           inputLevel={props.inputLevel}
           microphoneId={props.microphoneId}
           onMicrophone={props.onMicrophone}
-          microphoneVolume={props.settings.microphoneVolume ?? 1}
+          microphoneVolume={props.settings.microphoneVolume ?? 0.5}
           onMicrophoneVolume={props.onMicrophoneVolume}
           onAppSoundVolume={props.onAppSoundVolume}
           onOutput={props.onOutput}
-          outputVolume={props.settings.outputVolume ?? 1}
+          outputVolume={props.settings.outputVolume ?? 0.5}
           onOutputVolume={props.onOutputVolume}
           onRefresh={props.onRefreshDevices}
           onTestOutput={props.onTestOutput}
+          onTestNotification={props.onTestNotification}
           outputId={props.outputId}
           voiceConnected={props.voiceConnected}
         />

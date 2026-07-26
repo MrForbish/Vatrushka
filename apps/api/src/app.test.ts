@@ -51,7 +51,10 @@ function inviteTokenFromUrl(inviteUrl: string): string {
   return token;
 }
 
-async function makeContext(objectStorage: FakeObjectStorage | null = null): Promise<TestContext> {
+async function makeContext(
+  objectStorage: FakeObjectStorage | null = null,
+  environment: Record<string, string> = {},
+): Promise<TestContext> {
   const store = new MemoryStore();
   const mailer = new FakeMailer();
   const media = new FakeMediaService();
@@ -66,6 +69,7 @@ async function makeContext(objectStorage: FakeObjectStorage | null = null): Prom
     LIVEKIT_URL: 'ws://livekit.test',
     LIVEKIT_HTTP_URL: 'http://livekit.test',
     VOICE_MOVE_STRATEGY: 'livekit-cloud',
+    ...environment,
   });
   const realtimeEvents: RealtimeEvent[] = [];
   const realtimeBus = {
@@ -1269,6 +1273,31 @@ describe('servers, channels, messages, and roles API', () => {
     const removed = await context.app.inject({ method: 'DELETE', url: `${API_PREFIX}/direct-attachments/${attachmentId}`, headers: { authorization: `Bearer ${boris.accessToken}` } });
     expect(removed.statusCode).toBe(200);
     expect(removed.json<{ attachments: unknown[] }>().attachments).toEqual([]);
+  });
+
+  it('serves profile media through a short-lived signed CDN URL when configured', async () => {
+    const cdnSecret = 'cdn-token-secret-for-tests';
+    context = await makeContext(new FakeObjectStorage(), {
+      MEDIA_CDN_BASE_URL: 'https://cdn.test',
+      MEDIA_CDN_TOKEN_SECRET: cdnSecret,
+    });
+    const anna = await login('cdn-anna@example.com', 'Anna');
+    const boris = await login('cdn-boris@example.com', 'Boris');
+    const borisRecord = context.store.users.get(boris.userId);
+    if (!borisRecord) throw new Error('Boris was not created');
+    const objectKey = 'profiles/boris/avatar.webp';
+    context.store.users.set(boris.userId, { ...borisRecord, avatarObjectKey: objectKey });
+
+    const createdServer = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { name: 'CDN community' } });
+    const server = createdServer.json<{ inviteUrl: string }>();
+    await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteTokenFromUrl(server.inviteUrl)}/accept`, headers: { authorization: `Bearer ${boris.accessToken}` } });
+
+    const candidates = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-conversations/candidates`, headers: { authorization: `Bearer ${anna.accessToken}` } });
+    expect(candidates.statusCode).toBe(200);
+    const expires = Math.floor(context.clock.now.getTime() / 1_000) + 900;
+    const path = '/profiles/boris/avatar.webp';
+    const signature = createHash('md5').update(`${cdnSecret}${path}${expires}`).digest('base64').replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=/gu, '');
+    expect(candidates.json<Array<{ avatarUrl: string }>>()[0]?.avatarUrl).toBe(`https://cdn.test/md5(${signature},${expires})${path}`);
   });
 
   it('enforces channel overwrites, protects hierarchy, and records role audit events', async () => {

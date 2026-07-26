@@ -425,10 +425,10 @@ export default function App(): ReactNode {
   const [connectedVoiceChannelName, setConnectedVoiceChannelName] =
     useState("");
   const [settings, setSettings] = useState<LocalSettings>({
-    microphoneVolume: 1,
-    outputVolume: 1,
-    volume: 1,
-    appSoundVolume: 0.6,
+    microphoneVolume: 0.5,
+    outputVolume: 0.5,
+    volume: 0.5,
+    appSoundVolume: 0.5,
     desktopNotificationsEnabled: true,
     messageSoundsEnabled: true,
   });
@@ -905,6 +905,14 @@ export default function App(): ReactNode {
       );
     },
     [presence?.preference, settings.appSoundVolume, settings.outputDeviceId],
+  );
+
+  const playAudioPreview = useCallback(
+    (cue: VoiceCue, volume: number): void => {
+      voiceCuePlayerRef.current ??= new VoiceCuePlayer();
+      voiceCuePlayerRef.current.play(cue, settings.outputDeviceId, volume);
+    },
+    [settings.outputDeviceId],
   );
 
   const updateUser = (next: PublicUser | null): void => {
@@ -3275,9 +3283,9 @@ export default function App(): ReactNode {
       }
       devices={devices}
       microphoneId={settings.microphoneDeviceId}
-      microphoneVolume={settings.microphoneVolume ?? 1}
+      microphoneVolume={settings.microphoneVolume ?? 0.5}
       outputId={settings.outputDeviceId}
-      outputVolume={settings.outputVolume ?? 1}
+      outputVolume={settings.outputVolume ?? 0.5}
       busy={busy}
       error={error}
       onMute={() => void run(() => media.setMuted(!mediaSnapshot.isMuted))}
@@ -3532,7 +3540,12 @@ export default function App(): ReactNode {
           onRefreshDevices={() => {
             void run(() => refreshDevices(true));
           }}
-          onTestOutput={() => playVoiceCue("message")}
+          onTestOutput={() =>
+            playAudioPreview("join", settings.outputVolume ?? 0.5)
+          }
+          onTestNotification={() =>
+            playAudioPreview("message", settings.appSoundVolume)
+          }
           onLoadPresence={loadPresence}
           onLoadPrivacy={loadPrivacySettings}
           onLoadNotificationPreferences={loadNotificationPreferences}
