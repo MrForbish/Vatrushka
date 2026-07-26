@@ -90,8 +90,8 @@ describe('routed user settings pages', () => {
     fireEvent.change(screen.getByRole('slider', { name: 'Громкость вывода' }), { target: { value: '65' } });
     expect(onMicrophoneVolume).toHaveBeenCalledWith(0.55);
     expect(onOutputVolume).toHaveBeenCalledWith(0.65);
-    await userEvent.click(screen.getByRole('slider', { name: 'Громкость звуков приложения' }));
-    expect(screen.getByText(/Вход и выход из голоса/u)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('slider', { name: 'Громкость уведомлений' }));
+    expect(screen.getByText(/Системный toast остаётся без отдельного звука/u)).toBeInTheDocument();
   });
 
   it('loads and saves DND as a server-side presence preference', async () => {

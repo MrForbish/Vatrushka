@@ -28,7 +28,7 @@ export function AudioReadinessCard({
   error = null,
   inputLevel = 0,
   microphoneId,
-  microphoneVolume = 1,
+  microphoneVolume = 1.25,
   onMicrophone,
   onMicrophoneVolume = () => undefined,
   onOutput,
@@ -67,7 +67,7 @@ export function AudioReadinessCard({
         <article data-error={permissionDenied || error !== null || undefined}>
           <header><span className="home-card-icon"><Icon name="mic" size={18} /></span><div><strong>Микрофон</strong><small>{inputStatus}</small></div></header>
           <Select label="Устройство ввода" onValueChange={onMicrophone} options={inputOptions} value={microphoneId ?? 'default'} />
-          <Slider label="Громкость микрофона" max={100} min={0} onChange={(event) => onMicrophoneVolume(Number(event.target.value) / 100)} value={Math.round(microphoneVolume * 100)} valueLabel={`${Math.round(microphoneVolume * 100)}%`} />
+          <Slider label="Громкость микрофона" max={150} min={0} onChange={(event) => onMicrophoneVolume(Number(event.target.value) / 100)} value={Math.round(microphoneVolume * 100)} valueLabel={`${Math.round(microphoneVolume * 100)}%`} />
           <div className="home-audio-readiness__meter"><AudioLevelMeter label="Уровень сигнала микрофона" value={inputLevel} /><span>{signalDetected ? 'Сигнал есть' : testing ? 'Говорите в микрофон' : 'Проверка не запущена'}</span></div>
           <Button disabled={busy} onClick={onRefresh} size="sm" variant="secondary">Проверить микрофон</Button>
         </article>

@@ -54,6 +54,44 @@ describe("MediaSession audio devices", () => {
       "Не удалось выбрать устройство вывода",
     );
   });
+
+  it("keeps a microphone enabled when optional gain processing is unavailable", async () => {
+    const session = new MediaSession({} as ApiClient);
+    const setMicrophoneEnabled = vi.fn().mockResolvedValue(undefined);
+    const setProcessor = vi.fn().mockRejectedValue(new Error("Audio context unavailable"));
+    const internals = session as unknown as {
+      room: {
+        localParticipant: {
+          setMicrophoneEnabled: typeof setMicrophoneEnabled;
+          getTrackPublication(source: Track.Source): { track: { kind: Track.Kind; setProcessor: typeof setProcessor } } | undefined;
+        };
+      };
+      microphoneGainProcessor: object;
+      microphoneEnabledBeforeDeafen: boolean;
+      refreshSnapshot(): void;
+      syncOwnVoiceState(): Promise<void>;
+    };
+    internals.room = {
+      localParticipant: {
+        setMicrophoneEnabled,
+        getTrackPublication: (source) =>
+          source === Track.Source.Microphone
+            ? { track: { kind: Track.Kind.Audio, setProcessor } }
+            : undefined,
+      },
+    };
+    internals.microphoneGainProcessor = {};
+    vi.spyOn(internals, "refreshSnapshot").mockImplementation(() => undefined);
+    vi.spyOn(internals, "syncOwnVoiceState").mockResolvedValue(undefined);
+
+    await expect(session.setMuted(false)).resolves.toBeUndefined();
+
+    expect(setMicrophoneEnabled).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({ echoCancellation: true }),
+    );
+    expect(setProcessor).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("MediaSession incoming audio", () => {

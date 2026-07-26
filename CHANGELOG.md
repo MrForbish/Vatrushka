@@ -4,6 +4,19 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.30] - 2026-07-26
+
+### Fixed
+
+- Restored microphone activation by attaching the optional local gain processor
+  only after LiveKit assigns the track its audio context. A gain-processing
+  failure now preserves a working microphone and is recorded diagnostically.
+
+### Changed
+
+- New local profiles start with microphone gain at 125%; users can adjust it
+  from 0% to 150% in the existing device controls.
+
 ## [0.8.29] - 2026-07-26
 
 ### Changed

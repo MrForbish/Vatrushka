@@ -997,6 +997,7 @@ export interface DesktopMediaDiagnostic {
     | "voice_reconnected"
     | "voice_audio_restored"
     | "voice_audio_restore_failed"
+    | "voice_microphone_gain_failed"
     | "voice_track_subscription_failed"
     | "screen_share_heartbeat_failed"
     | "screen_share_heartbeat_recovered"

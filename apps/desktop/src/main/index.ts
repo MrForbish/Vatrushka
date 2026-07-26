@@ -124,7 +124,7 @@ function showMessageNotification(message: DesktopMessageNotification): void {
   const notification = new Notification({
     title: message.title,
     body: message.body,
-    silent: message.silent ?? false,
+    silent: true,
   });
   const release = (): void => {
     activeNotifications.delete(notification);
