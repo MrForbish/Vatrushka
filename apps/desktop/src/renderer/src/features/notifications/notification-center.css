@@ -96,6 +96,10 @@
   color: var(--color-text-tertiary);
   font-size: 12px;
 }
+.vui-notification-center__version {
+  color: var(--color-text-tertiary);
+  font: var(--text-label-sm);
+}
 .vui-notification-center__panel nav {
   display: flex;
   gap: 5px;

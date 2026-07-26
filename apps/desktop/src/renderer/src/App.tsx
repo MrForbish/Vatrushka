@@ -3087,6 +3087,7 @@ export default function App(): ReactNode {
       {user ? (
         <SystemToolbar>
           <NotificationCenter
+          appVersion={version}
           hasMore={notificationHistory.hasMore}
           items={notifications}
           loadingMore={notificationHistory.loading}
