@@ -9,6 +9,7 @@ import './notification-center.css';
 type NotificationFilter = 'all' | 'direct_message' | 'mention' | 'reply' | 'system';
 
 export interface NotificationCenterProps {
+  appVersion?: string | undefined;
   items: InternalNotification[];
   onDismiss(id: string): void;
   onMarkAllRead(): void;
@@ -53,7 +54,7 @@ function relativeTime(value: string): string {
   }).format(new Date(value));
 }
 
-export function NotificationCenter({ hasMore = false, items, loadingMore = false, onCheckUpdate, onDismiss, onInstallUpdate, onLoadMore, onMarkAllRead, onOpen, onRead, onRetryUpdate, updateInstallBlocked = false, updateState }: NotificationCenterProps): React.JSX.Element {
+export function NotificationCenter({ appVersion, hasMore = false, items, loadingMore = false, onCheckUpdate, onDismiss, onInstallUpdate, onLoadMore, onMarkAllRead, onOpen, onRead, onRetryUpdate, updateInstallBlocked = false, updateState }: NotificationCenterProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<NotificationFilter>('all');
   const [seenUpdateKey, setSeenUpdateKey] = useState<string | null>(null);
@@ -110,6 +111,7 @@ export function NotificationCenter({ hasMore = false, items, loadingMore = false
                 <span>
                   <strong id="vui-notification-center-title">Уведомления</strong>
                   <small>Важные события собраны здесь</small>
+                  {appVersion ? <span className="vui-notification-center__version">Версия приложения {appVersion}</span> : null}
                 </span>
               </span>
               <IconButton icon="close" label="Закрыть" onClick={() => setOpen(false)} size="sm" type="button" />
