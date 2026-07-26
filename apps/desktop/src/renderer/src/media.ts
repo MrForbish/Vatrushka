@@ -157,7 +157,7 @@ export class MediaSession {
     this.outputVolume = settings.outputVolume ?? 1;
     const { MicrophoneGainProcessor } = await import("./microphone-gain");
     this.microphoneGainProcessor = new MicrophoneGainProcessor(
-      settings.microphoneVolume ?? 1,
+      settings.microphoneVolume ?? 1.25,
     );
     this.screenShareAudioMuted = false;
     this.screenAnnotations = [];

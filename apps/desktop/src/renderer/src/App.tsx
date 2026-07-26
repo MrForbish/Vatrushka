@@ -3271,7 +3271,7 @@ export default function App(): ReactNode {
       }
       devices={devices}
       microphoneId={settings.microphoneDeviceId}
-      microphoneVolume={settings.microphoneVolume ?? 1}
+      microphoneVolume={settings.microphoneVolume ?? 1.25}
       outputId={settings.outputDeviceId}
       outputVolume={settings.outputVolume ?? 1}
       busy={busy}

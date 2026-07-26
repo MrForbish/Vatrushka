@@ -220,7 +220,7 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
             selectLabel="Устройство ввода"
             testId="mute-control"
             value={props.microphoneId ?? "default"}
-            volume={props.microphoneVolume ?? 1}
+            volume={props.microphoneVolume ?? 1.25}
             volumeLabel="Громкость микрофона"
           />
           <VoiceDeviceControl
