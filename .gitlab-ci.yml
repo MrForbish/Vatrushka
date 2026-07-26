@@ -846,12 +846,24 @@ windows-production-package:
     - .release-candidate-rules
   variables:
     VITE_PUBLIC_API_BASE_URL: '$PRODUCTION_API_BASE_URL'
-    RELEASE_BRANCH: '$CI_COMMIT_BRANCH'
+    RELEASE_BRANCH: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME'
     CSC_LINK: '$WINDOWS_CSC_LINK'
     CSC_KEY_PASSWORD: '$WINDOWS_CSC_KEY_PASSWORD'
     CSC_IDENTITY_AUTO_DISCOVERY: '$WINDOWS_CSC_ENABLED'
   script:
     - |
+      # Merge-request pipelines have no CI_COMMIT_BRANCH. Release branch
+      # pipelines have no CI_MERGE_REQUEST_SOURCE_BRANCH_NAME. Normalize the
+      # validated branch before release:validate so both reviewed paths use the
+      # same package contract.
+      if ([string]::IsNullOrWhiteSpace($env:RELEASE_BRANCH)) {
+        $env:RELEASE_BRANCH = $env:CI_COMMIT_BRANCH
+      }
+      if ([string]::IsNullOrWhiteSpace($env:RELEASE_BRANCH)) {
+        Write-Error 'RELEASE_BRANCH could not be resolved for production package validation.'
+        exit 1
+      }
+
       function Test-HawkIntegrationToken([string] $value) {
         try {
           $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($value)) | ConvertFrom-Json

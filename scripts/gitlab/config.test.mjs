@@ -241,6 +241,9 @@ test('production publication is tag-only and uses protected file variables', asy
   const windowsPackage = pipeline.slice(pipeline.indexOf('windows-production-package:'), pipeline.indexOf('resolve-production-desktop-package:'));
   assert.match(pipeline, /windows-production-package:[\s\S]*\.release-candidate-rules/u);
   assert.match(pipeline, /windows-production-package:[\s\S]*packages\/generic\/vatrushka-production-desktop/u);
+  assert.match(windowsPackage, /RELEASE_BRANCH: '\$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME'/u);
+  assert.match(windowsPackage, /\$env:RELEASE_BRANCH = \$env:CI_COMMIT_BRANCH/u);
+  assert.match(windowsPackage, /RELEASE_BRANCH could not be resolved for production package validation/u);
   assert.doesNotMatch(windowsPackage, /CI_COMMIT_TAG =~/u);
   assert.match(pipeline, /resolve-production-desktop-package:[\s\S]*CI_COMMIT_TAG =~/u);
   assert.doesNotMatch(windowsPackage, /deploy-observability-runtime/u);
