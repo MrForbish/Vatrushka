@@ -9,6 +9,8 @@ route закрыт.
 Операционные действия описаны в [runbook](observability-runbook.md), backup и
 восстановление — в [disaster recovery](observability-disaster-recovery.md).
 Dashboard/provisioning и alert rules находятся в `infra/observability/platform`.
+Для практической трактовки метрик и состояний `0` / `Нет данных` используйте
+[руководство по метрикам](observability-metrics-guide.md).
 
 ## Components and data
 
