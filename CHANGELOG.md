@@ -4,6 +4,53 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.28] - 2026-07-26
+
+### Fixed
+
+- Normalize updater inbox file modes on the receiving production host before
+  the root-owned publication wrapper validates and promotes them.
+
+## [0.8.27] - 2026-07-26
+
+### Fixed
+
+- Restored the production PostgreSQL backup driver by importing the operating
+  system module used to set its protected backup-directory permissions.
+
+## [0.8.26] - 2026-07-26
+
+### Fixed
+
+- Hotfix branches now publish immutable delivery candidates before their
+  protected tag pipeline promotes the reviewed merge parent.
+
+## [0.8.25] - 2026-07-26
+
+### Fixed
+
+- preserves the root-owned updater publication contract by normalizing all
+  staged Windows feed inputs to non-writable artifact modes before transfer;
+- binds the protected production candidate job to the dedicated Linux runner,
+  validates normalized Observer SSH material, and corrects root-owned
+  candidate-manifest permissions;
+- refreshes the deterministic Windows compact-shell visual baseline after a
+  verified 24-pixel rendering drift on the self-managed runner.
+
+## [0.8.24] - 2026-07-26
+
+### Fixed
+
+- normalizes the Windows-generated desktop checksum sidecar before protected Linux tag validation;
+- keeps candidate checksum verification strict and uses the dedicated production CI deploy key before any production preflight.
+
+## [0.8.23] - 2026-07-26
+
+### Fixed
+
+- makes protected-tag checksum validation portable to the Alpine/BusyBox runner and normalizes protected SSH key material before production preflight;
+- preserves immutable candidate promotion, checksum verification and the stable-updater final gate without changing application, database, Redis or media contracts.
+
 ## [0.8.22] - 2026-07-25
 
 ### Changed

@@ -92,10 +92,18 @@ variables:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "develop"'
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\/\d+\.\d+\.\d+$/'
+    # A hotfix is promoted from main through an immutable tag. Build its
+    # production candidate before merge so the tag pipeline can promote the
+    # exact reviewed parent commit rather than rebuilding it after approval.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^hotfix\/\d+\.\d+\.\d+-.+$/'
 
 .release-candidate-rules:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH =~ /^release\/\d+\.\d+\.\d+$/'
+    # Hotfixes have the same stable-candidate contract as release branches.
+    # The tag pipeline verifies the merge parent and resolves these immutable
+    # artifacts by its SHA; it must never rebuild a reviewed hotfix.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event" && $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main" && $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /^hotfix\/\d+\.\d+\.\d+-.+$/'
 
 .staging-candidate-rules:
   rules:
@@ -367,7 +375,7 @@ verify-tag:
       git fetch origin "$PRODUCTION_BRANCH"
       git merge-base --is-ancestor "$CI_COMMIT_SHA" "origin/$PRODUCTION_BRANCH" || { echo 'Tagged commit is not in the production branch.' >&2; exit 1; }
       set -- $(git show -s --format=%P "$CI_COMMIT_SHA")
-      test "$#" = 2 || { echo 'Stable tag must point to a merge commit from release/X.Y.Z.' >&2; exit 1; }
+      test "$#" = 2 || { echo 'Stable tag must point to a reviewed release or hotfix merge commit.' >&2; exit 1; }
       release_candidate_sha="$2"
       echo "$release_candidate_sha" | grep -Eq '^[a-f0-9]{40}$' || { echo 'Release candidate parent is invalid.' >&2; exit 1; }
       test "$(node -p "require('./package.json').version")" = "$version" || { echo 'Tag and package version differ.' >&2; exit 1; }
@@ -838,12 +846,24 @@ windows-production-package:
     - .release-candidate-rules
   variables:
     VITE_PUBLIC_API_BASE_URL: '$PRODUCTION_API_BASE_URL'
-    RELEASE_BRANCH: '$CI_COMMIT_BRANCH'
+    RELEASE_BRANCH: '$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME'
     CSC_LINK: '$WINDOWS_CSC_LINK'
     CSC_KEY_PASSWORD: '$WINDOWS_CSC_KEY_PASSWORD'
     CSC_IDENTITY_AUTO_DISCOVERY: '$WINDOWS_CSC_ENABLED'
   script:
     - |
+      # Merge-request pipelines have no CI_COMMIT_BRANCH. Release branch
+      # pipelines have no CI_MERGE_REQUEST_SOURCE_BRANCH_NAME. Normalize the
+      # validated branch before release:validate so both reviewed paths use the
+      # same package contract.
+      if ([string]::IsNullOrWhiteSpace($env:RELEASE_BRANCH)) {
+        $env:RELEASE_BRANCH = $env:CI_COMMIT_BRANCH
+      }
+      if ([string]::IsNullOrWhiteSpace($env:RELEASE_BRANCH)) {
+        Write-Error 'RELEASE_BRANCH could not be resolved for production package validation.'
+        exit 1
+      }
+
       function Test-HawkIntegrationToken([string] $value) {
         try {
           $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($value)) | ConvertFrom-Json
@@ -943,7 +963,9 @@ resolve-production-desktop-package:
       mkdir -p production-desktop/release
       curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "production-desktop/$archive" "$package_base/$archive"
       curl --fail --show-error --header "JOB-TOKEN: $CI_JOB_TOKEN" -o "production-desktop/$archive.sha256" "$package_base/$archive.sha256"
-      (cd production-desktop && sha256sum -c "$archive.sha256")
+      # The producer is the Windows runner, whose checksum sidecar can use CRLF.
+      # Normalize it before verification so the filename cannot contain a trailing CR.
+      (cd production-desktop && tr -d '\r' < "$archive.sha256" | sha256sum -c -)
       tar -xzf "production-desktop/$archive" -C production-desktop/release
       test -f production-desktop/release/latest.yml
       test -f production-desktop/release/SHA256SUMS.txt
@@ -1015,6 +1037,7 @@ publish-production:
       chmod 0644 "$setup" "$blockmap" "$latest" "$checksums" "$metadata" "production-desktop/release/updater-$CI_COMMIT_TAG.json"
       remote="$PRODUCTION_SSH_USER@$PRODUCTION_SSH_HOST"
       scp "$setup" "$blockmap" "$latest" "$checksums" "$metadata" "production-desktop/release/updater-$CI_COMMIT_TAG.json" "$remote:/var/lib/vatrushka/inbox/"
+      ssh "$remote" "chmod 0644 '/var/lib/vatrushka/inbox/$setup_name' '/var/lib/vatrushka/inbox/$blockmap_name' '/var/lib/vatrushka/inbox/latest.yml' '/var/lib/vatrushka/inbox/SHA256SUMS.txt' '/var/lib/vatrushka/inbox/release-metadata.json' '/var/lib/vatrushka/inbox/updater-$CI_COMMIT_TAG.json'"
       ssh "$remote" "sudo -n /usr/local/lib/vatrushka/vatrushka-publish-updater '/var/lib/vatrushka/inbox/updater-$CI_COMMIT_TAG.json'"
     - |
       find production-desktop/release -maxdepth 1 -type f -print -quit | grep -q . || { echo 'Release artifact contains no publishable files.' >&2; exit 1; }

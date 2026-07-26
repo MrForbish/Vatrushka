@@ -107,12 +107,22 @@ test('protected tags promote an existing immutable image through the root-owned 
     pipeline.indexOf('windows-production-package:'),
   );
   assert.match(pipeline, /\.release-candidate-rules:/u);
+  assert.match(
+    pipeline,
+    /\.release-candidate-rules:[\s\S]*CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ \/\^hotfix\\\//u,
+  );
+  assert.match(
+    pipeline,
+    /\.immutable-image-rules:[\s\S]*CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ \/\^hotfix\\\//u,
+  );
   assert.match(resolver, /vatrushka-release-candidate/u);
   assert.match(resolver, /RELEASE_CANDIDATE_SHA/u);
+  const verifyTag = pipeline.slice(pipeline.indexOf('verify-tag:'), pipeline.indexOf('verify:'));
+  assert.match(verifyTag, /reviewed release or hotfix merge commit/u);
   assert.match(manifest, /channel == "stable"/u);
   assert.match(manifest, /apiEnvironment == "production"/u);
   assert.match(pipeline, /^resolve-production-desktop-package:[\s\S]*packages\/generic\/vatrushka-production-desktop/mu);
-  assert.match(pipeline, /^resolve-production-desktop-package:[\s\S]*sha256sum -c/mu);
+  assert.match(pipeline, /^resolve-production-desktop-package:[\s\S]*tr -d '\\r' < "\$archive\.sha256" \| sha256sum -c -/mu);
   assert.match(pipeline, /\.production-ssh:[\s\S]*tr -d '\\r' < "\$PRODUCTION_SSH_PRIVATE_KEY"/u);
   assert.match(pipeline, /\.production-ssh:[\s\S]*ssh-keygen -lf ~\/\.ssh\/id_ed25519/u);
   assert.match(pipeline, /\.production-ssh:[\s\S]*ssh-keygen -F "\$PRODUCTION_SSH_HOST" -f ~\/\.ssh\/known_hosts/u);
@@ -231,6 +241,9 @@ test('production publication is tag-only and uses protected file variables', asy
   const windowsPackage = pipeline.slice(pipeline.indexOf('windows-production-package:'), pipeline.indexOf('resolve-production-desktop-package:'));
   assert.match(pipeline, /windows-production-package:[\s\S]*\.release-candidate-rules/u);
   assert.match(pipeline, /windows-production-package:[\s\S]*packages\/generic\/vatrushka-production-desktop/u);
+  assert.match(windowsPackage, /RELEASE_BRANCH: '\$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME'/u);
+  assert.match(windowsPackage, /\$env:RELEASE_BRANCH = \$env:CI_COMMIT_BRANCH/u);
+  assert.match(windowsPackage, /RELEASE_BRANCH could not be resolved for production package validation/u);
   assert.doesNotMatch(windowsPackage, /CI_COMMIT_TAG =~/u);
   assert.match(pipeline, /resolve-production-desktop-package:[\s\S]*CI_COMMIT_TAG =~/u);
   assert.doesNotMatch(windowsPackage, /deploy-observability-runtime/u);
