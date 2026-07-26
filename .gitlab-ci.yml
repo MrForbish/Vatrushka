@@ -119,6 +119,7 @@ variables:
         - packages/shared/**/*
         - infra/scripts/package-win.ps1
         - infra/windows-toolchain-lock.json
+        - ops/server-wrappers/**/*
         - package.json
         - package-lock.json
         - .gitlab-ci.yml
