@@ -181,7 +181,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "Что показывает: строки, которые не удалось разобрать как JSON. Как считается: query-time json и __error__. Норма: 0 для application Docker logs; journald обрабатывается fallback-панелью. Проблема: рост после изменения формата. Что проверить: logger и Alloy.",
+      "description": "Что показывает: Docker-строки, не соответствующие ожидаемому JSON-формату. Как считается: query-time JSON parsing только для контейнерных логов. Норма: 0; journald заранее упаковывается Alloy в JSON и сюда не попадает. Проблема: рост означает регрессию формата контейнерного logger. Что проверить: service и Alloy pipeline.",
       "fieldConfig": {
         "defaults": {
           "noValue": "Нет данных",
@@ -211,7 +211,7 @@
       "id": 7,
       "targets": [
         {
-          "expr": "sum(count_over_time({source=~\".+\",environment=~\"$environment\",service=~\"$service\",host=~\"$host\",container=~\"$container\"} | json | __error__ != `` [$__range]))",
+          "expr": "sum(count_over_time({source=\"docker\",environment=~\"$environment\",service=~\"$service\",host=~\"$host\",container=~\"$container\"} | json | __error__ != `` [$__range]))",
           "queryType": "instant",
           "refId": "A"
         }
@@ -290,7 +290,7 @@
         "type": "loki",
         "uid": "loki"
       },
-      "description": "Что показывает: неструктурированные Docker/journald строки, не прошедшие JSON parsing. Как считается: __error__ после json stage и текстовый фильтр. Норма: допустимо для system journals, нежелательно для API. Проблема: application service перешёл на plain text. Что проверить: logger config.",
+      "description": "Что показывает: системные сообщения journald. Alloy упаковывает каждую запись в JSON, сохраняя исходный текст в поле _entry. Норма: системные сообщения появляются без ошибок JSON parsing. Проблема: отсутствие ожидаемого сервиса или рост warning/error. Что проверить: systemd и Alloy.",
       "gridPos": {
         "h": 10,
         "w": 12,
@@ -310,12 +310,12 @@
       },
       "targets": [
         {
-          "expr": "{source=~\".+\",environment=~\"$environment\",service=~\"$service\",host=~\"$host\",container=~\"$container\"} | json | __error__ != `` |~ `(?i)$search`",
+          "expr": "{source=\"journald\",environment=~\"$environment\",service=~\"$service\",host=~\"$host\",container=~\"$container\"} | json |~ `(?i)$search`",
           "queryType": "range",
           "refId": "A"
         }
       ],
-      "title": "Fallback: неструктурированные логи",
+      "title": "Системные журналы",
       "type": "logs"
     }
   ],
