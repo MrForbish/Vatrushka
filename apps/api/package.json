@@ -1,6 +1,6 @@
 {
   "name": "@vatrushka/api",
-  "version": "0.8.29",
+  "version": "0.8.30",
   "private": true,
   "type": "module",
   "main": "dist/index.js",
@@ -33,7 +33,7 @@
     "@fastify/swagger-ui": "6.1.0",
     "@fastify/websocket": "^11.3.0",
     "@hawk.so/nodejs": "^3.3.2",
-    "@vatrushka/shared": "0.8.29",
+    "@vatrushka/shared": "0.8.30",
     "drizzle-orm": "0.45.2",
     "fastify": "5.10.0",
     "fastify-raw-body": "5.0.0",

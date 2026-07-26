@@ -649,7 +649,7 @@ export const localSettingsSchema = z
   .object({
     microphoneDeviceId: z.string().max(512).optional(),
     outputDeviceId: z.string().max(512).optional(),
-    microphoneVolume: z.number().min(0).max(1).optional(),
+    microphoneVolume: z.number().min(0).max(1.5).optional(),
     outputVolume: z.number().min(0).max(1).optional(),
     volume: z.number().min(0).max(1).default(1),
     appSoundVolume: z.number().min(0).max(1).default(1),

@@ -408,7 +408,7 @@ function VoiceDeviceControl({
             </div>
             <Slider
               label={volumeLabel}
-              max={100}
+              max={volumeLabel === "Громкость микрофона" ? 150 : 100}
               min={0}
               onChange={(event) => onVolumeChange(Number(event.target.value) / 100)}
               value={Math.round(volume * 100)}

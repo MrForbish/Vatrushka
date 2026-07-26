@@ -6,7 +6,7 @@ import { app, safeStorage } from 'electron';
 import { localSettingsSchema, type LocalSettings } from '@vatrushka/shared';
 
 const defaultSettings: LocalSettings = {
-  microphoneVolume: 1,
+  microphoneVolume: 1.25,
   outputVolume: 1,
   volume: 1,
   appSoundVolume: 1,

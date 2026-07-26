@@ -425,7 +425,7 @@ export default function App(): ReactNode {
   const [connectedVoiceChannelName, setConnectedVoiceChannelName] =
     useState("");
   const [settings, setSettings] = useState<LocalSettings>({
-    microphoneVolume: 1,
+    microphoneVolume: 1.25,
     outputVolume: 1,
     volume: 1,
     appSoundVolume: 1,
@@ -2853,7 +2853,7 @@ export default function App(): ReactNode {
   const setMicrophoneVolume = (value: number): void => {
     const next = {
       ...settings,
-      microphoneVolume: Math.max(0, Math.min(1, value)),
+      microphoneVolume: Math.max(0, Math.min(1.5, value)),
     };
     setSettings(next);
     media.setMicrophoneVolume(next.microphoneVolume);

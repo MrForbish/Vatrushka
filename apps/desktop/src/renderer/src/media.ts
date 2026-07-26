@@ -5,6 +5,7 @@ import {
   RoomEvent,
   Track,
   VideoQuality,
+  type LocalAudioTrack,
   type LocalTrack,
   type Participant,
   type RemoteParticipant,
@@ -117,6 +118,7 @@ export class MediaSession {
   private screenShareAudioVolume = 1;
   private outputVolume = 1;
   private microphoneGainProcessor: MicrophoneGainProcessor | null = null;
+  private microphoneGainTrack: LocalAudioTrack | null = null;
   private screenShareAudioMuted = false;
   private screenAnnotations: ScreenAnnotationStroke[] = [];
   private annotationScreenSharerIdentity: string | null = null;
@@ -172,7 +174,6 @@ export class MediaSession {
         ...(settings.microphoneDeviceId
           ? { deviceId: settings.microphoneDeviceId }
           : {}),
-        processor: this.microphoneGainProcessor,
       },
       ...(settings.outputDeviceId
         ? { audioOutput: { deviceId: settings.outputDeviceId } }
@@ -198,15 +199,7 @@ export class MediaSession {
           this.refreshSnapshot();
           return;
         }
-        await room.localParticipant.setMicrophoneEnabled(true, {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          ...(settings.microphoneDeviceId
-            ? { deviceId: settings.microphoneDeviceId }
-            : {}),
-          processor: this.microphoneGainProcessor,
-        });
+        await this.enableMicrophone(settings.microphoneDeviceId);
       } catch (error) {
         this.patch({ error: deviceErrorMessage(error), isMuted: true });
       }
@@ -227,7 +220,8 @@ export class MediaSession {
     // An explicit microphone enable is also an explicit return to the call.
     // Deafen owns the microphone only while it remains enabled.
     if (this.isDeafened && !muted) await this.setDeafened(false);
-    await this.room.localParticipant.setMicrophoneEnabled(!muted);
+    if (muted) await this.room.localParticipant.setMicrophoneEnabled(false);
+    else await this.enableMicrophone();
     this.microphoneEnabledBeforeDeafen = !muted;
     this.refreshSnapshot();
     await this.syncOwnVoiceState();
@@ -244,7 +238,7 @@ export class MediaSession {
       this.microphoneEnabledBeforeDeafen &&
       this.connection?.canSpeak !== false
     ) {
-      await this.room.localParticipant.setMicrophoneEnabled(true);
+      await this.enableMicrophone();
     }
     this.isDeafened = deafened;
     for (const participant of this.room.remoteParticipants.values())
@@ -272,6 +266,45 @@ export class MediaSession {
       true,
     );
     if (!switched) throw new Error("Не удалось выбрать устройство вывода");
+  }
+
+  private async enableMicrophone(deviceId?: string): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    await room.localParticipant.setMicrophoneEnabled(true, {
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+      ...(deviceId ? { deviceId } : {}),
+    });
+    await this.attachMicrophoneGainProcessor();
+  }
+
+  private async attachMicrophoneGainProcessor(): Promise<void> {
+    const processor = this.microphoneGainProcessor;
+    const track = this.room?.localParticipant.getTrackPublication?.(
+      Track.Source.Microphone,
+    )?.track;
+    if (
+      processor === null ||
+      track === undefined ||
+      track.kind !== Track.Kind.Audio ||
+      !("setProcessor" in track)
+    )
+      return;
+
+    const microphoneTrack = track as LocalAudioTrack;
+    if (microphoneTrack === this.microphoneGainTrack) return;
+    try {
+      await microphoneTrack.setProcessor(processor);
+      this.microphoneGainTrack = microphoneTrack;
+    } catch (error) {
+      // Gain is an enhancement. A WebAudio failure must never turn a working
+      // microphone into a failed call.
+      this.reportDiagnostic("voice_microphone_gain_failed", {
+        reason: mediaFailureReason(error),
+      });
+    }
   }
 
   setParticipantVolume(identity: string, volume: number): void {
@@ -530,6 +563,7 @@ export class MediaSession {
     this.annotationScreenSharerIdentity = null;
     const microphoneGainProcessor = this.microphoneGainProcessor;
     this.microphoneGainProcessor = null;
+    this.microphoneGainTrack = null;
     void microphoneGainProcessor?.destroy();
     this.removeRemoteAudioElements();
     this.snapshot.screenTrack?.detach().forEach((element) => element.remove());

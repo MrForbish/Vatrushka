@@ -2,7 +2,7 @@ import type { AudioProcessorOptions, TrackProcessor } from "livekit-client";
 import type { Track } from "livekit-client";
 
 function clampVolume(volume: number): number {
-  return Math.max(0, Math.min(1, volume));
+  return Math.max(0, Math.min(1.5, volume));
 }
 
 export class MicrophoneGainProcessor
