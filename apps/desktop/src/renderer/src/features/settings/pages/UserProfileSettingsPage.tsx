@@ -33,6 +33,7 @@ export interface UserProfileSettingsPageProps {
   onResetAvatar(): Promise<UserProfileSettings>;
   onCover?(file: File): Promise<UserProfileSettings>;
   onResetCover?(): Promise<UserProfileSettings>;
+  onProfileMediaChange?(profile: UserProfileSettings): void;
   onUserChange(user: PublicUser): void;
 }
 
@@ -57,6 +58,7 @@ export function UserProfileSettingsPage({
   onLoad,
   onResetAvatar,
   onResetCover,
+  onProfileMediaChange,
   onSave,
   onUserChange,
   user,
@@ -138,6 +140,7 @@ export function UserProfileSettingsPage({
           displayName: next.displayName,
           avatarUrl: next.avatarUrl,
         });
+        onProfileMediaChange?.(next);
         setSaveState("saved");
         window.setTimeout(() => setSaveState("idle"), 1_800);
       })
@@ -153,6 +156,7 @@ export function UserProfileSettingsPage({
       .then((next) => {
         apply(next);
         onUserChange({ ...user, avatarUrl: next.avatarUrl });
+        onProfileMediaChange?.(next);
         setAvatarFileName(null);
         setCoverFileName(null);
       })

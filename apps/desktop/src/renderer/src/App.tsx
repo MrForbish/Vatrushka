@@ -42,6 +42,7 @@ import {
   type TextMessage,
   type UserNotificationPreferences,
   type UserPresence,
+  type UserProfileSettings,
   type UserUnreadSummary,
   type RealtimeEvent,
 } from "@vatrushka/shared";
@@ -896,6 +897,18 @@ export default function App(): ReactNode {
     userRef.current = next;
     setUser(next);
   };
+  const updateProfileMedia = useCallback(
+    (profile: UserProfileSettings): void => {
+      setProfileCoverUrl(profile.coverUrl ?? null);
+      setUser((current) => {
+        if (current === null || current.id !== profile.id) return current;
+        const next = { ...current, avatarUrl: profile.avatarUrl };
+        userRef.current = next;
+        return next;
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
     if (user === null) {
@@ -3460,6 +3473,7 @@ export default function App(): ReactNode {
           onUpdatePrivacy={updatePrivacySettings}
           onUpdateNotificationPreferences={updateServerNotificationPreferences}
           onLogout={requestLogout}
+          onProfileMediaChange={updateProfileMedia}
           onUserChange={updateUser}
           outputId={settings.outputDeviceId}
           presence={presence}
