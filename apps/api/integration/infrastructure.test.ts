@@ -130,6 +130,7 @@ describe("production infrastructure adapters", () => {
     const user = await postgres.store.createUserWithPassword(
       `${randomUUID()}@reset.integration.test`,
       "old-password-hash",
+      `reset${randomUUID().replace(/-/gu, "").slice(0, 27)}`,
       now,
     );
     if (!user) throw new Error("Failed to create reset integration user");

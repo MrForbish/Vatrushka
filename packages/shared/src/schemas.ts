@@ -42,16 +42,25 @@ export const passwordSchema = z
     (value) => /\p{L}/u.test(value) && /\p{N}/u.test(value),
     "Пароль должен содержать букву и цифру",
   );
+export const usernameSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(
+    /^[a-z0-9_]{3,32}$/u,
+    "Username: 3–32 символа, латиница, цифры и подчёркивание",
+  );
 export const uuidSchema = z.uuid();
 
 export const requestRegistrationSchema = z
-  .object({ email: emailSchema, password: passwordSchema })
+  .object({ email: emailSchema, password: passwordSchema, username: usernameSchema })
   .strict();
 export const verifyRegistrationSchema = z
   .object({
     email: emailSchema,
     code: otpCodeSchema,
     deviceName: z.string().trim().min(1).max(100),
+    username: usernameSchema,
   })
   .strict();
 export const requestPasswordResetSchema = z
@@ -99,14 +108,6 @@ export const refreshSchema = z
 export const updateProfileSchema = z
   .object({ displayName: displayNameSchema })
   .strict();
-export const usernameSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .regex(
-    /^[a-z0-9_]{3,32}$/u,
-    "Username: 3–32 символа, латиница, цифры и подчёркивание",
-  );
 export const updateUserProfileSettingsSchema = z
   .object({
     displayName: displayNameSchema,

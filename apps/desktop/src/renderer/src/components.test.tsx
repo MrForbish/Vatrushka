@@ -76,6 +76,46 @@ describe('authentication screens', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Неверный код');
   });
 
+  it('requires a username when registering an account', async () => {
+    const onUsernameChange = vi.fn();
+    render(
+      <AuthPanel
+        mode="register"
+        stage="credentials"
+        factor="email"
+        totpAvailable={false}
+        email="new@example.com"
+        username=""
+        code=""
+        password="secure-pass-42"
+        passwordConfirmation="secure-pass-42"
+        rememberSession
+        retrySeconds={0}
+        busy={false}
+        error={null}
+        notice={null}
+        onMode={noop}
+        onReset={noop}
+        onEmailChange={noop}
+        onUsernameChange={onUsernameChange}
+        onCodeChange={noop}
+        onPasswordChange={noop}
+        onPasswordConfirmationChange={noop}
+        onRememberSessionChange={noop}
+        onRequest={noop}
+        onVerify={noop}
+        onFactor={noop}
+        onBack={noop}
+      />,
+    );
+
+    const username = screen.getByLabelText('Имя пользователя');
+    expect(username).toHaveAttribute('autocomplete', 'username');
+    expect(screen.getByText('Username уникален и меняется не чаще одного раза в 7 дней.')).toBeInTheDocument();
+    await userEvent.type(username, 'new_player');
+    expect(onUsernameChange).toHaveBeenCalledWith('n');
+  });
+
   it('renders password reset without disclosing account existence', async () => {
     const onVerify = vi.fn();
     render(<AuthPanel mode="reset" stage="otp" factor="email" totpAvailable={false} email="test@example.com" code="123456" password="new-password-42" passwordConfirmation="new-password-42" rememberSession retrySeconds={0} busy={false} error={null} notice={null} onMode={noop} onReset={noop} onEmailChange={noop} onCodeChange={noop} onPasswordChange={noop} onPasswordConfirmationChange={noop} onRememberSessionChange={noop} onRequest={noop} onVerify={onVerify} onFactor={noop} onBack={noop} />);

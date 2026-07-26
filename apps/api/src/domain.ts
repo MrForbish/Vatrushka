@@ -14,6 +14,7 @@ import type {
 export interface UserRecord {
   id: string;
   email: string;
+  username?: string | null;
   displayName: string | null;
   avatarObjectKey?: string | null;
   platformRole: PlatformRole;
