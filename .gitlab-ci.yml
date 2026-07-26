@@ -915,7 +915,7 @@ publish-staging-beta:
     - job: windows-staging-beta-package
       artifacts: true
   script:
-    - setup="$(find apps/desktop/release -maxdepth 1 -name 'Vatrushka-Setup-*-beta.*-x64.exe' -print -quit)"
+    - setup="$(find apps/desktop/release -maxdepth 1 -name '*-Setup-*-beta.*-x64.exe' -print -quit)"
     - blockmap="${setup}.blockmap"
     - latest=apps/desktop/release/latest.yml
     - checksums=apps/desktop/release/SHA256SUMS.txt
