@@ -649,8 +649,8 @@ export const localSettingsSchema = z
   .object({
     microphoneDeviceId: z.string().max(512).optional(),
     outputDeviceId: z.string().max(512).optional(),
-    microphoneVolume: z.number().min(0).max(1).optional(),
-    outputVolume: z.number().min(0).max(1).optional(),
+    microphoneVolume: z.number().min(0).max(1).default(1),
+    outputVolume: z.number().min(0).max(1).default(1),
     volume: z.number().min(0).max(1).default(1),
     appSoundVolume: z.number().min(0).max(1).default(0.6),
     desktopNotificationsEnabled: z.boolean().default(true),
