@@ -49,6 +49,7 @@ const definitions: Record<ServerPermission, Omit<PermissionDefinition, 'permissi
   CREATE_THREADS: { label: 'Создавать обсуждения', description: 'Создавать ветки по сообщениям.' },
   CONNECT_VOICE: { label: 'Подключаться к голосу', description: 'Входить в голосовые каналы.' },
   SPEAK: { label: 'Говорить', description: 'Передавать голос в голосовом канале.' },
+  STREAM_VIDEO: { label: 'Включать камеру', description: 'Передавать видео с камеры в голосовом канале.' },
   STREAM_SCREEN: { label: 'Демонстрировать экран', description: 'Запускать показ экрана или приложения.' },
   STREAM_APPLICATION_AUDIO: { label: 'Передавать звук приложения', description: 'Добавлять системный звук к демонстрации.' },
   USE_PRIORITY_VOICE: { label: 'Приоритет голоса', description: 'Получать приоритет во время разговора.' },
@@ -73,5 +74,5 @@ export const permissionDefinitions = Object.fromEntries(
 
 export const channelPermissionGroups = [
   group('text', 'Текстовые каналы', ['VIEW_CHANNEL', 'READ_MESSAGE_HISTORY', 'SEND_MESSAGES', 'SEND_ATTACHMENTS', 'ADD_REACTIONS', 'EMBED_LINKS', 'MENTION_EVERYONE', 'MANAGE_OWN_MESSAGES', 'MANAGE_MESSAGES', 'PIN_MESSAGES', 'CREATE_THREADS']),
-  group('voice', 'Голос и демонстрация', ['CONNECT_VOICE', 'SPEAK', 'STREAM_SCREEN', 'STREAM_APPLICATION_AUDIO', 'USE_PRIORITY_VOICE', 'MUTE_MEMBERS', 'DEAFEN_MEMBERS', 'MOVE_MEMBERS', 'STOP_OTHERS_STREAM', 'CREATE_TEMPORARY_VOICE']),
+  group('voice', 'Голос, камера и демонстрация', ['CONNECT_VOICE', 'SPEAK', 'STREAM_VIDEO', 'STREAM_SCREEN', 'STREAM_APPLICATION_AUDIO', 'USE_PRIORITY_VOICE', 'MUTE_MEMBERS', 'DEAFEN_MEMBERS', 'MOVE_MEMBERS', 'STOP_OTHERS_STREAM', 'CREATE_TEMPORARY_VOICE']),
 ];

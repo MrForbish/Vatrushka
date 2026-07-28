@@ -43,6 +43,7 @@ export interface SettingsRoutePageProps {
   directUnreadCount: number;
   error: string | null;
   inputLevel: number;
+  cameraId: string | undefined;
   loading: boolean;
   microphoneId: string | undefined;
   outputId: string | undefined;
@@ -63,6 +64,7 @@ export interface SettingsRoutePageProps {
   onHome(): void;
   onNavigate(path: string): void;
   onMicrophone(deviceId: string): void;
+  onCamera(deviceId: string): void;
   onMicrophoneVolume(value: number): void;
   onNotificationSettingsChange(
     settings: Pick<
@@ -240,10 +242,12 @@ export function SettingsRoutePage(
         <UserAudioSettingsPage
           appSoundVolume={props.settings.appSoundVolume}
           busy={props.busy}
+          cameraId={props.cameraId}
           devices={props.devices}
           inputLevel={props.inputLevel}
           microphoneId={props.microphoneId}
           onMicrophone={props.onMicrophone}
+          onCamera={props.onCamera}
           microphoneVolume={props.settings.microphoneVolume ?? 0.5}
           onMicrophoneVolume={props.onMicrophoneVolume}
           onAppSoundVolume={props.onAppSoundVolume}

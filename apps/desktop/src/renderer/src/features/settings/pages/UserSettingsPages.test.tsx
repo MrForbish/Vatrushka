@@ -71,13 +71,14 @@ describe('routed user settings pages', () => {
 
   it('renders real device labels and persists selected device identifiers', async () => {
     const onMicrophone = vi.fn();
+    const onCamera = vi.fn();
     const onMicrophoneVolume = vi.fn();
     const onOutput = vi.fn();
     const onOutputVolume = vi.fn();
     const onAppSoundVolume = vi.fn();
     const onTestNotification = vi.fn();
     const onTestOutput = vi.fn();
-    render(<UserAudioSettingsPage appSoundVolume={0.5} busy={false} devices={{ inputs: [device('audioinput', 'default', 'Default - Studio Mic'), device('audioinput', 'mic-2', 'USB Microphone')], outputs: [device('audiooutput', 'default', 'Default - Headphones'), device('audiooutput', 'speaker-2', 'Monitor Speakers')] }} inputLevel={0.3} microphoneId="default" microphoneVolume={0.5} onAppSoundVolume={onAppSoundVolume} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onRefresh={vi.fn()} onTestNotification={onTestNotification} onTestOutput={onTestOutput} outputId="default" outputVolume={0.5} voiceConnected />);
+    render(<UserAudioSettingsPage appSoundVolume={0.5} busy={false} cameraId="camera-2" devices={{ cameras: [device('videoinput', 'camera-2', 'USB Camera')], inputs: [device('audioinput', 'default', 'Default - Studio Mic'), device('audioinput', 'mic-2', 'USB Microphone')], outputs: [device('audiooutput', 'default', 'Default - Headphones'), device('audiooutput', 'speaker-2', 'Monitor Speakers')] }} inputLevel={0.3} microphoneId="default" microphoneVolume={0.5} onAppSoundVolume={onAppSoundVolume} onCamera={onCamera} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onRefresh={vi.fn()} onTestNotification={onTestNotification} onTestOutput={onTestOutput} outputId="default" outputVolume={0.5} voiceConnected />);
 
     expect(screen.getByText('Системное · Studio Mic')).toBeInTheDocument();
     expect(screen.getByText('Системное · Headphones')).toBeInTheDocument();
@@ -88,6 +89,7 @@ describe('routed user settings pages', () => {
 
     expect(onMicrophone).toHaveBeenCalledWith('mic-2');
     expect(onOutput).toHaveBeenCalledWith('speaker-2');
+    expect(screen.getByText('USB Camera')).toBeInTheDocument();
     fireEvent.change(screen.getByRole('slider', { name: 'Громкость микрофона' }), { target: { value: '55' } });
     fireEvent.change(screen.getByRole('slider', { name: 'Громкость вывода' }), { target: { value: '65' } });
     expect(onMicrophoneVolume).toHaveBeenCalledWith(0.55);

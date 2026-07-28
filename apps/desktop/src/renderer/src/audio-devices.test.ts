@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { audioDeviceOptions, splitAudioDevices } from './audio-devices';
+import { audioDeviceOptions, cameraDeviceOptions, splitAudioDevices } from './audio-devices';
 
 function device(kind: MediaDeviceKind, deviceId: string, label: string): MediaDeviceInfo {
   return { kind, deviceId, label, groupId: `${deviceId}-group`, toJSON: () => ({}) };
@@ -20,9 +20,17 @@ describe('audio device presentation', () => {
     ]);
   });
 
-  it('keeps input and output devices separate and deduplicated', () => {
+  it('keeps audio inputs, outputs and cameras separate and deduplicated', () => {
     const input = device('audioinput', 'mic', 'USB Microphone');
     const output = device('audiooutput', 'speaker', 'USB Headset');
-    expect(splitAudioDevices([input, input, output])).toEqual({ inputs: [input], outputs: [output] });
+    const camera = device('videoinput', 'camera', 'USB Camera');
+    expect(splitAudioDevices([input, input, output, camera, camera])).toEqual({
+      inputs: [input],
+      outputs: [output],
+      cameras: [camera],
+    });
+    expect(cameraDeviceOptions([camera])).toEqual([
+      { value: 'camera', label: 'USB Camera' },
+    ]);
   });
 });

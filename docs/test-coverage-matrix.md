@@ -10,7 +10,7 @@
 | Серверы, роли и permissions | действие без права, stale update, рассинхронизация клиентов | да | да | да | серверный flow | shell/settings | два клиента и denied/allowed matrix |
 | Presence и уведомления | устаревший статус, нарушение DND/privacy, дубликаты | да | да, настоящий Redis | да | частично | settings/notification | native notifications и reconnect |
 | Messaging | дубликаты, потеря read state, неверные mentions/attachments | да | да, outbox + S3 contracts | да | базовый flow | message states | два клиента, S3 и reconnect |
-| Voice | неверное устройство, зависшее подключение, неснятые tracks | да | lease/webhook | да | permission/devices | voice shell | реальный LiveKit и два Windows ПК |
+| Voice и камера | неверное устройство, зависшее подключение, неснятые camera/screen tracks, публикация без права | да | lease/webhook + `STREAM_VIDEO` | да | permission/devices/camera preview | voice shell/camera tiles | реальный LiveKit и два Windows ПК: камера, screen share, reconnect |
 | Screen share/audio | повторный publish, плохой профиль, дублирование голосов | да | lease | да | lifecycle smoke | picker/viewer | window/monitor, loopback и reconnect |
 | Updater | ложное уведомление, dev URL, поломанный upgrade | да | feed contract | да | shell state | ready state | clean install + две предыдущие версии |
 | Release и migrations | destructive migration, неверная ветка/версия, mutable artifact | policy tests | полный migration chain | нет | installer в RC | нет | staging feed и rollback drill |

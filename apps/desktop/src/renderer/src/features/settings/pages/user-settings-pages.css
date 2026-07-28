@@ -40,6 +40,33 @@
 .vui-user-audio-settings__volume .vui-slider {
   align-self: center;
 }
+.vui-user-audio-settings__camera {
+  grid-column: 1 / -1;
+}
+.vui-user-audio-settings__camera-empty,
+.vui-user-audio-settings__camera-error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+  font: var(--text-body-sm);
+}
+.vui-user-audio-settings__camera-error { color: var(--color-danger); }
+.vui-user-audio-settings__camera-preview {
+  display: grid;
+  gap: var(--space-3);
+  max-width: 560px;
+}
+.vui-user-audio-settings__camera-preview video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-0);
+  object-fit: cover;
+  transform: scaleX(-1);
+}
 .vui-user-profile-settings__grid {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);

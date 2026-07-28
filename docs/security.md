@@ -21,7 +21,7 @@ Windows DPAPI protects against other OS users but not every process already runn
 - route rate limits covered by integration tests, attempt limits, immediate access-token checks and session family revocation;
 - password reset does not disclose account existence at request time and atomically revokes every active session after successful email-code verification;
 - single-use hashed 2FA recovery codes, active-session management and an append-only security event feed;
-- least-privilege channel tokens: microphone/screen sources, no camera;
+- least-privilege channel tokens: microphone, camera and screen sources are issued independently from effective channel permissions; камера требует `STREAM_VIDEO`;
 - server membership, effective permissions and moderation checks выполняются server-side; гостевой media-доступ отсутствует;
 - webhook signature and body checksum validation;
 - Pino redaction for auth headers/code/refresh/secrets.

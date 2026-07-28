@@ -39,6 +39,7 @@ export const serverPermissions = [
   "CREATE_THREADS",
   "CONNECT_VOICE",
   "SPEAK",
+  "STREAM_VIDEO",
   "STREAM_SCREEN",
   "STREAM_APPLICATION_AUDIO",
   "USE_PRIORITY_VOICE",
@@ -973,6 +974,7 @@ export interface RoomConnection {
   serverName?: string;
   channelName?: string;
   canSpeak?: boolean;
+  canStreamVideo?: boolean;
   canStream?: boolean;
   canStreamApplicationAudio?: boolean;
   canMoveMembers?: boolean;

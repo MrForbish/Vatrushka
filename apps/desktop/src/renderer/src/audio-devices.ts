@@ -1,6 +1,8 @@
 export interface AudioDevices {
   inputs: MediaDeviceInfo[];
   outputs: MediaDeviceInfo[];
+  /** Optional while older stories and tests migrate to camera-aware catalogs. */
+  cameras?: MediaDeviceInfo[];
 }
 
 export interface AudioDeviceOption {
@@ -16,14 +18,22 @@ function cleanSystemLabel(label: string): string {
 export function splitAudioDevices(devices: MediaDeviceInfo[]): AudioDevices {
   const unique = new Map<string, MediaDeviceInfo>();
   for (const device of devices) {
-    if (device.kind !== 'audioinput' && device.kind !== 'audiooutput') continue;
+    if (device.kind !== 'audioinput' && device.kind !== 'audiooutput' && device.kind !== 'videoinput') continue;
     unique.set(`${device.kind}:${device.deviceId}`, device);
   }
   const values = [...unique.values()];
   return {
     inputs: values.filter((device) => device.kind === 'audioinput'),
     outputs: values.filter((device) => device.kind === 'audiooutput'),
+    cameras: values.filter((device) => device.kind === 'videoinput'),
   };
+}
+
+export function cameraDeviceOptions(devices: MediaDeviceInfo[]): AudioDeviceOption[] {
+  return devices.map((device, index) => ({
+    value: device.deviceId,
+    label: device.label.trim() || `Название камеры скрыто Windows (${index + 1})`,
+  }));
 }
 
 export function audioDeviceOptions(devices: MediaDeviceInfo[], kind: 'input' | 'output'): AudioDeviceOption[] {

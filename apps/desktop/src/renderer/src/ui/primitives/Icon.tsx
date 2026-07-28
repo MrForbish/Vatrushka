@@ -4,6 +4,8 @@ export type IconName =
   | 'arrowRight'
   | 'attachment'
   | 'bell'
+  | 'camera'
+  | 'cameraOff'
   | 'check'
   | 'chevronDown'
   | 'close'
@@ -48,6 +50,8 @@ const paths: Record<IconName, ReactNode> = {
   arrowRight: <path d="M5 12h14m-6-6 6 6-6 6" />,
   attachment: <path d="m21.4 11.6-8.9 8.9a6 6 0 0 1-8.5-8.5l9.5-9.5a4 4 0 0 1 5.7 5.7l-9.6 9.5a2 2 0 0 1-2.8-2.8l8.9-8.9" />,
   bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9Z" /><path d="M10 21h4" /></>,
+  camera: <><rect x="3" y="6" width="13" height="12" rx="2" /><path d="m16 10 5-3v10l-5-3" /></>,
+  cameraOff: <><path d="m3 3 18 18" /><rect x="3" y="6" width="13" height="12" rx="2" /><path d="m16 10 5-3v10l-5-3" /></>,
   check: <path d="m5 12 4 4L19 6" />,
   chevronDown: <path d="m7 10 5 5 5-5" />,
   close: <path d="M6 6l12 12M18 6 6 18" />,

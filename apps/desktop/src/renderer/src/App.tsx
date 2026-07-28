@@ -435,6 +435,7 @@ export default function App(): ReactNode {
   const [devices, setDevices] = useState<AudioDevices>({
     inputs: [],
     outputs: [],
+    cameras: [],
   });
   const [audioDeviceCatalogAuthorized, setAudioDeviceCatalogAuthorized] =
     useState(false);
@@ -1083,7 +1084,7 @@ export default function App(): ReactNode {
             "Не удалось получить доступ к аудиоустройствам. Проверьте разрешение на микрофон в Windows.",
             { cause: caught },
           );
-        setDevices({ inputs: [], outputs: [] });
+        setDevices({ inputs: [], outputs: [], cameras: [] });
       } finally {
         permissionStream?.getTracks().forEach((track) => track.stop());
       }
@@ -1181,10 +1182,17 @@ export default function App(): ReactNode {
       !devices.outputs.some(
         (device) => device.deviceId === settings.outputDeviceId,
       );
-    if (!microphoneMissing && !outputMissing) return;
+    const cameraMissing =
+      settings.cameraDeviceId !== undefined &&
+      (devices.cameras?.length ?? 0) > 0 &&
+      !(devices.cameras ?? []).some(
+        (device) => device.deviceId === settings.cameraDeviceId,
+      );
+    if (!microphoneMissing && !outputMissing && !cameraMissing) return;
     const next = { ...settings };
     if (microphoneMissing) delete next.microphoneDeviceId;
     if (outputMissing) delete next.outputDeviceId;
+    if (cameraMissing) delete next.cameraDeviceId;
     setSettings(next);
     void window.desktop
       .updateLocalSettings(next)
@@ -1193,11 +1201,12 @@ export default function App(): ReactNode {
       const fallbacks: Array<Promise<void>> = [];
       if (microphoneMissing) fallbacks.push(media.switchMicrophone("default"));
       if (outputMissing) fallbacks.push(media.switchOutput("default"));
+      if (cameraMissing) fallbacks.push(media.switchCamera("default"));
       void Promise.all(fallbacks).catch((caught) =>
         setError(userMessage(caught)),
       );
     }
-  }, [audioDeviceCatalogAuthorized, connection, devices.inputs, devices.outputs, settings]);
+  }, [audioDeviceCatalogAuthorized, connection, devices.cameras, devices.inputs, devices.outputs, settings]);
 
   useEffect(() => {
     if (connection === null) {
@@ -2827,7 +2836,7 @@ export default function App(): ReactNode {
   const requestLogout = (): void => setLogoutConfirmOpen(true);
 
   const persistDevice = (
-    key: "microphoneDeviceId" | "outputDeviceId",
+    key: "microphoneDeviceId" | "outputDeviceId" | "cameraDeviceId",
     value: string,
   ): void => {
     const deviceId = value === "default" ? undefined : value;
@@ -2838,7 +2847,9 @@ export default function App(): ReactNode {
       if (connection !== null)
         await (key === "microphoneDeviceId"
           ? media.switchMicrophone(value)
-          : media.switchOutput(value));
+          : key === "outputDeviceId"
+            ? media.switchOutput(value)
+            : media.switchCamera(value));
       setSettings(next);
       await window.desktop.updateLocalSettings(next);
     };
@@ -3237,6 +3248,10 @@ export default function App(): ReactNode {
     connection === null ? undefined : localParticipant?.audioLevel;
   const openConnectedVoice = (): void => {
     if (!connection) return;
+    // Settings routes render ahead of the selected workspace. Clear a user or
+    // server settings route before selecting the active voice channel, or the
+    // mini-panel action appears to do nothing.
+    void navigate("/", { replace: true });
     if (serverDetail?.id === connection.serverId) {
       setActiveChannelId(connection.channelId);
       setScreen("server");
@@ -3284,6 +3299,7 @@ export default function App(): ReactNode {
       devices={devices}
       microphoneId={settings.microphoneDeviceId}
       microphoneVolume={settings.microphoneVolume ?? 0.5}
+      cameraId={settings.cameraDeviceId}
       outputId={settings.outputDeviceId}
       outputVolume={settings.outputVolume ?? 0.5}
       busy={busy}
@@ -3292,6 +3308,14 @@ export default function App(): ReactNode {
       onDeafen={() =>
         void run(() => media.setDeafened(!mediaSnapshot.isDeafened))
       }
+      onCamera={() =>
+        void run(() =>
+          media.setCameraEnabled(
+            !mediaSnapshot.isCameraEnabled,
+            settings.cameraDeviceId,
+          ),
+        )
+      }
       onShare={showSourcePicker}
       onLeave={leaveRoom}
       onKick={(identity) =>
@@ -3299,6 +3323,7 @@ export default function App(): ReactNode {
       }
       onMicrophone={(value) => persistDevice("microphoneDeviceId", value)}
       onMicrophoneVolume={setMicrophoneVolume}
+      onCameraDevice={(value) => persistDevice("cameraDeviceId", value)}
       onOutput={(value) => persistDevice("outputDeviceId", value)}
       onOutputVolume={setOutputVolume}
       onStartAudio={() => void media.startAudio()}
@@ -3518,6 +3543,7 @@ export default function App(): ReactNode {
                 settingsServerError === null))
           }
           microphoneId={settings.microphoneDeviceId}
+          cameraId={settings.cameraDeviceId}
           onBack={closeSettings}
           onCreateServer={leaveSettingsForHome}
           onCurrentSessionRevoked={handleCurrentSessionRevoked}
@@ -3526,6 +3552,7 @@ export default function App(): ReactNode {
           onMicrophone={(deviceId) =>
             persistDevice("microphoneDeviceId", deviceId)
           }
+          onCamera={(deviceId) => persistDevice("cameraDeviceId", deviceId)}
           onAppSoundVolume={setAppSoundVolume}
           onMicrophoneVolume={setMicrophoneVolume}
           onNavigate={(path) => {
