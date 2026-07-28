@@ -86,7 +86,7 @@ env_file=$4
 image_repository=$5
 registry_auth_dir=$6
 
-set -- $(python3 - "$manifest" <<'PY'
+manifest_values=$(python3 - "$manifest" <<'PY'
 import json
 import re
 import sys
@@ -119,6 +119,8 @@ print(source_archive_sha)
 print(dependency_lock_sha)
 PY
 ) || fail "Candidate manifest is invalid."
+set -- $manifest_values
+test "$#" -eq 5 || fail "Candidate manifest is invalid."
 api_digest=$1
 commit=$2
 manifest_environment=$3

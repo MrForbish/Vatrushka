@@ -197,13 +197,13 @@ create-staging-candidate-manifest:
     - echo "$SOURCE_ARCHIVE_SHA256" | grep -Eq '^[a-f0-9]{64}$'
     - mv candidate-source.tar.gz "candidate/$SOURCE_ARCHIVE_SHA256.tar.gz"
     - |
-      migration_required=false
-      migration_compatibility=none
-      if [ "$CI_COMMIT_BEFORE_SHA" != "0000000000000000000000000000000000000000" ] && \
-         git diff --name-only "$CI_COMMIT_BEFORE_SHA" "$CI_COMMIT_SHA" -- apps/api/drizzle | grep -q .; then
-        migration_required=true
-        migration_compatibility=manual-review
+      changed_migrations=''
+      if [ "$CI_COMMIT_BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+        changed_migrations="$(git diff --name-only "$CI_COMMIT_BEFORE_SHA" "$CI_COMMIT_SHA" -- apps/api/drizzle)"
       fi
+      migration_metadata="$(printf '%s\n' "$changed_migrations" | node scripts/delivery/resolve-migration-compatibility.mjs scripts/delivery/migration-compatibility.json)"
+      migration_required="$(printf '%s\n' "$migration_metadata" | sed -n '1p')"
+      migration_compatibility="$(printf '%s\n' "$migration_metadata" | sed -n '2p')"
       node scripts/delivery/create-candidate-manifest.mjs \
         --version "$(node -p "require('./package.json').version")" \
         --commit-sha "$CI_COMMIT_SHA" \
@@ -239,12 +239,13 @@ create-release-candidate-manifest:
     - mv release-source.tar.gz "release-candidate/$SOURCE_ARCHIVE_SHA256.tar.gz"
     - |
       previous_tag="$(git tag --merged "$CI_COMMIT_SHA" --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1 || true)"
-      migration_required=false
-      migration_compatibility=none
-      if [ -n "$previous_tag" ] && git diff --name-only "$previous_tag" "$CI_COMMIT_SHA" -- apps/api/drizzle | grep -q .; then
-        migration_required=true
-        migration_compatibility=manual-review
+      changed_migrations=''
+      if [ -n "$previous_tag" ]; then
+        changed_migrations="$(git diff --name-only "$previous_tag" "$CI_COMMIT_SHA" -- apps/api/drizzle)"
       fi
+      migration_metadata="$(printf '%s\n' "$changed_migrations" | node scripts/delivery/resolve-migration-compatibility.mjs scripts/delivery/migration-compatibility.json)"
+      migration_required="$(printf '%s\n' "$migration_metadata" | sed -n '1p')"
+      migration_compatibility="$(printf '%s\n' "$migration_metadata" | sed -n '2p')"
       node scripts/delivery/create-candidate-manifest.mjs \
         --version "$(node -p "require('./package.json').version")" \
         --commit-sha "$CI_COMMIT_SHA" \
