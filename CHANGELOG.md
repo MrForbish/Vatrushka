@@ -4,6 +4,21 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.34] - 2026-07-28
+
+### Added
+
+- Camera publishing and viewing in voice channels, governed by the new
+  `STREAM_VIDEO` permission.
+
+### Fixed
+
+- Classified the reviewed additive `STREAM_VIDEO` role-permission migration as
+  backward-compatible for immutable delivery manifests; all unreviewed
+  migrations remain blocked for manual review.
+- Stopped the root-owned deployment wrapper from continuing after an invalid
+  candidate-manifest parse.
+
 ## [0.8.33] - 2026-07-28
 
 ### Added

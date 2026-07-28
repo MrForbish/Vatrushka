@@ -1,0 +1,6 @@
+{
+  "apps/api/drizzle/0027_stream_video_default_role.sql": {
+    "compatibility": "backward-compatible",
+    "rationale": "Adds STREAM_VIDEO to existing EVERYONE role permission arrays; no schema objects are changed and existing deny overwrites remain authoritative."
+  }
+}
