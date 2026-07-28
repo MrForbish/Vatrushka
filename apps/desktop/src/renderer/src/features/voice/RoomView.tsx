@@ -21,7 +21,6 @@ import {
   IconButton,
   Popover,
   Slider,
-  VoiceParticipantStrip,
   VoiceParticipantTile,
   type VoiceParticipantViewModel,
 } from "../../ui";
@@ -119,9 +118,13 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
       ?.name ??
     props.snapshot.screenSharerName ??
     "участник";
-  const stripParticipants = participantModels;
   const cameraTracks = (props.snapshot.videoTracks ?? []).filter(
-    (track) => track.source === "camera",
+    (track) =>
+      track.source === "camera" &&
+      // LiveKit may retain a local publication briefly while the camera track
+      // is being unpublished. Never keep a black local camera tile on screen
+      // during that transition.
+      (!track.isLocal || props.snapshot.isCameraEnabled),
   );
   const videoTracks = props.snapshot.videoTracks ?? [];
   const focusedTrack = videoTracks.find((track) => track.id === focusedTrackId) ?? null;
@@ -148,7 +151,12 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
         {props.snapshot.screenTrack === null ? (
           <div className="vui-room__voice-stage">
             {cameraTracks.length > 0 ? (
-              <CameraTrackGrid onOpen={setFocusedTrackId} tracks={cameraTracks} />
+              <CameraTrackGrid
+                focusedTrackId={focusedTrackId}
+                onClose={() => setFocusedTrackId(null)}
+                onOpen={setFocusedTrackId}
+                tracks={cameraTracks}
+              />
             ) : participantModels.length === 0 ? (
               <div className="vui-room__empty">
                 <Icon name="voice" size={38} />
@@ -199,17 +207,15 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
                   if (screenTrack) setFocusedTrackId(screenTrack.id);
                 }}
               />
-              <div className="vui-room__stream-label">
+              <div
+                aria-label={`Экран показывает ${screenSharerName}`}
+                className="vui-room__stream-presenter"
+                tabIndex={0}
+              >
                 <Badge tone="primary">Демонстрация экрана</Badge>
-                <span>
-                  Экран показывает <strong>{screenSharerName}</strong>
-                </span>
+                <span>{screenSharerName}</span>
               </div>
             </div>
-            <VoiceParticipantStrip
-              {...participantActions}
-              participants={stripParticipants}
-            />
             {cameraTracks.length > 0 ? (
               <CameraTrackStrip onOpen={setFocusedTrackId} tracks={cameraTracks} />
             ) : null}
@@ -337,7 +343,7 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
           />
         </footer>
       </div>
-      {focusedTrack ? (
+      {focusedTrack?.source === "screen" ? (
         <VideoFocusView
           onClose={() => setFocusedTrackId(null)}
           onOpen={setFocusedTrackId}
@@ -350,17 +356,30 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
 }
 
 function CameraTrackGrid({
+  focusedTrackId,
+  onClose,
   onOpen,
   tracks,
 }: {
+  focusedTrackId: string | null;
+  onClose(): void;
   onOpen(id: string): void;
   tracks: NonNullable<MediaSnapshot["videoTracks"]>;
 }): React.JSX.Element {
+  const focusedTrack = tracks.find((track) => track.id === focusedTrackId) ?? null;
   return (
-    <div className="vui-room__camera-grid" aria-label="Камеры участников">
-      {tracks.map((track) => (
-        <VideoTrack key={track.id} onOpen={onOpen} track={track} />
-      ))}
+    <div
+      aria-label="Камеры участников"
+      className="vui-room__camera-grid"
+      data-focused={focusedTrack !== null || undefined}
+    >
+      {focusedTrack ? (
+        <VideoTrack expanded onClose={onClose} track={focusedTrack} />
+      ) : (
+        tracks.map((track) => (
+          <VideoTrack key={track.id} onOpen={onOpen} track={track} />
+        ))
+      )}
     </div>
   );
 }
@@ -383,10 +402,14 @@ function CameraTrackStrip({
 
 function VideoTrack({
   compact = false,
+  expanded = false,
+  onClose,
   onOpen,
   track,
 }: {
   compact?: boolean;
+  expanded?: boolean;
+  onClose?(): void;
   onOpen?(id: string): void;
   track: NonNullable<MediaSnapshot["videoTracks"]>[number];
 }): React.JSX.Element {
@@ -401,16 +424,37 @@ function VideoTrack({
   }, [track.track]);
   const content = (
     <>
-      <video autoPlay className="vui-room__camera-video" muted={track.isLocal} playsInline ref={ref} />
+      <video
+        autoPlay
+        className="vui-room__camera-video"
+        data-source={track.source}
+        muted={track.isLocal}
+        playsInline
+        ref={ref}
+      />
       <div className="vui-room__camera-label">
         <span>{track.participantDisplayName}</span>
         <Badge tone="primary">{track.source === "camera" ? "Камера" : "Демонстрация экрана"}</Badge>
       </div>
+      {expanded && onClose ? (
+        <button
+          aria-label="Вернуть обычный размер камеры"
+          className="vui-room__camera-close"
+          onClick={onClose}
+          type="button"
+        >
+          <Icon name="close" size={20} />
+        </button>
+      ) : null}
     </>
   );
   if (!onOpen)
     return (
-      <div className="vui-room__camera-tile" data-compact={compact || undefined}>
+      <div
+        className="vui-room__camera-tile"
+        data-compact={compact || undefined}
+        data-expanded={expanded || undefined}
+      >
         {content}
       </div>
     );

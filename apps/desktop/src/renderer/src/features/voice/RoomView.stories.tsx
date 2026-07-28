@@ -110,7 +110,15 @@ export const CameraTiles: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Открыть камеру: Анна Белова' }));
-    await expect(canvas.getByRole('dialog', { name: 'Увеличенный просмотр видео' })).toBeInTheDocument();
+    await expect(
+      canvasElement.querySelector(".vui-room__camera-tile[data-expanded='true']"),
+    ).not.toBeNull();
+    await userEvent.click(
+      canvas.getByRole('button', { name: 'Вернуть обычный размер камеры' }),
+    );
+    await expect(
+      canvasElement.querySelector(".vui-room__camera-tile[data-expanded='true']"),
+    ).toBeNull();
   },
 };
 
