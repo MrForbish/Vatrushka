@@ -55,18 +55,20 @@ export class LiveKitMediaService implements MediaService {
     await this.rooms.removeParticipant(roomName, identity);
   }
 
-  async moveParticipant(sourceRoomName: string, identity: string, destinationRoomName: string, permissions: Pick<MediaTokenOptions, 'canPublishMicrophone' | 'canPublishScreen' | 'canPublishScreenAudio'>): Promise<void> {
+  async moveParticipant(sourceRoomName: string, identity: string, destinationRoomName: string, permissions: Pick<MediaTokenOptions, 'canPublishMicrophone' | 'canPublishCamera' | 'canPublishScreen' | 'canPublishScreenAudio'>): Promise<void> {
     await this.rooms.moveParticipant(sourceRoomName, identity, destinationRoomName);
     const canPublishMicrophone = permissions.canPublishMicrophone ?? true;
+    const canPublishCamera = permissions.canPublishCamera ?? true;
     const canPublishScreen = permissions.canPublishScreen ?? true;
     const canPublishScreenAudio = canPublishScreen && (permissions.canPublishScreenAudio ?? true);
     await this.rooms.updateParticipant(destinationRoomName, identity, {
       permission: {
-        canPublish: canPublishMicrophone || canPublishScreen,
+        canPublish: canPublishMicrophone || canPublishCamera || canPublishScreen,
         canSubscribe: true,
         canPublishData: false,
         canPublishSources: [
           ...(canPublishMicrophone ? [TrackSource.MICROPHONE] : []),
+          ...(canPublishCamera ? [TrackSource.CAMERA] : []),
           ...(canPublishScreen ? [TrackSource.SCREEN_SHARE] : []),
           ...(canPublishScreenAudio ? [TrackSource.SCREEN_SHARE_AUDIO] : []),
         ],
@@ -85,6 +87,7 @@ export class LiveKitMediaService implements MediaService {
 
   async issueToken(options: MediaTokenOptions): Promise<string> {
     const canPublishMicrophone = options.canPublishMicrophone ?? true;
+    const canPublishCamera = options.canPublishCamera ?? true;
     const canPublishScreen = options.canPublishScreen ?? true;
     const canPublishScreenAudio = canPublishScreen && (options.canPublishScreenAudio ?? true);
     const token = new AccessToken(this.config.LIVEKIT_API_KEY, this.config.LIVEKIT_API_SECRET, {
@@ -96,11 +99,12 @@ export class LiveKitMediaService implements MediaService {
     token.addGrant({
       room: options.roomName,
       roomJoin: true,
-      canPublish: canPublishMicrophone || canPublishScreen,
+      canPublish: canPublishMicrophone || canPublishCamera || canPublishScreen,
       canSubscribe: true,
       canPublishData: false,
       canPublishSources: [
         ...(canPublishMicrophone ? [TrackSource.MICROPHONE] : []),
+        ...(canPublishCamera ? [TrackSource.CAMERA] : []),
         ...(canPublishScreen ? [TrackSource.SCREEN_SHARE] : []),
         ...(canPublishScreenAudio ? [TrackSource.SCREEN_SHARE_AUDIO] : []),
       ],

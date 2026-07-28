@@ -9,7 +9,7 @@ import { MicrophoneGainProcessor } from "./microphone-gain";
 
 interface DeviceSwitchRoom {
   switchActiveDevice(
-    kind: "audioinput" | "audiooutput",
+    kind: "audioinput" | "audiooutput" | "videoinput",
     deviceId: string,
     exact: boolean,
   ): Promise<boolean>;
@@ -37,6 +37,7 @@ describe("MediaSession audio devices", () => {
 
     await session.switchMicrophone("microphone-studio");
     await session.switchOutput("headphones-usb");
+    await session.switchCamera("usb-camera");
 
     expect(switchActiveDevice).toHaveBeenNthCalledWith(
       1,
@@ -48,6 +49,12 @@ describe("MediaSession audio devices", () => {
       2,
       "audiooutput",
       "headphones-usb",
+      true,
+    );
+    expect(switchActiveDevice).toHaveBeenNthCalledWith(
+      3,
+      "videoinput",
+      "usb-camera",
       true,
     );
   });
@@ -101,6 +108,80 @@ describe("MediaSession audio devices", () => {
       expect.objectContaining({ echoCancellation: true }),
     );
     expect(setProcessor).not.toHaveBeenCalled();
+  });
+});
+
+describe("MediaSession camera", () => {
+  function cameraSession(
+    setCameraEnabled: (...args: unknown[]) => Promise<void>,
+  ): MediaSession {
+    const session = new MediaSession({} as ApiClient);
+    const localParticipant = {
+      isCameraEnabled: false,
+      isScreenShareEnabled: true,
+      setCameraEnabled: vi.fn(async (...args: unknown[]) => {
+        await setCameraEnabled(...args);
+        localParticipant.isCameraEnabled = args[0] === true;
+      }),
+    };
+    const internals = session as unknown as {
+      room: { state: ConnectionState; localParticipant: typeof localParticipant };
+      connection: RoomConnection;
+      refreshSnapshot(): void;
+    };
+    internals.room = { state: ConnectionState.Connected, localParticipant };
+    internals.connection = {
+      roomId: "channel-1",
+      ownerUserId: "owner-1",
+      livekitUrl: "ws://test",
+      livekitToken: "token",
+      participantIdentity: "local",
+      participantDisplayName: "Local",
+      isOwner: true,
+      contextType: "channel",
+      serverId: "server-1",
+      channelId: "channel-1",
+      canStreamVideo: true,
+    };
+    vi.spyOn(internals, "refreshSnapshot").mockImplementation(() => undefined);
+    return session;
+  }
+
+  it("publishes a 720p camera track independently from an active screen share", async () => {
+    const setCameraEnabled = vi.fn().mockResolvedValue(undefined);
+    const session = cameraSession(setCameraEnabled);
+
+    await session.setCameraEnabled(true, "usb-camera");
+
+    expect(setCameraEnabled).toHaveBeenCalledWith(true, {
+      deviceId: "usb-camera",
+      frameRate: { ideal: 30, max: 30 },
+      resolution: { width: 1280, height: 720 },
+    });
+  });
+
+  it("does not request a camera when the effective channel permission denies it", async () => {
+    const setCameraEnabled = vi.fn().mockResolvedValue(undefined);
+    const session = cameraSession(setCameraEnabled);
+    (session as unknown as { connection: RoomConnection }).connection = {
+      ...(session as unknown as { connection: RoomConnection }).connection,
+      canStreamVideo: false,
+    };
+
+    await expect(session.setCameraEnabled(true)).rejects.toThrow(
+      "Роль не разрешает включать камеру",
+    );
+    expect(setCameraEnabled).not.toHaveBeenCalled();
+  });
+
+  it("maps a denied device permission without affecting the room", async () => {
+    const session = cameraSession(
+      vi.fn().mockRejectedValue(new DOMException("denied", "NotAllowedError")),
+    );
+
+    await expect(session.setCameraEnabled(true)).rejects.toThrow(
+      "Доступ к камере запрещён",
+    );
   });
 });
 

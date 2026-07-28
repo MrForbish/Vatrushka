@@ -5,7 +5,7 @@ export const userSettingsNavigation = [
   { section: 'profile', label: 'Мой профиль', description: 'Имя, аватар и представление', icon: 'users' },
   { section: 'status', label: 'Статус и активность', description: 'Видимость и пользовательский статус', icon: 'sparkles' },
   { section: 'notifications', label: 'Уведомления', description: 'Звуки, баннеры и quiet hours', icon: 'bell' },
-  { section: 'audio', label: 'Голос и звук', description: 'Локальные устройства этого компьютера', icon: 'headphones' },
+  { section: 'audio', label: 'Звук и видео', description: 'Локальные устройства этого компьютера', icon: 'headphones' },
   { section: 'security', label: 'Безопасность', description: 'Пароль, 2FA и резервные коды', icon: 'lock' },
   { section: 'sessions', label: 'Устройства и сессии', description: 'Активные входы в аккаунт', icon: 'screen' },
   { section: 'activity', label: 'Активность аккаунта', description: 'История значимых событий', icon: 'info' },
