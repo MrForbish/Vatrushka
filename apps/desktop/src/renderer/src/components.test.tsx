@@ -255,6 +255,7 @@ describe('room UI', () => {
     error: null,
   };
   const voiceDevices = {
+    cameras: [{ deviceId: 'camera-usb', groupId: 'group-camera', kind: 'videoinput', label: 'USB Camera', toJSON: () => ({}) } as MediaDeviceInfo],
     inputs: [{ deviceId: 'microphone-studio', groupId: 'group-input', kind: 'audioinput', label: 'Studio Microphone', toJSON: () => ({}) } as MediaDeviceInfo],
     outputs: [{ deviceId: 'headphones-usb', groupId: 'group-output', kind: 'audiooutput', label: 'USB Headphones', toJSON: () => ({}) } as MediaDeviceInfo],
   };
@@ -263,9 +264,10 @@ describe('room UI', () => {
     const onParticipantMute = vi.fn();
     const onMicrophone = vi.fn();
     const onOutput = vi.fn();
+    const onCameraDevice = vi.fn();
     const onMicrophoneVolume = vi.fn();
     const onOutputVolume = vi.fn();
-    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={voiceDevices} microphoneId="microphone-studio" outputId={undefined} busy={false} error={null} microphoneVolume={0.8} outputVolume={0.6} onMute={noop} onShare={noop} onLeave={noop} onKick={noop} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={onParticipantMute} onParticipantVolume={noop} />);
+    render(<RoomView connection={connection} snapshot={baseSnapshot} devices={voiceDevices} microphoneId="microphone-studio" cameraId="camera-usb" outputId={undefined} busy={false} error={null} microphoneVolume={0.8} outputVolume={0.6} onMute={noop} onShare={noop} onLeave={noop} onKick={noop} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onCameraDevice={onCameraDevice} onOutput={onOutput} onOutputVolume={onOutputVolume} onStartAudio={noop} onScreenAudioMute={noop} onScreenAudioVolume={noop} onParticipantMute={onParticipantMute} onParticipantVolume={noop} />);
     expect(screen.getAllByText('Owner (вы)').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/Visitor/u).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/говорит/ui).length).toBeGreaterThan(0);
@@ -285,6 +287,10 @@ describe('room UI', () => {
     await userEvent.click(screen.getByRole('option', { name: 'USB Headphones' }));
     expect(onMicrophone).toHaveBeenCalledWith('microphone-studio');
     expect(onOutput).toHaveBeenCalledWith('headphones-usb');
+    await userEvent.click(screen.getByRole('button', { name: 'Выбрать устройство: Камера' }));
+    expect(screen.getByRole('option', { name: 'USB Camera' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('option', { name: 'USB Camera' }));
+    expect(onCameraDevice).toHaveBeenCalledWith('camera-usb');
     await userEvent.click(screen.getByRole('button', { name: 'Выбрать устройство: Микрофон' }));
     fireEvent.change(screen.getByRole('slider', { name: 'Громкость микрофона' }), { target: { value: '45' } });
     expect(onMicrophoneVolume).toHaveBeenCalledWith(0.45);

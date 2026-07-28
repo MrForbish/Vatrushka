@@ -224,6 +224,7 @@ const connectionSchema = z.object({
   serverName: z.string().optional(),
   channelName: z.string().optional(),
   canSpeak: z.boolean().optional(),
+  canStreamVideo: z.boolean().optional(),
   canStream: z.boolean().optional(),
   canStreamApplicationAudio: z.boolean().optional(),
   canMoveMembers: z.boolean().optional(),

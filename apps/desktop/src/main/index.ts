@@ -237,13 +237,16 @@ function configureSession(): void {
   });
 
   currentSession.setPermissionCheckHandler(
-    (webContents, permission, requestingOrigin, details) => {
+    (webContents, permission, requestingOrigin) => {
       const trusted = Boolean(
         mainWindow &&
         webContents === mainWindow.webContents &&
         isTrustedOrigin(requestingOrigin),
       );
-      return trusted && permission === "media" && details.mediaType !== "video";
+      // Camera capture is intentionally available only to the trusted main
+      // renderer. The operating system remains the final authority for the
+      // user-facing camera permission.
+      return trusted && permission === "media";
     },
   );
   currentSession.setPermissionRequestHandler(
@@ -253,11 +256,7 @@ function configureSession(): void {
         webContents === mainWindow.webContents &&
         isTrustedUrl(details.requestingUrl),
       );
-      const audioOnly =
-        permission === "media" &&
-        "mediaTypes" in details &&
-        details.mediaTypes?.every((type: string) => type === "audio");
-      callback(trusted && audioOnly);
+      callback(trusted && permission === "media");
     },
   );
 

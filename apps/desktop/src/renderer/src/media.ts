@@ -49,13 +49,24 @@ export interface ParticipantView {
   connectionQuality: string;
 }
 
+export interface VideoTrackView {
+  id: string;
+  source: "camera" | "screen";
+  participantIdentity: string;
+  participantDisplayName: string;
+  isLocal: boolean;
+  track: RemoteTrack | LocalTrack;
+}
+
 export interface MediaSnapshot {
   connectionState: ConnectionState;
   pingMs: number | null;
   participants: ParticipantView[];
   isMuted: boolean;
   isDeafened: boolean;
+  isCameraEnabled?: boolean;
   isScreenSharing: boolean;
+  videoTracks?: VideoTrackView[];
   screenTrack: RemoteTrack | LocalTrack | null;
   screenSharerName: string | null;
   screenShareIsLocal: boolean;
@@ -73,7 +84,9 @@ const initialSnapshot: MediaSnapshot = {
   participants: [],
   isMuted: true,
   isDeafened: false,
+  isCameraEnabled: false,
   isScreenSharing: false,
+  videoTracks: [],
   screenTrack: null,
   screenSharerName: null,
   screenShareIsLocal: false,
@@ -178,6 +191,13 @@ export class MediaSession {
           ? { deviceId: settings.microphoneDeviceId }
           : {}),
       },
+      videoCaptureDefaults: {
+        resolution: { width: 1280, height: 720 },
+        frameRate: { ideal: 30, max: 30 },
+        ...(settings.cameraDeviceId
+          ? { deviceId: settings.cameraDeviceId }
+          : {}),
+      },
       ...(settings.outputDeviceId
         ? { audioOutput: { deviceId: settings.outputDeviceId } }
         : {}),
@@ -269,6 +289,39 @@ export class MediaSession {
       true,
     );
     if (!switched) throw new Error("Не удалось выбрать устройство вывода");
+  }
+
+  async setCameraEnabled(enabled: boolean, deviceId?: string): Promise<void> {
+    const room = this.room;
+    if (!room) throw new UserFacingMediaError("Голосовой канал не подключён");
+    if (this.connection?.canStreamVideo === false)
+      throw new UserFacingMediaError("Роль не разрешает включать камеру");
+    if (this.connection?.canStreamVideo !== true)
+      throw new UserFacingMediaError(
+        "Сервер ещё не выдал право на публикацию камеры. Переподключитесь после обновления сервера.",
+      );
+    await this.waitForPublishingReady();
+    try {
+      await room.localParticipant.setCameraEnabled(enabled, enabled
+          ? {
+            resolution: { width: 1280, height: 720 },
+            frameRate: { ideal: 30, max: 30 },
+            ...(deviceId ? { deviceId } : {}),
+          }
+        : undefined);
+      this.refreshSnapshot();
+    } catch (error) {
+      const message = cameraErrorMessage(error);
+      this.patch({ error: message });
+      throw new UserFacingMediaError(message);
+    }
+  }
+
+  async switchCamera(deviceId: string): Promise<void> {
+    const room = this.room;
+    if (!room) return;
+    const switched = await room.switchActiveDevice("videoinput", deviceId, true);
+    if (!switched) throw new Error("Не удалось выбрать камеру");
   }
 
   private async enableMicrophone(deviceId?: string): Promise<void> {
@@ -558,6 +611,7 @@ export class MediaSession {
         await this.stopScreenShare(release);
       try {
         await this.room.localParticipant.setMicrophoneEnabled(false);
+        await this.room.localParticipant.setCameraEnabled(false);
       } catch {
         // Tracks are also force-stopped by Room.disconnect(true).
       }
@@ -711,17 +765,29 @@ export class MediaSession {
       connectionQuality: connectionQualityLabel(participant.connectionQuality),
     }));
 
-    const screenCandidates = allParticipants.flatMap((participant) =>
+    const videoTracks = allParticipants.flatMap((participant) =>
       [...participant.trackPublications.values()]
         .filter(
           (publication) =>
-            publication.source === Track.Source.ScreenShare &&
+            (publication.source === Track.Source.Camera ||
+              publication.source === Track.Source.ScreenShare) &&
             publication.track,
         )
         .map((publication) => ({
+          id: publication.trackSid,
+          source:
+            publication.source === Track.Source.Camera
+              ? ("camera" as const)
+              : ("screen" as const),
+          participantIdentity: participant.identity,
+          participantDisplayName: participant.name || "Участник",
+          isLocal: participant === room.localParticipant,
           participant,
           track: publication.track as RemoteTrack | LocalTrack,
         })),
+    );
+    const screenCandidates = videoTracks.filter(
+      (candidate) => candidate.source === "screen",
     );
     if (screenCandidates.length > 1)
       console.error(
@@ -744,7 +810,16 @@ export class MediaSession {
       participants,
       isMuted: !room.localParticipant.isMicrophoneEnabled,
       isDeafened: this.isDeafened,
+      isCameraEnabled: room.localParticipant.isCameraEnabled,
       isScreenSharing: room.localParticipant.isScreenShareEnabled,
+      videoTracks: videoTracks.map((candidate) => ({
+        id: candidate.id,
+        source: candidate.source,
+        participantIdentity: candidate.participantIdentity,
+        participantDisplayName: candidate.participantDisplayName,
+        isLocal: candidate.isLocal,
+        track: candidate.track,
+      })),
       screenTrack: firstScreen?.track ?? null,
       screenSharerName: firstScreen?.participant.name || null,
       screenShareIsLocal,
@@ -1079,6 +1154,17 @@ function deviceErrorMessage(error: unknown): string {
   if (error instanceof DOMException && error.name === "NotReadableError")
     return "Микрофон используется другим приложением";
   return "Не удалось включить микрофон";
+}
+
+function cameraErrorMessage(error: unknown): string {
+  if (error instanceof UserFacingMediaError) return error.message;
+  if (error instanceof DOMException && error.name === "NotAllowedError")
+    return "Доступ к камере запрещён. Разрешите его в настройках Windows.";
+  if (error instanceof DOMException && error.name === "NotFoundError")
+    return "Камера не найдена";
+  if (error instanceof DOMException && error.name === "NotReadableError")
+    return "Камера используется другим приложением";
+  return "Не удалось включить камеру";
 }
 
 function isConfirmedScreenShareLeaseLoss(error: unknown): boolean {
