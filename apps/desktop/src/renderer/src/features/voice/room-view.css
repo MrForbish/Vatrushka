@@ -40,14 +40,19 @@
 }
 .vui-room__participant-grid--single { align-self: center; justify-self: center; }
 .vui-room__voice-stage > .vui-voice-strip { width: 100%; }
-.vui-room__camera-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-content: center; gap: var(--space-3); width: min(1440px, 100%); min-height: 0; padding: var(--space-3) 0 var(--space-5); overflow-y: auto; }
+.vui-room__camera-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-content: center; gap: var(--space-3); width: min(1440px, 100%); min-height: 0; height: 100%; padding: var(--space-3) 0 var(--space-5); overflow-y: auto; }
+.vui-room__camera-grid[data-focused='true'] { grid-template-columns: minmax(0, 1fr); align-content: stretch; }
 .vui-room__camera-strip { display: grid; grid-auto-columns: minmax(180px, 240px); grid-auto-flow: column; gap: var(--space-2); max-width: 100%; overflow-x: auto; padding-bottom: var(--space-1); }
 .vui-room__camera-tile { display: block; width: 100%; padding: 0; position: relative; min-height: 180px; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-surface-2); box-shadow: var(--shadow-float); cursor: zoom-in; color: inherit; text-align: inherit; }
 .vui-room__camera-tile:focus-visible { outline: 2px solid var(--color-cyan); outline-offset: 2px; }
 .vui-room__camera-tile[data-compact='true'] { min-height: 120px; border-radius: var(--radius-md); }
+.vui-room__camera-tile[data-expanded='true'] { min-height: 0; height: 100%; cursor: default; }
 .vui-room__camera-video { display: block; width: 100%; height: 100%; object-fit: cover; background: var(--color-canvas); }
+.vui-room__camera-video[data-source='screen'] { object-fit: contain; object-position: center; }
 .vui-room__camera-label { position: absolute; right: var(--space-2); bottom: var(--space-2); left: var(--space-2); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-canvas), transparent 18%); color: var(--color-text-primary); font: var(--text-caption); }
 .vui-room__camera-label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--text-label-md); }
+.vui-room__camera-close { position: absolute; z-index: 2; top: var(--space-3); right: var(--space-3); display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid var(--color-border-default); border-radius: var(--radius-round); background: color-mix(in srgb, var(--color-canvas), transparent 14%); color: var(--color-text-primary); cursor: pointer; }
+.vui-room__camera-close:hover { background: var(--color-surface-3); }
 .vui-room__camera-focus { position: absolute; z-index: 30; inset: var(--space-3); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--space-3); min-width: 0; min-height: 0; padding: var(--space-4); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-canvas), transparent 2%); box-shadow: var(--shadow-modal); }
 .vui-room__camera-focus > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .vui-room__camera-focus > header > div { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
@@ -57,9 +62,9 @@
 .vui-room__camera-focus-strip { display: grid; grid-auto-columns: minmax(160px, 220px); grid-auto-flow: column; gap: var(--space-2); overflow-x: auto; }
 .vui-room__stream-stage { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--space-3); height: 100%; }
 .vui-room__stream { position: relative; min-height: 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--color-border-default), transparent 10%); border-radius: 16px; background: #030405; box-shadow: var(--shadow-float); }
-.vui-room__video-frame { position: relative; width: 100%; height: 100%; background: #030405; }
+.vui-room__video-frame { position: relative; display: grid; width: 100%; height: 100%; place-items: center; background: #030405; }
 .vui-room__video-frame:fullscreen { display: grid; place-items: center; }
-.vui-room__video { width: 100%; height: 100%; object-fit: contain; }
+.vui-room__video { display: block; width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-fit: contain; object-position: center; }
 .vui-room__annotation-canvas { position: absolute; z-index: 2; inset: 0; width: 100%; height: 100%; pointer-events: none; touch-action: none; }
 .vui-room__annotation-canvas[data-active='true'] { pointer-events: auto; cursor: crosshair; }
 .vui-room__annotation-tools { position: absolute; z-index: 4; top: var(--space-4); left: 50%; display: flex; align-items: center; gap: var(--space-2); max-width: calc(100% - 300px); padding: var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-canvas), transparent 6%); box-shadow: var(--shadow-float); transform: translateX(-50%); }
@@ -73,7 +78,9 @@
 .vui-room__annotation-size { display: flex; align-items: center; gap: var(--space-1); color: var(--color-text-muted); font: var(--text-caption); }
 .vui-room__fullscreen { position: absolute; right: var(--space-4); bottom: var(--space-4); opacity: .7; }
 .vui-room__fullscreen:hover { opacity: 1; }
-.vui-room__stream-label { position: absolute; top: var(--space-4); left: var(--space-4); display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-canvas), transparent 10%); font: var(--text-caption); }
+.vui-room__stream-presenter { position: absolute; z-index: 3; right: var(--space-4); bottom: var(--space-4); display: flex; align-items: center; gap: var(--space-2); max-width: min(320px, calc(100% - var(--space-8))); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border-default); border-radius: var(--radius-md); background: color-mix(in srgb, var(--color-canvas), transparent 10%); color: var(--color-text-primary); font: var(--text-caption); opacity: 0; pointer-events: none; transform: translateY(var(--space-1)); transition: opacity var(--motion-fast), transform var(--motion-fast); }
+.vui-room__stream:hover .vui-room__stream-presenter, .vui-room__stream:focus-within .vui-room__stream-presenter { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.vui-room__stream-presenter > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vui-room__stream-quality { position: absolute; top: var(--space-4); right: var(--space-4); padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-canvas), transparent 10%); color: var(--color-text-secondary); font: var(--text-caption); }
 .vui-room__stream-audio { display: none; }
 .vui-room__stream-audio-label { display: flex; align-items: center; gap: var(--space-2); color: var(--color-cyan); }

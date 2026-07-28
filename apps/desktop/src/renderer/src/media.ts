@@ -771,7 +771,13 @@ export class MediaSession {
           (publication) =>
             (publication.source === Track.Source.Camera ||
               publication.source === Track.Source.ScreenShare) &&
-            publication.track,
+            publication.track &&
+            // LiveKit can retain the local camera publication until the
+            // unpublish event completes. It must not keep a stopped camera
+            // surface visible while the participant has already disabled it.
+            (publication.source !== Track.Source.Camera ||
+              participant !== room.localParticipant ||
+              participant.isCameraEnabled),
         )
         .map((publication) => ({
           id: publication.trackSid,
