@@ -1001,8 +1001,9 @@ describe('servers, channels, messages, and roles API', () => {
     if (!voice) throw new Error('Missing voice channel');
     const connected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/connect`, headers: { authorization: `Bearer ${owner.accessToken}` } });
     expect(connected.statusCode).toBe(200);
-    const connection = connected.json<{ contextType: string; participantIdentity: string; voiceSessionId: string }>();
+    const connection = connected.json<{ contextType: string; participantIdentity: string; voiceSessionId: string; canStreamVideo: boolean }>();
     expect(connection.contextType).toBe('channel');
+    expect(connection.canStreamVideo).toBe(true);
     const channel = context.store.serverChannels.get(voice.id);
     if (!channel?.livekitRoomName) throw new Error('Missing LiveKit channel room');
     context.media.connect(channel.livekitRoomName, connection.participantIdentity);
@@ -1042,13 +1043,13 @@ describe('servers, channels, messages, and roles API', () => {
     expect(heartbeatMetrics.body).toContain('screen_share_active_sessions 1');
     context.media.available = true;
 
-    const audioDenied = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/channels/${voice.id}/overwrites/MEMBER/${member.userId}`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { allow: [], deny: ['STREAM_APPLICATION_AUDIO'] } });
-    expect(audioDenied.statusCode).toBe(204);
+    const mediaDenied = await context.app.inject({ method: 'PUT', url: `${API_PREFIX}/channels/${voice.id}/overwrites/MEMBER/${member.userId}`, headers: { authorization: `Bearer ${owner.accessToken}` }, payload: { allow: [], deny: ['STREAM_VIDEO', 'STREAM_APPLICATION_AUDIO'] } });
+    expect(mediaDenied.statusCode).toBe(204);
     const memberConnected = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/channels/${voice.id}/connect`, headers: { authorization: `Bearer ${member.accessToken}` } });
     expect(memberConnected.statusCode).toBe(200);
-    const memberConnection = memberConnected.json<{ participantIdentity: string; voiceSessionId: string; canStream: boolean; canStreamApplicationAudio: boolean }>();
-    expect(memberConnection).toEqual(expect.objectContaining({ canStream: true, canStreamApplicationAudio: false }));
-    expect(context.media.tokens.at(-1)).toEqual(expect.objectContaining({ canPublishScreen: true, canPublishScreenAudio: false }));
+    const memberConnection = memberConnected.json<{ participantIdentity: string; voiceSessionId: string; canStreamVideo: boolean; canStream: boolean; canStreamApplicationAudio: boolean }>();
+    expect(memberConnection).toEqual(expect.objectContaining({ canStreamVideo: false, canStream: true, canStreamApplicationAudio: false }));
+    expect(context.media.tokens.at(-1)).toEqual(expect.objectContaining({ canPublishCamera: false, canPublishScreen: true, canPublishScreenAudio: false }));
     context.media.connect(channel.livekitRoomName, memberConnection.participantIdentity);
     await context.service.handleWebhookEvent({
       id: 'voice-member-joined-source',

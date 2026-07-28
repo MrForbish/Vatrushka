@@ -43,6 +43,9 @@ const audioDevices: AudioDevices = {
     { deviceId: 'headphones', groupId: 'desk', kind: 'audiooutput', label: 'Наушники Arctis Nova 7', toJSON: () => ({}) },
     { deviceId: 'speakers', groupId: 'monitor', kind: 'audiooutput', label: 'Динамики монитора', toJSON: () => ({}) },
   ],
+  cameras: [
+    { deviceId: 'brio', groupId: 'camera', kind: 'videoinput', label: 'Logitech Brio', toJSON: () => ({}) },
+  ],
 };
 const dndPresence = { preference: 'do_not_disturb' as const, effectiveStatus: 'dnd' as const, customText: 'Фокус до релиза', customTextExpiresAt: null, updatedAt: '2026-07-17T10:00:00.000Z' };
 const privacySettings = { directMessages: 'shared_servers' as const, presenceVisibility: 'shared_servers' as const, activityVisible: true, updatedAt: '2026-07-17T10:00:00.000Z' };
@@ -129,7 +132,7 @@ export const ServerRoles: Story = {
 
 export const UserAudioDevices: Story = {
   args: { scope: 'user' },
-  render: (args) => <SettingsShell activeSection="audio" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserAudioSettingsPage appSoundVolume={0.5} busy={false} devices={audioDevices} inputLevel={0.34} microphoneId="studio-mic" microphoneVolume={0.5} onAppSoundVolume={() => undefined} onMicrophone={() => undefined} onMicrophoneVolume={() => undefined} onOutput={() => undefined} onOutputVolume={() => undefined} onRefresh={() => undefined} onTestNotification={() => undefined} onTestOutput={() => undefined} outputId="headphones" outputVolume={0.5} voiceConnected /></SettingsShell>,
+  render: (args) => <SettingsShell activeSection="audio" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserAudioSettingsPage appSoundVolume={0.5} busy={false} cameraId="brio" devices={audioDevices} inputLevel={0.34} microphoneId="studio-mic" microphoneVolume={0.5} onAppSoundVolume={() => undefined} onCamera={() => undefined} onMicrophone={() => undefined} onMicrophoneVolume={() => undefined} onOutput={() => undefined} onOutputVolume={() => undefined} onRefresh={() => undefined} onTestNotification={() => undefined} onTestOutput={() => undefined} outputId="headphones" outputVolume={0.5} voiceConnected /></SettingsShell>,
 };
 
 export const UserPresenceDnd: Story = {

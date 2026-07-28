@@ -430,6 +430,7 @@ export interface MediaTokenOptions {
   displayName: string;
   metadata: Record<string, string>;
   canPublishMicrophone?: boolean;
+  canPublishCamera?: boolean;
   canPublishScreen?: boolean;
   canPublishScreenAudio?: boolean;
 }
@@ -446,7 +447,10 @@ export interface MediaService {
     destinationRoomName: string,
     permissions: Pick<
       MediaTokenOptions,
-      "canPublishMicrophone" | "canPublishScreen" | "canPublishScreenAudio"
+      | "canPublishMicrophone"
+      | "canPublishCamera"
+      | "canPublishScreen"
+      | "canPublishScreenAudio"
     >,
   ): Promise<void>;
   participantIdentities(roomName: string): Promise<string[]>;

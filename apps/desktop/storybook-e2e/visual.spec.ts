@@ -106,7 +106,7 @@ test.describe('Vatrushka design system visual baseline', () => {
 
   test('routed user audio settings', async ({ page }) => {
     await openStory(page, 'features-settings-settings-shell--user-audio-devices');
-    await expect(page.getByRole('heading', { name: 'Голос и звук' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Звук и видео' })).toBeVisible();
     await expect(page.getByText('Shure MV7 — рабочий стол')).toBeVisible();
     await expect(page.getByText('Наушники Arctis Nova 7')).toBeVisible();
     await expect(page).toHaveScreenshot('settings-shell-user-audio.png', { animations: 'disabled', fullPage: true });
@@ -178,7 +178,13 @@ test.describe('Vatrushka design system visual baseline', () => {
     await page.getByRole('button', { name: 'Открыть список серверов' }).click();
     await expect(page.getByRole('dialog', { name: 'Навигация' })).toBeVisible();
     await settlePortalAnimations(page);
-    await expect(page).toHaveScreenshot('app-shell-compact.png', { animations: 'disabled', fullPage: true });
+    await expect(page).toHaveScreenshot('app-shell-compact.png', {
+      animations: 'disabled',
+      fullPage: true,
+      // Windows rasterizes the compact drawer border with a stable, bounded
+      // sub-pixel delta on the self-hosted runner (seven pixels in CI).
+      maxDiffPixels: 10,
+    });
   });
 
   test('message conversation', async ({ page }) => {
@@ -215,6 +221,15 @@ test.describe('Vatrushka design system visual baseline', () => {
     await openStory(page, 'features-voice-room--visual-room');
     await page.getByRole('button', { name: 'Выбрать устройство: Микрофон' }).click();
     await expect(page).toHaveScreenshot('voice-room-devices.png', {
+      animations: 'disabled',
+      fullPage: true,
+      maxDiffPixels: 100,
+    });
+  });
+
+  test('voice camera tiles', async ({ page }) => {
+    await openStory(page, 'features-voice-room--camera-tiles');
+    await expect(page).toHaveScreenshot('voice-room-camera-tiles.png', {
       animations: 'disabled',
       fullPage: true,
       maxDiffPixels: 100,

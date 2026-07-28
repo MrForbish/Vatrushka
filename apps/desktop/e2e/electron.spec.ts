@@ -723,11 +723,11 @@ test("opens the routed settings shell without replacing the application controll
       .getByText("Новое имя", { exact: true }),
   ).toBeVisible();
   await settingsNavigation
-    .getByRole("button", { name: /Голос и звук/u })
+    .getByRole("button", { name: /Звук и видео/u })
     .click();
   await expect(window).toHaveURL(/#\/settings\/audio/u);
   await expect(
-    window.getByRole("heading", { name: "Голос и звук" }),
+    window.getByRole("heading", { name: "Звук и видео" }),
   ).toBeVisible();
   await expect(
     window.getByRole("button", { name: "Устройство ввода" }),

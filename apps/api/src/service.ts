@@ -211,6 +211,7 @@ const DEFAULT_SERVER_PERMISSIONS: ServerPermission[] = [
   "MANAGE_OWN_MESSAGES",
   "CONNECT_VOICE",
   "SPEAK",
+  "STREAM_VIDEO",
   "STREAM_SCREEN",
   "STREAM_APPLICATION_AUDIO",
   "MANAGE_INVITES",
@@ -4146,6 +4147,7 @@ export class VatrushkaService {
           platformRole: user.platformRole,
         },
         canPublishMicrophone: permissions.has("SPEAK"),
+        canPublishCamera: permissions.has("STREAM_VIDEO"),
         canPublishScreen: permissions.has("STREAM_SCREEN"),
         canPublishScreenAudio: permissions.has("STREAM_APPLICATION_AUDIO"),
       });
@@ -4172,6 +4174,7 @@ export class VatrushkaService {
         serverName: server.name,
         channelName: channel.name,
         canSpeak: permissions.has("SPEAK"),
+        canStreamVideo: permissions.has("STREAM_VIDEO"),
         canStream: permissions.has("STREAM_SCREEN"),
         canStreamApplicationAudio: permissions.has("STREAM_APPLICATION_AUDIO"),
         canMoveMembers: permissions.has("MOVE_MEMBERS"),
@@ -4489,6 +4492,7 @@ export class VatrushkaService {
             destinationRoomName: channel.livekitRoomName,
             permissions: {
               canPublishMicrophone: targetPermissions.has("SPEAK"),
+              canPublishCamera: targetPermissions.has("STREAM_VIDEO"),
               canPublishScreen: targetPermissions.has("STREAM_SCREEN"),
               canPublishScreenAudio: targetPermissions.has(
                 "STREAM_APPLICATION_AUDIO",

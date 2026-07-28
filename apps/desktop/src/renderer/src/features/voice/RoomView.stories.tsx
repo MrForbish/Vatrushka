@@ -6,6 +6,7 @@ import { RoomView } from './RoomView';
 
 const microphone = { deviceId: 'microphone-studio', groupId: 'group-input', kind: 'audioinput', label: 'Studio Microphone', toJSON: () => ({}) } as MediaDeviceInfo;
 const headset = { deviceId: 'headphones-usb', groupId: 'group-output', kind: 'audiooutput', label: 'USB Headphones', toJSON: () => ({}) } as MediaDeviceInfo;
+const camera = { deviceId: 'camera-usb', groupId: 'group-camera', kind: 'videoinput', label: 'USB Camera', toJSON: () => ({}) } as MediaDeviceInfo;
 
 const meta = {
   title: 'Features/Voice Room',
@@ -24,7 +25,9 @@ const meta = {
       ],
       isMuted: false,
       isDeafened: false,
+      isCameraEnabled: false,
       isScreenSharing: false,
+      videoTracks: [],
       screenTrack: null,
       screenSharerName: null,
       screenShareIsLocal: false,
@@ -35,12 +38,15 @@ const meta = {
       canPlayAudio: true,
       error: null,
     },
-    devices: { inputs: [microphone], outputs: [headset] },
+    devices: { cameras: [camera], inputs: [microphone], outputs: [headset] },
     microphoneId: undefined,
+    cameraId: 'camera-usb',
     outputId: undefined,
     busy: false,
     error: null,
     onMute: fn(),
+    onCamera: fn(),
+    onCameraDevice: fn(),
     onShare: fn(),
     onLeave: fn(),
     onKick: fn(),
@@ -68,8 +74,11 @@ export const DeviceSelection: Story = {
     await userEvent.click(page.getByRole('option', { name: 'Studio Microphone' }));
     await userEvent.click(canvas.getByRole('button', { name: 'Выбрать устройство: Звук' }));
     await userEvent.click(page.getByRole('option', { name: 'USB Headphones' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Выбрать устройство: Камера' }));
+    await userEvent.click(page.getByRole('option', { name: 'USB Camera' }));
     await expect(args.onMicrophone).toHaveBeenCalledWith('microphone-studio');
     await expect(args.onOutput).toHaveBeenCalledWith('headphones-usb');
+    await expect(args.onCameraDevice).toHaveBeenCalledWith('camera-usb');
   },
 };
 
@@ -85,17 +94,61 @@ export const SingleParticipant: Story = {
 };
 
 const screenTrack = { attach: () => undefined, detach: () => [] } as unknown as LocalTrack;
+const cameraTrack = { attach: () => undefined, detach: () => [] } as unknown as LocalTrack;
+
+export const CameraTiles: Story = {
+  args: {
+    snapshot: {
+      ...meta.args.snapshot,
+      isCameraEnabled: true,
+      videoTracks: [
+        { id: 'camera-local', source: 'camera', participantIdentity: 'user_founder_local', participantDisplayName: 'Илья Форбиш', isLocal: true, track: cameraTrack },
+        { id: 'camera-anna', source: 'camera', participantIdentity: 'user_anna_remote', participantDisplayName: 'Анна Белова', isLocal: false, track: cameraTrack },
+      ],
+    },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(canvas.getByRole('button', { name: 'Открыть камеру: Анна Белова' }));
+    await expect(canvas.getByRole('dialog', { name: 'Увеличенный просмотр видео' })).toBeInTheDocument();
+  },
+};
 
 export const ScreenShareViewer: Story = {
   args: {
     snapshot: {
       ...meta.args.snapshot,
       screenTrack,
+      videoTracks: [
+        {
+          id: 'screen-anna',
+          source: 'screen',
+          participantIdentity: 'user_anna_remote',
+          participantDisplayName: 'Анна Белова',
+          isLocal: false,
+          track: screenTrack,
+        },
+      ],
       screenSharerName: 'Анна Белова',
       screenShareIsLocal: false,
       hasScreenShareAudio: true,
       screenShareAudioVolume: 0.72,
     },
+  },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    await userEvent.click(
+      canvas.getByRole('button', {
+        name: 'Открыть увеличенный просмотр демонстрации',
+      }),
+    );
+    await expect(
+      canvas.getByRole('dialog', { name: 'Увеличенный просмотр видео' }),
+    ).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await expect(
+      canvas.queryByRole('dialog', { name: 'Увеличенный просмотр видео' }),
+    ).not.toBeInTheDocument();
   },
 };
 
@@ -105,6 +158,16 @@ export const ScreenShareAnnotations: Story = {
       ...meta.args.snapshot,
       isScreenSharing: true,
       screenTrack,
+      videoTracks: [
+        {
+          id: 'screen-local',
+          source: 'screen',
+          participantIdentity: 'user_founder_local',
+          participantDisplayName: 'Илья Форбиш',
+          isLocal: true,
+          track: screenTrack,
+        },
+      ],
       screenSharerName: 'Илья Форбиш',
       screenShareIsLocal: true,
       screenAnnotations: [{ id: 'stroke-demo', color: '#facc15', size: 8, points: [{ x: 0.15, y: 0.65 }, { x: 0.35, y: 0.45 }, { x: 0.62, y: 0.58 }] }],

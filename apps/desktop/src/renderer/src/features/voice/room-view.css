@@ -40,6 +40,21 @@
 }
 .vui-room__participant-grid--single { align-self: center; justify-self: center; }
 .vui-room__voice-stage > .vui-voice-strip { width: 100%; }
+.vui-room__camera-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); align-content: center; gap: var(--space-3); width: min(1440px, 100%); min-height: 0; padding: var(--space-3) 0 var(--space-5); overflow-y: auto; }
+.vui-room__camera-strip { display: grid; grid-auto-columns: minmax(180px, 240px); grid-auto-flow: column; gap: var(--space-2); max-width: 100%; overflow-x: auto; padding-bottom: var(--space-1); }
+.vui-room__camera-tile { display: block; width: 100%; padding: 0; position: relative; min-height: 180px; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid var(--color-border-default); border-radius: var(--radius-lg); background: var(--color-surface-2); box-shadow: var(--shadow-float); cursor: zoom-in; color: inherit; text-align: inherit; }
+.vui-room__camera-tile:focus-visible { outline: 2px solid var(--color-cyan); outline-offset: 2px; }
+.vui-room__camera-tile[data-compact='true'] { min-height: 120px; border-radius: var(--radius-md); }
+.vui-room__camera-video { display: block; width: 100%; height: 100%; object-fit: cover; background: var(--color-canvas); }
+.vui-room__camera-label { position: absolute; right: var(--space-2); bottom: var(--space-2); left: var(--space-2); display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--color-canvas), transparent 18%); color: var(--color-text-primary); font: var(--text-caption); }
+.vui-room__camera-label > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--text-label-md); }
+.vui-room__camera-focus { position: absolute; z-index: 30; inset: var(--space-3); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--space-3); min-width: 0; min-height: 0; padding: var(--space-4); border: 1px solid var(--color-border-strong); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--color-canvas), transparent 2%); box-shadow: var(--shadow-modal); }
+.vui-room__camera-focus > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.vui-room__camera-focus > header > div { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.vui-room__camera-focus > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--text-heading-sm); }
+.vui-room__camera-focus > header > button { display: grid; width: 36px; height: 36px; place-items: center; border: 1px solid var(--color-border-default); border-radius: var(--radius-round); background: var(--color-surface-2); color: var(--color-text-primary); cursor: pointer; }
+.vui-room__camera-focus > .vui-room__camera-tile { min-width: 0; min-height: 0; height: 100%; cursor: default; }
+.vui-room__camera-focus-strip { display: grid; grid-auto-columns: minmax(160px, 220px); grid-auto-flow: column; gap: var(--space-2); overflow-x: auto; }
 .vui-room__stream-stage { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--space-3); height: 100%; }
 .vui-room__stream { position: relative; min-height: 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--color-border-default), transparent 10%); border-radius: 16px; background: #030405; box-shadow: var(--shadow-float); }
 .vui-room__video-frame { position: relative; width: 100%; height: 100%; background: #030405; }
@@ -74,7 +89,7 @@
 .vui-room__empty { display: grid; justify-items: center; color: var(--color-text-muted); text-align: center; }
 .vui-room__empty h1 { color: var(--color-text-primary); font: var(--text-display-md); }
 .vui-room__controls { position: relative; display: flex; align-self: end; justify-content: center; padding-top: var(--space-3); }
-.vui-room__control-dock { display: grid; grid-template-columns: repeat(4, auto); align-items: center; justify-content: center; gap: 6px; width: fit-content; max-width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.vui-room__control-dock { display: grid; grid-template-columns: repeat(5, auto); align-items: center; justify-content: center; gap: 6px; width: fit-content; max-width: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .vui-room__device-control,
 .vui-room__dock-action { display: grid; justify-items: center; min-width: 0; color: var(--color-text-secondary); font: var(--text-caption); }
 .vui-room__device-control > div { display: flex; align-items: stretch; height: 48px; }

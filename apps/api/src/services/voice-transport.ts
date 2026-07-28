@@ -7,7 +7,10 @@ export interface MoveParticipantInput {
   participantIdentity: string;
   permissions: Pick<
     MediaTokenOptions,
-    "canPublishMicrophone" | "canPublishScreen" | "canPublishScreenAudio"
+    | "canPublishMicrophone"
+    | "canPublishCamera"
+    | "canPublishScreen"
+    | "canPublishScreenAudio"
   >;
 }
 

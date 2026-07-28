@@ -4,6 +4,18 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.33] - 2026-07-28
+
+### Added
+
+- Voice-channel participants can publish camera video when their role grants
+  `STREAM_VIDEO`; the voice dock includes a persisted camera-device selector.
+
+### Fixed
+
+- The trusted Electron renderer can request Windows camera capture permission.
+- Returning to an active voice channel now works from user and server settings.
+
 ## [0.8.32] - 2026-07-27
 
 ### Changed
