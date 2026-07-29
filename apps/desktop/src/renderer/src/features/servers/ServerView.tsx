@@ -368,8 +368,7 @@ export function ServerView(props: ServerViewProps): React.JSX.Element {
 
   const globalSidebar = (
     <GlobalSidebar
-      activeSection="community"
-      onCommunity={() => props.onSwitchServer(props.server.id)}
+      activeSection="server"
       onDirectMessages={props.onDirectMessages ?? (() => undefined)}
       onHome={props.onBack}
       activeServerId={props.server.id}

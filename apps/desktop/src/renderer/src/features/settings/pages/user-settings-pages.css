@@ -2,6 +2,98 @@
   display: grid;
   gap: var(--space-5);
 }
+.vui-profile-settings-hub {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+.vui-profile-settings-hub__heading > span {
+  color: var(--color-cyan);
+  font: var(--text-overline);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.vui-profile-settings-hub__heading h1 {
+  margin: var(--space-2) 0;
+  font: var(--text-display-md);
+}
+.vui-profile-settings-hub__heading p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font: var(--text-body-lg);
+}
+.vui-profile-settings-hub__columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--space-4);
+  min-width: 0;
+}
+.vui-profile-settings-hub__group {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  gap: var(--space-3);
+  min-width: 0;
+}
+.vui-profile-settings-hub__group > header h2 {
+  margin: 0;
+  font: var(--text-heading-lg);
+}
+.vui-profile-settings-hub__group > header p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+  font: var(--text-body-sm);
+}
+.vui-profile-settings-hub__column {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+}
+.vui-profile-settings-hub__column > .vui-user-settings-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.vui-profile-settings-hub__column .vui-user-profile-settings__grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+.vui-profile-settings-hub__column .vui-user-profile-settings__fields {
+  grid-template-columns: minmax(0, 1fr);
+}
+.vui-profile-settings-hub__column .vui-user-settings-card {
+  gap: var(--space-4);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.vui-profile-settings-hub__column .vui-presence-options {
+  grid-template-columns: minmax(0, 1fr);
+}
+.vui-profile-settings-hub__column .vui-presence-options > button {
+  min-height: 0;
+  padding: var(--space-3);
+}
+@container (max-width: 1120px) {
+  .vui-profile-settings-hub__columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .vui-profile-settings-hub__group:first-child { grid-column: 1 / -1; }
+  .vui-profile-settings-hub__column .vui-user-profile-settings__fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (max-width: 720px) {
+  .vui-profile-settings-hub__columns { grid-template-columns: minmax(0, 1fr); }
+  .vui-profile-settings-hub__group:first-child { grid-column: auto; }
+  .vui-profile-settings-hub__column .vui-user-profile-settings__fields { grid-template-columns: minmax(0, 1fr); }
+}
 .vui-user-settings-page__heading {
   display: flex;
   align-items: flex-start;
@@ -67,11 +159,6 @@
   object-fit: cover;
   transform: scaleX(-1);
 }
-.vui-user-profile-settings__grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(320px, 0.95fr);
-  gap: var(--space-4);
-}
 .vui-user-settings-card {
   display: grid;
   align-content: start;
@@ -109,53 +196,6 @@
   font: var(--text-label-md);
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.vui-user-profile-preview {
-  position: relative;
-  overflow: hidden;
-}
-.vui-user-profile-preview__banner {
-  position: relative;
-  z-index: 0;
-  height: 96px;
-  overflow: hidden;
-  border-radius: var(--radius-sm);
-  background: var(--gradient-brand);
-  opacity: 0.65;
-}
-.vui-user-profile-preview__banner img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-.vui-user-profile-cover-editor {
-  display: flex;
-  align-items: end;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  min-width: 0;
-}
-.vui-user-profile-cover-editor .vui-file-picker {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-.vui-user-profile-preview > .vui-avatar {
-  position: relative;
-  z-index: 2;
-  margin-top: -52px;
-  margin-left: var(--space-3);
-  box-shadow: 0 0 0 4px var(--color-surface-1);
-}
-.vui-user-profile-preview > strong {
-  font: var(--text-heading-lg);
-}
-.vui-user-profile-preview > small {
-  margin-top: calc(var(--space-4) * -1);
-  color: var(--color-text-muted);
-  font: var(--text-caption);
-}
-.vui-user-profile-preview > .vui-badge {
-  justify-self: stretch;
 }
 .vui-user-settings-note {
   padding: var(--space-3) var(--space-4);
@@ -213,9 +253,6 @@
   );
 }
 @media (max-width: 1180px) {
-  .vui-user-profile-settings__grid {
-    grid-template-columns: 1fr;
-  }
   .vui-user-audio-settings__grid {
     grid-template-columns: 1fr;
   }
@@ -245,34 +282,25 @@
 }
 .vui-user-settings-time-grid {
   display: grid;
+  width: 100%;
+  max-width: 100%;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-3);
 }
-.vui-user-settings-time-grid > :last-child {
-  grid-column: 1 / -1;
-}
-.vui-user-profile-avatar-editor {
-  display: flex;
-  align-items: end;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-}
-.vui-user-profile-avatar-editor > .vui-avatar,
-.vui-user-profile-preview__avatar {
-  width: 64px;
-  height: 64px;
-}
-.vui-user-profile-media-actions {
-  display: flex;
-  flex: 1 1 280px;
+.vui-user-settings-time-grid > * {
+  width: 100%;
   min-width: 0;
-  align-items: end;
-  flex-wrap: wrap;
-  gap: var(--space-3);
 }
-.vui-user-profile-media-actions .vui-file-picker {
-  flex: 1 1 180px;
+.vui-user-settings-time-grid .vui-field,
+.vui-user-settings-time-grid .vui-input-frame {
+  box-sizing: border-box;
+  width: 100%;
   min-width: 0;
+}
+.vui-user-settings-time-grid input {
+  box-sizing: border-box;
+  min-width: 0;
+  padding-inline: var(--space-2);
 }
 .vui-avatar-crop {
   display: grid;
@@ -336,19 +364,6 @@
   color: var(--color-text-muted);
   font: var(--text-caption);
 }
-.vui-user-profile-preview > .vui-user-profile-preview__avatar {
-  position: relative;
-  z-index: 2;
-  margin-top: -52px;
-  margin-left: var(--space-3);
-  box-shadow: 0 0 0 4px var(--color-surface-1);
-}
-.vui-user-profile-preview > p {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font: var(--text-body-md);
-  white-space: pre-wrap;
-}
 .vui-user-settings-note--error {
   border-color: color-mix(
     in srgb,
@@ -357,6 +372,32 @@
   );
   color: var(--color-danger);
 }
+.vui-user-profile-settings__form { gap: var(--space-6); }
+.vui-user-profile-media { position: relative; min-height: 224px; padding-bottom: var(--space-5); }
+.vui-user-profile-media__input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+.vui-user-profile-media__cover-frame { position: relative; height: 192px; }
+.vui-user-profile-media__cover { position: relative; display: block; width: 100%; height: 192px; overflow: hidden; padding: 0; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); background: var(--gradient-brand); cursor: pointer; }
+.vui-user-profile-media__cover:focus-visible, .vui-user-profile-media__avatar:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.vui-user-profile-media__cover:disabled, .vui-user-profile-media__avatar:disabled { cursor: wait; }
+.vui-user-profile-media__cover-image, .vui-user-profile-media__cover-image img, .vui-user-profile-media__cover-placeholder { display: block; width: 100%; height: 100%; }
+.vui-user-profile-media__cover-image img { object-fit: cover; }
+.vui-user-profile-media__cover-placeholder { background: radial-gradient(circle at 78% 22%, rgb(43 216 229 / 32%), transparent 34%), radial-gradient(circle at 20% 110%, rgb(123 74 255 / 42%), transparent 54%), var(--gradient-brand); }
+.vui-user-profile-media__overlay, .vui-user-profile-media__avatar-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: var(--space-2); background: rgb(4 7 15 / 68%); color: var(--color-text-primary); font: var(--text-label-md); opacity: 0; transition: opacity 160ms ease; }
+.vui-user-profile-media__cover:hover .vui-user-profile-media__overlay, .vui-user-profile-media__cover:focus-visible .vui-user-profile-media__overlay, .vui-user-profile-media__avatar:hover .vui-user-profile-media__avatar-overlay, .vui-user-profile-media__avatar:focus-visible .vui-user-profile-media__avatar-overlay { opacity: 1; }
+.vui-user-profile-media__avatar-frame { position: absolute; bottom: 0; left: var(--space-5); width: 104px; height: 104px; }
+.vui-user-profile-media__avatar { position: relative; width: 100%; height: 100%; overflow: hidden; padding: 0; border: 4px solid var(--color-surface-1); border-radius: var(--radius-round); background: var(--color-surface-0); cursor: pointer; box-shadow: var(--shadow-lg); }
+.vui-user-profile-media__avatar .vui-avatar, .vui-user-profile-media__avatar .vui-avatar__mask, .vui-user-profile-media__avatar .vui-avatar__mask > img, .vui-user-profile-media__avatar .vui-avatar__mask > span { width: 100%; height: 100%; border-radius: inherit; }
+.vui-user-profile-media__avatar .vui-avatar__mask > span { display: grid; place-items: center; }
+.vui-user-profile-media__avatar .vui-status-dot { position: absolute; right: 5px; bottom: 5px; }
+.vui-user-profile-media__avatar-overlay { flex-direction: column; gap: 2px; padding: var(--space-2); font: var(--text-caption); text-align: center; }
+.vui-user-profile-media__cover-frame > .vui-tooltip-anchor,
+.vui-user-profile-media__avatar-frame > .vui-tooltip-anchor { position: absolute; z-index: 3; }
+.vui-user-profile-media__cover-frame > .vui-tooltip-anchor { top: var(--space-3); right: var(--space-3); }
+.vui-user-profile-media__avatar-frame > .vui-tooltip-anchor { top: 6px; right: 6px; }
+.vui-user-profile-media__remove { position: static; width: 24px; min-width: 24px; height: 24px; min-height: 24px; padding: 0; background: rgb(11 15 27 / 88%); backdrop-filter: blur(8px); }
+.vui-user-profile-settings__fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.vui-user-profile-settings__fields > .vui-user-settings-bio, .vui-user-profile-settings__fields > .vui-user-settings-note, .vui-user-profile-settings__fields > .vui-user-settings-readonly { grid-column: 1 / -1; }
+@media (max-width: 760px) { .vui-user-profile-media { min-height: 188px; } .vui-user-profile-media__cover-frame, .vui-user-profile-media__cover { height: 156px; } .vui-user-profile-media__avatar-frame { left: var(--space-3); width: 88px; height: 88px; } .vui-user-profile-settings__fields { grid-template-columns: 1fr; } }
 .vui-user-blocked-list {
   display: grid;
   gap: var(--space-2);

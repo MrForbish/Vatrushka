@@ -10,9 +10,7 @@ import { SettingsPageState } from '../components/SettingsPageState';
 import { SettingsSaveBar } from '../components/SettingsSaveBar';
 import { UserAudioSettingsPage } from '../pages/UserAudioSettingsPage';
 import { UserAccountSettingsPage } from '../pages/UserAccountSettingsPage';
-import { UserNotificationSettingsPage } from '../pages/UserNotificationSettingsPage';
-import { UserProfileSettingsPage } from '../pages/UserProfileSettingsPage';
-import { UserPresenceSettingsPage } from '../pages/UserPresenceSettingsPage';
+import { UserProfileSettingsHub } from '../pages/UserProfileSettingsHub';
 import { UserPrivacySettingsPage } from '../pages/UserPrivacySettingsPage';
 import { ServerSettingsPage } from '../pages/ServerSettingsPage';
 import { SettingsShell } from './SettingsShell';
@@ -49,7 +47,7 @@ const audioDevices: AudioDevices = {
 };
 const dndPresence = { preference: 'do_not_disturb' as const, effectiveStatus: 'dnd' as const, customText: 'Фокус до релиза', customTextExpiresAt: null, updatedAt: '2026-07-17T10:00:00.000Z' };
 const privacySettings = { directMessages: 'shared_servers' as const, presenceVisibility: 'shared_servers' as const, activityVisible: true, updatedAt: '2026-07-17T10:00:00.000Z' };
-const notificationSettings = { desktopEnabled: true, soundEnabled: true, previewMode: 'full' as const, directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: '22:00', quietHoursEnd: '08:00', quietHoursTimezone: 'Europe/Moscow', updatedAt: '2026-07-17T10:00:00.000Z' };
+const notificationSettings = { desktopEnabled: true, soundEnabled: true, previewMode: 'full' as const, directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: '22:00', quietHoursEnd: '08:00', updatedAt: '2026-07-17T10:00:00.000Z' };
 const accountSettings = { email: securityUser.email, emailVerified: true, pendingEmail: null, deactivationScheduledAt: null, deletionAt: null, ownsServers: false };
 const securityClient: SecurityClient = {
   requestPasswordSetup: fn(() => Promise.resolve({ retryAfterSeconds: 60 })),
@@ -74,7 +72,7 @@ interface SettingsStoryProps {
 function SettingsStory({ onBack, onNavigate, scope }: SettingsStoryProps): React.JSX.Element {
   const workspace = <WorkspaceLibrary {...(scope === 'server' ? { activeWorkspaceId: 'vatrushka' } : {})} onCreate={() => undefined} onDirectMessages={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />;
   if (scope === 'server') return <SettingsShell activeSection="overview" entityLabel="Настройки сервера" entityName="Команда Ватрушки" items={serverSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><ServerSettingsPage onChanged={() => Promise.resolve()} onDeleted={() => undefined} section="overview" server={storyServer} /></SettingsShell>;
-  return <SettingsShell activeSection="profile" entityLabel="Личные настройки" entityName="Илья Форбиш" items={userSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><UserProfileSettingsPage onAvatar={() => Promise.resolve(profileSettings)} onDirtyChange={() => undefined} onLoad={() => Promise.resolve(profileSettings)} onResetAvatar={() => Promise.resolve(profileSettings)} onSave={(input) => Promise.resolve({ ...profileSettings, ...input })} onUserChange={() => undefined} user={securityUser} /></SettingsShell>;
+  return <SettingsShell activeSection="profile" entityLabel="Личные настройки" entityName="Илья Форбиш" items={userSettingsNavigation} onBack={onBack} onSelect={onNavigate} workspaceLibrary={workspace}><UserProfileSettingsHub onAvatar={() => Promise.resolve(profileSettings)} onCover={() => Promise.resolve(profileSettings)} onDirtyChange={() => undefined} onLoadNotificationPreferences={() => Promise.resolve(notificationSettings)} onLoadPresence={() => Promise.resolve(dndPresence)} onLoadProfile={() => Promise.resolve(profileSettings)} onPreviewNotificationSound={() => undefined} onPresenceChange={() => undefined} onProfileMediaChange={() => undefined} onResetAvatar={() => Promise.resolve(profileSettings)} onResetCover={() => Promise.resolve(profileSettings)} onSaveProfile={(input) => Promise.resolve({ ...profileSettings, ...input })} onUpdateNotificationPreferences={() => Promise.resolve(notificationSettings)} onUpdatePresence={() => Promise.resolve(dndPresence)} onUserChange={() => undefined} presence={dndPresence} presenceEnabled user={securityUser} /></SettingsShell>;
 }
 
 const meta = {
@@ -135,19 +133,9 @@ export const UserAudioDevices: Story = {
   render: (args) => <SettingsShell activeSection="audio" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserAudioSettingsPage appSoundVolume={0.5} busy={false} cameraId="brio" devices={audioDevices} inputLevel={0.34} microphoneId="studio-mic" microphoneVolume={0.5} onAppSoundVolume={() => undefined} onCamera={() => undefined} onMicrophone={() => undefined} onMicrophoneVolume={() => undefined} onOutput={() => undefined} onOutputVolume={() => undefined} onRefresh={() => undefined} onTestNotification={() => undefined} onTestOutput={() => undefined} outputId="headphones" outputVolume={0.5} voiceConnected /></SettingsShell>,
 };
 
-export const UserPresenceDnd: Story = {
-  args: { scope: 'user' },
-  render: (args) => <SettingsShell activeSection="status" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserPresenceSettingsPage onDirtyChange={() => undefined} onLoad={() => Promise.resolve(dndPresence)} onPresenceChange={() => undefined} onSave={() => Promise.resolve(dndPresence)} presence={dndPresence} /></SettingsShell>,
-};
-
 export const UserPrivacy: Story = {
   args: { scope: 'user' },
   render: (args) => <SettingsShell activeSection="privacy" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserPrivacySettingsPage onDirtyChange={() => undefined} onLoad={() => Promise.resolve(privacySettings)} onLoadBlocked={() => Promise.resolve([])} onSave={() => Promise.resolve(privacySettings)} onUnblock={() => Promise.resolve()} /></SettingsShell>,
-};
-
-export const UserNotifications: Story = {
-  args: { scope: 'user' },
-  render: (args) => <SettingsShell activeSection="notifications" entityLabel="Личные настройки" entityName={securityUser.displayName ?? securityUser.email} items={userSettingsNavigation} onBack={args.onBack} onSelect={args.onNavigate} workspaceLibrary={<WorkspaceLibrary onCreate={() => undefined} onHome={() => undefined} onSelect={() => undefined} workspaces={workspaces} />}><UserNotificationSettingsPage dndActive={false} onDirtyChange={() => undefined} onLoad={() => Promise.resolve(notificationSettings)} onPreviewSound={() => undefined} onSave={() => Promise.resolve(notificationSettings)} /></SettingsShell>,
 };
 
 export const UserAccount: Story = {

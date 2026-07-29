@@ -686,7 +686,6 @@ export interface UserNotificationPreferences {
   mentionsEnabled: boolean;
   quietHoursStart: string | null;
   quietHoursEnd: string | null;
-  quietHoursTimezone: string | null;
   updatedAt: string;
 }
 
