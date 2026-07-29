@@ -196,17 +196,6 @@ const envSchema = z
     LOG_LEVEL: z
       .enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"])
       .default("info"),
-    HAWK_ENABLED: booleanFromString,
-    HAWK_API_INTEGRATION_TOKEN: z.string().trim().optional().or(z.literal("")),
-    // Temporary compatibility path for existing production installations.
-    // New deployments must use the API-specific variable above.
-    HAWK_INTEGRATION_TOKEN: z.string().trim().optional().or(z.literal("")),
-    HAWK_ENVIRONMENT: z
-      .enum(["development", "staging", "production"])
-      .default("development"),
-    HAWK_RELEASE: z.string().trim().min(1).default(packageVersion),
-    HAWK_USER_HASH_SECRET: z.string().min(32).optional().or(z.literal("")),
-    HAWK_STARTUP_SMOKE_TEST: booleanFromString,
   })
   .superRefine((env, context) => {
     if (env.MEDIA_STORAGE_DRIVER === "s3") {
@@ -336,20 +325,6 @@ const envSchema = z
           code: "custom",
           path: ["PRESENCE_STORAGE_DRIVER"],
           message: "Production presence storage must use Redis",
-        });
-    }
-    if (env.HAWK_ENABLED) {
-      if (!env.HAWK_API_INTEGRATION_TOKEN && !env.HAWK_INTEGRATION_TOKEN)
-        context.addIssue({
-          code: "custom",
-          path: ["HAWK_API_INTEGRATION_TOKEN"],
-          message: "HAWK_API_INTEGRATION_TOKEN is required when HAWK_ENABLED=true",
-        });
-      if (!env.HAWK_RELEASE)
-        context.addIssue({
-          code: "custom",
-          path: ["HAWK_RELEASE"],
-          message: "HAWK_RELEASE is required when HAWK_ENABLED=true",
         });
     }
   });

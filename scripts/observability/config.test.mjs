@@ -367,7 +367,6 @@ test("migration and recovery scripts preserve old metrics and secrets", async ()
   assert.match(productReleaseApply, /infra\/observability\/agents\/\.env\.agent/u);
   assert.match(productReleaseApply, /--profile product --profile docker/u);
   assert.match(productReleaseApply, /APP_DIR=\$\{VATRUSHKA_APP_DIR:-\/opt\/vatrushka\}/u);
-  assert.match(productReleaseApply, /hawk_reporter_enabled/u);
   const healthcheck = await read("infra/observability/platform/scripts/healthcheck.sh");
   assert.match(healthcheck, /OBSERVABILITY_HEALTHCHECK_ATTEMPTS:-30/u);
   assert.match(healthcheck, /wait_for_url/u);
