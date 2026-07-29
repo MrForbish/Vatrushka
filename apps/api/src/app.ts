@@ -15,7 +15,6 @@ import {
 import type { ZodTypeProvider } from "fastify-type-provider-zod";
 import { WebhookReceiver } from "livekit-server-sdk";
 import { z, ZodError } from "zod";
-import { createHawkReporter } from "./observability/hawk.js";
 
 import {
   API_PREFIX,
@@ -923,7 +922,6 @@ export async function buildApp(
   options: BuildAppOptions,
 ): Promise<FastifyInstance> {
   const { config, service } = options;
-  const hawk = createHawkReporter(config);
   technicalMetrics.set("vatrushka_build_info", 1, {
     version: config.APP_VERSION,
     commit: config.BUILD_COMMIT,
@@ -932,9 +930,6 @@ export async function buildApp(
     "vatrushka_deployment_timestamp_seconds",
     Math.floor(Date.now() / 1_000),
   );
-  technicalMetrics.set("hawk_reporter_enabled", hawk.enabled ? 1 : 0, {
-    runtime: "api",
-  });
   const requestStartedAt = new WeakMap<object, number>();
   const requestInFlightLabels = new WeakMap<object, { method: string; route: string }>();
   const app = Fastify({
@@ -952,19 +947,6 @@ export async function buildApp(
     bodyLimit: 64 * 1024,
     trustProxy: config.NODE_ENV === "production",
   });
-
-  if (config.HAWK_STARTUP_SMOKE_TEST) {
-    const submitted = hawk.capture(new Error("Hawk startup smoke test"), {
-      operation: "startup-smoke-test",
-      runtime: "api",
-      release: config.HAWK_RELEASE,
-    });
-    technicalMetrics.increment("hawk_events_submit_attempts_total", 1, {
-      runtime: "api",
-      result: submitted ? "submitted" : "not_configured_or_rejected",
-    });
-    app.log.info({ hawkEnabled: hawk.enabled, submitted }, "Hawk startup smoke test processed");
-  }
 
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -1077,12 +1059,6 @@ export async function buildApp(
         status_class: `${Math.floor(error.statusCode / 100)}xx`,
       });
       if (error.statusCode >= 500) {
-        hawk.capture(error, {
-          requestId: request.id,
-          route: request.routeOptions.url || "unmatched",
-          statusCode: String(error.statusCode),
-          errorCode: error.code,
-        });
         technicalMetrics.increment("api_errors_total", 1, {
           code: error.code,
           route: request.routeOptions.url || "unmatched",
@@ -1160,12 +1136,6 @@ export async function buildApp(
       return;
     }
     request.log.error({ err: error }, "Unhandled API error");
-    hawk.capture(error, {
-      requestId: request.id,
-      route: request.routeOptions.url || "unmatched",
-      statusCode: "500",
-      errorCode: "INTERNAL_ERROR",
-    });
     technicalMetrics.increment("api_errors_total", 1, {
       code: "INTERNAL_ERROR",
       route: request.routeOptions.url || "unmatched",

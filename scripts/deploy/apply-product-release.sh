@@ -50,15 +50,6 @@ until curl -fsS http://127.0.0.1:3001/health/ready >/dev/null; do
   sleep 2
 done
 
-# Do not report a successful release when the operator enabled Hawk in this
-# runtime's .env but that configuration did not reach the API container.
-if grep -qx 'HAWK_ENABLED=true' "$APP_DIR/.env"; then
-  curl -fsS http://127.0.0.1:3001/metrics | grep -Eq '^hawk_reporter_enabled(\{[^}]*\})? 1$' || {
-    printf '%s\n' 'Hawk is enabled in the runtime .env but the API reporter is not active' >&2
-    exit 1
-  }
-fi
-
 # Keep the production telemetry agent on the same immutable source revision as
 # the API. Its operator-owned .env.agent contains only endpoint and secret
 # values and is deliberately preserved outside the release archive.

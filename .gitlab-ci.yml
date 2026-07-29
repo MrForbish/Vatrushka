@@ -971,45 +971,7 @@ windows-production-package:
         exit 1
       }
 
-      function Test-HawkIntegrationToken([string] $value) {
-        try {
-          $decoded = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($value)) | ConvertFrom-Json
-          return -not [string]::IsNullOrWhiteSpace([string] $decoded.integrationId) -and
-            -not [string]::IsNullOrWhiteSpace([string] $decoded.secret)
-        } catch {
-          return $false
-        }
-      }
-
-      if ([string]::IsNullOrWhiteSpace($env:HAWK_DESKTOP_MAIN_TOKEN)) {
-        Write-Error 'HAWK_DESKTOP_MAIN_TOKEN must be configured as a protected CI/CD variable.'
-        exit 1
-      }
-      if ([string]::IsNullOrWhiteSpace($env:HAWK_DESKTOP_RENDERER_TOKEN)) {
-        Write-Error 'HAWK_DESKTOP_RENDERER_TOKEN must be configured as a protected CI/CD variable.'
-        exit 1
-      }
-      if (-not (Test-HawkIntegrationToken $env:HAWK_DESKTOP_MAIN_TOKEN)) {
-        Write-Error 'HAWK_DESKTOP_MAIN_TOKEN must be a valid Hawk integration token.'
-        exit 1
-      }
-      if (-not (Test-HawkIntegrationToken $env:HAWK_DESKTOP_RENDERER_TOKEN)) {
-        Write-Error 'HAWK_DESKTOP_RENDERER_TOKEN must be a valid Hawk integration token.'
-        exit 1
-      }
-
-      # Do not define a CI variable in terms of itself in YAML: GitLab leaves it as
-      # a literal string and the packager then receives an invalid Hawk token.
-      # The protected variables stay inherited; only distinct build-time aliases are
-      # exported here for the Electron main and renderer bundles.
       $env:VERSION = node -p "require('./package.json').version"
-      $release = if ([string]::IsNullOrWhiteSpace($env:CI_COMMIT_TAG)) { "main-$env:CI_COMMIT_SHORT_SHA" } else { $env:CI_COMMIT_TAG }
-      $env:HAWK_DESKTOP_MAIN_ENABLED = 'true'
-      $env:HAWK_DESKTOP_RENDERER_ENABLED = 'true'
-      $env:VITE_HAWK_DESKTOP_RENDERER_ENABLED = 'true'
-      $env:VITE_HAWK_DESKTOP_RENDERER_TOKEN = $env:HAWK_DESKTOP_RENDERER_TOKEN
-      $env:HAWK_DESKTOP_RELEASE = $release
-      $env:VITE_HAWK_DESKTOP_RELEASE = $release
     - npm run release:validate
     - npm run package:win
     - |
