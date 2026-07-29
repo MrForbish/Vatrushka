@@ -38,13 +38,17 @@ export interface UserProfileSettingsHubProps {
   onUpdateNotificationPreferences(
     input: Omit<UserNotificationPreferences, "updatedAt">,
   ): Promise<UserNotificationPreferences>;
+  appSoundVolume: number;
+  onAppSoundVolume(value: number): void;
   onPreviewNotificationSound(): void;
 }
 
 type Column = "profile" | "presence" | "notifications";
 
 export function UserProfileSettingsHub({
+  appSoundVolume,
   onAvatar,
+  onAppSoundVolume,
   onCover,
   onDirtyChange,
   onLoadNotificationPreferences,
@@ -151,8 +155,10 @@ export function UserProfileSettingsHub({
           </header>
           <section aria-labelledby="notifications-column-title" className="vui-profile-settings-hub__column">
           <UserNotificationSettingsPage
+            appSoundVolume={appSoundVolume}
             dndActive={presence?.preference === "do_not_disturb"}
             embedded
+            onAppSoundVolume={onAppSoundVolume}
             onDirtyChange={reportNotificationsDirty}
             onLoad={onLoadNotificationPreferences}
             onPreviewSound={onPreviewNotificationSound}
