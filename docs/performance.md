@@ -10,8 +10,7 @@ npm run perf:bundle
 
 ## Release budgets
 
-The JavaScript ceiling is 2.8 MB. It includes the opt-in Hawk Browser catcher
-(about 64 KiB of the packaged renderer) and remains a blocking regression gate.
+The JavaScript ceiling is 2.8 MB and remains a blocking regression gate.
 
 | Asset | vNext measured baseline | Blocking budget |
 |---|---:|---:|

@@ -36,5 +36,4 @@ Labels: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
 - **unknown:** independent production database/Redis/LiveKit/TURN validation, production media S3 principal mapping and isolated restore procedure.
 - **unknown:** DNS cutover control, private-network/WireGuard topology and migration window.
 - **unknown:** staging hostname and staging-only credentials; these intentionally do not exist until after production migration.
-- **proposal:** regenerate exposed Hawk integration tokens in the Hawk UI and replace their protected GitLab variables before the next production release.
 - **proposal:** populate the existing root-owned production application environment with the dedicated production-media S3 principal before the first immutable runtime deployment. The new deployment preflight intentionally blocks until this is complete.

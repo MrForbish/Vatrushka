@@ -16,7 +16,6 @@ import {
 } from "./services/identity-settings.js";
 import { createMediaCleanupWorker } from "./services/media-cleanup.js";
 import { VoiceReconciliationWorker } from "./services/voice-reconciliation.js";
-import { publishApiHawkRelease } from "./observability/hawk.js";
 
 const config = loadConfig();
 const database = createPostgresStore(config.DATABASE_URL);
@@ -109,9 +108,6 @@ process.once("SIGTERM", () => void shutdown("SIGTERM"));
 
 try {
   await app.listen({ host: config.HOST, port: config.PORT });
-  void publishApiHawkRelease(config)
-    .then((sourceMapCount) => app.log.info({ release: config.HAWK_RELEASE, sourceMapCount }, "Hawk API release published"))
-    .catch((error) => app.log.warn({ err: error, release: config.HAWK_RELEASE }, "Hawk API release publication failed"));
 } catch (error) {
   app.log.fatal({ err: error }, "API failed to start");
   await app.close();

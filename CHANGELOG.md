@@ -4,6 +4,19 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.37] - 2026-07-29
+
+### Changed
+
+- Removed the Hawk exception-monitoring integration from the API and desktop
+  client. Prometheus, Grafana, Loki, and structured application logs remain
+  the supported observability path.
+
+### Fixed
+
+- Removed the obsolete Hawk token validation and source-map publication gate
+  from Windows production packaging.
+
 ## [0.8.36] - 2026-07-29
 
 ### Changed
