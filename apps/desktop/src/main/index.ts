@@ -25,7 +25,6 @@ import { findDeepLink } from "./deep-link.js";
 import { configureLogging, IPC_CHANNELS, registerIpc } from "./ipc.js";
 import { DesktopStorage } from "./storage.js";
 import { DesktopUpdater } from "./updater.js";
-import { captureMainHawk, initializeMainHawk } from "./hawk.js";
 
 const desktopAppName = process.env.VATRUSHKA_APP_NAME;
 const desktopProtocol = process.env.VATRUSHKA_APP_PROTOCOL || APP_PROTOCOL;
@@ -440,7 +439,6 @@ if (!hasLock) {
   });
 
   void app.whenReady().then(async () => {
-    initializeMainHawk();
     app.setName(APP_NAME);
     app.setAppUserModelId("ru.vatrushka.desktop");
     registerProtocol();
@@ -483,8 +481,6 @@ if (!hasLock) {
   });
 }
 
-process.on("uncaughtException", (error) => captureMainHawk(error, "uncaught-exception"));
-process.on("unhandledRejection", (reason) => captureMainHawk(reason, "unhandled-rejection"));
 
 app.on("activate", showMainWindow);
 // The auth window is intentionally replaced with the main application window

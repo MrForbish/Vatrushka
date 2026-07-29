@@ -1,11 +1,6 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite';
 import { resolve } from 'node:path';
-import hawkSourceMapPlugin from './scripts/hawk-source-map-plugin.mjs';
-
-const hawkRendererToken = process.env.HAWK_DESKTOP_RENDERER_TOKEN;
-const hawkMainToken = process.env.HAWK_DESKTOP_MAIN_TOKEN;
-const hawkRelease = process.env.HAWK_DESKTOP_RELEASE ?? 'unknown';
 const devApiProxyTarget = process.env.VATRUSHKA_DEV_API_PROXY_TARGET ?? 'https://api.myvatrushka.ru';
 
 function stripBrowserOrigin(proxy: { on(event: string, listener: (...args: unknown[]) => void): void }): void {
@@ -19,14 +14,8 @@ function stripBrowserOrigin(proxy: { on(event: string, listener: (...args: unkno
 
 export default defineConfig({
   main: {
-    plugins: [
-      externalizeDepsPlugin(),
-      ...(hawkMainToken ? [hawkSourceMapPlugin({ token: hawkMainToken, release: hawkRelease })] : []),
-    ],
+    plugins: [externalizeDepsPlugin()],
     define: {
-      'process.env.HAWK_DESKTOP_MAIN_ENABLED': JSON.stringify(process.env.HAWK_DESKTOP_MAIN_ENABLED ?? 'false'),
-      'process.env.HAWK_DESKTOP_MAIN_TOKEN': JSON.stringify(hawkMainToken ?? ''),
-      'process.env.HAWK_DESKTOP_RELEASE': JSON.stringify(hawkRelease),
       'process.env.VATRUSHKA_UPDATES_ENABLED': JSON.stringify(process.env.VATRUSHKA_UPDATES_ENABLED ?? 'true'),
       'process.env.VATRUSHKA_APP_NAME': JSON.stringify(process.env.VATRUSHKA_APP_NAME ?? ''),
       'process.env.VATRUSHKA_APP_PROTOCOL': JSON.stringify(process.env.VATRUSHKA_APP_PROTOCOL ?? ''),
@@ -62,12 +51,7 @@ export default defineConfig({
         },
       },
     },
-    plugins: [
-      react(),
-      ...(hawkRendererToken
-        ? [hawkSourceMapPlugin({ token: hawkRendererToken, release: hawkRelease })]
-        : []),
-    ],
+    plugins: [react()],
     build: {
       sourcemap: true,
       rollupOptions: {
