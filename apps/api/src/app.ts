@@ -58,6 +58,7 @@ import {
   updateConversationMessageSchema,
   updateConversationReadStateSchema,
   notificationQuerySchema,
+  notificationPreviewModeSchema,
   createAttachmentIntentSchema,
   updateUserNotificationPreferencesSchema,
   updateServerNotificationPreferencesSchema,
@@ -821,8 +822,18 @@ const unreadSummaryResponseSchema = z.object({
     }),
   ),
 });
-const userNotificationPreferencesResponseSchema =
-  updateUserNotificationPreferencesSchema.extend({ updatedAt: z.string() });
+const userNotificationPreferencesResponseSchema = z
+  .object({
+    desktopEnabled: z.boolean(),
+    soundEnabled: z.boolean(),
+    previewMode: notificationPreviewModeSchema,
+    directMessagesEnabled: z.boolean(),
+    mentionsEnabled: z.boolean(),
+    quietHoursStart: z.string().nullable(),
+    quietHoursEnd: z.string().nullable(),
+    updatedAt: z.string(),
+  })
+  .strict();
 const serverNotificationPreferencesResponseSchema =
   updateServerNotificationPreferencesSchema.extend({
     serverId: z.uuid(),

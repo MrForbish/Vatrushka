@@ -264,7 +264,7 @@ export function SecurityCenter({ client = apiClient, dndActive = false, onClose,
 
           {activeTab === 'notifications' && <div className="security-stack">
             <div className="security-section-heading"><div><h3>Уведомления о сообщениях</h3><p>Настройки хранятся только на этом компьютере и применяются сразу.</p></div></div>
-            {dndActive ? <aside className="security-notice"><strong>Статус «Не беспокоить» активен</strong><span>Все звуки и desktop/push-уведомления временно отключены. Сообщения и unread-счётчики продолжают обновляться.</span></aside> : null}
+            {dndActive ? <aside className="security-notice"><strong>Статус «Не беспокоить» активен</strong><span>Все звуки и системные уведомления временно отключены. Сообщения и счётчики непрочитанных продолжают обновляться.</span></aside> : null}
             <article className="security-card"><div><h3>Push-уведомления Windows</h3><p>Показывать автора, канал и текст нового сообщения, даже когда окно приложения открыто.</p></div><Switch checked={settings.desktopNotificationsEnabled} disabled={dndActive} label="Push-уведомления" onCheckedChange={(checked) => onSettingsChange({ desktopNotificationsEnabled: checked, messageSoundsEnabled: settings.messageSoundsEnabled })} /></article>
             <article className="security-card"><div><h3>Звук сообщения</h3><p>Проигрывать короткий ненавязчивый сигнал на выбранном устройстве вывода.</p></div><Switch checked={settings.messageSoundsEnabled} disabled={dndActive} label="Звуковые уведомления" onCheckedChange={(checked) => onSettingsChange({ desktopNotificationsEnabled: settings.desktopNotificationsEnabled, messageSoundsEnabled: checked })} /></article>
           </div>}

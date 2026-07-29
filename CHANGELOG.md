@@ -4,6 +4,24 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.36] - 2026-07-29
+
+### Changed
+
+- Reworked profile settings into a unified three-column workspace for profile
+  data, presence, and notifications; its layout now adapts without widening
+  neighbouring settings panels.
+- Removed the obsolete global "Community" entry. Servers remain available from
+  their cards in the persistent global navigation.
+
+### Fixed
+
+- Kept quiet-hours start and end controls within their card at narrow widths.
+- Localized notification preference descriptions and moved the notification
+  center control clear of the Windows window controls.
+- Made Electron E2E cleanup reliably close its temporary app and API server so
+  failed tests do not leave local windows or background processes behind.
+
 ## [0.8.35] - 2026-07-29
 
 ### Changed

@@ -116,13 +116,12 @@ export interface WorkspaceLibraryProps {
   profile?: ReactNode;
 }
 
-export type GlobalSidebarSection = "home" | "community" | "messages";
+export type GlobalSidebarSection = "home" | "messages" | "server";
 
 export interface GlobalSidebarProps {
   activeSection: GlobalSidebarSection;
   disabled?: boolean;
   activeServerId?: string;
-  onCommunity: () => void;
   onDirectMessages: () => void;
   onHome: () => void;
   onServerSelect?: (serverId: string) => void;
@@ -138,7 +137,6 @@ export function GlobalSidebar({
   activeSection,
   activeServerId,
   disabled = false,
-  onCommunity,
   onDirectMessages,
   onHome,
   onServerSelect,
@@ -169,9 +167,6 @@ export function GlobalSidebar({
       <nav aria-label="Разделы приложения" className="vui-global-sidebar__nav">
         <button aria-current={activeSection === "home" ? "page" : undefined} data-active={activeSection === "home" || undefined} disabled={disabled} onClick={onHome} type="button">
           <Icon name="home" size={18} /><span>Главная</span>
-        </button>
-        <button aria-current={activeSection === "community" ? "page" : undefined} data-active={activeSection === "community" || undefined} disabled={disabled} onClick={onCommunity} type="button">
-          <Icon name="users" size={18} /><span>Сообщество</span>
         </button>
         <button aria-describedby="vui-global-sidebar-friends-hint" disabled type="button">
           <Icon name="users" size={18} /><span>Друзья</span>

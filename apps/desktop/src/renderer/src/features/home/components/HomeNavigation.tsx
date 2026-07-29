@@ -16,7 +16,6 @@ import {
 export interface HomeNavigationProps {
   user: PublicUser;
   servers: ServerSummary[];
-  onCreate: () => void;
   onDirectMessages?: (() => void) | undefined;
   onOpenServer: (serverId: string) => void;
   onSecurity: () => void;
@@ -30,7 +29,6 @@ export interface HomeNavigationProps {
 
 export function HomeNavigation({
   networkAvailable = true,
-  onCreate,
   onDirectMessages,
   onLogout,
   onOpenServer,
@@ -55,11 +53,6 @@ export function HomeNavigation({
     <GlobalSidebar
       activeSection="home"
       disabled={!networkAvailable}
-      onCommunity={() => {
-        const firstServer = servers[0];
-        if (firstServer) onOpenServer(firstServer.id);
-        else onCreate();
-      }}
       onDirectMessages={onDirectMessages ?? (() => undefined)}
       onHome={() => undefined}
       onServerSelect={onOpenServer}
