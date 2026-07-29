@@ -319,7 +319,6 @@ describe("production infrastructure adapters", () => {
         mentionsEnabled: true,
         quietHoursStart: "22:00",
         quietHoursEnd: "08:00",
-        quietHoursTimezone: "Europe/Moscow",
       },
       now,
     );
@@ -327,6 +326,7 @@ describe("production infrastructure adapters", () => {
       (await messaging.getNotificationPreferences(second.id, now)).previewMode,
     ).toBe("sender_only");
     expect(preferences.desktopEnabled).toBe(false);
+    expect(preferences).not.toHaveProperty("quietHoursTimezone");
     const channelId = randomUUID();
     const roleId = randomUUID();
     await adminPool.query(

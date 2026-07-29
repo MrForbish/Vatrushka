@@ -7,7 +7,9 @@ import type { PublicUser } from '@vatrushka/shared';
 
 import { UserAudioSettingsPage } from './UserAudioSettingsPage';
 import { UserAccountSettingsPage } from './UserAccountSettingsPage';
+import { UserNotificationSettingsPage } from './UserNotificationSettingsPage';
 import { UserProfileSettingsPage } from './UserProfileSettingsPage';
+import { UserProfileSettingsHub } from './UserProfileSettingsHub';
 import { UserPresenceSettingsPage } from './UserPresenceSettingsPage';
 import { UserPrivacySettingsPage } from './UserPrivacySettingsPage';
 
@@ -19,13 +21,31 @@ function device(kind: MediaDeviceKind, deviceId: string, label: string): MediaDe
 }
 
 describe('routed user settings pages', () => {
+  it('unifies profile, presence, and notification controls without duplicate loads', async () => {
+    const presence = { preference: 'online' as const, effectiveStatus: 'online' as const, customText: null, customTextExpiresAt: null, updatedAt: '2026-07-18T10:00:00.000Z' };
+    const notifications = { desktopEnabled: true, soundEnabled: true, previewMode: 'full' as const, directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: null, quietHoursEnd: null, updatedAt: '2026-07-18T10:00:00.000Z' };
+    const onLoadProfile = vi.fn(async () => profile);
+    const onLoadPresence = vi.fn(async () => presence);
+    const onLoadNotifications = vi.fn(async () => notifications);
+    render(<UserProfileSettingsHub onAvatar={vi.fn(async () => profile)} onCover={vi.fn(async () => profile)} onDirtyChange={vi.fn()} onLoadNotificationPreferences={onLoadNotifications} onLoadPresence={onLoadPresence} onLoadProfile={onLoadProfile} onPreviewNotificationSound={vi.fn()} onPresenceChange={vi.fn()} onProfileMediaChange={vi.fn()} onResetAvatar={vi.fn(async () => profile)} onResetCover={vi.fn(async () => profile)} onSaveProfile={vi.fn(async () => profile)} onUpdateNotificationPreferences={vi.fn(async () => notifications)} onUpdatePresence={vi.fn(async () => presence)} onUserChange={vi.fn()} presence={presence} presenceEnabled user={user} />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Мой профиль' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Статус и активность' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Уведомления' })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(onLoadProfile).toHaveBeenCalledTimes(1);
+      expect(onLoadPresence).toHaveBeenCalledTimes(1);
+      expect(onLoadNotifications).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('opens avatar crop preview and leaves the current avatar unchanged on cancel', async () => {
     const onAvatar = vi.fn(async () => profile);
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:avatar-preview');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
     render(<UserProfileSettingsPage onAvatar={onAvatar} onDirtyChange={vi.fn()} onLoad={vi.fn(async () => profile)} onResetAvatar={vi.fn(async () => profile)} onSave={vi.fn(async () => profile)} onUserChange={vi.fn()} user={user} />);
 
-    const input = await screen.findByLabelText('Загрузить аватар: файл');
+    const input = await screen.findByLabelText('Изменить аватар: файл');
     await userEvent.upload(
       input,
       new File(['avatar'], 'portrait.png', { type: 'image/png' }),
@@ -34,6 +54,23 @@ describe('routed user settings pages', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Отмена' }));
     expect(screen.queryByRole('dialog', { name: 'Выберите область аватара' })).not.toBeInTheDocument();
     expect(onAvatar).not.toHaveBeenCalled();
+  });
+
+  it('uses the cover and avatar preview as the only media editing surface', async () => {
+    const onCover = vi.fn(async () => ({ ...profile, coverUrl: 'https://cdn.example/cover.webp' }));
+    render(<UserProfileSettingsPage onAvatar={vi.fn(async () => profile)} onCover={onCover} onDirtyChange={vi.fn()} onLoad={vi.fn(async () => ({ ...profile, coverUrl: null }))} onResetAvatar={vi.fn(async () => profile)} onResetCover={vi.fn(async () => ({ ...profile, coverUrl: null }))} onSave={vi.fn(async () => profile)} onUserChange={vi.fn()} user={user} />);
+    expect(await screen.findByRole('button', { name: 'Изменить обложку' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Изменить аватар' })).toBeInTheDocument();
+    expect(screen.queryByText('Предпросмотр профиля')).not.toBeInTheDocument();
+    expect(screen.queryByText('Загрузить аватар')).not.toBeInTheDocument();
+    await userEvent.upload(screen.getByLabelText('Изменить обложку: файл'), new File(['cover'], 'cover.webp', { type: 'image/webp' }));
+    await waitFor(() => expect(onCover).toHaveBeenCalledOnce());
+  });
+
+  it('keeps invalid image uploads local and explains the validation error', async () => {
+    render(<UserProfileSettingsPage onAvatar={vi.fn(async () => profile)} onDirtyChange={vi.fn()} onLoad={vi.fn(async () => profile)} onResetAvatar={vi.fn(async () => profile)} onSave={vi.fn(async () => profile)} onUserChange={vi.fn()} user={user} />);
+    fireEvent.change(await screen.findByLabelText('Изменить аватар: файл'), { target: { files: [new File(['not an image'], 'avatar.gif', { type: 'image/gif' })] } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Поддерживаются изображения PNG, JPEG и WebP.');
   });
 
   it('validates and saves the supported display name field', async () => {
@@ -99,7 +136,7 @@ describe('routed user settings pages', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Проверить уведомление' }));
     expect(onTestOutput).toHaveBeenCalledOnce();
     expect(onTestNotification).toHaveBeenCalledOnce();
-    expect(screen.getByText(/Системный toast остаётся без отдельного звука/u)).toBeInTheDocument();
+    expect(screen.getByText(/Системное уведомление остаётся без отдельного звука/u)).toBeInTheDocument();
   });
 
   it('loads and saves DND as a server-side presence preference', async () => {
@@ -112,6 +149,21 @@ describe('routed user settings pages', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
     await waitFor(() => expect(onSave).toHaveBeenCalledWith({ preference: 'do_not_disturb', customText: null, customTextExpiresAt: null }));
     expect(onPresenceChange).toHaveBeenLastCalledWith(updated);
+  });
+
+  it('persists notification filters and quiet-hours interval without a timezone field', async () => {
+    const initial = { desktopEnabled: true, soundEnabled: true, previewMode: 'full' as const, directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: null, quietHoursEnd: null, updatedAt: '2026-07-29T00:00:00.000Z' };
+    const onSave = vi.fn(async (next: typeof initial) => ({ ...next, updatedAt: '2026-07-29T00:01:00.000Z' }));
+    render(<UserNotificationSettingsPage dndActive={false} onDirtyChange={vi.fn()} onLoad={vi.fn(async () => initial)} onPreviewSound={vi.fn()} onSave={onSave} />);
+
+    await userEvent.click(await screen.findByRole('switch', { name: 'Личные сообщения' }));
+    await userEvent.click(screen.getByRole('switch', { name: 'Включить тихие часы' }));
+    fireEvent.change(screen.getByLabelText('Начало'), { target: { value: '23:00' } });
+    fireEvent.change(screen.getByLabelText('Окончание'), { target: { value: '07:30' } });
+    expect(screen.queryByLabelText('Часовой пояс')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalledWith({ desktopEnabled: true, soundEnabled: true, previewMode: 'full', directMessagesEnabled: false, mentionsEnabled: true, quietHoursStart: '23:00', quietHoursEnd: '07:30' }));
   });
 
   it('persists privacy controls instead of only hiding local UI', async () => {

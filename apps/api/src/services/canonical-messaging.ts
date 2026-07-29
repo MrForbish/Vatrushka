@@ -1544,13 +1544,12 @@ export class CanonicalMessagingStore {
       mentions_enabled: boolean;
       quiet_hours_start: string | null;
       quiet_hours_end: string | null;
-      quiet_hours_timezone: string | null;
       updated_at: Date;
     }>(
       `
       insert into user_notification_preferences (user_id, updated_at) values ($1, $2)
       on conflict (user_id) do update set user_id = excluded.user_id
-      returning desktop_enabled, sound_enabled, preview_mode, direct_messages_enabled, mentions_enabled, quiet_hours_start, quiet_hours_end, quiet_hours_timezone, updated_at
+      returning desktop_enabled, sound_enabled, preview_mode, direct_messages_enabled, mentions_enabled, quiet_hours_start, quiet_hours_end, updated_at
     `,
       [userId, now],
     );
@@ -1563,7 +1562,6 @@ export class CanonicalMessagingStore {
       mentionsEnabled: row.mentions_enabled,
       quietHoursStart: row.quiet_hours_start,
       quietHoursEnd: row.quiet_hours_end,
-      quietHoursTimezone: row.quiet_hours_timezone,
       updatedAt: row.updated_at.toISOString(),
     };
   }
@@ -1575,12 +1573,12 @@ export class CanonicalMessagingStore {
   ): Promise<UserNotificationPreferences> {
     await this.pool.query(
       `
-      insert into user_notification_preferences (user_id, desktop_enabled, sound_enabled, show_preview, preview_mode, direct_messages_enabled, mentions_enabled, quiet_hours_start, quiet_hours_end, quiet_hours_timezone, updated_at)
-      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      insert into user_notification_preferences (user_id, desktop_enabled, sound_enabled, show_preview, preview_mode, direct_messages_enabled, mentions_enabled, quiet_hours_start, quiet_hours_end, updated_at)
+      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       on conflict (user_id) do update set desktop_enabled = excluded.desktop_enabled, sound_enabled = excluded.sound_enabled,
         show_preview = excluded.show_preview, preview_mode = excluded.preview_mode, direct_messages_enabled = excluded.direct_messages_enabled,
         mentions_enabled = excluded.mentions_enabled, quiet_hours_start = excluded.quiet_hours_start, quiet_hours_end = excluded.quiet_hours_end,
-        quiet_hours_timezone = excluded.quiet_hours_timezone, updated_at = excluded.updated_at
+        quiet_hours_timezone = null, updated_at = excluded.updated_at
     `,
       [
         userId,
@@ -1592,7 +1590,6 @@ export class CanonicalMessagingStore {
         input.mentionsEnabled,
         input.quietHoursStart,
         input.quietHoursEnd,
-        input.quietHoursTimezone,
         now,
       ],
     );
