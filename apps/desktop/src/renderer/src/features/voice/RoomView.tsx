@@ -21,7 +21,6 @@ import {
   IconButton,
   Popover,
   Slider,
-  VoiceParticipantStrip,
   VoiceParticipantTile,
   type VoiceParticipantViewModel,
 } from "../../ui";
@@ -105,7 +104,8 @@ function participantModel(
 }
 
 export function RoomView(props: RoomViewProps): React.JSX.Element {
-  const [focusedTrackId, setFocusedTrackId] = useState<string | null>(null);
+  const [selectedTrackId, setSelectedTrackId] = useState<string | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const participantModels = props.snapshot.participants.map((participant) =>
     participantModel(
       participant,
@@ -119,23 +119,37 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
       ?.name ??
     props.snapshot.screenSharerName ??
     "участник";
-  const stripParticipants = participantModels;
   const cameraTracks = (props.snapshot.videoTracks ?? []).filter(
-    (track) => track.source === "camera",
+    (track) =>
+      track.source === "camera" &&
+      // LiveKit may retain a local publication briefly while the camera track
+      // is being unpublished. Never keep a black local camera tile on screen
+      // during that transition.
+      (!track.isLocal || props.snapshot.isCameraEnabled),
   );
   const videoTracks = props.snapshot.videoTracks ?? [];
-  const focusedTrack = videoTracks.find((track) => track.id === focusedTrackId) ?? null;
+  const selectedTrack =
+    videoTracks.find((track) => track.id === selectedTrackId) ??
+    videoTracks.find((track) => track.source === "screen") ??
+    cameraTracks[0] ??
+    null;
+  const showScreenTrack =
+    props.snapshot.screenTrack !== null &&
+    (selectedTrackId === null || selectedTrack?.source === "screen" || selectedTrack === null);
   useEffect(() => {
-    if (focusedTrackId !== null && focusedTrack === null) setFocusedTrackId(null);
-  }, [focusedTrack, focusedTrackId]);
+    if (selectedTrackId !== null && !videoTracks.some((track) => track.id === selectedTrackId)) {
+      setSelectedTrackId(null);
+      setIsFullscreen(false);
+    }
+  }, [selectedTrackId, videoTracks]);
   useEffect(() => {
-    if (focusedTrackId === null) return undefined;
+    if (!isFullscreen) return undefined;
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") setFocusedTrackId(null);
+      if (event.key === "Escape") setIsFullscreen(false);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [focusedTrackId]);
+  }, [isFullscreen]);
   const participantActions = {
     canKick: props.connection.isOwner,
     onKick: props.onKick,
@@ -143,13 +157,11 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
     onVolume: props.onParticipantVolume,
   };
   return (
-    <section className="vui-room">
+    <section className="vui-room" data-fullscreen={isFullscreen || undefined}>
       <div className="vui-room__content">
-        {props.snapshot.screenTrack === null ? (
+        {selectedTrack === null && !showScreenTrack ? (
           <div className="vui-room__voice-stage">
-            {cameraTracks.length > 0 ? (
-              <CameraTrackGrid onOpen={setFocusedTrackId} tracks={cameraTracks} />
-            ) : participantModels.length === 0 ? (
+            {participantModels.length === 0 ? (
               <div className="vui-room__empty">
                 <Icon name="voice" size={38} />
                 <h1>Ожидаем участников</h1>
@@ -170,7 +182,7 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
               </div>
             )}
           </div>
-        ) : (
+        ) : showScreenTrack ? (
           <div className="vui-room__stream-stage">
             <div className="vui-room__stream">
               <ScreenTrack
@@ -192,27 +204,39 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
                 onAnnotationClear={
                   props.onScreenAnnotationClear ?? (() => undefined)
                 }
-                track={props.snapshot.screenTrack}
+                track={props.snapshot.screenTrack!}
                 volume={props.snapshot.screenShareAudioVolume}
-                onOpen={() => {
-                  const screenTrack = videoTracks.find((track) => track.source === "screen");
-                  if (screenTrack) setFocusedTrackId(screenTrack.id);
-                }}
+                fullscreen={isFullscreen}
+                onOpen={() => setIsFullscreen((value) => !value)}
               />
-              <div className="vui-room__stream-label">
-                <Badge tone="primary">Демонстрация экрана</Badge>
-                <span>
-                  Экран показывает <strong>{screenSharerName}</strong>
-                </span>
+              <div
+                aria-label={`Экран показывает ${screenSharerName}`}
+                className="vui-room__stream-presenter"
+                tabIndex={0}
+              >
+                <span>Демонстрация экрана {screenSharerName}</span>
               </div>
+              {videoTracks.length > 1 ? (
+                <MediaTrackSwitcher
+                  onSelect={setSelectedTrackId}
+                  selectedTrackId={selectedTrack?.id ?? ""}
+                  tracks={videoTracks}
+                />
+              ) : null}
             </div>
-            <VoiceParticipantStrip
-              {...participantActions}
-              participants={stripParticipants}
-            />
-            {cameraTracks.length > 0 ? (
-              <CameraTrackStrip onOpen={setFocusedTrackId} tracks={cameraTracks} />
-            ) : null}
+          </div>
+        ) : (
+          <div className="vui-room__stream-stage">
+            <div className="vui-room__stream">
+              <VideoTrack expanded onOpen={() => setIsFullscreen((value) => !value)} track={selectedTrack!} />
+              {videoTracks.length > 1 ? (
+                <MediaTrackSwitcher
+                  onSelect={setSelectedTrackId}
+                  selectedTrackId={selectedTrack!.id}
+                  tracks={videoTracks}
+                />
+              ) : null}
+            </div>
           </div>
         )}
       </div>
@@ -337,45 +361,29 @@ export function RoomView(props: RoomViewProps): React.JSX.Element {
           />
         </footer>
       </div>
-      {focusedTrack ? (
-        <VideoFocusView
-          onClose={() => setFocusedTrackId(null)}
-          onOpen={setFocusedTrackId}
-          track={focusedTrack}
-          tracks={videoTracks}
-        />
-      ) : null}
     </section>
   );
 }
 
-function CameraTrackGrid({
-  onOpen,
+function MediaTrackSwitcher({
+  onSelect,
+  selectedTrackId,
   tracks,
 }: {
-  onOpen(id: string): void;
+  onSelect(id: string): void;
+  selectedTrackId: string;
   tracks: NonNullable<MediaSnapshot["videoTracks"]>;
 }): React.JSX.Element {
   return (
-    <div className="vui-room__camera-grid" aria-label="Камеры участников">
+    <div className="vui-room__media-switcher" aria-label="Переключение демонстрации и камер">
       {tracks.map((track) => (
-        <VideoTrack key={track.id} onOpen={onOpen} track={track} />
-      ))}
-    </div>
-  );
-}
-
-function CameraTrackStrip({
-  onOpen,
-  tracks,
-}: {
-  onOpen(id: string): void;
-  tracks: NonNullable<MediaSnapshot["videoTracks"]>;
-}): React.JSX.Element {
-  return (
-    <div className="vui-room__camera-strip" aria-label="Камеры участников">
-      {tracks.map((track) => (
-        <VideoTrack compact key={track.id} onOpen={onOpen} track={track} />
+        <VideoTrack
+          compact
+          key={track.id}
+          onOpen={onSelect}
+          selected={track.id === selectedTrackId}
+          track={track}
+        />
       ))}
     </div>
   );
@@ -383,11 +391,15 @@ function CameraTrackStrip({
 
 function VideoTrack({
   compact = false,
+  expanded = false,
   onOpen,
+  selected = false,
   track,
 }: {
   compact?: boolean;
+  expanded?: boolean;
   onOpen?(id: string): void;
+  selected?: boolean;
   track: NonNullable<MediaSnapshot["videoTracks"]>[number];
 }): React.JSX.Element {
   const ref = useRef<HTMLVideoElement>(null);
@@ -401,16 +413,28 @@ function VideoTrack({
   }, [track.track]);
   const content = (
     <>
-      <video autoPlay className="vui-room__camera-video" muted={track.isLocal} playsInline ref={ref} />
+      <video
+        autoPlay
+        className="vui-room__camera-video"
+        data-source={track.source}
+        muted={track.isLocal}
+        playsInline
+        ref={ref}
+      />
       <div className="vui-room__camera-label">
         <span>{track.participantDisplayName}</span>
-        <Badge tone="primary">{track.source === "camera" ? "Камера" : "Демонстрация экрана"}</Badge>
+        {track.source === "screen" ? <Badge tone="primary">Демонстрация экрана</Badge> : null}
       </div>
     </>
   );
   if (!onOpen)
     return (
-      <div className="vui-room__camera-tile" data-compact={compact || undefined}>
+      <div
+        className="vui-room__camera-tile"
+        data-compact={compact || undefined}
+        data-expanded={expanded || undefined}
+        data-stage={expanded || undefined}
+      >
         {content}
       </div>
     );
@@ -419,38 +443,13 @@ function VideoTrack({
       aria-label={`Открыть ${track.source === "camera" ? "камеру" : "демонстрацию экрана"}: ${track.participantDisplayName}`}
       className="vui-room__camera-tile"
       data-compact={compact || undefined}
+      data-expanded={expanded || undefined}
+      data-selected={selected || undefined}
       onClick={() => onOpen(track.id)}
       type="button"
     >
       {content}
     </button>
-  );
-}
-
-function VideoFocusView({
-  onClose,
-  onOpen,
-  track,
-  tracks,
-}: {
-  onClose(): void;
-  onOpen(id: string): void;
-  track: NonNullable<MediaSnapshot["videoTracks"]>[number];
-  tracks: NonNullable<MediaSnapshot["videoTracks"]>;
-}): React.JSX.Element {
-  return (
-    <section aria-label="Увеличенный просмотр видео" className="vui-room__camera-focus" role="dialog">
-      <header>
-        <div><Badge tone="primary">{track.source === "camera" ? "Камера" : "Демонстрация экрана"}</Badge><strong>{track.participantDisplayName}</strong></div>
-        <button aria-label="Закрыть увеличенный просмотр" onClick={onClose} type="button"><Icon name="close" size={20} /></button>
-      </header>
-      <VideoTrack track={track} />
-      {tracks.length > 1 ? (
-        <div aria-label="Другие камеры" className="vui-room__camera-focus-strip">
-          {tracks.filter((item) => item.id !== track.id).map((item) => <VideoTrack compact key={item.id} onOpen={onOpen} track={item} />)}
-        </div>
-      ) : null}
-    </section>
   );
 }
 
@@ -604,6 +603,7 @@ function ScreenTrack({
   annotationEditable,
   annotations,
   audioAvailable,
+  fullscreen,
   muted,
   onAnnotationClear,
   onAnnotationStroke,
@@ -617,6 +617,7 @@ function ScreenTrack({
   annotationEditable: boolean;
   annotations: ScreenAnnotationStroke[];
   audioAvailable: boolean;
+  fullscreen: boolean;
   muted: boolean;
   onAnnotationClear(): void;
   onAnnotationStroke(stroke: ScreenAnnotationStroke): void;
@@ -762,7 +763,7 @@ function ScreenTrack({
       <IconButton
         className="vui-room__fullscreen"
         icon="screen"
-        label="Открыть увеличенный просмотр демонстрации"
+        label={fullscreen ? "Выйти из полноэкранного режима" : "Открыть полноэкранный режим"}
         onClick={onOpen}
         type="button"
       />

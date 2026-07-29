@@ -110,7 +110,9 @@ export const CameraTiles: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await userEvent.click(canvas.getByRole('button', { name: 'Открыть камеру: Анна Белова' }));
-    await expect(canvas.getByRole('dialog', { name: 'Увеличенный просмотр видео' })).toBeInTheDocument();
+    await expect(
+      canvasElement.querySelector(".vui-room__camera-tile[data-expanded='true']"),
+    ).not.toBeNull();
   },
 };
 
@@ -128,6 +130,14 @@ export const ScreenShareViewer: Story = {
           isLocal: false,
           track: screenTrack,
         },
+        {
+          id: 'camera-founder',
+          source: 'camera',
+          participantIdentity: 'user_founder_local',
+          participantDisplayName: 'Илья Форбиш',
+          isLocal: true,
+          track: cameraTrack,
+        },
       ],
       screenSharerName: 'Анна Белова',
       screenShareIsLocal: false,
@@ -135,20 +145,24 @@ export const ScreenShareViewer: Story = {
       screenShareAudioVolume: 0.72,
     },
   },
+};
+
+export const ScreenShareFullscreen: Story = {
+  args: { ...ScreenShareViewer.args! },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await userEvent.click(
-      canvas.getByRole('button', {
-        name: 'Открыть увеличенный просмотр демонстрации',
-      }),
-    );
+    await userEvent.click(canvasElement.querySelector('.vui-room__video-frame')!);
     await expect(
-      canvas.getByRole('dialog', { name: 'Увеличенный просмотр видео' }),
-    ).toBeInTheDocument();
+      canvasElement.querySelector(".vui-room[data-fullscreen='true']"),
+    ).not.toBeNull();
     await userEvent.keyboard('{Escape}');
     await expect(
-      canvas.queryByRole('dialog', { name: 'Увеличенный просмотр видео' }),
-    ).not.toBeInTheDocument();
+      canvasElement.querySelector(".vui-room[data-fullscreen='true']"),
+    ).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Открыть камеру: Илья Форбиш' }));
+    await expect(
+      canvasElement.querySelector(".vui-room__stream > .vui-room__camera-tile[data-expanded='true']"),
+    ).not.toBeNull();
   },
 };
 
