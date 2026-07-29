@@ -570,9 +570,20 @@ export const updateUserNotificationPreferencesSchema = z
       .string()
       .regex(/^([01]\d|2[0-3]):[0-5]\d$/u)
       .nullable(),
-    quietHoursTimezone: z.string().trim().min(1).max(100).nullable(),
+    // Accepted only so older desktop builds can still save their preferences.
+    // The server discards it: quiet hours now follow each device's local clock.
+    quietHoursTimezone: z.string().trim().min(1).max(100).nullable().optional(),
   })
   .strict()
+  .transform((value) => ({
+    desktopEnabled: value.desktopEnabled,
+    soundEnabled: value.soundEnabled,
+    previewMode: value.previewMode,
+    directMessagesEnabled: value.directMessagesEnabled,
+    mentionsEnabled: value.mentionsEnabled,
+    quietHoursStart: value.quietHoursStart,
+    quietHoursEnd: value.quietHoursEnd,
+  }))
   .refine(
     (value) =>
       (value.quietHoursStart === null) === (value.quietHoursEnd === null),

@@ -20,10 +20,8 @@ import {
   SettingsShell,
   UserAccountSettingsPage,
   UserAudioSettingsPage,
-  UserNotificationSettingsPage,
-  UserPresenceSettingsPage,
   UserPrivacySettingsPage,
-  UserProfileSettingsPage,
+  UserProfileSettingsHub,
 } from "../../features/settings";
 import { apiClient } from "../../api";
 import {
@@ -130,10 +128,9 @@ const userSecurityTabs = {
 function securityTabPath(tab: SecurityTab): string {
   if (tab === "recovery") return userSettingsPath("security", "backup-codes");
   if (tab === "protection") return userSettingsPath("security");
+  if (tab === "notifications") return userSettingsPath("security");
   return userSettingsPath(
-    tab === "notifications"
-      ? "notifications"
-      : tab === "sessions"
+    tab === "sessions"
         ? "sessions"
         : "activity",
   );
@@ -177,13 +174,8 @@ export function SettingsRoutePage(
 
   const globalSidebar = (
     <GlobalSidebar
-      activeSection={props.route.kind === "server" ? "community" : "home"}
+      activeSection={props.route.kind === "server" ? "server" : "home"}
       {...(props.route.kind === "server" ? { activeServerId: props.route.serverId } : {})}
-      onCommunity={() => {
-        const serverId = props.route.kind === "server" ? props.route.serverId : props.servers[0]?.id;
-        if (serverId) requestNavigation(() => props.onOpenServer(serverId));
-        else requestNavigation(props.onCreateServer);
-      }}
       onDirectMessages={() => requestNavigation(props.onDirectMessages)}
       onHome={() => requestNavigation(props.onHome)}
       onServerSelect={(serverId) => requestNavigation(() => props.onOpenServer(serverId))}
@@ -218,25 +210,25 @@ export function SettingsRoutePage(
           ];
     const content =
       props.route.section === "profile" ? (
-        <UserProfileSettingsPage
+        <UserProfileSettingsHub
           onAvatar={(file) => apiClient.uploadUserAvatar(file)}
           onCover={(file) => apiClient.uploadUserProfileCover(file)}
           onDirtyChange={setPageDirty}
-          onLoad={loadUserProfileSettings}
+          onLoadNotificationPreferences={props.onLoadNotificationPreferences}
+          onLoadPresence={props.onLoadPresence}
+          onLoadProfile={loadUserProfileSettings}
+          onPreviewNotificationSound={props.onTestNotification}
           onResetAvatar={() => apiClient.resetUserAvatar()}
           onResetCover={() => apiClient.resetUserProfileCover()}
           onProfileMediaChange={props.onProfileMediaChange}
-          onSave={(input) => apiClient.updateUserProfileSettings(input)}
+          onSaveProfile={(input) => apiClient.updateUserProfileSettings(input)}
           onUserChange={props.onUserChange}
-          user={props.user}
-        />
-      ) : props.route.section === "status" && props.presenceEnabled ? (
-        <UserPresenceSettingsPage
-          onDirtyChange={setPageDirty}
-          onLoad={props.onLoadPresence}
           onPresenceChange={props.onPresenceChange}
-          onSave={props.onUpdatePresence}
+          onUpdateNotificationPreferences={props.onUpdateNotificationPreferences}
+          onUpdatePresence={props.onUpdatePresence}
           presence={props.presence}
+          presenceEnabled={props.presenceEnabled}
+          user={props.user}
         />
       ) : props.route.section === "audio" ? (
         <UserAudioSettingsPage
@@ -259,14 +251,6 @@ export function SettingsRoutePage(
           onTestNotification={props.onTestNotification}
           outputId={props.outputId}
           voiceConnected={props.voiceConnected}
-        />
-      ) : props.route.section === "notifications" ? (
-        <UserNotificationSettingsPage
-          dndActive={props.presence?.preference === "do_not_disturb"}
-          onDirtyChange={setPageDirty}
-          onLoad={props.onLoadNotificationPreferences}
-          onPreviewSound={props.onTestOutput}
-          onSave={props.onUpdateNotificationPreferences}
         />
       ) : props.route.section === "privacy" ? (
         <UserPrivacySettingsPage

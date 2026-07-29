@@ -26,6 +26,26 @@ async function launchElectron(
   });
 }
 
+async function closeTestApplication(): Promise<void> {
+  if (!application) return;
+  const runningApplication = application;
+
+  let timedOut = false;
+  await Promise.race([
+    runningApplication.close().catch(() => undefined),
+    new Promise<void>((resolve) => {
+      setTimeout(() => {
+        timedOut = true;
+        resolve();
+      }, 5_000);
+    }),
+  ]);
+
+  if (timedOut && !runningApplication.process().killed) {
+    runningApplication.process().kill();
+  }
+}
+
 async function waitForApplicationWindow(
   previousWindow: Page,
 ): Promise<Page> {
@@ -50,14 +70,17 @@ function electronEnvironment(): Record<string, string> {
 }
 
 test.afterEach(async () => {
-  if (application) await application.close();
-  if (apiServer)
-    await new Promise<void>((resolve, reject) =>
-      apiServer?.close((error) => (error ? reject(error) : resolve())),
-    );
-  apiServer = undefined;
+  try {
+    await closeTestApplication();
+  } finally {
+    if (apiServer) {
+      apiServer.closeAllConnections();
+      await new Promise<void>((resolve) => apiServer?.close(() => resolve()));
+      apiServer = undefined;
+    }
+  }
   const safePrefix = `${resolve(tmpdir(), "vatrushka-e2e-")}`;
-  for (const profile of testProfiles) {
+  for (const profile of [...testProfiles]) {
     const target = resolve(profile);
     if (target.startsWith(safePrefix))
       rmSync(target, { recursive: true, force: true });
@@ -482,7 +505,6 @@ test("opens the routed settings shell without replacing the application controll
     mentionsEnabled: true,
     quietHoursStart: null,
     quietHoursEnd: null,
-    quietHoursTimezone: null,
     updatedAt: "2026-07-17T10:00:00.000Z",
   };
   const home = {
@@ -697,6 +719,19 @@ test("opens the routed settings shell without replacing the application controll
   await expect(
     window.getByRole("heading", { name: "Мой профиль" }),
   ).toBeVisible();
+  await window.evaluate(() => {
+    globalThis.location.hash = "#/settings/status";
+  });
+  await expect(
+    window.getByRole("heading", { name: "Страница не найдена" }),
+  ).toBeVisible();
+  await expect(window).toHaveURL(/#\/settings\/status/u);
+  await window.evaluate(() => {
+    globalThis.location.hash = "#/settings/profile?settingsPreview=1";
+  });
+  await expect(
+    window.getByRole("heading", { name: "Мой профиль" }),
+  ).toBeVisible();
   const settingsNavigation = window.getByRole("navigation", {
     name: "Разделы настроек",
   });
@@ -705,26 +740,24 @@ test("opens the routed settings shell without replacing the application controll
     .getByRole("textbox", { name: "Отображаемое имя" })
     .fill("Новое имя");
   await expect(
-    window.getByText("Есть изменения", { exact: true }),
+    window.getByText("Есть несохранённые изменения", { exact: true }),
   ).toBeVisible();
-  await settingsNavigation
-    .getByRole("button", { name: /Уведомления/u })
-    .click();
+  await settingsNavigation.getByRole("button", { name: /Звук и видео/u }).click();
   const discardDialog = window.getByRole("dialog", {
     name: "Отменить изменения?",
   });
   await expect(discardDialog).toBeVisible();
   await discardDialog.getByRole("button", { name: "Отмена" }).click();
   await expect(window).toHaveURL(/#\/settings\/profile/u);
-  await window.getByRole("button", { name: "Сохранить" }).click();
+  const profileSaveButton = window
+    .locator(".vui-profile-settings-hub__group")
+    .filter({ has: window.getByRole("heading", { name: "Данные профиля" }) })
+    .getByRole("button", { name: "Сохранить" });
+  await profileSaveButton.click();
   await expect(
-    window
-      .locator(".vui-user-profile-preview")
-      .getByText("Новое имя", { exact: true }),
-  ).toBeVisible();
-  await settingsNavigation
-    .getByRole("button", { name: /Звук и видео/u })
-    .click();
+    window.getByRole("textbox", { name: "Отображаемое имя" }),
+  ).toHaveValue("Новое имя");
+  await settingsNavigation.getByRole("button", { name: /Звук и видео/u }).click();
   await expect(window).toHaveURL(/#\/settings\/audio/u);
   await expect(
     window.getByRole("heading", { name: "Звук и видео" }),
@@ -735,26 +768,21 @@ test("opens the routed settings shell without replacing the application controll
   await expect(
     window.getByRole("button", { name: "Динамики / наушники" }),
   ).toContainText("Fake Default Audio Output");
-  await settingsNavigation
-    .getByRole("button", { name: /Статус и активность/u })
-    .click();
+  await settingsNavigation.getByRole("button", { name: /Мой профиль/u }).click();
   await expect(
     window.getByRole("heading", { name: "Статус и активность" }),
   ).toBeVisible();
   await window.getByRole("radio", { name: /Не беспокоить/u }).click();
-  await window.getByRole("button", { name: "Сохранить" }).click();
+  await window
+    .locator(".vui-profile-settings-hub__group")
+    .filter({ has: window.getByRole("heading", { name: "Статус и активность" }) })
+    .getByRole("button", { name: "Сохранить" })
+    .click();
   await expect(
     window.getByText("Режим «Не беспокоить» активен."),
   ).toBeVisible();
-  await settingsNavigation
-    .getByRole("button", { name: /Уведомления/u })
-    .click();
-  await expect(window).toHaveURL(/#\/settings\/notifications/u);
-  await expect(
-    window.getByRole("heading", { name: "Уведомления" }),
-  ).toBeVisible();
   const desktopNotifications = window.getByRole("switch", {
-    name: /Desktop-уведомления/u,
+    name: /Системные уведомления/u,
   });
   await expect(desktopNotifications).toBeVisible();
   await expect(desktopNotifications).toBeChecked();
@@ -796,8 +824,8 @@ test("opens the routed settings shell without replacing the application controll
   await expect(logoutDialog).toBeHidden();
 });
 
-test("opens the redesigned Home, creates the first server, and restores it after returning", async () => {
-  let serverCreated = false;
+test("opens the redesigned Home and reaches a server from the global sidebar", async () => {
+  let serverCreated = true;
   const user = {
     id: "home-e2e-user",
     email: "home@myvatrushka.ru",
@@ -897,6 +925,10 @@ test("opens the redesigned Home, creates the first server, and restores it after
     }
     if (request.method === "GET" && url.pathname === "/api/v1/servers") {
       response.end(JSON.stringify(serverCreated ? [server] : []));
+      return;
+    }
+    if (request.method === "GET" && url.pathname === `/api/v1/servers/${server.id}`) {
+      response.end(JSON.stringify(server));
       return;
     }
     if (request.method === "POST" && url.pathname === "/api/v1/servers") {
@@ -1021,11 +1053,8 @@ test("opens the redesigned Home, creates the first server, and restores it after
 
   await window
     .getByRole("complementary", { name: "Глобальная навигация" })
-    .getByRole("button", { name: "Сообщество" })
+    .getByRole("button", { name: server.name })
     .click();
-  const dialog = window.getByRole("dialog", { name: "Новый сервер" });
-  await dialog.getByLabel("Название").fill(server.name);
-  await dialog.getByRole("button", { name: "Создать" }).click();
   await expect(window.getByRole("button", { name: "общий" })).toBeVisible();
   await application.evaluate(({ BrowserWindow }) => {
     const browserWindow = BrowserWindow.getAllWindows()[0];

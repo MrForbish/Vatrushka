@@ -39,7 +39,7 @@ Direct message проходит состояния `sending → sent → deliver
 
 ## Notification decision
 
-Перед Electron toast клиент и API учитывают access, автора, блокировку, активный conversation, mute, уровень `all/mentions/none`, подавление role/everyone, глобальные direct/mention switches, DND, quiet hours, возраст и dedupe события. DND подавляет toast и звук, но не историю, internal notification и unread.
+Перед Electron toast клиент и API учитывают access, автора, блокировку, активный conversation, mute, уровень `all/mentions/none`, подавление role/everyone, глобальные direct/mention switches, DND, quiet hours, возраст и dedupe события. Тихие часы задаются одним интервалом и на каждом устройстве считаются по его локальному времени — отдельный часовой пояс не хранится и не показывается. DND подавляет toast и звук, но не историю, internal notification и unread.
 
 Закрытие окна оставляет приложение в tray. Native notification открывает серверный канал либо direct conversation; само нажатие не отмечает историю прочитанной до фактического показа.
 

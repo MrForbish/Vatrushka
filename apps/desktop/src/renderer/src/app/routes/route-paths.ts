@@ -1,7 +1,5 @@
 export const userSettingsSections = [
   'profile',
-  'status',
-  'notifications',
   'audio',
   'security',
   'sessions',

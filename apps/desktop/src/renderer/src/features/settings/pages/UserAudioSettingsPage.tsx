@@ -39,7 +39,7 @@ export function UserAudioSettingsPage({ appSoundVolume, busy, cameraId, devices,
       <div className="vui-user-audio-settings__grid">
         <AudioReadinessCard busy={busy} devices={devices} error={readiness.error} inputLevel={effectiveLevel} microphoneId={microphoneId} microphoneVolume={microphoneVolume} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onRefresh={() => { onRefresh(); setTestRevision((value) => value + 1); }} onTestMicrophone={() => { setMicrophoneTestActive((active) => !active); setTestRevision((value) => value + 1); }} onTestOutput={onTestOutput} outputId={outputId} outputVolume={outputVolume} permission={readiness.permission} signalDetected={effectiveLevel > 0.025} testing={voiceConnected || readiness.testing} />
         <article className="vui-user-settings-card vui-user-audio-settings__volume">
-          <header><div><h2>Громкость уведомлений</h2><p>Короткие сигналы Ватрушки для сообщений, голоса, демонстрации и обновлений. Системный toast остаётся без отдельного звука.</p></div></header>
+          <header><div><h2>Громкость уведомлений</h2><p>Короткие сигналы Ватрушки для сообщений, голоса, демонстрации и обновлений. Системное уведомление остаётся без отдельного звука.</p></div></header>
           <Slider label="Громкость уведомлений" max={100} min={0} onChange={(event) => onAppSoundVolume(Number(event.target.value) / 100)} value={Math.round(appSoundVolume * 100)} valueLabel={`${Math.round(appSoundVolume * 100)}%`} />
           <Button disabled={busy} onClick={onTestNotification} size="sm" variant="secondary">Проверить уведомление</Button>
         </article>

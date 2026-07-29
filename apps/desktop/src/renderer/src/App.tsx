@@ -63,6 +63,7 @@ import {
   useHomeDashboard,
 } from "./features/home/index.js";
 import { NotificationCenter } from "./features/notifications/NotificationCenter.js";
+import { shouldPresentNotification } from "./features/notifications/delivery-policy.js";
 import {
   SourcePicker,
   type ScreenShareQuality,
@@ -82,7 +83,7 @@ import {
 } from "./features/voice/store/voice-state.js";
 import { MediaSession } from "./media.js";
 import { RealtimeClient } from "./realtime.js";
-import { ConfirmDialog, SystemToolbar } from "./ui";
+import { Button, ConfirmDialog, SystemToolbar } from "./ui";
 
 type Screen = "boot" | "auth" | "profile" | "home" | "server" | "direct";
 const media = new MediaSession(apiClient);
@@ -366,34 +367,6 @@ function mergeMessages<T extends { id: string; createdAt: string }>(
       left.createdAt.localeCompare(right.createdAt) ||
       left.id.localeCompare(right.id),
   );
-}
-
-function quietHoursActive(
-  preferences: UserNotificationPreferences | null,
-  now = new Date(),
-): boolean {
-  if (
-    !preferences?.quietHoursStart ||
-    !preferences.quietHoursEnd ||
-    !preferences.quietHoursTimezone
-  )
-    return false;
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: preferences.quietHoursTimezone,
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(now);
-  const current =
-    Number(parts.find((part) => part.type === "hour")?.value ?? 0) * 60 +
-    Number(parts.find((part) => part.type === "minute")?.value ?? 0);
-  const minutes = (value: string): number =>
-    Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
-  const start = minutes(preferences.quietHoursStart);
-  const end = minutes(preferences.quietHoursEnd);
-  return start <= end
-    ? current >= start && current < end
-    : current >= start || current < end;
 }
 
 export default function App(): ReactNode {
@@ -837,11 +810,6 @@ export default function App(): ReactNode {
     messageDraft,
     screen,
   ]);
-
-  useEffect(() => {
-    if (invalidSettingsCanonicalPath === null) return;
-    void navigate(invalidSettingsCanonicalPath, { replace: true });
-  }, [invalidSettingsCanonicalPath, navigate]);
 
   useEffect(() => {
     if (
@@ -1358,24 +1326,6 @@ export default function App(): ReactNode {
           for (const notification of items)
             shownNotificationIdsRef.current.add(notification.id);
           for (const notification of fresh) {
-            if (
-              Date.now() - new Date(notification.createdAt).getTime() >
-              5 * 60_000
-            )
-              continue;
-            if (presence?.preference === "do_not_disturb") continue;
-            if (quietHoursActive(notificationPreferences)) continue;
-            if (
-              notification.type === "direct_message" &&
-              notificationPreferences?.directMessagesEnabled === false
-            )
-              continue;
-            if (
-              (notification.type === "mention" ||
-                notification.type === "reply") &&
-              notificationPreferences?.mentionsEnabled === false
-            )
-              continue;
             const conversation = notification.conversationId
               ? conversations.find(
                   (item) => item.id === notification.conversationId,
@@ -1387,11 +1337,13 @@ export default function App(): ReactNode {
                 : screen === "direct"
                   ? activeDirectConversationId
                   : null;
-            if (
-              document.hasFocus() &&
-              document.visibilityState === "visible" &&
-              notification.conversationId === visibleConversationId
-            )
+            if (!shouldPresentNotification({
+              notification,
+              preferences: notificationPreferences,
+              presence,
+              visibleConversationId,
+              applicationIsVisible: document.hasFocus() && document.visibilityState === "visible",
+            }))
               continue;
             const preview =
               typeof notification.payload.preview === "string"
@@ -3517,6 +3469,16 @@ export default function App(): ReactNode {
         onChange={setDisplayName}
         onSave={saveProfile}
       />,
+    );
+  if (invalidSettingsCanonicalPath !== null && user !== null)
+    return withNotifications(
+      <main aria-labelledby="settings-not-found-title" className="bootScreen">
+        <h1 id="settings-not-found-title">Страница не найдена</h1>
+        <p>Запрошенный раздел настроек больше не существует.</p>
+        <Button onClick={() => void navigate("/")} type="button">
+          На главную
+        </Button>
+      </main>,
     );
   if (settingsRoute !== null && user !== null)
     return withNotifications(

@@ -131,7 +131,7 @@ describe('main screen', () => {
   it('shows the UI Kit home composition and preserves navigation actions', () => {
     render(<HomePage user={{ id: 'user-1', email: 'anna@example.com', displayName: 'Anna', platformRole: 'member', hasPassword: true, twoFactorEnabled: false }} version="1.2.3" devices={{ inputs: [], outputs: [] }} microphoneId={undefined} outputId={undefined} busy={false} error={null} servers={[]} serverName="Команда" onLogout={noop} onSecurity={noop} onServerName={noop} onCreateServer={noop} onOpenServer={noop} />);
     expect(screen.getAllByText('Anna').length).toBeGreaterThan(0);
-    expect(screen.getByRole('button', { name: 'Сообщество' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Сообщество' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Друзья' })).toBeDisabled();
     expect(screen.getByRole('region', { name: 'Быстрый возврат' })).toBeInTheDocument();
     expect(screen.getByText('Активные пространства')).toBeInTheDocument();

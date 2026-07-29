@@ -259,11 +259,6 @@ export function DirectMessagesView(
   const globalSidebar = (
     <GlobalSidebar
       activeSection="messages"
-      onCommunity={() => {
-        const firstServer = props.servers[0];
-        if (firstServer) props.onSwitchServer(firstServer.id);
-        else setServerCreateOpen(true);
-      }}
       onDirectMessages={() => undefined}
       onHome={props.onHome}
       onServerSelect={props.onSwitchServer}

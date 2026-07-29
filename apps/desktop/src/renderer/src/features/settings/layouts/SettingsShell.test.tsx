@@ -9,7 +9,7 @@ import { SettingsShell } from './SettingsShell';
 
 const sections = [
   { section: 'profile', label: 'Мой профиль', description: 'Основные данные', icon: 'users' },
-  { section: 'notifications', label: 'Уведомления', description: 'Звуки и баннеры', icon: 'bell' },
+  { section: 'audio', label: 'Звук и видео', description: 'Локальные устройства', icon: 'headphones' },
 ] as const;
 
 function workspace(): React.JSX.Element {
@@ -24,8 +24,8 @@ describe('SettingsShell', () => {
 
     expect(screen.getByRole('button', { name: /Мой профиль/u })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('button', { name: 'Открыть участников' })).not.toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Уведомления/u }));
-    expect(onSelect).toHaveBeenCalledWith('notifications');
+    await userEvent.click(screen.getByRole('button', { name: /Звук и видео/u }));
+    expect(onSelect).toHaveBeenCalledWith('audio');
     await userEvent.click(screen.getByRole('button', { name: 'Вернуться' }));
     expect(onBack).toHaveBeenCalledOnce();
   });

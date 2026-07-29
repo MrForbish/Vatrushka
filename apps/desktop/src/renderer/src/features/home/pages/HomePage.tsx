@@ -85,7 +85,6 @@ export function HomePage(props: HomePageProps): React.JSX.Element {
         globalSidebar={
           <HomeNavigation
             networkAvailable={connectionQuality !== "offline"}
-            onCreate={() => setCreateOpen(true)}
             onDirectMessages={props.onDirectMessages}
             onLogout={props.onLogout}
             onOpenServer={props.onOpenServer}

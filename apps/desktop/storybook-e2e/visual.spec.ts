@@ -112,13 +112,6 @@ test.describe('Vatrushka design system visual baseline', () => {
     await expect(page).toHaveScreenshot('settings-shell-user-audio.png', { animations: 'disabled', fullPage: true });
   });
 
-  test('routed DND presence settings', async ({ page }) => {
-    await openStory(page, 'features-settings-settings-shell--user-presence-dnd');
-    await expect(page.getByRole('heading', { name: 'Статус и активность' })).toBeVisible();
-    await expect(page.getByText('Режим «Не беспокоить» активен.')).toBeVisible();
-    await expect(page).toHaveScreenshot('settings-shell-user-presence.png', { animations: 'disabled', fullPage: true });
-  });
-
   test('routed user privacy settings', async ({ page }) => {
     await openStory(page, 'features-settings-settings-shell--user-privacy');
     await expect(page.getByRole('heading', { name: 'Конфиденциальность' })).toBeVisible();
@@ -369,12 +362,6 @@ test.describe('Vatrushka design system visual baseline', () => {
     await openStory(page, 'features-settings-settings-shell--server-danger-zone');
     await expect(page.getByRole('heading', { name: 'Опасная зона' })).toBeVisible();
     await expect(page).toHaveScreenshot('server-settings-danger-zone.png', { animations: 'disabled', fullPage: true });
-  });
-
-  test('routed user notification settings', async ({ page }) => {
-    await openStory(page, 'features-settings-settings-shell--user-notifications');
-    await expect(page.getByRole('heading', { name: 'Уведомления' })).toBeVisible();
-    await expect(page).toHaveScreenshot('user-settings-notifications.png', { animations: 'disabled', fullPage: true });
   });
 
   test('routed user account settings', async ({ page }) => {
