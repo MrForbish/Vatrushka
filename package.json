@@ -1,6 +1,6 @@
 {
   "name": "vatrushka",
-  "version": "0.8.35",
+  "version": "0.8.36",
   "private": true,
   "description": "«Ватрушка» — настольные серверы, текстовые и голосовые каналы",
   "type": "module",
