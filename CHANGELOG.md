@@ -4,6 +4,22 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.35] - 2026-07-29
+
+### Changed
+
+- Unified the camera and screen-share stage in voice channels: participants can
+  switch between available streams, camera names remain readable without
+  redundant labels, and the selected media uses the available stage space.
+- Added a keyboard-accessible in-app full-screen media view. It preserves media
+  proportions and closes with Escape or the same control.
+
+### Fixed
+
+- Prevented a disabled camera track from leaving an empty black media tile.
+- Moved screen-share presenter context into the media stage and preserved its
+  visible controls on hover without clipping the shared image.
+
 ## [0.8.34] - 2026-07-28
 
 ### Added
