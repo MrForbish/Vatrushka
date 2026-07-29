@@ -27,7 +27,7 @@ describe('routed user settings pages', () => {
     const onLoadProfile = vi.fn(async () => profile);
     const onLoadPresence = vi.fn(async () => presence);
     const onLoadNotifications = vi.fn(async () => notifications);
-    render(<UserProfileSettingsHub onAvatar={vi.fn(async () => profile)} onCover={vi.fn(async () => profile)} onDirtyChange={vi.fn()} onLoadNotificationPreferences={onLoadNotifications} onLoadPresence={onLoadPresence} onLoadProfile={onLoadProfile} onPreviewNotificationSound={vi.fn()} onPresenceChange={vi.fn()} onProfileMediaChange={vi.fn()} onResetAvatar={vi.fn(async () => profile)} onResetCover={vi.fn(async () => profile)} onSaveProfile={vi.fn(async () => profile)} onUpdateNotificationPreferences={vi.fn(async () => notifications)} onUpdatePresence={vi.fn(async () => presence)} onUserChange={vi.fn()} presence={presence} presenceEnabled user={user} />);
+    render(<UserProfileSettingsHub appSoundVolume={0.5} onAppSoundVolume={vi.fn()} onAvatar={vi.fn(async () => profile)} onCover={vi.fn(async () => profile)} onDirtyChange={vi.fn()} onLoadNotificationPreferences={onLoadNotifications} onLoadPresence={onLoadPresence} onLoadProfile={onLoadProfile} onPreviewNotificationSound={vi.fn()} onPresenceChange={vi.fn()} onProfileMediaChange={vi.fn()} onResetAvatar={vi.fn(async () => profile)} onResetCover={vi.fn(async () => profile)} onSaveProfile={vi.fn(async () => profile)} onUpdateNotificationPreferences={vi.fn(async () => notifications)} onUpdatePresence={vi.fn(async () => presence)} onUserChange={vi.fn()} presence={presence} presenceEnabled user={user} />);
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Мой профиль' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Статус и активность' })).toBeInTheDocument();
@@ -112,10 +112,8 @@ describe('routed user settings pages', () => {
     const onMicrophoneVolume = vi.fn();
     const onOutput = vi.fn();
     const onOutputVolume = vi.fn();
-    const onAppSoundVolume = vi.fn();
-    const onTestNotification = vi.fn();
     const onTestOutput = vi.fn();
-    render(<UserAudioSettingsPage appSoundVolume={0.5} busy={false} cameraId="camera-2" devices={{ cameras: [device('videoinput', 'camera-2', 'USB Camera')], inputs: [device('audioinput', 'default', 'Default - Studio Mic'), device('audioinput', 'mic-2', 'USB Microphone')], outputs: [device('audiooutput', 'default', 'Default - Headphones'), device('audiooutput', 'speaker-2', 'Monitor Speakers')] }} inputLevel={0.3} microphoneId="default" microphoneVolume={0.5} onAppSoundVolume={onAppSoundVolume} onCamera={onCamera} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onRefresh={vi.fn()} onTestNotification={onTestNotification} onTestOutput={onTestOutput} outputId="default" outputVolume={0.5} voiceConnected />);
+    render(<UserAudioSettingsPage busy={false} cameraId="camera-2" devices={{ cameras: [device('videoinput', 'camera-2', 'USB Camera')], inputs: [device('audioinput', 'default', 'Default - Studio Mic'), device('audioinput', 'mic-2', 'USB Microphone')], outputs: [device('audiooutput', 'default', 'Default - Headphones'), device('audiooutput', 'speaker-2', 'Monitor Speakers')] }} inputLevel={0.3} microphoneId="default" microphoneVolume={0.5} onCamera={onCamera} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onRefresh={vi.fn()} onTestOutput={onTestOutput} outputId="default" outputVolume={0.5} voiceConnected />);
 
     expect(screen.getByText('Системное · Studio Mic')).toBeInTheDocument();
     expect(screen.getByText('Системное · Headphones')).toBeInTheDocument();
@@ -131,12 +129,10 @@ describe('routed user settings pages', () => {
     fireEvent.change(screen.getByRole('slider', { name: 'Громкость вывода' }), { target: { value: '65' } });
     expect(onMicrophoneVolume).toHaveBeenCalledWith(0.55);
     expect(onOutputVolume).toHaveBeenCalledWith(0.65);
-    await userEvent.click(screen.getByRole('slider', { name: 'Громкость уведомлений' }));
+    expect(screen.queryByRole('slider', { name: 'Громкость уведомлений' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Проверить звук вывода' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Проверить уведомление' }));
     expect(onTestOutput).toHaveBeenCalledOnce();
-    expect(onTestNotification).toHaveBeenCalledOnce();
-    expect(screen.getByText(/Системное уведомление остаётся без отдельного звука/u)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Камера' })).toBeInTheDocument();
   });
 
   it('loads and saves DND as a server-side presence preference', async () => {
@@ -154,8 +150,11 @@ describe('routed user settings pages', () => {
   it('persists notification filters and quiet-hours interval without a timezone field', async () => {
     const initial = { desktopEnabled: true, soundEnabled: true, previewMode: 'full' as const, directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: null, quietHoursEnd: null, updatedAt: '2026-07-29T00:00:00.000Z' };
     const onSave = vi.fn(async (next: typeof initial) => ({ ...next, updatedAt: '2026-07-29T00:01:00.000Z' }));
-    render(<UserNotificationSettingsPage dndActive={false} onDirtyChange={vi.fn()} onLoad={vi.fn(async () => initial)} onPreviewSound={vi.fn()} onSave={onSave} />);
+    const onAppSoundVolume = vi.fn();
+    render(<UserNotificationSettingsPage appSoundVolume={0.5} dndActive={false} onAppSoundVolume={onAppSoundVolume} onDirtyChange={vi.fn()} onLoad={vi.fn(async () => initial)} onPreviewSound={vi.fn()} onSave={onSave} />);
 
+    fireEvent.change(await screen.findByRole('slider', { name: 'Громкость уведомлений' }), { target: { value: '65' } });
+    expect(onAppSoundVolume).toHaveBeenCalledWith(0.65);
     await userEvent.click(await screen.findByRole('switch', { name: 'Личные сообщения' }));
     await userEvent.click(screen.getByRole('switch', { name: 'Включить тихие часы' }));
     fireEvent.change(screen.getByLabelText('Начало'), { target: { value: '23:00' } });

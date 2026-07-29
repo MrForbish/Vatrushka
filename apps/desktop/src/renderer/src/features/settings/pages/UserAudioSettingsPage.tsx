@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { cameraDeviceOptions, type AudioDevices } from '../../../audio-devices';
 import { AudioReadinessCard, useAudioReadiness } from '../../home';
-import { Button, Icon, Select, Slider } from '../../../ui';
+import { Button, Icon, Select } from '../../../ui';
 import './user-settings-pages.css';
 
 export interface UserAudioSettingsPageProps {
@@ -15,7 +15,6 @@ export interface UserAudioSettingsPageProps {
   outputId: string | undefined;
   outputVolume: number;
   voiceConnected: boolean;
-  appSoundVolume: number;
   onMicrophone(deviceId: string): void;
   onCamera?(deviceId: string): void;
   onMicrophoneVolume(value: number): void;
@@ -23,11 +22,9 @@ export interface UserAudioSettingsPageProps {
   onOutputVolume(value: number): void;
   onRefresh(): void;
   onTestOutput(): void;
-  onTestNotification(): void;
-  onAppSoundVolume(value: number): void;
 }
 
-export function UserAudioSettingsPage({ appSoundVolume, busy, cameraId, devices, inputLevel, microphoneId, microphoneVolume, onAppSoundVolume, onCamera, onMicrophone, onMicrophoneVolume, onOutput, onOutputVolume, onRefresh, onTestNotification, onTestOutput, outputId, outputVolume, voiceConnected }: UserAudioSettingsPageProps): React.JSX.Element {
+export function UserAudioSettingsPage({ busy, cameraId, devices, inputLevel, microphoneId, microphoneVolume, onCamera, onMicrophone, onMicrophoneVolume, onOutput, onOutputVolume, onRefresh, onTestOutput, outputId, outputVolume, voiceConnected }: UserAudioSettingsPageProps): React.JSX.Element {
   const [testRevision, setTestRevision] = useState(0);
   const [microphoneTestActive, setMicrophoneTestActive] = useState(false);
   const readiness = useAudioReadiness(microphoneId, !voiceConnected && microphoneTestActive, testRevision);
@@ -38,11 +35,6 @@ export function UserAudioSettingsPage({ appSoundVolume, busy, cameraId, devices,
       <header className="vui-user-settings-page__heading"><div><span>Локальные настройки</span><h1 id="user-audio-settings-title">Звук и видео</h1><p>Выбор применяется к этому компьютеру и сохраняется через защищённый Electron bridge.</p></div></header>
       <div className="vui-user-audio-settings__grid">
         <AudioReadinessCard busy={busy} devices={devices} error={readiness.error} inputLevel={effectiveLevel} microphoneId={microphoneId} microphoneVolume={microphoneVolume} onMicrophone={onMicrophone} onMicrophoneVolume={onMicrophoneVolume} onOutput={onOutput} onOutputVolume={onOutputVolume} onRefresh={() => { onRefresh(); setTestRevision((value) => value + 1); }} onTestMicrophone={() => { setMicrophoneTestActive((active) => !active); setTestRevision((value) => value + 1); }} onTestOutput={onTestOutput} outputId={outputId} outputVolume={outputVolume} permission={readiness.permission} signalDetected={effectiveLevel > 0.025} testing={voiceConnected || readiness.testing} />
-        <article className="vui-user-settings-card vui-user-audio-settings__volume">
-          <header><div><h2>Громкость уведомлений</h2><p>Короткие сигналы Ватрушки для сообщений, голоса, демонстрации и обновлений. Системное уведомление остаётся без отдельного звука.</p></div></header>
-          <Slider label="Громкость уведомлений" max={100} min={0} onChange={(event) => onAppSoundVolume(Number(event.target.value) / 100)} value={Math.round(appSoundVolume * 100)} valueLabel={`${Math.round(appSoundVolume * 100)}%`} />
-          <Button disabled={busy} onClick={onTestNotification} size="sm" variant="secondary">Проверить уведомление</Button>
-        </article>
         <CameraSettingsCard
           busy={busy}
           cameraId={cameraId}
