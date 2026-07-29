@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 
 import type { NotificationPreviewMode, UserNotificationPreferences } from '@vatrushka/shared';
 
-import { Input, Select, Switch } from '../../../ui';
+import { Input, Select, Slider, Switch } from '../../../ui';
 import { SettingsPageState } from '../components/SettingsPageState';
 import { SettingsSaveBar } from '../components/SettingsSaveBar';
 import type { SettingsSaveState } from '../model/settings.types';
@@ -11,8 +11,10 @@ import './user-settings-pages.css';
 type EditablePreferences = Omit<UserNotificationPreferences, 'updatedAt'>;
 
 export interface UserNotificationSettingsPageProps {
+  appSoundVolume: number;
   embedded?: boolean;
   dndActive: boolean;
+  onAppSoundVolume(value: number): void;
   onDirtyChange(dirty: boolean): void;
   onLoad(): Promise<UserNotificationPreferences>;
   onPreviewSound(): void;
@@ -23,7 +25,7 @@ function editable(value: UserNotificationPreferences): EditablePreferences {
   return { desktopEnabled: value.desktopEnabled, soundEnabled: value.soundEnabled, previewMode: value.previewMode, directMessagesEnabled: value.directMessagesEnabled, mentionsEnabled: value.mentionsEnabled, quietHoursStart: value.quietHoursStart, quietHoursEnd: value.quietHoursEnd };
 }
 
-export function UserNotificationSettingsPage({ dndActive, embedded = false, onDirtyChange, onLoad, onPreviewSound, onSave }: UserNotificationSettingsPageProps): React.JSX.Element {
+export function UserNotificationSettingsPage({ appSoundVolume, dndActive, embedded = false, onAppSoundVolume, onDirtyChange, onLoad, onPreviewSound, onSave }: UserNotificationSettingsPageProps): React.JSX.Element {
   const [saved, setSaved] = useState<UserNotificationPreferences | null>(null);
   const [form, setForm] = useState<EditablePreferences>({ desktopEnabled: true, soundEnabled: true, previewMode: 'full', directMessagesEnabled: true, mentionsEnabled: true, quietHoursStart: null, quietHoursEnd: null });
   const [quietEnabled, setQuietEnabled] = useState(false);
@@ -51,7 +53,7 @@ export function UserNotificationSettingsPage({ dndActive, embedded = false, onDi
     {!embedded ? <header className="vui-user-settings-page__heading"><div><span>Сигналы и центр уведомлений</span><h1 id="user-notification-settings-title">Уведомления</h1><p>Эти настройки синхронизируются между устройствами. «Не беспокоить» временно перекрывает их, не изменяя выбранные значения.</p></div></header> : null}
     {dndActive ? <aside className="vui-user-settings-note vui-user-settings-note--dnd"><strong>Статус «Не беспокоить» активен.</strong> Все звуки и системные уведомления временно отключены. События продолжают появляться в приложении и центре уведомлений.</aside> : null}
     <div className="vui-user-profile-settings__grid">
-      <article className="vui-user-settings-card"><header><div><h2>Способ доставки</h2><p>Центр уведомлений и счётчики непрочитанных работают всегда.</p></div></header><Switch checked={form.desktopEnabled} description="Показывать системное уведомление, когда окно скрыто или не в фокусе." label="Системные уведомления" onCheckedChange={(value) => update('desktopEnabled', value)} /><Switch checked={form.soundEnabled} description="Один управляемый звуковой сигнал Ватрушки для разрешённых событий." label="Звуки уведомлений" onCheckedChange={(value) => update('soundEnabled', value)} /><button className="vui-user-settings-test" disabled={!form.soundEnabled || dndActive} onClick={onPreviewSound} type="button">Проверить звук</button></article>
+      <article className="vui-user-settings-card"><header><div><h2>Способ доставки</h2><p>Центр уведомлений и счётчики непрочитанных работают всегда.</p></div></header><Switch checked={form.desktopEnabled} description="Показывать системное уведомление, когда окно скрыто или не в фокусе." label="Системные уведомления" onCheckedChange={(value) => update('desktopEnabled', value)} /><Switch checked={form.soundEnabled} description="Один управляемый звуковой сигнал Ватрушки для разрешённых событий." label="Звуки уведомлений" onCheckedChange={(value) => update('soundEnabled', value)} /><Slider disabled={!form.soundEnabled || dndActive} label="Громкость уведомлений" max={100} min={0} onChange={(event) => onAppSoundVolume(Number(event.target.value) / 100)} value={Math.round(appSoundVolume * 100)} valueLabel={`${Math.round(appSoundVolume * 100)}%`} /><button className="vui-user-settings-test" disabled={!form.soundEnabled || dndActive} onClick={onPreviewSound} type="button">Проверить звук</button></article>
       <article className="vui-user-settings-card"><header><div><h2>Какие события важны</h2><p>Настройки серверов и каналов могут дополнительно сузить доставку.</p></div></header><Switch checked={form.directMessagesEnabled} label="Личные сообщения" onCheckedChange={(value) => update('directMessagesEnabled', value)} /><Switch checked={form.mentionsEnabled} label="Упоминания и ответы" onCheckedChange={(value) => update('mentionsEnabled', value)} /><Select label="Текст системного уведомления" onValueChange={(value) => update('previewMode', value as NotificationPreviewMode)} options={[{ value: 'full', label: 'Имя и текст сообщения' }, { value: 'sender_only', label: 'Только отправитель' }, { value: 'hidden', label: 'Нейтральное уведомление' }]} value={form.previewMode} /></article>
       <article className="vui-user-settings-card"><header><div><h2>Тихие часы</h2><p>В выбранный интервал внешние звуки и системные уведомления отключаются, а центр уведомлений продолжает обновляться. Интервал считается по локальному времени текущего устройства.</p></div></header><Switch checked={quietEnabled} label="Включить тихие часы" onCheckedChange={toggleQuiet} />{quietEnabled ? <div className="vui-user-settings-time-grid"><Input label="Начало" onChange={(event) => update('quietHoursStart', event.target.value)} type="time" value={form.quietHoursStart ?? '22:00'} /><Input label="Окончание" onChange={(event) => update('quietHoursEnd', event.target.value)} type="time" value={form.quietHoursEnd ?? '08:00'} /></div> : null}</article>
     </div>

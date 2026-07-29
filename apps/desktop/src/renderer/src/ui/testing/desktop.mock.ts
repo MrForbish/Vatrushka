@@ -25,8 +25,8 @@ export const desktopMock: DesktopBridge = {
   onDeepLink: () => () => undefined,
   getPlatform: async () => "win32",
   getLocalSettings: async () => ({
-    volume: 1,
-    appSoundVolume: 1,
+    volume: 0.5,
+    appSoundVolume: 0.5,
     desktopNotificationsEnabled: true,
     messageSoundsEnabled: true,
   }),

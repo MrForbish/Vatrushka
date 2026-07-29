@@ -211,6 +211,8 @@ export function SettingsRoutePage(
     const content =
       props.route.section === "profile" ? (
         <UserProfileSettingsHub
+          appSoundVolume={props.settings.appSoundVolume}
+          onAppSoundVolume={props.onAppSoundVolume}
           onAvatar={(file) => apiClient.uploadUserAvatar(file)}
           onCover={(file) => apiClient.uploadUserProfileCover(file)}
           onDirtyChange={setPageDirty}
@@ -232,7 +234,6 @@ export function SettingsRoutePage(
         />
       ) : props.route.section === "audio" ? (
         <UserAudioSettingsPage
-          appSoundVolume={props.settings.appSoundVolume}
           busy={props.busy}
           cameraId={props.cameraId}
           devices={props.devices}
@@ -242,13 +243,11 @@ export function SettingsRoutePage(
           onCamera={props.onCamera}
           microphoneVolume={props.settings.microphoneVolume ?? 0.5}
           onMicrophoneVolume={props.onMicrophoneVolume}
-          onAppSoundVolume={props.onAppSoundVolume}
           onOutput={props.onOutput}
           outputVolume={props.settings.outputVolume ?? 0.5}
           onOutputVolume={props.onOutputVolume}
           onRefresh={props.onRefreshDevices}
           onTestOutput={props.onTestOutput}
-          onTestNotification={props.onTestNotification}
           outputId={props.outputId}
           voiceConnected={props.voiceConnected}
         />

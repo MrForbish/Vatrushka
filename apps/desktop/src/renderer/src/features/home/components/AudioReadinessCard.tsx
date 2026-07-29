@@ -62,7 +62,7 @@ export function AudioReadinessCard({
   return (
     <section className="home-widget home-audio-readiness" id="home-audio" aria-labelledby="home-audio-title">
       <header className="home-widget__header">
-        <div><span>Перед звонком</span><h2 id="home-audio-title">Готовность к аудио</h2></div>
+        <div><span>Перед звонком</span><h2 id="home-audio-title">Настройки звука</h2></div>
         <Button disabled={busy} icon="refresh" onClick={onRefresh} size="sm" variant="quiet">Обновить</Button>
       </header>
       <div className="home-audio-readiness__devices">

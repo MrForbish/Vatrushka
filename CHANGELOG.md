@@ -4,6 +4,20 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.38] - 2026-07-30
+
+### Changed
+
+- Moved notification-volume control to the profile notification settings and
+  replaced its former audio-settings card with camera controls.
+- Renamed the audio readiness section to "Настройки звука".
+
+### Fixed
+
+- Applied a one-time migration of legacy local audio preferences to the
+  documented 50% defaults for microphone, output, screen share, and
+  notification volume. Future user selections remain persistent.
+
 ## [0.8.37] - 2026-07-29
 
 ### Changed
