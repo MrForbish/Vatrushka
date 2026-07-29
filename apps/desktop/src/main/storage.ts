@@ -10,6 +10,7 @@ const defaultSettings: LocalSettings = {
   outputVolume: 0.5,
   volume: 0.5,
   appSoundVolume: 0.5,
+  audioVolumeDefaultsVersion: 1 as const,
   desktopNotificationsEnabled: true,
   messageSoundsEnabled: true,
 };
@@ -84,7 +85,24 @@ export class DesktopStorage {
     try {
       const raw = await fs.readFile(this.settingsPath, 'utf8');
       const parsed = localSettingsSchema.safeParse(JSON.parse(raw));
-      return parsed.success ? { ...defaultSettings, ...parsed.data } : defaultSettings;
+      if (!parsed.success) return defaultSettings;
+
+      // Earlier desktop builds initialized every volume control at 100%.
+      // Apply the product default once and keep any later user choice intact.
+      if (parsed.data.audioVolumeDefaultsVersion !== 1) {
+        const migrated = {
+          ...defaultSettings,
+          ...parsed.data,
+          microphoneVolume: 0.5,
+          outputVolume: 0.5,
+          volume: 0.5,
+          appSoundVolume: 0.5,
+          audioVolumeDefaultsVersion: 1 as const,
+        };
+        await this.updateSettings(migrated);
+        return migrated;
+      }
+      return { ...defaultSettings, ...parsed.data };
     } catch {
       return defaultSettings;
     }
