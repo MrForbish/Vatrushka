@@ -4,6 +4,18 @@ All notable changes to Vatrushka are documented here. The project follows semant
 
 ## [Unreleased]
 
+## [0.8.39] - 2026-09-28
+
+### Fixed
+
+- Coalesced concurrent desktop refresh calls to prevent accidental session revocation.
+- Restored direct private-S3 image delivery and retired the unavailable CDN path.
+
+### Documentation
+
+- Added current Home and server voice screenshots to README.
+- Refreshed reviewed Windows visual references without weakening comparison tolerances.
+
 ## [0.8.38] - 2026-07-30
 
 ### Changed
