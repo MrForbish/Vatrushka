@@ -7,6 +7,16 @@ describe('media storage configuration', () => {
     expect(loadConfig({ NODE_ENV: 'test' }).MEDIA_STORAGE_DRIVER).toBe('database');
   });
 
+  it.each([
+    { MEDIA_CDN_BASE_URL: 'https://cdn.test', MEDIA_CDN_TOKEN_SECRET: 'legacy-cdn-secret-for-tests' },
+    { MEDIA_CDN_BASE_URL: 'invalid-old-cdn-setting' },
+    { MEDIA_CDN_TOKEN_SECRET: 'old' },
+  ])('ignores retired CDN configuration: %j', (legacySettings) => {
+    const config = loadConfig({ NODE_ENV: 'test', ...legacySettings });
+    expect(config).not.toHaveProperty('MEDIA_CDN_BASE_URL');
+    expect(config).not.toHaveProperty('MEDIA_CDN_TOKEN_SECRET');
+  });
+
   it('requires complete HTTPS S3 credentials when the driver is enabled', () => {
     expect(() => loadConfig({ NODE_ENV: 'test', MEDIA_STORAGE_DRIVER: 's3' })).toThrow();
     expect(() => loadConfig({
