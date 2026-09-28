@@ -292,6 +292,10 @@ async function listSources(): Promise<DesktopSourceInfo[]> {
 }
 
 export function registerIpc(options: IpcOptions): () => void {
+  let refreshInFlight: Promise<{
+    session: DesktopAuthSession | null;
+    expired: boolean;
+  }> | null = null;
   const outgoingChannels = new Set<string>([
     IPC_CHANNELS.deepLink,
     IPC_CHANNELS.notificationClick,
@@ -345,7 +349,12 @@ export function registerIpc(options: IpcOptions): () => void {
       return completed;
     }
     try {
-      const refreshed = await refreshAuthSession(options.storage);
+      if (!refreshInFlight) {
+        refreshInFlight = refreshAuthSession(options.storage).finally(() => {
+          refreshInFlight = null;
+        });
+      }
+      const refreshed = await refreshInFlight;
       if (refreshed.expired) {
         // A stale refresh token is discovered only after the normal desktop
         // window has already been created. Electron cannot safely switch a

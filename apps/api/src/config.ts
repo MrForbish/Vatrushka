@@ -128,8 +128,6 @@ const envSchema = z
       .string()
       .regex(/^[a-z0-9](?:[a-z0-9/_-]*[a-z0-9])?$/)
       .default("prod"),
-    MEDIA_CDN_BASE_URL: z.url().optional().or(z.literal("")),
-    MEDIA_CDN_TOKEN_SECRET: z.string().min(16).optional().or(z.literal("")),
     MEDIA_MAX_IMAGE_BYTES: z.coerce
       .number()
       .int()
@@ -228,34 +226,6 @@ const envSchema = z
             message: "S3_ENDPOINT must be a valid URL",
           });
         }
-      }
-    }
-    if (Boolean(env.MEDIA_CDN_BASE_URL) !== Boolean(env.MEDIA_CDN_TOKEN_SECRET))
-      context.addIssue({
-        code: "custom",
-        path: ["MEDIA_CDN_BASE_URL"],
-        message:
-          "MEDIA_CDN_BASE_URL and MEDIA_CDN_TOKEN_SECRET must be configured together",
-      });
-    if (env.MEDIA_CDN_BASE_URL) {
-      try {
-        const cdnUrl = new URL(env.MEDIA_CDN_BASE_URL);
-        if (
-          cdnUrl.protocol !== "https:" ||
-          cdnUrl.username ||
-          cdnUrl.password ||
-          cdnUrl.pathname !== "/" ||
-          cdnUrl.search ||
-          cdnUrl.hash
-        )
-          context.addIssue({
-            code: "custom",
-            path: ["MEDIA_CDN_BASE_URL"],
-            message:
-              "MEDIA_CDN_BASE_URL must be an HTTPS origin without credentials, path, query, or fragment",
-          });
-      } catch {
-        // z.url() reports malformed URLs before this refinement runs.
       }
     }
     if (env.PRESENCE_STORAGE_DRIVER === "redis" && !env.REDIS_URL)

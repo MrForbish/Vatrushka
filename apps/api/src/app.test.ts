@@ -1,7 +1,8 @@
 import { createHash, createHmac } from 'node:crypto';
 
 import { AccessToken } from 'livekit-server-sdk';
-import { beforeEach, describe, expect, it } from 'vitest';
+import type pg from 'pg';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { API_PREFIX, type RealtimeEvent } from '@vatrushka/shared';
 
@@ -9,6 +10,7 @@ import { buildApp, logRedactPaths } from './app.js';
 import { loadConfig } from './config.js';
 import { MAX_ATTACHMENT_BYTES, VatrushkaService } from './service.js';
 import type { RedisRealtimeBus } from './services/realtime.js';
+import { IdentitySettingsStore } from './services/identity-settings.js';
 import { FakeMailer, FakeMediaService, FakeObjectStorage } from './testing/fakes.js';
 import { MemoryStore } from './testing/memory-store.js';
 
@@ -54,6 +56,7 @@ function inviteTokenFromUrl(inviteUrl: string): string {
 async function makeContext(
   objectStorage: FakeObjectStorage | null = null,
   environment: Record<string, string> = {},
+  identitySettingsStore: IdentitySettingsStore | null = null,
 ): Promise<TestContext> {
   const store = new MemoryStore();
   const mailer = new FakeMailer();
@@ -76,7 +79,7 @@ async function makeContext(
     publish: async (event: RealtimeEvent) => { realtimeEvents.push(event); return true; },
     publishPresence: async () => true,
   } as unknown as RedisRealtimeBus;
-  const service = new VatrushkaService({ config, store, mailer, media, objectStorage, realtimeBus, clock: () => clock.now });
+  const service = new VatrushkaService({ config, store, mailer, media, objectStorage, ...(identitySettingsStore ? { identitySettingsStore } : {}), realtimeBus, clock: () => clock.now });
   const app = await buildApp({ config, service, logger: false });
   return { app, service, store, mailer, media, objectStorage, clock, config, realtimeEvents };
 }
@@ -1275,29 +1278,56 @@ describe('servers, channels, messages, and roles API', () => {
     expect(removed.json<{ attachments: unknown[] }>().attachments).toEqual([]);
   });
 
-  it('serves profile media through a short-lived signed CDN URL when configured', async () => {
-    const cdnSecret = 'cdn-token-secret-for-tests';
-    context = await makeContext(new FakeObjectStorage(), {
+  it('serves profile and server media directly from S3 despite legacy CDN settings', async () => {
+    const storage = new FakeObjectStorage();
+    const signedGet = vi.spyOn(storage, 'createGetUrl');
+    const profileQuery = vi.fn();
+    context = await makeContext(storage, {
       MEDIA_CDN_BASE_URL: 'https://cdn.test',
-      MEDIA_CDN_TOKEN_SECRET: cdnSecret,
-    });
+      MEDIA_CDN_TOKEN_SECRET: 'legacy-cdn-secret-for-tests',
+    }, new IdentitySettingsStore({ query: profileQuery } as unknown as pg.Pool));
     const anna = await login('cdn-anna@example.com', 'Anna');
     const boris = await login('cdn-boris@example.com', 'Boris');
     const borisRecord = context.store.users.get(boris.userId);
     if (!borisRecord) throw new Error('Boris was not created');
     const objectKey = 'profiles/boris/avatar.webp';
+    const coverKey = 'profiles/boris/cover.webp';
     context.store.users.set(boris.userId, { ...borisRecord, avatarObjectKey: objectKey });
+    profileQuery.mockResolvedValue({ rows: [{
+      id: boris.userId, email: borisRecord.email, display_name: 'Boris', username: null, bio: null,
+      avatar_object_key: objectKey, profile_cover_object_key: coverKey,
+      username_changed_at: null, updated_at: context.clock.now,
+    }] });
 
     const createdServer = await context.app.inject({ method: 'POST', url: `${API_PREFIX}/servers`, headers: { authorization: `Bearer ${anna.accessToken}` }, payload: { name: 'CDN community' } });
-    const server = createdServer.json<{ inviteUrl: string }>();
+    const server = createdServer.json<{ id: string; inviteUrl: string }>();
     await context.app.inject({ method: 'POST', url: `${API_PREFIX}/invites/${inviteTokenFromUrl(server.inviteUrl)}/accept`, headers: { authorization: `Bearer ${boris.accessToken}` } });
+
+    const serverRecord = context.store.servers.get(server.id);
+    if (!serverRecord) throw new Error('Server was not created');
+    const iconKey = `servers/${server.id}/icon.webp`;
+    const bannerKey = `servers/${server.id}/banner.webp`;
+    context.store.servers.set(server.id, { ...serverRecord, iconObjectKey: iconKey, bannerObjectKey: bannerKey });
 
     const candidates = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/direct-conversations/candidates`, headers: { authorization: `Bearer ${anna.accessToken}` } });
     expect(candidates.statusCode).toBe(200);
-    const expires = Math.floor(context.clock.now.getTime() / 1_000) + 900;
-    const path = '/profiles/boris/avatar.webp';
-    const signature = createHash('md5').update(`${cdnSecret}${path}${expires}`).digest('base64').replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=/gu, '');
-    expect(candidates.json<Array<{ avatarUrl: string }>>()[0]?.avatarUrl).toBe(`https://cdn.test/md5(${signature},${expires})${path}`);
+    const s3Url = (key: string) => `https://storage.test/get/${encodeURIComponent(key)}`;
+    expect(candidates.json<Array<{ avatarUrl: string }>>()[0]?.avatarUrl).toBe(s3Url(objectKey));
+    const profile = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/users/me/profile`, headers: { authorization: `Bearer ${boris.accessToken}` } });
+    expect(profile.statusCode).toBe(200);
+    expect(profile.json()).toEqual(expect.objectContaining({ avatarUrl: s3Url(objectKey), coverUrl: s3Url(coverKey) }));
+    const detail = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${anna.accessToken}` } });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toEqual(expect.objectContaining({ iconUrl: s3Url(iconKey), bannerUrl: s3Url(bannerKey) }));
+    for (const key of [objectKey, coverKey, iconKey, bannerKey]) expect(signedGet).toHaveBeenCalledWith(key, 900);
+
+    const outsider = await login('s3-outsider@example.com', 'Outsider');
+    signedGet.mockClear();
+    const anonymous = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}` });
+    expect(anonymous.statusCode).toBe(401);
+    const denied = await context.app.inject({ method: 'GET', url: `${API_PREFIX}/servers/${server.id}`, headers: { authorization: `Bearer ${outsider.accessToken}` } });
+    expect(denied.statusCode).toBe(403);
+    expect(signedGet).not.toHaveBeenCalled();
   });
 
   it('enforces channel overwrites, protects hierarchy, and records role audit events', async () => {
