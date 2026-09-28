@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 
 import { errors as joseErrors } from "jose";
 import { TrackSource } from "livekit-server-sdk";
@@ -449,26 +449,7 @@ export class VatrushkaService {
   ): Promise<string | null> {
     if (!objectKey) return null;
     if (!this.objectStorage) return mediaUrl(objectKey);
-    if (this.config.MEDIA_CDN_BASE_URL && this.config.MEDIA_CDN_TOKEN_SECRET)
-      return this.createCdnUrl(objectKey, 900);
     return this.objectStorage.createGetUrl(objectKey, 900);
-  }
-
-  private createCdnUrl(objectKey: string, expiresInSeconds: number): string {
-    const tokenSecret = this.config.MEDIA_CDN_TOKEN_SECRET;
-    const configuredBaseUrl = this.config.MEDIA_CDN_BASE_URL;
-    if (!tokenSecret) throw new Error("CDN token secret is not configured");
-    if (!configuredBaseUrl) throw new Error("CDN base URL is not configured");
-    const baseUrl = configuredBaseUrl.replace(/\/$/u, "");
-    const path = `/${objectKey.split("/").map(encodeURIComponent).join("/")}`;
-    const expires = Math.floor(this.now().getTime() / 1_000) + expiresInSeconds;
-    const signature = createHash("md5")
-      .update(`${tokenSecret}${path}${expires}`)
-      .digest("base64")
-      .replace(/\+/gu, "-")
-      .replace(/\//gu, "_")
-      .replace(/=/gu, "");
-    return `${baseUrl}/md5(${signature},${expires})${path}`;
   }
 
   private async resolveMediaUrl(
