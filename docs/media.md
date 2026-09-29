@@ -1,6 +1,6 @@
-# Media
+# Медиа
 
-## Voice
+## Голос
 
 LiveKit JS SDK подключается с auto-subscribe, echo cancellation, noise suppression и auto gain control. Отказ микрофона не выбрасывает пользователя из голосового канала: клиент остаётся muted и показывает понятную ошибку. `devicechange` обновляет списки. `Room.switchActiveDevice` немедленно переключает input/output.
 
@@ -14,7 +14,7 @@ Participant UI показывает имя, владельца/админист�
 
 Управление микрофоном и входящим звуком находится только в панели активного голосового соединения; нижняя плашка профиля содержит профиль, настройки и выход. Кнопка микрофона управляет реальным local microphone track. Deafen сначала выключает микрофон, затем локально обнуляет громкость `Microphone` и `ScreenShareAudio` всех удалённых участников. При обратном включении входящего звука сохраняются индивидуальные mute/volume-настройки; явное включение микрофона во время deafen также снимает deafen и возвращает входящий звук. Во время reconnect и media-операций кнопки показывают честное disabled-состояние.
 
-## Screen capture
+## Скриншот
 
 1. API atomically выдаёт 30-секундную lease.
 2. Main process сериализует `desktopCapturer.getSources` без Node objects.
@@ -34,6 +34,6 @@ Cancel, publish failure, normal stop, channel leave, window close, `participant_
 
 Роль с `MOVE_MEMBERS` может перетащить участника на целевой голосовой канал. API проверяет иерархию ролей и право `CONNECT_VOICE` у цели. Уже подключённая identity переносится нативным `MoveParticipant`, после чего API повторно применяет разрешённые в целевом канале microphone/screen publish grants; desktop синхронизирует выбранный канал без разрыва media-сессии. Для участника вне voice создаётся минутная команда подключения с новым channel-scoped токеном. Если его приложение закрыто, WebRTC-подключение создать невозможно.
 
-## Provider switching
+## Смена провайдера
 
 Код не различает Cloud и self-hosted. Меняются только `LIVEKIT_URL`, `LIVEKIT_HTTP_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`.

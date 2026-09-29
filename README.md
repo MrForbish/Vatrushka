@@ -37,9 +37,9 @@
                               Redis
 ```
 
-- npm workspaces: `apps/desktop`, `apps/api`, `packages/shared`, `packages/config`.
+- npm рабочие пространства: `apps/desktop`, `apps/api`, `packages/shared`, `packages/config`.
 - Desktop: Electron 43, React 19, TanStack Query, electron-vite, LiveKit JS SDK, Zod.
-- API: Node.js, Fastify 5, PostgreSQL, Drizzle ORM, Nodemailer, LiveKit Server SDK.
+- API: Node.js, Fastify 5, PostgreSQL, Drizzle ORM, Nodemailer, LiveKit Сервер SDK.
 - Авторизация: scrypt-пароль, email/TOTP/recovery 2FA, управление устройствами, access JWT на 15 минут; opaque refresh token на 30 дней с rotation/reuse detection и хранением только в Electron main/safeStorage.
 - Медиа: LiveKit Cloud по умолчанию; self-hosted меняется только значениями `LIVEKIT_*`.
 - Сообщения: PostgreSQL — единственный durable source of truth; transactional outbox публикует realtime-события через Redis Pub/Sub в authenticated WebSocket gateway, а HTTP reconciliation восстанавливает пропущенные события.
@@ -162,7 +162,7 @@ Start-Process 'vatrushka://invite/ABCD2345test'
 
 Приложение использует single-instance lock, валидирует protocol/host/token и передаёт только непрозрачный invite token существующему окну. После авторизации ссылка автоматически добавляет и открывает сервер; для уже состоящего участника она просто открывает его повторно.
 
-## LiveKit Cloud
+## LiveKit Облако
 
 1. Создайте проект в LiveKit Cloud.
 2. Скопируйте WebSocket URL, API key и API secret только в backend `.env`.
@@ -206,18 +206,18 @@ API наружу не публикуется напрямую; доступен 
 
 | Группа | Переменные |
 |---|---|
-| Process | `NODE_ENV`, `HOST`, `PORT`, `LOG_LEVEL`, `PUBLIC_API_URL`, `PUBLIC_INVITE_URL` |
-| Product | `APP_NAME`, `APP_PROTOCOL`, `PLATFORM_OWNER_EMAIL` |
-| Database | `DATABASE_URL`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` |
-| Tokens | `ACCESS_TOKEN_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`, `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS` |
+| Процесс | `NODE_ENV`, `HOST`, `PORT`, `LOG_LEVEL`, `PUBLIC_API_URL`, `PUBLIC_INVITE_URL` |
+| Продукт | `APP_NAME`, `APP_PROTOCOL`, `PLATFORM_OWNER_EMAIL` |
+| База данных | `DATABASE_URL`, `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` |
+| Токены | `ACCESS_TOKEN_SECRET`, `CREDENTIAL_ENCRYPTION_KEY`, `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_DAYS` |
 | OTP | `OTP_PEPPER`, `OTP_TTL_SECONDS`, `OTP_RESEND_SECONDS`, `DEV_FIXED_OTP` |
 | SMTP | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME` |
 | LiveKit | `LIVEKIT_URL`, `LIVEKIT_HTTP_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET` |
-| Object storage | `MEDIA_STORAGE_DRIVER`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_KEY_PREFIX`, `MEDIA_MAX_*`, `MEDIA_ALLOWED_MIME_TYPES`, `MEDIA_CLEANUP_*` |
-| Presence | `PRESENCE_STORAGE_DRIVER`, `REDIS_URL`, `REDIS_PASSWORD`, `PRESENCE_HEARTBEAT_SECONDS`, `PRESENCE_TTL_SECONDS` |
-| Media coordination | `SCREEN_SHARE_LEASE_SECONDS`, `SCREEN_SHARE_HEARTBEAT_SECONDS` |
-| Network | `CORS_ALLOWED_ORIGINS`, `DOMAIN`, `INVITE_DOMAIN`, `LIVEKIT_DOMAIN`, `TURN_DOMAIN` |
-| Desktop public | `VITE_PUBLIC_API_BASE_URL` |
+| Хранение объектов | `MEDIA_STORAGE_DRIVER`, `S3_ENDPOINT`, `S3_REGION`, `S3_BUCKET`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_FORCE_PATH_STYLE`, `S3_KEY_PREFIX`, `MEDIA_MAX_*`, `MEDIA_ALLOWED_MIME_TYPES`, `MEDIA_CLEANUP_*` |
+| Присутствие | `PRESENCE_STORAGE_DRIVER`, `REDIS_URL`, `REDIS_PASSWORD`, `PRESENCE_HEARTBEAT_SECONDS`, `PRESENCE_TTL_SECONDS` |
+| Координация медиа | `SCREEN_SHARE_LEASE_SECONDS`, `SCREEN_SHARE_HEARTBEAT_SECONDS` |
+| Сеть | `CORS_ALLOWED_ORIGINS`, `DOMAIN`, `INVITE_DOMAIN`, `LIVEKIT_DOMAIN`, `TURN_DOMAIN` |
+| Desktop публичный | `VITE_PUBLIC_API_BASE_URL` |
 
 Production API отклоняет development secrets и `DEV_FIXED_OTP`; обязательные настройки валидируются Zod до открытия порта.
 
@@ -231,7 +231,7 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 - «Системное устройство» означает текущий Windows default; рядом выводится его реальное название, когда Chromium его предоставляет. Нумерованных заглушек «Микрофон 1»/«Динамики 1» нет.
 - Логи: `%APPDATA%\Ватрушка\logs\main.log`; токены и OTP туда не пишутся.
 
-### Screen share
+### Совместный доступ к экрану
 
 - Источник должен оставаться открытым после показа picker.
 - Если демонстрация занята, дождитесь остановки/30-секундного expiry lease.
@@ -258,23 +258,23 @@ Production API отклоняет development secrets и `DEV_FIXED_OTP`; обя
 
 ## Документация
 
-- [Technical specification](docs/technical-specification.md)
-- [Messaging and realtime](docs/messaging.md)
-- [Architecture decisions](docs/adr/README.md)
-- [Auth](docs/auth.md)
-- [Media](docs/media.md)
-- [Object storage](docs/object-storage.md)
-- [Deployment](docs/deployment.md)
-- [Self-hosted LiveKit](docs/self-hosted-livekit.md)
-- [Security](docs/security.md)
-- [Testing](docs/testing.md)
-- [Test coverage and viewport matrix](docs/test-coverage-matrix.md)
-- [Performance](docs/performance.md)
-- [Capacity checks](docs/capacity-testing.md)
-- [Release 0.4.4](docs/releases/0.4.4.md)
-- [Release 0.4.3](docs/releases/0.4.3.md)
-- [Release 0.4.2](docs/releases/0.4.2.md)
-- [Release 0.4.1](docs/releases/0.4.1.md)
-- [Release 0.4.0](docs/releases/0.4.0.md)
-- [Release 0.3.0](docs/releases/0.3.0.md)
-- [vNext roadmap](docs/vnext-roadmap.md)
+- [Техническая спецификация](docs/technical-specification.md)
+- [Обмен сообщениями и режим реального времени](docs/messaging.md)
+- [Архитектурные решения](docs/adr/README.md)
+- [Аут](docs/auth.md)
+- [Медиа](docs/media.md)
+- [Объектное хранилище](docs/object-storage.md)
+- [Развертывание](docs/deployment.md)
+- [Самостоятельно размещённый LiveKit](docs/self-hosted-livekit.md)
+- [Безопасность](docs/security.md)
+- [Тестирование](docs/testing.md)
+- [Покрытие тестов и матрица видимой области](docs/test-coverage-matrix.md)
+- [Производительность](docs/performance.md)
+- [Проверка ёмкости](docs/capacity-testing.md)
+- [Релиз 0.4.4](docs/releases/0.4.4.md)
+- [Релиз 0.4.3](docs/releases/0.4.3.md)
+- [Релиз 0.4.2](docs/releases/0.4.2.md)
+- [Релиз 0.4.1](docs/releases/0.4.1.md)
+- [Релиз 0.4.0](docs/releases/0.4.0.md)
+- [Релиз 0.3.0](docs/releases/0.3.0.md)
+- [дорожная карта vNext](docs/vnext-roadmap.md)

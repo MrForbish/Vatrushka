@@ -1,6 +1,6 @@
-# Current pipeline graph
+# Текущий pipeline график
 
-Labels: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
+Метки: **факт**, **вывод**, **предположение**, **неизвестно**, **предложение**.
 
 ```mermaid
 flowchart LR
@@ -19,11 +19,11 @@ flowchart LR
   D -. emergency only .-> RB[Optional manual runtime rollback]
 ```
 
-- **fact:** merge-request pipelines contain no SSH deployment, updater publication, or production secrets.
-- **fact:** `develop` builds an immutable API image and creates a redacted candidate manifest. The staging delivery job is present but cannot run until the isolated staging host and its variables exist.
-- **fact:** a protected SemVer tag resolves the already-built API image by digest and the already-built Windows package by commit SHA; it rebuilds neither artifact.
-- **fact:** `windows-production-package` precedes `deploy-production-runtime`; `publish-production` waits for runtime and Observer verification, then gives `latest.yml` to the root-owned updater wrapper as the final stable exposure step.
-- **fact (2026-07-25):** `deploy-production-runtime` is the only mandatory manual job in the production tag path. The checksum-bound production observability agent starts automatically after that runtime, followed by Observer verification of the new host's Alloy telemetry. `rollback-production-runtime` is a separate optional emergency action and is allowed to be skipped.
-- **inference:** this ordering prevents a stable client update from becoming visible before runtime and monitoring gates have succeeded.
-- **unknown:** staging host identity, private route and beta updater endpoint.
-- **proposal:** after production migration and staging reimage, make staging candidate delivery automatic and gate beta publication on staging smoke plus Observer verification.
+- **факт:** конвейеры merge-request не содержат развертывания SSH, публикации updater или секретов production.
+- **факт:** `develop` создает неизменяемый образ API и формирует редактированный манифест кандидата. Задание доставки staging присутствует, но не может выполняться, пока не будет существовать изолированный хост staging и его переменные.
+- **факт:** защищённый тег SemVer разрешает уже собранный образ API по дайджесту и уже собранный пакет Windows по коммиту SHA; он не перестраивает ни один из артефактов.
+- **факт:** `windows-production-package` предшествует `deploy-production-runtime`; `publish-production` ожидает runtime и проверки Наблюдателем, затем передает `latest.yml` обертке updater, принадлежащей root, как финальный шаг стабильного раскрытия.
+- **факт (25-07-2026):** `deploy-production-runtime` является единственной обязательной ручной работой в пути тега production. Агент наблюдаемости с контрольной суммой production запускается автоматически после этого runtime, за которым следует проверка Observer телеметрии нового хоста Alloy. `rollback-production-runtime` является отдельным необязательным аварийным действием и может быть пропущен.
+- **вывод:** такое упорядочивание предотвращает отображение стабильного обновления клиента до того, как runtime и контрольные точки мониторинга будут выполнены успешно.
+- **неизвестно:** staging идентичность хоста, приватный маршрут и бета-updater конечная точка.
+- **предложение:** После production миграции и staging имиджа сделать staging доставку кандидатов автоматической и публикацию бета-гейта на staging smoke plus верификацию Observer.

@@ -1,10 +1,10 @@
-# Observer deployment wrapper
+# Обертка развертывания наблюдателя
 
-`vatrushka_observer_deploy` is a separate, key-only GitLab CI account for the Observer VPS. It is not a production application deploy account and cannot use a shell, Docker, Compose or arbitrary `sudo` command.
+`vatrushka_observer_deploy` является отдельной учетной записью только с ключом GitLab CI для Наблюдателя VPS. Это не учетная запись для развертывания приложения production и она не может использовать оболочку, Docker, Compose или произвольные команды `sudo`.
 
-The root-owned `vatrushka-observability-verify production` wrapper is the only current CI entry point. It verifies the fixed Observer Compose project and Grafana, Prometheus and Loki readiness through private host bindings. It does not change configuration or restart containers.
+Обертка `vatrushka-observability-verify production`, принадлежащая root, является единственной текущей точкой входа CI. Она проверяет фиксированный проект Observer Compose и готовность Grafana, Prometheus и Loki через приватные привязки хоста. Она не изменяет конфигурацию и не перезапускает контейнеры.
 
-Install as root only:
+Устанавливать только от имени root:
 
 ```sh
 install -d -m 700 -o vatrushka_observer_deploy -g vatrushka_observer_deploy /home/vatrushka_observer_deploy/.ssh
@@ -14,4 +14,4 @@ install -m 600 -o vatrushka_observer_deploy -g vatrushka_observer_deploy /dev/nu
 sudo -u vatrushka_observer_deploy sudo -n /usr/local/lib/vatrushka/vatrushka-observability-verify production
 ```
 
-Do not replace the fixed wrapper with `sudo sh`, Docker-group membership or passwordless `ALL`.
+Не заменяйте фиксированный обёртку на `sudo sh`, членство в группе Docker или безпарольный `ALL`.

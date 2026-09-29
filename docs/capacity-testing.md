@@ -1,4 +1,4 @@
-# Capacity and dependency checks
+# Проверка вместимости и зависимости
 
 `npm run capacity:check` выполняет управляемый read/write baseline для API, authenticated WebSocket, PostgreSQL, Redis, приватного S3 и control plane LiveKit. Он не является генератором реального WebRTC-медиа: голос, loopback и screen share по-прежнему проверяются отдельной двухмашинной матрицей.
 

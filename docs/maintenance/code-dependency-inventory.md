@@ -1,20 +1,20 @@
-# Code dependency inventory
+# Инвентаризация зависимостей кода
 
-## Active entrypoints
+## Активные точки входа
 
-| Area | Status | Evidence |
+| Область | Статус | Доказательства |
 | --- | --- | --- |
-| Desktop renderer/main/preload | active | Electron packaging, `App.tsx`, renderer routes, IPC and desktop CI jobs. |
-| API/Fastify | active | `apps/api/src/app.ts`, service/store ports, Docker runtime and integration jobs. |
-| Shared contracts | active | workspace build precedes API and desktop builds. |
-| Realtime/media | active | WebSocket, Redis, LiveKit and screen-share paths are governed by ADR-0004/0006 and are excluded from cleanup. |
-| Canonical messaging migration | compatibility | service, `DataStore`, PostgreSQL schema, migration script and tests use legacy lookup/migration helpers. |
-| Test fakes and MemoryStore | active | imported by API unit tests; not a production datastore. |
+| Desktop renderer/main/preload | активно | Electron упаковка, `App.tsx`, renderer маршруты, IPC и desktop CI задания. |
+| API/Fastify | активный | `apps/api/src/app.ts`, порты сервиса/хранилища, Docker runtime и интеграционные задания. |
+| Общие контракты | активен | сборка рабочего пространства предшествует сборкам API и desktop. |
+| В реальном времени/медиа | активно | пути WebSocket, Redis, LiveKit и демонстрации экрана регулируются ADR-0004/0006 и исключены из очистки. |
+| Миграция канонических сообщений | совместимость | сервис, `DataStore`, схема PostgreSQL, скрипт миграции и тесты используют устаревшие вспомогательные функции поиска/миграции. |
+| Тестовые подделки и MemoryStore | активен | импортирован модульными тестами API; не является хранилищем данных production. |
 
-## Dependency conclusion
+## Заключение о зависимости
 
-`package.json` defines workspaces and root development tooling; workspace manifests own runtime dependencies. No direct dependency is classified removable from import/search evidence alone. Removal must be its own package-manager MR with lockfile regeneration and targeted build/test proof.
+`package.json` определяет рабочие пространства и инструменты разработки корня; манифесты рабочего пространства содержат собственные зависимости runtime. Ни одна прямая зависимость не классифицируется как удаляемая только на основании доказательств импорта/поиска. Удаление должно быть выполнено собственным MR пакетного менеджера с регенерацией lockfile и доказательством сборки/тестирования.
 
-## Required pre-removal search
+## Необходимый предварительный поиск перед удалением
 
-For any candidate, record `rg` results across source, tests, scripts, CI, Docker/Compose, Storybook, Electron packaging, runtime string paths and documentation; then run its owning build/test path.
+Для любого кандидата зафиксируйте результаты `rg` по источнику, тестам, скриптам, CI, Docker/Compose, Storybook, упаковке Electron, runtime путям строк и документации; затем запустите его принадлежащий путь сборки/тестирования.

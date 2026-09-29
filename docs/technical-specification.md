@@ -4,12 +4,12 @@
 
 ## 1. Состав системы
 
-Vatrushka — npm workspaces monorepo:
+Vatrushka — монорепозиторий npm workspaces:
 
 | Пакет             | Ответственность                                                                                |
 | ----------------- | ---------------------------------------------------------------------------------------------- |
-| `apps/desktop`    | Electron main/preload, React renderer, LiveKit client, auto-update, Windows packaging          |
-| `apps/api`        | Fastify API, WebSocket gateway, PostgreSQL stores, Redis, SMTP, S3, LiveKit server integration |
+| `apps/desktop`    | Electron main/preload, React renderer, LiveKit клиент, автообновление, Windows упаковка          |
+| `apps/api`        | Fastify API, WebSocket шлюз, PostgreSQL магазины, Redis, SMTP, S3, LiveKit интеграция с сервером |
 | `packages/shared` | Zod-контракты, доменные типы, permissions и общие helpers                                      |
 | `packages/config` | общие TypeScript-настройки                                                                     |
 | `infra`           | Docker, Caddy, LiveKit и операционные scripts                                                  |
@@ -34,9 +34,9 @@ Renderer считается недоверенным. Он не получает
 
 Fastify повторно проверяет auth, membership, permissions, ownership, optimistic version и входные Zod-схемы. UI-disable не является защитой. Production-конфигурация отклоняет fixed OTP, слабые секреты и отсутствующие обязательные integrations до открытия порта.
 
-## 3. Desktop
+## 3. Настольный клиент
 
-### 3.1. Renderer
+### 3.1. Процесс отображения
 
 React 19 и TanStack Query отвечают за серверное состояние. `AppRouter` использует `HashRouter`, совместимый с packaged `file://`. `App.tsx` пока остается крупным orchestration controller и является целью безопасной декомпозиции; media connection должна жить выше экранов и settings routes.
 
@@ -44,7 +44,7 @@ React 19 и TanStack Query отвечают за серверное состоя
 
 Gaming Home получает единый агрегат `GET /api/v1/home`. Backend объединяет PostgreSQL server membership и user activity, Redis voice projection, LiveKit-confirmed presence и permission-filtered server DTO. Ответ содержит компактный voice status, `quickReturn`, `activeSpaces` и `friendsInGame`; renderer подменяет только названия input/output фактическими Windows `MediaDeviceInfo`, не создавая демонстрационные production-данные. Realtime voice events coalesced-инвалидируют Home query, а reconnect восстанавливается HTTP snapshot. До появления отдельной friendship-модели социальный список использует реальные контакты существующих личных диалогов; это явно ограниченный compatibility source, а не скрытый mock.
 
-### 3.2. Electron main/preload
+### 3.2. Electron основной/предзагрузка
 
 Main process владеет single-instance/deep-link обработкой, safeStorage, updater, desktopCapturer, native notifications и window lifecycle. Screen source передается renderer только через одноразовый allowlist без повторной проверки списка источников между выбором пользователя и Chromium request: окончательное отсутствие источника безопасно отклоняется самим display-media handler. Updater работает с generic feed `/updates`, классифицирует ошибки проверки как локальную сеть, инфраструктуру обновлений или неизвестную ошибку; portable-сборка не автообновляется.
 
@@ -52,7 +52,7 @@ Windows-окно использует безопасный `titleBarOverlay`: с
 
 Серверы имеют `private/public` visibility. Авторизованный каталог публичных серверов возвращает только безопасную сводку, поддерживает пагинацию/rate limit и поднимает configured `FEATURED_SERVER_ID` первым. Присоединение к public server не требует invite token. Иконка, banner и accent входят в presentation DTO через временные S3 URL; внутренние object keys не передаются. Профиль пользователя поддерживает avatar и cover object keys с JPEG/PNG/WebP upload intents.
 
-### 3.3. Media
+### 3.3. СМИ
 
 LiveKit управляет WebRTC. API выпускает краткоживущий participant token с grants по вычисленным permissions. Client media controller отвечает за connect/reconnect, устройства, participant volume, screen audio, track cleanup и повторную публикацию. PostgreSQL lease сериализует право показа экрана; heartbeat/expiry восстанавливают состояние после аварии. Voice participant DTO включает effective presence, а renderer применяет `presence.updated` непосредственно к списку участников и voice stage, поэтому индикаторы не зависят от speaking state или 30-секундного reconciliation refresh.
 
@@ -62,10 +62,10 @@ API построен на Fastify 5. `app.ts` регистрирует transport
 
 Фоновые процессы:
 
-- transactional outbox publisher;
-- Redis presence heartbeat/expiry;
+- транзакционный outbox издатель;
+- Redis наличие сердцебиения/истечение срока;
 - durable cleanup S3-объектов;
-- screen-share lease heartbeat;
+- совместное использование экрана аренда сердцебиение;
 - updater feed обслуживается Caddy из versioned artifacts.
 
 Health endpoints различают liveness и readiness. `/metrics` отдает технические метрики API/messaging/media. Production Prometheus, Grafana, Loki/S3, Alertmanager, Blackbox и private Alloy agents подключены; ошибки API имеют bounded labels `code`, `route`, `status_class`, а heartbeat демонстрации — `result` без пользовательских данных.
@@ -78,10 +78,10 @@ PostgreSQL — источник истины для аккаунтов, серв
 
 Функциональные группы таблиц:
 
-- identity/security: users, sessions, auth codes, recovery, security events, blocks, email changes;
-- community: servers, members, viewer aliases, roles, member roles, categories, channels, invites, bans, overwrites, audit;
-- canonical messaging: conversations, members, messages, attachments, reactions, mentions, read states, notifications/preferences, outbox;
-- operations: user activity, screen-share leases, object deletion jobs.
+- идентичность/безопасность: пользователи, сеансы, коды аутентификации, восстановление, события безопасности, блокировки, изменения электронной почты;
+- сообщество: серверы, участники, псевдонимы зрителей, роли, роли участников, категории, каналы, приглашения, баны, переопределения, аудит;
+- каноническая система обмена сообщениями: разговоры, участники, сообщения, вложения, реакции, упоминания, состояние прочтения, уведомления/настройки, outbox;
+- операции: действия пользователя, аренда совместного использования экрана, задания по удалению объектов.
 
 Legacy `text_*`, `direct_*`, `message_*` таблицы и mapping columns пока нельзя удалять: клиент 0.6.1 все еще выполняет compatibility reads, а S3 backfill и rollback window описаны ADR 0005. Их удаление разрешено только отдельной contract-фазой после canonical-only desktop release, подтверждения adoption/telemetry, остановки dual write/read, backup и интеграционного migration test.
 
@@ -107,7 +107,7 @@ Renderer не использует presigned URL как React key. Общий `S
 
 Renderer нормализует относительные authenticated media URL относительно production API origin. HTTP(S)-ссылки из сообщений открываются только через main-process IPC с проверкой протокола и запретом embedded credentials. Read acknowledgement обновляет серверный cursor до очистки локального счётчика и разделителя. Update state отображается как единственная локальная запись Notification Center и не создаёт отдельный плавающий overlay.
 
-## 7. Auth lifecycle
+## 7. Жизненный цикл аутентификации
 
 - password: scrypt с уникальной солью;
 - access JWT: 15 минут;
@@ -119,7 +119,7 @@ Renderer нормализует относительные authenticated media U
 - revoke single/all sessions и security events;
 - legacy passwordless endpoints должны оставаться 404, а legacy refresh sessions — отзываться.
 
-## 8. Production topology
+## 8. Production топология
 
 Каноническая рабочая копия VPS — `/opt/vatrushka`. Docker Compose запускает Caddy, API, PostgreSQL и Redis; LiveKit/TURN развернуты self-hosted по отдельному runbook. API доступен наружу только через Caddy. PostgreSQL и Redis проброшены только на loopback. Media хранится в приватном Timeweb S3 bucket `media-vatrushka`.
 
@@ -129,12 +129,12 @@ Renderer нормализует относительные authenticated media U
 
 | Уровень                    | Назначение                                                                        |
 | -------------------------- | --------------------------------------------------------------------------------- |
-| shared unit                | Zod, helpers, permissions                                                         |
-| API unit/inject            | auth, business rules, routes, fakes                                               |
+| общая единица               | Zod, помощники, разрешения                                                        |
+| API единица/инъекция            | аутентификация, бизнес-правила, маршруты, имитации                                               |
 | integration                | настоящие PostgreSQL 17 и Redis 8, миграции и cross-instance semantics            |
-| renderer unit/component    | media helpers, realtime reducers, UI behavior                                     |
+| renderer блок/компонент    | вспомогательные средства медиа, редукторы в реальном времени, поведение UI                                     |
 | Storybook interaction/a11y | состояния переиспользуемых компонентов                                            |
-| Electron E2E               | preload/main/auth/navigation/media contracts                                      |
+| Electron E2E               | предварительная загрузка/главная/аутентификация/навигация/медиа контракты                                      |
 | visual Playwright          | эталонные stories в фиксированном viewport                                        |
 | manual two-machine         | WebRTC, Windows devices, scaling и native updater                                 |
 | capacity harness           | opt-in API/WebSocket/PostgreSQL/Redis/S3/LiveKit-control baseline и JSON evidence |
@@ -153,14 +153,14 @@ Pixel-perfect означает совпадение композиции, раз
 
 Обязательные сигналы:
 
-- API: RPS, p50/p95/p99 latency, 4xx/5xx, event-loop lag, heap, readiness;
-- WebSocket: active sessions, connect/reconnect, send failures, backpressure, event lag;
-- Redis: memory, clients, ops/sec, command latency, evictions, rejected connections, Pub/Sub;
-- PostgreSQL: connections, locks, transactions, query latency, DB size, outbox depth/oldest age;
-- messaging: create-to-deliver latency, retries, duplicates, unread reconciliation errors;
-- S3: presign/upload/finalize/delete failures, unfinished objects, cleanup age;
-- LiveKit: rooms/participants, reconnects, RTT/jitter/packet loss where exporter permits;
-- host/containers: CPU, RAM, disk, network, restarts, certificate expiry.
+- API: RPS, задержка p50/p95/p99, 4xx/5xx, задержка цикла событий, куча, готовность;
+- WebSocket: активные сессии, подключение/повторное подключение, ошибки отправки, обратное давление, задержка событий;
+- Redis: память, клиенты, операций/сек, задержка команд, вытеснения, отклонённые подключения, Pub/Sub;
+- PostgreSQL: подключения, блокировки, транзакции, задержка запросов, размер БД, outbox глубина/возраст самого старого;
+- обмен сообщениями: задержка от создания до доставки, повторные попытки, дубликаты, ошибки согласования непрочитанных сообщений;
+- S3: ошибки presign/upload/finalize/delete, незавершённые объекты, время очистки;
+- LiveKit: комнаты/участники, повторное подключение, RTT/джиттер/потеря пакетов, где это разрешено экспортером;
+- хост/контейнеры: CPU, RAM, диск, сеть, перезапуски, срок действия сертификата.
 
 Alerts должны покрывать readiness failure, 5xx/latency surge, Redis memory/evictions, PostgreSQL connection saturation/locks, outbox backlog, S3 cleanup backlog, disk pressure и certificate expiry. Конкретные thresholds фиксируются после недельного baseline.
 
@@ -168,8 +168,8 @@ Alerts должны покрывать readiness failure, 5xx/latency surge, Red
 
 Изменения выполняются маленькими MR с одним назначением. Обычные task MR squash-merge в `develop`; assembly, production release, hotfix и обратная синхронизация используют merge commit, чтобы сохранить границы версии и позволить revert целого изменения. Generated outputs, reference-pack и секреты не коммитятся. Мертвый код удаляется только после доказательства отсутствия imports/runtime calls, теста заменяющего контракт и, для БД, завершенной expand/contract migration.
 
-# Voice presence and movement
+# Присутствие голоса и движение
 
-Voice membership is confirmed by LiveKit webhooks, projected atomically into Redis, versioned per server, and delivered through the application WebSocket. `docs/adr/0006-livekit-confirmed-voice-presence.md` defines source-of-truth boundaries, Redis keys, adapters, reconciliation, and migration behavior. PostgreSQL does not store ephemeral voice membership.
+Членство в голосовом чате подтверждается вебхуками LiveKit, проецируемыми атомарно в Redis, версионируемыми для каждого сервера и доставляемыми через приложение WebSocket. `docs/adr/0006-livekit-confirmed-voice-presence.md` определяет границы источника истины, ключи Redis, адаптеры, согласование и поведение при миграции. PostgreSQL не хранит временное членство в голосовом чате.
 
 Клиент отправляет собственные bounded state transitions (`muted`, `deafened`, throttled `speaking`, `connectionQuality`) через `PATCH /api/v1/channels/:channelId/voice-state`. Backend сверяет authenticated user, channel и exact voice `sessionId`, обновляет Redis и публикует `voice.member.state.updated`; stale session получает `409 VOICE_SOURCE_CHANGED`. WebRTC RTT измеряется renderer через active ICE candidate pair и не записывается в PostgreSQL.

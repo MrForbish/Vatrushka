@@ -4,9 +4,9 @@ vX.Y.Z
 
 ## Синхронизация
 
-- production tag: `<tag>`
-- release pipeline: `<url>`
-- [ ] release fixes перенесены
-- [ ] version/changelog перенесены
-- [ ] migration/updater corrections перенесены
+- production-тег: `<tag>`
+- релизный pipeline: `<url>`
+- [ ] исправления релиза перенесены
+- [ ] версия и changelog перенесены
+- [ ] исправления миграций и updater перенесены
 - [ ] используется merge commit без squash

@@ -1,28 +1,28 @@
 ## Инцидент
 
-<!-- Severity, impact, affected version. -->
+<!-- Серьёзность, влияние, затронутая версия. -->
 
 ## Исправление
 
 - <!-- change -->
 
-## Release evidence
+## Подтверждение релиза (release evidence)
 
-- [ ] targeted regression
-- [ ] full required CI
-- [ ] migration/rollback reviewed
-- [ ] patch version consistent
+- [ ] выполнена целевая регрессионная проверка
+- [ ] выполнен полный обязательный CI
+- [ ] проверены миграция и откат
+- [ ] patch-версия согласована
 
 ## Миграции и совместимость
 
 - PostgreSQL: нет
-- Redis keys: нет
-- S3 lifecycle: нет
-- env/config: нет
+- ключи Redis: нет
+- жизненный цикл S3: нет
+- окружение и конфигурация: нет
 - feature flags: нет
-- breaking changes: нет
+- несовместимые изменения: нет
 
-## Rollback
+## Откат (rollback)
 
 <!-- Точный план отката к предыдущему production-состоянию. -->
 

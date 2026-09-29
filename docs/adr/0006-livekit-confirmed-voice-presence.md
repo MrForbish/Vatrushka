@@ -1,71 +1,71 @@
-# ADR 0005: LiveKit-confirmed voice presence
+# ADR 0005: подтвержденное присутствие голоса LiveKit
 
-Status: accepted (WEB-26)
+Статус: принят (WEB-26)
 
-## Audit of the previous implementation
+## Аудит предыдущей реализации
 
-- Client SDK: `livekit-client 2.20.1`; server SDK: `livekit-server-sdk 2.17.0`.
-- Production uses self-hosted LiveKit. Cloud remains a supported, explicitly selected strategy.
-- A voice channel maps to one transport room named `channel_<uuid>`; this naming is unchanged.
-- Participant identity remains `user_<userId>_<random suffix>`; it is not migrated.
-- Multiple LiveKit identities could exist for one user. The sidebar policy is one logical active voice session per user; a newer session wins and late leave events are conditionally ignored.
-- Application realtime is an authenticated Fastify WebSocket gateway backed by Redis Pub/Sub and target-user fanout.
-- The existing Redis presence store only tracked online/idle heartbeats. Voice membership was queried directly from LiveKit whenever server details were loaded.
-- LiveKit webhook validation and basic join/leave refresh events already existed, but there was no versioned projection, move state machine, deduplication, or reconciliation.
-- Permissions are resolved on the backend from server roles and per-channel overwrites. `CONNECT_VOICE`, `VIEW_CHANNEL`, `MOVE_MEMBERS`, capacity, owner protection, and role hierarchy are enforced for moves.
-- Click-to-join issued a short-lived room token. Moderator movement attempted native LiveKit move and fell back through a polling reconnect.
-- Renderer state was owned by the top-level application controller. Voice lists were embedded in `ServerDetail` and refreshed every 30 seconds.
-- Drag-and-drop used the native HTML5 API. No external DnD dependency was installed.
-- Existing coverage included LiveKit token/permissions, voice connect, screen share, cues, media lifecycle, and Electron/Storybook voice scenarios.
+- Клиент SDK: `livekit-client 2.20.1`; сервер SDK: `livekit-server-sdk 2.17.0`.
+- Production использует самохостинг LiveKit. Облако остаётся поддерживаемой, явно выбранной стратегией.
+- Голосовой канал соответствует одной транспортной комнате с названием `channel_<uuid>`; это название остаётся без изменений.
+- Личность участника остаётся `user_<userId>_<random suffix>`; она не переносится.
+- Для одного пользователя может существовать несколько LiveKit идентичностей. Политика боковой панели предусматривает одну логическую активную сессию активного пользователя; новая сессия выигрывает, а поздние события выхода игнорируются условно.
+- Приложение realtime является аутентифицированным шлюзом Fastify WebSocket, поддерживаемым Pub/Sub Redis и распределением для целевых пользователей.
+- Существующее хранилище присутствия Redis отслеживало только онлайн/неактивные сигналы. Членство в голосе запрашивалось напрямую из LiveKit каждый раз при загрузке сведений о сервере.
+- LiveKit проверка вебхуков и базовые события обновления при присоединении/выходе уже существовали, но не было версионированной проекции, машины состояний перемещения, дедупликации или согласования.
+- Разрешения определяются на backend из ролей сервера и переопределений для каждого канала. `CONNECT_VOICE`, `VIEW_CHANNEL`, `MOVE_MEMBERS`, вместимость, защита владельца и иерархия ролей применяются при перемещениях.
+- Click-to-join выдал краткоживущий токен комнаты. Попытка модератора выполнить нативное LiveKit движение завершилась неудачей, и он вернулся через повторное подключение опроса.
+- Состояние Renderer находилось во владении контроллера приложения верхнего уровня. Списки голосов были встроены в `ServerDetail` и обновлялись каждые 30 секунд.
+- Функция перетаскивания использовала родной HTML5 API. Внешние зависимости DnD не устанавливались.
+- Существующее покрытие включало токены/разрешения LiveKit, голосовое подключение, общий доступ к экрану, подсказки, жизненный цикл медиа и голосовые сценарии Electron/Storybook.
 
-## Decision
+## Решение
 
-LiveKit remains the media-presence source of truth. Redis stores an additive, versioned projection:
+LiveKit остается медийным присутствием source of truth. Redis хранит аддитивную, версионированную проекцию:
 
-- `vatrushka:voice:user:<userId>` — current logical voice session hash;
-- `vatrushka:voice:channel:<channelId>:members` — channel membership set;
-- `vatrushka:voice:server:<serverId>:users` — users in the server projection;
-- `vatrushka:voice:server:<serverId>:version` — monotonic membership version;
-- `vatrushka:voice:move:<movementId>` — pending move state;
-- `vatrushka:voice:move:user:<userId>` — one active move lock;
-- `vatrushka:voice:move:request:<actorUserId>:<clientRequestId>` — idempotency;
-- `vatrushka:voice:webhook:<eventId>` — webhook deduplication;
-- `vatrushka:voice:servers` — reconciliation scope.
+- `vatrushka:voice:user:<userId>` — текущий хэш логической сессии голосовой связи;
+- `vatrushka:voice:channel:<channelId>:members` — набор членства в канале;
+- `vatrushka:voice:server:<serverId>:users` — пользователи в проекции сервера;
+- `vatrushka:voice:server:<serverId>:version` — версия с монотонным членством;
+- `vatrushka:voice:move:<movementId>` — состояние ожидаемого перемещения;
+- `vatrushka:voice:move:user:<userId>` — один активный замок движения;
+- `vatrushka:voice:move:request:<actorUserId>:<clientRequestId>` — идемпотентность;
+- `vatrushka:voice:webhook:<eventId>` — дедупликация вебхуков;
+- `vatrushka:voice:servers` — область сверки.
 
-Membership updates are atomic in Redis. A leave is conditional on `sessionId`, so a delayed event cannot remove a newer connection. PostgreSQL continues to store only servers, channels, membership, roles, permissions, bans, and audit entries.
+Обновления членства являются атомарными в Redis. Выход зависит от `sessionId`, поэтому отложенное событие не может удалить более новое соединение. PostgreSQL продолжает хранить только серверы, каналы, членство, роли, разрешения, баны и записи аудита.
 
-The API exposes:
+API предоставляет:
 
 - `GET /api/v1/servers/:serverId/voice-state`;
 - `POST /api/v1/servers/:serverId/voice/moves`;
-- `POST /api/v1/integrations/livekit/webhook` (the previous webhook path remains during client/server migration).
+- `POST /api/v1/integrations/livekit/webhook` (предыдущий путь вебхука остается при миграции клиента/сервера).
 
-Realtime membership events are versioned and deduplicated. The renderer applies joined, left, moved, pending, failed, and state updates to a normalized store; a version gap or reconnect requests a snapshot.
+События о членстве в реальном времени имеют версии и устраняются дубликаты. renderer применяет обновления о присоединении, уходе, перемещении, ожидании, ошибках и состоянии к нормализованному хранилищу; пробел в версиях или переподключение запрашивает снимок.
 
-Two explicit transport adapters are used:
+Используются два явных транспортных адаптера:
 
-- `VOICE_MOVE_STRATEGY=controlled-reconnect` for self-hosted LiveKit. The target client receives a targeted command and fetches its one-room token through the authenticated move endpoint.
-- `VOICE_MOVE_STRATEGY=livekit-cloud` for native `moveParticipant`. Success is still confirmed only by the target-room webhook.
+- `VOICE_MOVE_STRATEGY=controlled-reconnect` для самостоятельного размещения LiveKit. Целевой клиент получает целевую команду и получает свой одноразовый токен через аутентифицированную конечную точку перемещения.
+- `VOICE_MOVE_STRATEGY=livekit-cloud` для носителей `moveParticipant`. Успех подтверждается только через вебхук целевой комнаты.
 
-Tokens and LiveKit secrets never enter Redis Pub/Sub payloads or logs.
+Токены и LiveKit секреты никогда не попадают в Redis полезные нагрузки Pub/Sub или журналы.
 
-## Migration and rollout
+## Миграция и развертывание
 
-No PostgreSQL migration and no voice outage are required. Existing clients continue to receive target-user realtime refreshes and can use the compatibility move endpoint. If Redis has no projection immediately after deployment, server details still use direct LiveKit participant discovery. New webhook events hydrate the projection, while reconciliation heals active projected servers every 45 seconds.
+Миграция PostgreSQL не требуется, и прерывания голосовой связи не требуется. Существующие клиенты продолжают получать обновления в реальном времени для целевых пользователей и могут использовать конечную точку совместимого перемещения. Если у Redis нет проекции сразу после развертывания, детали сервера по-прежнему используют прямое обнаружение участников LiveKit. Новые события вебхука обновляют проекцию, в то время как согласование восстанавливает активные проецируемые серверы каждые 45 секунд.
 
-Recommended rollout order:
+Рекомендуемый порядок внедрения:
 
-1. deploy API with `VOICE_DND_ENABLED=false` and verify webhook/snapshot metrics;
-2. enable realtime projection and reconciliation;
-3. enable self movement;
-4. enable moderator movement;
-5. retain `controlled-reconnect` on the current self-hosted LiveKit deployment.
+1. разверните API с `VOICE_DND_ENABLED=false` и проверьте метрики вебхука/снимка;
+2. включить проекцию и сверку в реальном времени;
+3. включить самостоятельное движение;
+4. включить перемещение модератора;
+5. сохранять `controlled-reconnect` на текущем развертывании LiveKit с собственного хоста.
 
-Rollback is configuration-only for DnD. Redis voice keys are ephemeral and may be deleted without touching PostgreSQL or LiveKit.
+Откат предназначен только для конфигурации DnD. Голосовые ключи Redis являются эфемерными и могут быть удалены без затрагивания PostgreSQL или LiveKit.
 
-## Regression boundaries
+## Границы регрессии
 
-- Do not change room naming or participant identity during this rollout.
-- Do not treat frontend drag state, HTTP 202, or client ACK as confirmed membership.
-- Do not persist speaking or other high-frequency media state in PostgreSQL.
-- Keep the direct LiveKit participant fallback until all supported clients and the production webhook are confirmed on the new version.
+- Не изменяйте названия комнат или идентичность участников во время этого развертывания.
+- Не рассматривайте состояние перетаскивания frontend, 202 HTTP или клиента ACK как подтвержденное членство.
+- Не продолжайте говорить или использовать другие высокочастотные медиа состояния в PostgreSQL.
+- Сохраняйте резервный вариант прямого участника LiveKit до тех пор, пока все поддерживаемые клиенты и вебхук production не будут подтверждены в новой версии.

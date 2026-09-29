@@ -23,7 +23,7 @@
 | Безопасность | [security.md](security.md) |
 | Тестирование | [testing.md](testing.md), [test-coverage-matrix.md](test-coverage-matrix.md) |
 | Производительность | [performance.md](performance.md), [capacity-testing.md](capacity-testing.md) |
-| Self-hosted LiveKit | [self-hosted-livekit.md](self-hosted-livekit.md) |
+| Самостоятельно размещено LiveKit | [самостоятельно-размещено-livekit.md](self-hosted-livekit.md) |
 | ADR | [adr/README.md](adr/README.md) |
 | История выпусков | [releases](releases), [CHANGELOG](../CHANGELOG.md) |
 

@@ -1,10 +1,10 @@
-# Updater gap
+# Updater разрыв
 
-Labels: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
+Метки: **факт**, **вывод**, **предположение**, **неизвестно**, **предложение**.
 
-- **fact:** local development disables automatic updates. Stable packaging uses the production API and the protected `vX.Y.Z` tag flow.
-- **fact:** protected `main` creates a checksum-bound immutable Windows package-registry artifact. A stable tag downloads that artifact by its exact commit SHA rather than rebuilding it. The root-owned `vatrushka-publish-updater` wrapper writes non-manifest files before `latest.yml`.
-- **fact:** the wrapper accepts only a checksum-bound inbox manifest and a fixed `/opt/vatrushka/updates` feed directory. Its production bootstrap boundary is verified.
-- **fact:** beta and RC configuration validation exists, but neither beta feed nor RC feed is active.
-- **unknown:** signing certificate rotation policy and a completed production upgrade drill.
-- **proposal:** after staging exists, publish beta only for desktop/shared client-contract changes and only after staging verification. Keep RC artifact-only until a separate RC-feed decision is approved.
+- **факт:** локальная разработка отключает автоматические обновления. Стабильная упаковка использует production API и защищённый поток тегов `vX.Y.Z`.
+- **факт:** защищённый `main` создаёт неизменяемый артефакт реестра пакетов Windows, привязанный к контрольной сумме. Стабильная метка загружает этот артефакт по его точному коммиту SHA, а не пересобирает его. Обёртка `vatrushka-publish-updater`, принадлежащая корню, записывает неманифестные файлы перед `latest.yml`.
+- **факт:** оболочка принимает только манифест входящих сообщений с контрольной суммой и фиксированную директорию фида `/opt/vatrushka/updates`. Её граничный уровень загрузки production проверяется.
+- **факт:** проверка конфигурации beta и RC существует, но ни beta-канал, ни RC-канал не активны.
+- **неизвестно:** политика ротации подписывающих сертификатов и завершённая отработка обновления production.
+- **предложение:** после того как staging будет готов, публиковать бета-версию только для desktop/изменений в общем клиентском контракте и только после проверки staging. Сохранять только артефакт RC до одобрения отдельного решения по RC-feed.

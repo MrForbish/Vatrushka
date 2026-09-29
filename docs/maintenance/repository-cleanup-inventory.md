@@ -1,24 +1,24 @@
-# Repository cleanup inventory
+# Инвентаризация очистки репозитория
 
-Status: audit-only. No files, branches, worktrees, dependencies, migrations, or deployment resources were deleted.
+Статус: только аудит. Ни файлы, ни ветки, ни рабочие деревья, ни зависимости, ни миграции, ни ресурсы развертывания не были удалены.
 
-## Scope evidence
+## Доказательства сферы
 
-- `git ls-files` reports 593 tracked paths; 95 are under `docs/`.
-- `git worktree list --porcelain` reports 69 worktrees.
-- Root checkout contains uncommitted and untracked material outside this audit worktree; it is classified `user-owned` and was not touched.
-- `vatrushka_codex_package/` is ignored by `.gitignore`; its local contents are classified `user-owned` unless separately imported into a canonical document.
+- `git ls-files` сообщает о 593 отслеживаемых маршрутах; 95 находятся под `docs/`.
+- `git worktree list --porcelain` сообщает о 69 рабочих деревьях.
+- Корневая версия содержит несохранённые и неотслеживаемые материалы за пределами этого рабочего дерева аудита; она классифицирована как `user-owned` и не была изменена.
+- `vatrushka_codex_package/` игнорируется `.gitignore`; его локальное содержимое классифицируется как `user-owned`, если его отдельно не импортировать в канонический документ.
 
-## Candidates
+## Кандидаты
 
-| ID | Category | Path/name | Status | Evidence | Risk | Proposed action |
+| ID | Категория | Путь/имя | Статус | Доказательство | Риск | Предлагаемое действие |
 | --- | --- | --- | --- | --- | --- | --- |
-| RC-01 | worktree | historical `assemble/*`, `release/*`, `hotfix/*` worktrees | unknown | 69 registered worktrees, many branches are stale or have gone upstream | high | Classify each worktree against its MR/release ownership before removal. |
-| RC-02 | documentation | legacy instructions outside `docs/` | dead-candidate | 95 canonical docs and `docs/delivery/README.md` exist; root untracked packs are ignored | medium | Link or mark historical; do not delete without inbound-link audit. |
-| RC-03 | artifacts | `apps/desktop/release-latest/` and local build outputs | user-owned | ignored build/release paths; no Git ownership | medium | Keep outside cleanup scope. |
-| RC-04 | code | legacy messaging/attachment compatibility paths | compatibility | canonical messaging service, ports, DB schema, migration script and tests reference the paths | critical | Preserve until documented adoption/rollback gate. |
-| RC-05 | tests | `MemoryStore` and fake media/mail/storage | active | referenced from API unit tests; integration tests separately exercise PostgreSQL/Redis | medium | Preserve. |
+| RC-01 | рабочее дерево | исторические `assemble/*`, `release/*`, `hotfix/*` рабочие деревья | неизвестно | 69 зарегистрированных рабочих деревьев, многие ветки устарели или были объединены с upstream | высокий | Классифицируйте каждое рабочее дерево по его принадлежности к MR/релизу перед удалением. |
+| RC-02 | документация | устаревшие инструкции вне `docs/` | мертвый кандидат | существует 95 канонических документов и `docs/delivery/README.md`; корневые непроиндексированные пакеты игнорируются | средний | Ссылка или отметка как историческое; не удалять без проверки входящих ссылок. |
+| RC-03 | артефакты | `apps/desktop/release-latest/` и локальные сборки | принадлежат пользователю | игнорируемые пути сборки/релиза; нет владения Git | средний | Оставить вне области очистки. |
+| RC-04 | код | пути совместимости устаревших сообщений/вложений | совместимость | канонический сервис сообщений, порты, схема БД, скрипт миграции и тесты ссылаются на эти пути | критично | Сохранять до документированного этапа принятия/отката. |
+| RC-05 | тесты | `MemoryStore` и поддельные медиа/почта/хранилище | активно | используется в модульных тестах API; интеграционные тесты отдельно проверяют PostgreSQL/Redis | средний | Сохранить. |
 
-## Gate
+## ворота
 
-No `dead-confirmed` code or dependency candidate is established by this audit. The next cleanup MR must name a single candidate, show runtime/build/test/CI/ops searches, and preserve rollback evidence.
+Ни один код или кандидат на зависимость `dead-confirmed` не установлен этим аудитом. Следующая очистка MR должна указать одного кандидата, показать поиски runtime/build/test/CI/ops и сохранить доказательства отката.

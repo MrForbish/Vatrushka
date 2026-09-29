@@ -15,7 +15,7 @@
 | Updater | ложное уведомление, dev URL, поломанный upgrade | да | feed contract | да | shell state | ready state | clean install + две предыдущие версии |
 | Release и migrations | destructive migration, неверная ветка/версия, mutable artifact | policy tests | полный migration chain | нет | installer в RC | нет | staging feed и rollback drill |
 
-## Viewport contract
+## Контракт оконного просмотра
 
 | Режим | Размер | Автоматическая проверка | Ожидаемое поведение |
 | --- | ---: | --- | --- |

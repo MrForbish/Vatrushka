@@ -1,7 +1,7 @@
-# Redacted infrastructure inventory contract
+# Засекреченный контракт на инвентаризацию инфраструктуры
 
-This directory contains metadata needed for delivery planning, never credentials or live secret values.
+Этот каталог содержит метаданные, необходимые для планирования доставки, но никогда не содержит учетных данных или действительных секретных значений.
 
-Each host record must state: role, lifecycle (`planned`, `active`, `retired`), environment, owner, public DNS aliases, private network identity/CIDR reference, deploy wrapper path, observability agent role, backup class and last audited date. Do not commit IP addresses unless they are intentionally public, passwords, private keys, `.env` contents, bucket credentials, database URLs or user personal data.
+Каждая запись хоста должна указывать: роль, жизненный цикл (`planned`, `active`, `retired`), среду, владельца, публичные DNS псевдонимы, идентификатор приватной сети/CIDR ссылку, путь развертывания обёртки, роль агента мониторинга, класс резервного копирования и дату последнего аудита. Не публикуйте IP-адреса, если они не являются намеренно публичными, пароли, приватные ключи, содержимое `.env`, учетные данные хранилища, URL базы данных или личные данные пользователей.
 
-The staging record remains `planned` until the new production migration and observation window are complete, then the former production VPS is intentionally retired and reinstalled.
+Запись staging остается `planned` до завершения нового окна миграции и наблюдения production, после чего предыдущий production VPS намеренно выводится из эксплуатации и переустанавливается.

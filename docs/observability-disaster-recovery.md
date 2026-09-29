@@ -1,4 +1,4 @@
-# Disaster recovery observability
+# Наблюдаемость восстановления после катастроф
 
 ## Цели
 

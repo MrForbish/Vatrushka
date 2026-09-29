@@ -1,4 +1,4 @@
-# Production observability
+# Production наблюдаемость
 
 Канонический production-контур работает на отдельной monitoring VPS: Prometheus,
 Grafana, Loki с S3 storage, Alloy, Alertmanager, Blackbox и exporters. Grafana
@@ -12,21 +12,21 @@ Dashboard/provisioning и alert rules находятся в `infra/observability
 Для практической трактовки метрик и состояний `0` / `Нет данных` используйте
 [руководство по метрикам](observability-metrics-guide.md).
 
-## Components and data
+## Компоненты и данные
 
-- API `/metrics`: bounded route templates, method/status class, request histogram, readiness, Node.js memory/CPU/event-loop lag, messaging/WebSocket/outbox counters;
-- `node_exporter`: host CPU, memory, disks, network and systemd;
-- cAdvisor: per-container CPU, memory, filesystem and network;
-- PostgreSQL/Redis exporters: connection, lock, transaction, memory, client, command and eviction signals;
-- blackbox exporter: public API/update-feed and LiveKit HTTPS probes, plus a TURN TLS probe;
-- Prometheus: 15-second scrape/evaluation, 15-day/5-GB default retention and provisioned alert rules;
-- Grafana: provisioned Prometheus datasource and `Vatrushka Production Overview` dashboard.
+- API `/metrics`: ограниченные шаблоны маршрутов, метод/класс статуса, гистограмма запросов, готовность, Node.js память/CPU/задержка event-loop, обмен сообщениями/WebSocket/outbox счетчики;
+- `node_exporter`: хост CPU, память, диски, сеть и systemd;
+- cAdvisor: информация по каждому контейнеру CPU, память, файловая система и сеть;
+- PostgreSQL/Redis экспортеры: сигналы подключения, блокировки, транзакции, памяти, клиента, команды и высвобождения;
+- экспортер blackbox: общедоступные датчики API/update-feed и LiveKit HTTPS, а также датчик TURN TLS;
+- Prometheus: 15-секундный сбор/оценка, стандартное хранение 15 дней/5 ГБ и заранее заданные правила оповещений;
+- Grafana: предоставлен источник данных Prometheus и панель управления `Vatrushka Production Overview`.
 
-Metrics must not contain email, user/server/channel IDs, message text, filenames, invite tokens or arbitrary URLs. HTTP `route` is the Fastify route template, not the requested path, so UUIDs cannot create unbounded series.
+Метрики не должны содержать адрес электронной почты, идентификаторы пользователей/серверов/каналов, текст сообщений, имена файлов, токены приглашений или произвольные URL. HTTP `route` — это шаблон маршрута Fastify, а не запрашиваемый путь, поэтому UUID не могут создавать неограниченные последовательности.
 
-## First deployment
+## Первое развертывание
 
-Run from the canonical `/opt/vatrushka` checkout after the ordinary PR has reached production:
+Запустите процесс проверки canonical `/opt/vatrushka` после того, как обычный PR достиг production:
 
 ```bash
 cd /opt/vatrushka/infra/observability
@@ -46,11 +46,11 @@ docker compose \
   -f docker-compose.yml up -d
 ```
 
-The production `.env` supplies existing PostgreSQL and Redis credentials only to their exporters. The Grafana password remains in the ignored `infra/observability/.env.observability` with mode `600`. Never paste rendered Compose output into logs because it contains interpolated secrets.
+production `.env` предоставляет существующие PostgreSQL и Redis учетные данные только их экспортерам. Пароль Grafana остается в игнорируемом `infra/observability/.env.observability` с режимом `600`. Никогда не вставляйте сгенерированный Compose вывод в журналы, потому что он содержит внедренные секреты.
 
-## Private access
+## Частный доступ
 
-Keep this tunnel open on the workstation:
+Держите этот туннель открытым на рабочей станции:
 
 ```powershell
 ssh -i C:\Users\Admin\.ssh\id_ed25519_vatrushka_server `
@@ -60,9 +60,9 @@ ssh -i C:\Users\Admin\.ssh\id_ed25519_vatrushka_server `
   codex@213.171.7.154
 ```
 
-Open `http://127.0.0.1:13002` for Grafana. Prometheus is available at `http://127.0.0.1:19090` only for diagnostics. Do not open ports `3002`, `9090`, `9100`, `8080`, `9187`, `9121` or `9115` in UFW/Timeweb firewall.
+Откройте `http://127.0.0.1:13002` для Grafana. Prometheus доступен на `http://127.0.0.1:19090` только для диагностики. Не открывайте порты `3002`, `9090`, `9100`, `8080`, `9187`, `9121` или `9115` в брандмауэре UFW/Timeweb.
 
-## Verification
+## Проверка
 
 ```bash
 curl -fsS http://127.0.0.1:9090/-/ready
@@ -75,20 +75,20 @@ curl -fsS https://api.myvatrushka.ru/metrics -o /dev/null -w '%{http_code}\n' # 
 
 In Prometheus, `up` must be `1` for all local jobs and `probe_success` must be `1` for HTTP, LiveKit and TURN probes. The deployment healthcheck requires the LiveKit and TURN probe series to exist, so a dashboard cannot silently degrade to `Нет метрик` because a blackbox module or target disappeared. The initial 0.6.3 capacity baseline recorded API/WebSocket/Redis/S3/LiveKit p95 comfortably inside budget; PostgreSQL p95 was `99.8 ms` against the initial `100 ms` budget, so connection/query/disk panels need particular attention.
 
-## Alerts and delivery
+## Оповещения и доставка
 
-Rules cover readiness, API 5xx/p95, outbox failure/age, Redis evictions/memory, PostgreSQL connection saturation, host disk and TLS expiry. They are visible immediately in Prometheus/Grafana. External notification delivery is intentionally not configured until a technical destination (SMTP, Telegram or another on-call channel) is selected; absence of a delivery receiver is shown in the roadmap and must not be confused with absence of alert evaluation.
+Правила охватывают готовность, API 5xx/p95, outbox сбои/возраст, Redis выселения/память, PostgreSQL насыщение соединений, диск хоста и TLS истечение срока. Они видны сразу в Prometheus/Grafana. Внешняя доставка уведомлений намеренно не настроена до выбора технического назначения (SMTP, Telegram или другой канал дежурного); отсутствие получателя доставки отображается в дорожной карте и не должно восприниматься как отсутствие оценки оповещений.
 
-Thresholds are conservative initial values. Review one week of production data before tightening them. Never hide a noisy alert without recording the measured baseline and the replacement threshold.
+Пороги являются консервативными начальными значениями. Просмотрите данные production за одну неделю перед их ужесточением. Никогда не скрывайте шумное оповещение без записи измеренной базовой линии и заменяющего порога.
 
-## Backup, retention and rollback
+## Резервное копирование, хранение и откат
 
-Prometheus retention is capped by both time and disk size. Grafana dashboards and datasource provisioning are versioned in the repository; only users/preferences live in `grafana_data`. Back up that named volume with the regular VPS backup cycle if UI-created preferences become important.
+Срок хранения Prometheus ограничен как по времени, так и по размеру диска. Панели управления и обеспечение источников данных Grafana версионируются в репозитории; только пользователи/настройки живут в `grafana_data`. Резервное копирование этого именованного тома следует выполнять с обычным циклом резервного копирования VPS, если предпочтения, созданные UI, становятся важными.
 
-Rollback does not touch application data:
+Откат не затрагивает данные приложения:
 
 ```bash
 docker compose --env-file ../../.env --env-file .env.observability -f docker-compose.yml down
 ```
 
-Named metric volumes remain unless explicitly removed. Never use `down -v` during a normal rollback.
+Названные метрические объемы остаются, если они явно не удалены. Никогда не используйте `down -v` во время обычного отката.
