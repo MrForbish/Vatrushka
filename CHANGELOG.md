@@ -1,507 +1,506 @@
-# Changelog
+# Журнал изменений
 
-All notable changes to Vatrushka are documented here. The project follows semantic versioning for desktop and API release artifacts.
+Все значимые изменения в Vatrushka задокументированы здесь. Проект использует семантическое версионирование для артефактов выпуска desktop и API.
 
-## [Unreleased]
+## [Не выпущено]
+
+## [0.8.40] - 2026-09-29
+
+### Документация
+
+- Вся отслеживаемая Markdown-документация переведена на русский язык.
+- Шаблоны Merge Request и проверки политики репозитория приведены в соответствие с русскими формулировками.
 
 ## [0.8.39] - 2026-09-28
 
-### Fixed
+### Исправлено
 
-- Coalesced concurrent desktop refresh calls to prevent accidental session revocation.
-- Restored direct private-S3 image delivery and retired the unavailable CDN path.
+- Объединены параллельные вызовы обновления desktop для предотвращения случайной отмены сессии.
+- Восстановлена прямая доставка личного изображения S3 и отключен недоступный путь CDN.
 
-### Documentation
+### Документация
 
-- Added current Home and server voice screenshots to README.
-- Refreshed reviewed Windows visual references without weakening comparison tolerances.
+- Добавлен текущий голос Home и сервера screenshots к README.
+- Обновлены проверенные Windows визуальные ссылки без ослабления допусков сравнения.
 
 ## [0.8.38] - 2026-07-30
 
-### Changed
+### Изменено
 
-- Moved notification-volume control to the profile notification settings and
-  replaced its former audio-settings card with camera controls.
+- Перенес управление громкостью уведомлений в настройки уведомлений профиля и
+заменила свою прежнюю карту настроек аудио на элементы управления камерой.
 - Renamed the audio readiness section to "Настройки звука".
 
-### Fixed
+### Исправлено
 
-- Applied a one-time migration of legacy local audio preferences to the
-  documented 50% defaults for microphone, output, screen share, and
-  notification volume. Future user selections remain persistent.
+- Применена однократная миграция устаревших локальных аудионастроек на
+зафиксированы 50% значений по умолчанию для микрофона, выхода, совместного использования экрана и громкости уведомлений. Будущие выборы пользователя сохраняются.
 
 ## [0.8.37] - 2026-07-29
 
-### Changed
+### Изменено
 
-- Removed the Hawk exception-monitoring integration from the API and desktop
-  client. Prometheus, Grafana, Loki, and structured application logs remain
-  the supported observability path.
+- Удалена интеграция мониторинга исключений Hawk из API и desktop
+клиент. Prometheus, Grafana, Loki и структурированные журналы приложений остаются поддерживаемым путем наблюдаемости.
 
-### Fixed
+### Исправлено
 
-- Removed the obsolete Hawk token validation and source-map publication gate
-  from Windows production packaging.
+- Удалена устаревшая проверка токена Hawk и механизм публикации source-map
+из упаковки Windows production.
 
 ## [0.8.36] - 2026-07-29
 
-### Changed
+### Изменено
 
-- Reworked profile settings into a unified three-column workspace for profile
-  data, presence, and notifications; its layout now adapts without widening
-  neighbouring settings panels.
-- Removed the obsolete global "Community" entry. Servers remain available from
-  their cards in the persistent global navigation.
+- Профильные настройки переработаны в единое рабочее пространство с тремя колонками для профиля
+данные, наличие и уведомления; его макет теперь адаптируется без расширения соседних панелей настроек.
+- Удалена устаревшая глобальная запись «Сообщество». Серверы остаются доступными с
+их карты в постоянной глобальной навигации.
 
-### Fixed
+### Исправлено
 
-- Kept quiet-hours start and end controls within their card at narrow widths.
-- Localized notification preference descriptions and moved the notification
-  center control clear of the Windows window controls.
-- Made Electron E2E cleanup reliably close its temporary app and API server so
-  failed tests do not leave local windows or background processes behind.
+- Контролы начала и конца тихих часов остаются в их карте при узкой ширине.
+- Локализованы описания предпочтений уведомлений и перемещено уведомление
+центр управления свободен от элементов управления окном Windows.
+- Заставил Electron E2E очистку надежно закрывать её временное приложение и API сервер, чтобы
+Проваленные тесты не оставляют локальные windows или фоновые процессы.
 
 ## [0.8.35] - 2026-07-29
 
-### Changed
+### Изменено
 
-- Unified the camera and screen-share stage in voice channels: participants can
-  switch between available streams, camera names remain readable without
-  redundant labels, and the selected media uses the available stage space.
-- Added a keyboard-accessible in-app full-screen media view. It preserves media
-  proportions and closes with Escape or the same control.
+- Объединили этап работы с камерой и демонстрацией экрана в голосовых каналах: участники могут
+переключаться между доступными потоками, имена камер остаются читаемыми без лишних меток, а выбранный медиафайл использует доступное пространство сцены.
+- Добавлен полноэкранный просмотр медиа в приложении с доступом с клавиатуры. Он сохраняет медиа
+пропорции и закрывается с помощью Escape или той же клавиши управления.
 
-### Fixed
+### Исправлено
 
-- Prevented a disabled camera track from leaving an empty black media tile.
-- Moved screen-share presenter context into the media stage and preserved its
-  visible controls on hover without clipping the shared image.
+- Предотвращено оставление пустого чёрного медиа-блока отключенной камерной дорожкой.
+- Переместил контекст демонстрации экрана ведущего на медиастадию и сохранил его
+видимые элементы управления при наведении без обрезки общего изображения.
 
 ## [0.8.34] - 2026-07-28
 
-### Added
+### Добавлено
 
-- Camera publishing and viewing in voice channels, governed by the new
-  `STREAM_VIDEO` permission.
+- Публикация и просмотр камеры в голосовых каналах, регулируемые новым
+`STREAM_VIDEO` разрешение.
 
-### Fixed
+### Исправлено
 
-- Classified the reviewed additive `STREAM_VIDEO` role-permission migration as
-  backward-compatible for immutable delivery manifests; all unreviewed
-  migrations remain blocked for manual review.
-- Stopped the root-owned deployment wrapper from continuing after an invalid
-  candidate-manifest parse.
+- Классифицировал проверенную миграцию разрешений-ролей добавки `STREAM_VIDEO` как
+обратно совместим с неизменяемыми манифестами доставки; все неизученные миграции остаются заблокированными для ручной проверки.
+- Остановлен запуск обертки развертывания, принадлежащей root, после возникновения ошибки
+анализ манифеста кандидата.
 
 ## [0.8.33] - 2026-07-28
 
-### Added
+### Добавлено
 
-- Voice-channel participants can publish camera video when their role grants
-  `STREAM_VIDEO`; the voice dock includes a persisted camera-device selector.
+- Участники голосового канала могут публиковать видеокамеру, когда их роль это разрешает
+`STREAM_VIDEO`; док с голосовым управлением включает постоянный селектор устройства камеры.
 
-### Fixed
+### Исправлено
 
-- The trusted Electron renderer can request Windows camera capture permission.
-- Returning to an active voice channel now works from user and server settings.
+- Доверенный Electron renderer может запросить разрешение на захват камеры Windows.
+- Возврат в активный голосовой канал теперь работает через настройки пользователя и сервера.
 
 ## [0.8.32] - 2026-07-27
 
-### Changed
+### Изменено
 
-- Added independent persisted input, output and notification-volume settings,
-  with distinct output/notification test cues and 50% defaults.
-- Profile and server media now use short-lived Secure Token URLs when the
-  private CDN origin is configured.
+- Добавлены независимые сохранённые настройки громкости ввода, вывода и уведомлений,
+с различными сигналами тестирования выхода/уведомления и 50% значений по умолчанию.
+- Профиль и медиасервер теперь используют краткоживущие URL-адреса с защищённым токеном, когда
+частный CDN источник сконфигурирован.
 
-### Fixed
+### Исправлено
 
-- Prevented reconnect from applying a reduced remote-audio gain before local
-  output settings are restored.
-- Kept successfully rendered avatars and covers visible while their refreshed
-  signed media URL loads.
-- Made microphone test capture explicitly stoppable.
+- Предотвращено повторное подключение с применением уменьшенного усиления удаленного аудио перед локальным
+Настройки вывода восстановлены.
+- Успешно оставлял видимыми сгенерированные аватары и обложки, пока они обновлялись
+подписанные медиа URL загружается.
+- Сделан микрофонный тест с возможностью явной остановки записи.
 
 ## [0.8.31] - 2026-07-26
 
-### Fixed
+### Исправлено
 
-- Prevented optional microphone gain processing from dereferencing an absent
-  LiveKit WebAudio context. Voice connection now keeps the microphone enabled
-  and transparently skips local gain until the context is available.
+- Предотвращена обработка дополнительного усиления микрофона с разыменованием отсутствующего объекта
+LiveKit Контекст WebAudio. Голосовое соединение теперь сохраняет включённый микрофон и прозрачно пропускает локальное усиление до того момента, пока контекст не станет доступен.
 
 ## [0.8.30] - 2026-07-26
 
-### Fixed
+### Исправлено
 
-- Restored microphone activation by attaching the optional local gain processor
-  only after LiveKit assigns the track its audio context. A gain-processing
-  failure now preserves a working microphone and is recorded diagnostically.
+- Восстановлена активация микрофона с подключением дополнительного локального усилителя
+только после того, как LiveKit назначает дорожке её аудиоконтекст. Сбой обработки усиления теперь сохраняет рабочий микрофон и записывается диагностически.
 
-### Changed
+### Изменено
 
-- Restored the standard 0–100% microphone range. Notification sound volume is
-  now a separate local setting, defaulting to 60%.
+- Восстановлен стандартный диапазон микрофона 0–100%. Громкость звука уведомления
+теперь отдельная локальная настройка с значением по умолчанию 60%.
 
 ## [0.8.29] - 2026-07-26
 
-### Changed
+### Изменено
 
-- Added independent microphone and output-volume controls that stay in sync
-  between local audio settings and the voice-channel device menus.
-- Registration now requires a unique username; the existing seven-day rename
-  limit is enforced consistently.
-- The notification center displays the installed application version.
+- Добавлены независимые регуляторы микрофона и громкости выхода, которые остаются синхронизированными
+между локальными аудионастройками и меню устройств голосового канала.
+- Регистрация теперь требует уникальное имя пользователя; существующее семидневное переименование
+предел соблюдается последовательно.
+- Центр уведомлений отображает установленную версию приложения.
 
-### Fixed
+### Исправлено
 
-- Normalized structured and fallback log ingestion, including JSON parsing
-  diagnostics in the Logs overview dashboard.
-- Profile avatars and covers refresh without restarting the client and retain
-  the last successfully loaded image during a transient load failure.
+- Нормализованный структурированный и резервный сбор логов, включая разбор JSON
+диагностика на панели обзора журналов.
+- Аватары и обложки профиля обновляются без перезапуска клиента и сохраняются
+последнее успешно загруженное изображение во время временного сбоя загрузки.
 
 ## [0.8.28] - 2026-07-26
 
-### Fixed
+### Исправлено
 
-- Normalize updater inbox file modes on the receiving production host before
-  the root-owned publication wrapper validates and promotes them.
+- Нормализовать режимы файлов входящей почты updater на принимающем хосте production перед
+оболочка публикации, принадлежащей корню, проверяет их и продвигает.
 
 ## [0.8.27] - 2026-07-26
 
-### Fixed
+### Исправлено
 
-- Restored the production PostgreSQL backup driver by importing the operating
-  system module used to set its protected backup-directory permissions.
+- Восстановлен резервный драйвер production PostgreSQL путем импорта операционной системы
+системный модуль, используемый для установки разрешений защищённого каталога резервного копирования.
 
 ## [0.8.26] - 2026-07-26
 
-### Fixed
+### Исправлено
 
-- Hotfix branches now publish immutable delivery candidates before their
-  protected tag pipeline promotes the reviewed merge parent.
+- Hotfix ветки теперь публикуют неизменяемые кандидаты на доставку перед их
+защищённый тег pipeline продвигает проверенного родителя слияния.
 
 ## [0.8.25] - 2026-07-26
 
-### Fixed
+### Исправлено
 
-- preserves the root-owned updater publication contract by normalizing all
-  staged Windows feed inputs to non-writable artifact modes before transfer;
-- binds the protected production candidate job to the dedicated Linux runner,
-  validates normalized Observer SSH material, and corrects root-owned
-  candidate-manifest permissions;
-- refreshes the deterministic Windows compact-shell visual baseline after a
-  verified 24-pixel rendering drift on the self-managed runner.
+- сохраняет корневой договор публикации, принадлежащий updater, путем нормализации всего
+подготовленные Windows входные данные для невоспроизводимых режимов артефактов перед передачей;
+- привязывает защищённую кандидатскую задачу production к выделенному исполнителю Linux,
+проверяет нормализованный материал Observer SSH и исправляет права кандидата-манифеста, принадлежащие корню;
+- обновляет детерминированную компактную оболочку визуальной базовой линии Windows после
+проверено дрейфирование рендеринга на 24 пикселя на самоуправляемом раннере.
 
 ## [0.8.24] - 2026-07-26
 
-### Fixed
+### Исправлено
 
-- normalizes the Windows-generated desktop checksum sidecar before protected Linux tag validation;
-- keeps candidate checksum verification strict and uses the dedicated production CI deploy key before any production preflight.
+- нормализует побочный файл контрольной суммы desktop, сгенерированной Windows, перед проверкой защищённого тега Linux;
+- поддерживает строгую проверку контрольной суммы кандидата и использует выделенный ключ развертывания production CI перед любой предварительной проверкой production.
 
 ## [0.8.23] - 2026-07-26
 
-### Fixed
+### Исправлено
 
-- makes protected-tag checksum validation portable to the Alpine/BusyBox runner and normalizes protected SSH key material before production preflight;
-- preserves immutable candidate promotion, checksum verification and the stable-updater final gate without changing application, database, Redis or media contracts.
+- делает проверку контрольной суммы защищенного тега переносимой на выполнителе Alpine/BusyBox и нормализует защищенные ключевые материалы SSH перед предварительной проверкой production;
+- сохраняет неизменное продвижение кандидата, проверку контрольной суммы и стабильный финальный этап updater без изменения приложения, базы данных, Redis или медиа-контрактов.
 
 ## [0.8.22] - 2026-07-25
 
-### Changed
+### Изменено
 
-- delivers the first immutable infrastructure migration candidate: API image and Windows installer are built from the release candidate SHA and promoted by the protected tag without rebuilding;
-- deploys the approved candidate through root-owned, checksum-verified runtime wrappers, with PostgreSQL backup, readiness, smoke and Observer verification before stable updater publication;
-- keeps the stable updater manifest as the final exposure gate and leaves database, Redis and media contracts unchanged.
+- доставляет первого кандидата на миграцию с неизменяемой инфраструктурой: образ API и установщик Windows собраны из кандидата на выпуск SHA и продвигаются с помощью защищенного тега без пересборки;
+- разворачивает утвержденного кандидата через обертки runtime, принадлежащие root и проверенные контрольной суммой, с резервным PostgreSQL, проверкой готовности, smoke-тестами и проверкой Observer перед стабильной публикацией updater;
+- сохраняет стабильный updater в качестве конечного шлюза экспозиции и оставляет базу данных, Redis и медиа-контракты без изменений.
 
 ## [0.8.21] - 2026-07-24
 
-### Changed
+### Изменено
 
-- recomposes the desktop UI around the Vatrushka UI Kit: global navigation, Home, server and direct-message workspaces, notification center, settings, authentication and responsive controls;
-- preserves the API/shared contracts, permissions, authentication lifecycle, WebSocket/reconnect, LiveKit/media architecture and Electron preload boundary;
-- refreshes Storybook coverage, visual baselines and Electron end-to-end paths for the new semantic UI structure.
+- рекомпозирует desktop UI вокруг Vatrushka UI набора: глобальная навигация, Главная, рабочие пространства сервера и прямых сообщений, центр уведомлений, настройки, аутентификация и адаптивные элементы управления;
+- сохраняет API/совместные контракты, разрешения, жизненный цикл аутентификации, WebSocket/переподключение, LiveKit/медиа-архитектуру и границу предварительной загрузки Electron;
+- обновляет покрытие Storybook, визуальные базовые линии и Electron сквозные пути для новой семантической структуры UI.
 
 ## [0.8.20] - 2026-07-22
 
-### Changed
+### Изменено
 
-- removes confirmed unused legacy authentication preview, benefits and responsive CSS after the V2 UI Kit migration; active authentication and profile scenarios are unchanged.
+- удаляет подтверждённый неиспользуемый предварительный просмотр устаревшей аутентификации, преимущества и отзывчивый CSS после миграции набора V2 UI; активная аутентификация и сценарии профиля остаются без изменений.
 
 ## [0.8.19] - 2026-07-22
 
-### Changed
+### Изменено
 
-- aligns the live Server and direct-message workspace with the V2 UI Kit: denser four-rail layout, message stage and composer, real conversation search, avatar-aware conversation header and notification control;
-- preserves the existing API, shared contracts, permissions, authentication, WebSocket/reconnect, LiveKit/media and Electron preload boundaries;
-- refreshes the affected Storybook visual baselines and keeps the virtualized message list deterministic.
+- согласовывает живой сервер и рабочее пространство прямых сообщений с V2 UI комплектом: более плотная четырехрельсовая компоновка, этап сообщений и композитор, поиск реальных разговоров, заголовок разговора с учетом аватара и контроль уведомлений;
+- сохраняет существующие API, совместные контракты, разрешения, аутентификацию, WebSocket/повторное подключение, LiveKit/медиа и границы предварительной загрузки Electron;
+- обновляет затронутые Storybook визуальные базовые линии и поддерживает детерминированность виртуализированного списка сообщений.
 
 ## [0.8.18] - 2026-07-22
 
-### Changed
+### Изменено
 
-- introduces the first V2 UI Kit slice: shared foundations, application shell, system toolbar, profile card, portal-safe overlays and unified avatar/community branding;
-- refreshes the personal Home dashboard with existing active-space and friends-in-game data while preserving its API and navigation contracts;
-- makes AppShell Storybook visual scenarios deterministic without weakening the interaction coverage for drawers and keyboard dismissal.
+- представляет первый срез набора V2 UI: общие основы, оболочка приложения, панель инструментов системы, карточка профиля, безопасные для портала наложения и единый брендинг аватара/сообщества;
+- обновляет личную панель Home с существующими данными активного пространства и друзей в игре, при этом сохраняя её API и контракты навигации;
+- делает визуальные сценарии AppShell Storybook детерминированными без ослабления покрытия взаимодействия для ящиков и отклонения клавиатуры.
 
 ## [0.8.17] - 2026-07-22
 
-### Fixed
+### Исправлено
 
-- preserves protected Hawk integration tokens during Windows release packaging instead of replacing them with literal self-references in GitLab CI;
-- validates the inherited Desktop Main and Renderer Hawk tokens before packaging, while exporting renderer-only build aliases at runtime without logging secrets.
+- сохраняет защищённые токены интеграции Hawk во время упаковки выпуска Windows вместо того, чтобы заменять их буквальными самоссылками в GitLab CI;
+- проверяет унаследованные токены Desktop Main и Renderer Hawk перед упаковкой, при этом экспортируя только renderer алиасы сборки на runtime без записи секретов.
 
 ## [0.8.16] - 2026-07-22
 
-### Fixed
+### Исправлено
 
-- makes Hawk source-map upload verifiable for Desktop Main and Renderer instead of allowing a release package to succeed after a hidden upload failure;
-- publishes API source maps with the immutable API release while keeping Hawk outages outside the API availability path.
+- делает загрузку карт исходников Hawk проверяемой для Desktop Main и Renderer, вместо того чтобы позволять успешное создание релизного пакета после скрытой ошибки загрузки;
+- публикует API исходные карты с неизменяемым API выпуском, при этом поддерживая сбои Hawk вне пути доступности API.
 
 ## [0.8.15] - 2026-07-22
 
-### Fixed
+### Исправлено
 
-- passes the immutable release tag to the Desktop Renderer Hawk catcher, so new events no longer use `unknown` as their release;
-- adds a CI contract test and release configuration documentation for the Renderer Hawk metadata.
+- передаёт неизменяемый тэг релиза в Desktop Renderer ловца Hawk, так что новые события больше не используют `unknown` в качестве своего релиза;
+- добавляет тест контракта CI и документацию по настройке релиза для метаданных Hawk Renderer.
 
 ## [0.8.14] - 2026-07-22
 
-### Fixed
+### Исправлено
 
-- prevents an incomplete offline Home cache from crashing the network-unavailable notification;
-- avoids clearing or briefly replacing the current server channel or direct conversation when it is selected again;
-- switches from a server channel before deletion and uses the styled application confirmation dialog;
-- restores an interactable `2560 × 1440 · 60 FPS` screen-share preset by placing its portalled menu above the source-picker modal.
+- предотвращает сбой уведомления о недоступности сети из-за неполного офлайн-кэша Домашней страницы;
+- избегает очистки или краткой замены текущего серверного канала или прямого разговора при его повторном выборе;
+- переключается с канала сервера перед удалением и использует оформленный диалог подтверждения приложения;
+- восстанавливает интерактивный `2560 × 1440 · 60 FPS` пресет совместного использования экрана, размещая его портальное меню поверх модального окна выбора источника.
 
 ## [0.8.13] - 2026-07-21
 
-### Fixed
+### Исправлено
 
-- fixes the production Alloy API scrape timeout so it is shorter than the 5-second interval and telemetry can start.
+- исправляет тайм-аут сканирования production Alloy API, чтобы он был короче 5-секундного интервала и телеметрия могла начать работу.
 
 ## [0.8.12] - 2026-07-21
 
-### Fixed
+### Исправлено
 
-- restores the versioned TURN TLS blackbox module and adds a public LiveKit HTTPS probe, so availability panels have an explicit data source;
-- makes `/opt/vatrushka` the canonical production runtime whenever its operator-owned `.env` exists, preventing a release directory from silently using a different configuration;
-- fails a production deploy when Hawk is enabled in the runtime configuration but the API reporter is not actually active.
+- восстанавливает версионный TURN TLS модуль черного ящика и добавляет публичный LiveKit HTTPS зонд, чтобы панели доступности имели явный источник данных;
+- делает `/opt/vatrushka` каноническим production runtime, когда существует его оператором принадлежащий `.env`, предотвращая тихое использование другой конфигурации в каталоге выпуска;
+- не удается выполнить развертывание production, когда Hawk включен в конфигурации runtime, но репортер API фактически не активен.
 
 ## [0.8.11] - 2026-07-20
 
-### Fixed
+### Исправлено
 
-- fixes Grafana LogQL selectors for the "All" filter value and removes the invalid Loki compactor pseudo-timestamp;
-- clarifies container, Redis and HTTP observability panels and refreshes the product metrics agent as part of a production deployment;
-- restores uploaded profile and server media across settings, navigation and workspace cards;
-- makes the initial text-channel scroll position reliably land on the latest messages and refines Help and application scrollbars;
-- adds safe Hawk reporter enabled/attempt diagnostics without exposing telemetry secrets.
+- исправляет Grafana селекторы LogQL для значения фильтра "Все" и удаляет недопустимый Loki псевдо-временную метку компактора;
+- уточняет контейнер, панели наблюдаемости Redis и HTTP и обновляет агент метрик продукта в рамках развертывания production;
+- восстанавливает загруженный профиль и серверные медиа в настройках, навигации и карточках рабочего пространства;
+- делает так, чтобы начальная позиция прокрутки текстового канала надёжно оказывалась на последних сообщениях, и улучшает полосы прокрутки справки и приложения;
+- добавляет безопасный репортер Hawk с включенной/попыткой диагностики без раскрытия секретов телеметрии.
 
 ## [0.8.10] - 2026-07-20
 
-### Fixed
+### Исправлено
 
-- fixes the Hawk-token preflight in Windows release packaging: it now runs with PowerShell syntax before the package build.
+- исправляет предварительную проверку токена Hawk в сборке релиза Windows: теперь она выполняется с синтаксисом PowerShell перед сборкой пакета.
 
 ## [0.8.9] - 2026-07-20
 
-### Fixed
+### Исправлено
 
-- the unread divider no longer appears for the current user's own message or in an already open conversation;
-- restores the explicit 2560 × 1440 / 60 FPS screen-share quality choice;
-- Home, server and direct-message surfaces consistently resolve uploaded server covers, server avatars and profile avatars;
-- removes the application-window fullscreen control; fullscreen remains available only for screen-share viewing;
-- enables actionable Hawk runtime error capture and validates the protected release token before packaging.
+- Разделитель непрочитанных больше не отображается для сообщения самого пользователя или в уже открытом разговоре;
+- восстанавливает явный выбор качества совместного использования экрана 2560 × 1440 / 60 FPS;
+- Главная страница, сервер и поверхности прямых сообщений последовательно отображают загруженные обложки серверов, аватары серверов и аватары профиля;
+- удаляет управление полноэкранным режимом окна приложения; полноэкранный режим остается доступным только для просмотра общего экрана;
+- обеспечивает возможность захвата объектов ошибок Hawk runtime и проверяет защищённый токен выпуска перед упаковкой.
 
-### Added
+### Добавлено
 
-- configurable local volume for Vatrushka cues: voice join/leave, screen-share start/stop, message and ready-to-install update notifications;
-- a manual update check in the Notification Center.
+- настраиваемая локальная громкость для сигналов Vatrushka: присоединение/выход голоса, начало/остановка демонстрации экрана, уведомления о сообщениях и готовности к установке обновлений;
+- ручная проверка обновлений в Центре уведомлений.
 
-### Fixed
+### Исправлено
 
-- screen-share source selection no longer rejects a valid first selection because a second desktop-source enumeration raced with window lifecycle;
-- only participants already present in a voice channel can be dragged between voice channels; regular/offline member rows are no longer drag sources;
-- presence on the central voice stage now uses the same realtime status as member lists and profile surfaces.
-- background update checks stay quiet during a local network outage and distinguish it from an update-service outage when the user runs a manual check.
+- выбор источника совместного использования экрана больше не отклоняет первый допустимый выбор из-за того, что второе desktop-перечисление источников выполнялось параллельно с жизненным циклом окна;
+- только участники, уже находящиеся в голосовом канале, могут быть перемещены между голосовыми каналами; обычные/неактивные участники больше не являются источниками для перетаскивания;
+- Присутствие на центральной сцене голосов теперь использует ту же самую статусную информацию в реальном времени, что и списки участников и профили.
+- проверки обновлений в фоновом режиме остаются незаметными во время отключения локальной сети и отличают это от сбоя службы обновлений, когда пользователь запускает ручную проверку.
 
 ## [0.8.8] - 2026-07-20
 
-### Fixed
+### Исправлено
 
-- Observability deployment health checks now wait for recreated Prometheus, Loki, Grafana and active targets instead of failing on their expected short startup window.
+- Проверки состояния развертывания наблюдаемости теперь ожидают повторно созданные Prometheus, Loki, Grafana и активные цели вместо того, чтобы завершаться с ошибкой из-за их ожидаемого короткого периода запуска.
 
 ## [0.8.7] - 2026-07-20
 
-### Fixed
+### Исправлено
 
-- Observability deployment now force-recreates configuration-bound services, ensuring changed Prometheus rules, Grafana dashboards, Alloy and Loki configuration are loaded during the release instead of merely copied to the VPS.
+- Развертывание Observability теперь принудительно воссоздает сервисы, привязанные к конфигурации, гарантируя, что измененные правила Prometheus, панели мониторинга Grafana, Alloy и конфигурация Loki загружаются во время выпуска, а не просто копируются в VPS.
 
 ## [0.8.6] - 2026-07-20
 
-### Fixed
+### Исправлено
 
-- Voice and screen-share gauges are refreshed from their authoritative operational stores on every internal metrics scrape, so an API restart no longer leaves the dashboards at a stale zero until the next media event.
-- Central Prometheus now alerts when product telemetry disappears from the cross-VPS ingestion path even while the public API remains reachable.
+- Индикаторы голоса и совместного доступа к экрану обновляются из их авторитетных рабочих хранилищ при каждом внутреннем опросе метрик, поэтому перезапуск API больше не оставляет панели управления с устаревшим нулём до следующего медийного события.
+- Центральный Prometheus теперь предупреждает, когда телеметрия продукта исчезает с пути инжестирования cross-VPS, даже если публичный API остается доступным.
 
 ## [0.8.5] - 2026-07-20
 
-### Fixed
+### Исправлено
 
-- observability deployment now explicitly receives the release-version artifact from tag verification, preventing an empty version from reaching the monitoring deployment script.
+- Развертывание наблюдаемости теперь явно получает артефакт версии выпуска из проверки тега, предотвращая попадание пустой версии в скрипт развертывания мониторинга.
 
 ## [0.8.4] - 2026-07-20
 
-### Fixed
+### Исправлено
 
-- production and observability deployment scripts now execute on the VPS through non-interactive sudo, allowing the deployment user to update the root-owned runtime tree safely.
+- Скрипты развертывания production и observability теперь выполняются на VPS через неинтерактивный sudo, что позволяет пользователю развертывания безопасно обновлять дерево runtime, принадлежащее root.
 
 ## [0.8.3] - 2026-07-20
 
-### Fixed
+### Исправлено
 
-- production SSH deployment jobs now declare the protected `production` environment, allowing GitLab to expose only the intended environment-scoped SSH variables.
+- Задачи развертывания production SSH теперь объявляют защищённую среду `production`, позволяя GitLab раскрывать только предназначенные переменные SSH, ограниченные этой средой.
 
 ## [0.8.2] - 2026-07-20
 
-### Fixed
+### Исправлено
 
-- production deployment jobs now pull their SSH runtime image through the GitLab Dependency Proxy, avoiding Docker Hub rate-limit failures before deployment begins.
+- Задачи развертывания production теперь загружают их SSH runtime образ через GitLab Dependency Proxy, избегая сбоев ограничения скорости Docker Hub перед началом развертывания.
 
 ## [0.8.1] - 2026-07-20
 
-### Fixed
+### Исправлено
 
-- Loki dashboard queries now retain a non-empty stream selector when every filter is set to `All`, so the Logs Overview dashboard opens without a LogQL parse error.
+- Запросы панели управления Loki теперь сохраняют непустой селектор потока, когда каждый фильтр установлен на `All`, поэтому панель Обзор журналов открывается без ошибки разбора LogQL.
 
-### Operations
+### Операции
 
-- adds opt-in Hawk error monitoring for the API, Electron Main process and renderer, with source-map upload restricted to protected CI credentials and pseudonymised user context.
+- добавляет возможность добровольного мониторинга ошибок Hawk для главного процесса API, Electron и renderer, при этом загрузка source-map ограничена защищёнными учётными данными CI и псевдонимизированным пользовательским контекстом.
 
 ## [0.8.0] - 2026-07-20
 
-### Added
+### Добавлено
 
-- provisioned product dashboards for realtime messaging, voice and screen sharing, PostgreSQL, Redis, private S3, email delivery, authentication and external probes;
-- bounded application metrics for WebSocket lifecycle, login outcomes, LiveKit webhooks, screen-share leases, S3 operations and in-flight HTTP requests;
-- actionable alerts for realtime reconnect bursts, messaging errors, voice projection drift, screen-share conflicts, S3 failures and login failure bursts.
-- a provisioned `Service Health & SLO` dashboard now tracks public API/update/TURN availability, 30-day success and latency objectives, error budgets, dependencies, alerts and deployed build metadata.
-- Prometheus health now exposes down targets, scrape and rule budgets, series churn, TSDB/WAL, Alertmanager delivery and remote-write state.
-- structured Loki dashboards now use normalized bounded log levels, query-time correlation fields and an end-to-end Loki canary instead of text-only error matching.
-- Russian infrastructure and container dashboards now cover host freshness, CPU/iowait, normalized load, swap, disks/inodes, I/O, network errors, clock skew, container limits, throttling, restarts and OOM events.
-- Russian Grafana dashboards for the application and detailed HTTP diagnostics now separate 2xx/3xx/4xx/5xx traffic, latency quantiles and bounded route/error breakdowns, with matching Prometheus recording rules and SLO alerts.
+- обеспечил панели мониторинга продуктов для обмена сообщениями в реальном времени, голосовой связи и совместного использования экрана, PostgreSQL, Redis, частной S3, доставки электронной почты, аутентификации и внешних зондов;
+- ограниченные метрики приложения для жизненного цикла WebSocket, результатов входа в систему, вебхуков LiveKit, аренды общего экрана, операций S3 и выполняющихся запросов HTTP;
+- действующие оповещения о всплесках повторного подключения в реальном времени, ошибках обмена сообщениями, отклонении голосовой проекции, конфликтах при совместном использовании экрана, сбоях S3 и всплесках неудачных попыток входа.
+- обеспеченная `Service Health & SLO` панель теперь отслеживает доступность публичного API/update/TURN, показатели успешности и задержки за 30 дней, бюджеты ошибок, зависимости, оповещения и метаданные развернутых сборок.
+- Prometheus здоровье теперь подвергает угрозе цели, соскребает и управляет бюджетами, меняет серии, TSDB/WAL, Alertmanager доставку и удалённое состояние записи.
+- структурированные Loki панели теперь используют нормализованные ограниченные уровни логов, поля корреляции во время запроса и сквозную Loki канарейку вместо сопоставления ошибок только по тексту.
+- Инфраструктура и панели контейнеров в России теперь охватывают актуальность хоста, CPU/iowait, нормализованную нагрузку, swap, диски/inodes, I/O, сетевые ошибки, рассинхронизацию часов, ограничения контейнеров, троттлинг, перезапуски и события OOM.
+- Русские Grafana панели для приложения и подробная HTTP диагностика теперь разделяют трафик 2xx/3xx/4xx/5xx, квантиле задержки и ограниченные разбиения по маршруту/ошибкам, с соответствующими правилами записи Prometheus и оповещениями SLO.
 - автор демонстрации может рисовать синхронные аннотации поверх видео, выбирать цвет и толщину, отменять последний штрих и очищать слой; координаты одинаково масштабируются у всех зрителей и сбрасываются вместе с media-сессией;
 
-### Fixed
+### Исправлено
 
-- avatars now use one round masked component with a stable fallback, profile media controls stay aligned, and avatar uploads include a move/zoom crop preview before upload;
-- signed S3 image URL refreshes are preloaded without blank flashes, while server icon, cover and accent changes immediately invalidate Home data and update navigation/voice cards;
-- the profile preview keeps the avatar above the cover, and the shared status menu is available from Home with outside-click and Escape dismissal;
-- messaging now keeps chronological bottom-anchored history, reports messages received below the viewport, clears canonical unread state after acknowledgement and performs a single bounded highlight when opening a notification;
-- the composer accepts pasted clipboard images, provides an accessible emoji picker and English emoji shortcodes, linkifies safe HTTP(S) URLs through validated Electron IPC and removes the inactive microphone action;
-- direct conversations, message authors and notification actors now render current profile avatars through normalized authenticated media URLs;
-- client update progress and restart actions now live in one deduplicated Notification Center entry instead of a floating bottom-right overlay;
-- the shared desktop shell now provides synchronized F11/UI fullscreen controls, a confirmation before logout, the canonical Vatrushka brand mark and a responsive Home support rail;
-- Gaming Home keeps the current confirmed voice session at the top of Quick Return, and the retired Spaces navigation action is removed;
-- Windows packaging deterministically generates a multi-resolution 32-bit application icon from the tracked brand asset;
-- voice mute/deafen/speaking state now propagates through the authenticated API, Redis projection and realtime server UI; undeafen restores the microphone only when it was enabled before deafen;
-- Gaming Home shows measured WebRTC RTT, and an active voice connection prevents false automatic idle presence;
-- voice-channel invites provide visible clipboard feedback, member moderation is hidden behind a context menu, and device selects flip/fit inside the current viewport;
-- screen sharing now tolerates transient heartbeat/network failures, keeps authoritative lease conflicts deterministic and records bounded heartbeat diagnostics;
-- remote audio tracks are reattached after a LiveKit reconnect and desktop media diagnostics include safe session/correlation context;
-- voice-state reads no longer synchronously poll LiveKit, preventing a transient RoomService failure from becoming an API 500;
-- Windows system-audio capture uses a compatible `restrictOwnAudio` constraint and refuses an unsafe stream when Chromium cannot exclude Vatrushka output;
-- production observability no longer sends Loki internal gRPC through the egress proxy, probes TURN with a real TLS handshake and avoids the AppArmor-incompatible systemd collector.
-- Loki health diagnostics no longer depend on obsolete BoltDB Shipper metrics while the production store uses TSDB/S3.
-- cAdvisor metrics expose a canonical bounded `container` label, and restart alerts now use changes of the start-time gauge instead of an invalid counter increase.
+- Аватары теперь используют один круглой формы маскированный компонент с стабильным запасным вариантом, элементы управления медиа профиля остаются выровненными, а загрузка аватаров включает предварительный просмотр обрезки с перемещением/масштабированием перед загрузкой;
+- Подписанные обновления изображений S3 URL загружаются заранее без пустых вспышек, в то время как изменения значков сервера, обложки и акцента сразу же аннулируют данные главной страницы и обновляют навигационные/голосовые карточки;
+- предварительный просмотр профиля держит аватар выше обложки, а меню общего статуса доступно с главной страницы с возможностью закрытия кликом вне и клавишей Escape;
+- Обмен сообщениями теперь сохраняет хронологическую историю с привязкой к нижней части, сообщает о сообщениях, полученных ниже области просмотра, очищает каноническое состояние непрочитанных после подтверждения и выполняет одно ограниченное выделение при открытии уведомления;
+- композитор принимает вставленные изображения из буфера обмена, предоставляет доступный выбор эмодзи и английские короткие коды эмодзи, преобразует безопасные URL-адреса HTTP(S) в ссылки через проверенные Electron IPC и удаляет неактивное действие микрофона;
+- Прямые разговоры, авторы сообщений и участники уведомлений теперь отображают текущие аватары профиля через нормализованные аутентифицированные URL-адреса медиа.
+- обновление клиента и действия по перезапуску теперь отображаются в одной объединённой записи Центра уведомлений, а не во всплывающем окне в правом нижнем углу;
+- общая оболочка desktop теперь предоставляет синхронизированные полноэкранные элементы управления F11/UI, подтверждение перед выходом из системы, каноническую бренд-марку Vatrushka и адаптивную панель поддержки на главной странице;
+- Gaming Home удерживает текущую подтверждённую голосовую сессию в верхней части Quick Return, а устаревшее действие навигации Spaces удалено;
+- Windows упаковка детерминированно создает многорезолюционную 32-битную иконку приложения из отслеживаемого бренд-актива;
+- состояние голосового отключения/оглушения/речи теперь распространяется через аутентифицированный API, Redis проекцию и сервер реального времени UI; включение звука возвращает микрофон только тогда, когда он был включен до оглушения;
+- Игровой дом показывает измеренный WebRTC RTT, и активное голосовое соединение предотвращает ложное автоматическое присутствие в режиме ожидания;
+- Приглашения в голосовой канал предоставляют видимую обратную связь с буфером обмена, модерация участников скрыта за контекстным меню, а выбор устройства выполняет переворот/подгонку внутри текущей области просмотра;
+- совместное использование экрана теперь допускает временные сбои сигналов/сети, сохраняет детерминированность конфликтов авторитетных аренд и записывает ограниченные диагностические данные сигналов;
+- удалённые аудиотреки повторно присоединяются после повторного подключения LiveKit и диагностика медиа desktop включает безопасный контекст сеанса/корреляции;
+- voice-state больше не синхронно опрашивает LiveKit, предотвращая превращение временного сбоя RoomService в API 500;
+- Захват системного аудио Windows использует совместимое ограничение `restrictOwnAudio` и отклоняет небезопасный поток, когда Chromium не может исключить вывод Vatrushka;
+- production наблюдаемость больше не отправляет Loki внутренний gRPC через egress-прокси, проверяет TURN с реальным рукопожатием TLS и избегает несовместимого с AppArmor сборщика systemd.
+- Loki диагностика здоровья больше не зависит от устаревших метрик BoltDB Shipper, в то время как хранилище production использует TSDB/S3.
+- Метрики cAdvisor отображают каноническую ограниченную метку `container`, а уведомления о перезапуске теперь используют изменения датчика времени запуска вместо некорректного увеличения счетчика.
 
 ## [0.7.0] - 2026-07-19
 
-### Added
+### Добавлено
 
-- LiveKit-confirmed realtime voice presence with Redis projection, versioned snapshots, reconciliation and self/moderator drag-and-drop moves;
-- Gaming Home with compact voice health, quick return, active voice spaces and permission-filtered social activity;
-- redesigned gaming authentication shell with the final Vatrushka logo, approved background and functional session-only sign-in;
-- reproducible Prometheus, Grafana, Loki, Alertmanager, Blackbox and agent configuration for the dedicated observability platform;
-- public server visibility, profile/server media and durable email delivery through the transactional outbox.
+- LiveKit — подтвержденное реальное присутствие голоса с проекцией Redis, версионированными снимками, сверкой и перемещениями перетаскиванием для себя/модератора;
+- Игровой дом с компактным голосовым здоровьем, быстрой отдачей, активными голосовыми пространствами и социальной активностью с фильтрацией по разрешениям;
+- переосмысленная оболочка аутентификации для игр с финальным логотипом Vatrushka, утвержденным фоном и функциональным входом только на сеанс;
+- воспроизводимые Prometheus, Grafana, Loki, Alertmanager, конфигурация Blackbox и агента для специализированной платформы наблюдения;
+- публичная видимость сервера, медиа профиля/сервера и надёжная доставка электронной почты через транзакционный outbox.
 
-### Changed
+### Изменено
 
-- Home now keeps exactly four central gaming blocks and removes the retired welcome/onboarding/recent-activity UI;
-- screen sharing and voice movement wait for authoritative LiveKit state instead of optimistic client state;
-- Windows title bar, updater discovery, temporary E2E profiles and responsive Storybook coverage are hardened;
-- canonical product, technical, testing, deployment and roadmap documentation reflects the 0.7 architecture.
+- Теперь на главной странице хранится ровно четыре центральных блока игр и удаляется устаревший блок приветствия/онбординга/недавней активности UI.
+- совместное использование экрана и движение голоса ожидают авторитетного состояния LiveKit, а не оптимистичного состояния клиента;
+- Панель заголовка Windows, обнаружение updater, временные профили E2E и адаптивное покрытие Storybook защищены;
+- Каноническая документация по продукту, техническая, тестированию, развертыванию и дорожной карте отражает архитектуру 0.7.
 
-### Fixed
+### Исправлено
 
-- screen sharing no longer falls back to unsafe system-audio capture and validates actual media presence before participant moves;
-- notification email delivery is durable and idempotent;
-- Home realtime refreshes are coalesced and exclude high-frequency typing events;
-- dead Home components and their obsolete stories/selectors/styles are removed while legacy response fields remain compatible.
+- совместное использование экрана больше не возвращается к небезопасной записи системного звука и проверяет фактическое наличие медиа перед перемещением участника;
+- доставка уведомлений по электронной почте надежна и идемпотентна;
+- Обновления в реальном времени на домашней странице объединяются и исключают события высокой частоты набора текста;
+- Устаревшие компоненты Home и их устаревшие stories/селекторы/стили удалены, в то время как старые поля ответа остаются совместимыми.
 
 ## [0.6.10] - 2026-07-19
 
-### Fixed
+### Исправлено
 
-- Windows production packaging now downloads its locked, SHA-256-verified toolchain from the private GitLab Generic Package Registry with the built-in CI job token;
-- packaging toolchain caches are isolated from Electron E2E and visual-regression caches, preventing unrelated jobs from overwriting them;
-- includes the prompt automatic update discovery fix introduced in the unpublished 0.6.9 tag.
+- Windows production упаковка теперь загружает свою заблокированную, проверенную по SHA-256 цепочку инструментов из частного GitLab Generic Package Registry с встроенным токеном задания CI;
+- кэши инструментальной цепочки упаковки изолированы от кэшей Electron E2E и визуальной регрессии, предотвращая их перезапись несвязанными заданиями;
+- включает исправление обнаружения автоматического обновления подсказок, введенное в неопубликованном теге 0.6.9.
 
 ## [0.6.9] - 2026-07-19
 
-### Fixed
+### Исправлено
 
-- desktop update checks now run immediately after startup, every 15 minutes, and when the application regains focus or Windows resumes;
-- repeated focus events are rate-limited while still allowing a newly published version to be discovered promptly.
+- Проверки обновлений desktop теперь выполняются сразу после запуска, каждые 15 минут и когда приложение получает фокус или Windows возобновляется;
+- Повторяющиеся события фокусировки ограничиваются по частоте, при этом новая опубликованная версия может быть обнаружена без задержки.
 
 ## [0.6.8] - 2026-07-19
 
-### Fixed
+### Исправлено
 
-- `glab` production publication now enables GitLab CI auto-login, which sends `CI_JOB_TOKEN` through the supported `JOB-TOKEN` header;
-- removed the unnecessary long-lived release-token variable and added a policy guard against configuring `GITLAB_TOKEN` in the production job.
+- Публикация `glab` production теперь позволяет GitLab CI автоматический вход, который отправляет `CI_JOB_TOKEN` через поддерживаемый заголовок `JOB-TOKEN`;
+- удалена ненужная долгоживущая переменная release-token и добавлен защитный механизм политики против настройки `GITLAB_TOKEN` в задаче production.
 
 ## [0.6.7] - 2026-07-19
 
-### Fixed
+### Исправлено
 
-- production release publication now authenticates to the GitLab Releases and Generic Packages APIs with a dedicated protected and masked CI variable instead of the insufficient `CI_JOB_TOKEN`;
-- repository policy tests prevent the release job from silently returning to `CI_JOB_TOKEN`.
+- Публикация выпуска production теперь аутентифицируется в API выпусков и общих пакетов GitLab с использованием выделенной защищённой и замаскированной переменной CI вместо недостаточной `CI_JOB_TOKEN`;
+- Тесты политики репозитория предотвращают процесс выпуска от тихого возврата к `CI_JOB_TOKEN`.
 
 ## [0.6.6] - 2026-07-19
 
-### Fixed
+### Исправлено
 
-- Windows packaging now prefetches Electron and electron-builder toolsets with retrying `curl` downloads and verifies every archive by SHA-256 before use;
-- the verified local Electron archive is passed directly to `electron-builder`, removing its unreliable runtime request for GitHub `SHASUMS256.txt`;
-- GitLab caches the verified Windows packaging toolsets between jobs.
+- Упаковка Windows теперь заранее загружает наборы инструментов сборки Electron и electron с повторными попытками загрузок `curl` и проверяет каждый архив с помощью SHA-256 перед использованием;
+- проверенный локальный архив Electron передается напрямую в `electron-builder`, удаляя его ненадежный запрос runtime для GitHub `SHASUMS256.txt`;
+- GitLab кэширует проверенные наборы инструментов упаковки Windows между заданиями.
 
 ## [0.6.5] - 2026-07-19
 
-### Fixed
+### Исправлено
 
-- production GitLab Release publication now uses POSIX-compatible commands instead of Bash-only `mapfile` in the Alpine `glab` image;
-- the production SSH file variable preserves the final OpenSSH newline required by Alpine `libcrypto`.
+- Публикация релиза теперь использует команды, совместимые с POSIX, вместо только для Bash `mapfile` в образе Alpine `glab`;
+- переменная файла production SSH сохраняет окончательный символ новой строки OpenSSH, необходимый для Alpine `libcrypto`.
 
 ## [0.6.4] - 2026-07-19
 
-### Operations
+### Операции
 
-- repository automation, protected delivery and Windows/Linux quality gates moved to self-managed GitLab CI runners;
-- added a private Prometheus/Grafana stack with host, container, PostgreSQL, Redis and public endpoint probes;
-- added low-cardinality API HTTP/runtime metrics, a provisioned production dashboard and 14 baseline alert rules;
-- blocked public access to `/metrics`; Grafana and Prometheus are available only through an SSH tunnel.
+- автоматизация репозитория, защищённая доставка и контроль качества Windows/Linux перенесены на самостоятельно управляемые GitLab CI раннеры;
+- добавлен приватный стек Prometheus/Grafana с хостом, контейнером, PostgreSQL, Redis и проверками публичной конечной точки;
+- добавлены метрики низкой кардинальности API HTTP/runtime, предоставлена панель управления production и 14 базовых правил оповещения;
+- блокированный общественный доступ к `/metrics`; Grafana и Prometheus доступны только через туннель SSH.
 
 ## [0.6.3] - 2026-07-18
 
-### CI and quality
+### CI и качество
 
-- Visual regression now runs against one production-like static Storybook build instead of recompiling stories through the development server.
-- GitHub Actions reports and enforces duration budgets for Storybook interaction, Electron E2E and visual suites, with job-level hang protection.
-- The visual contract now includes the supported 1280×720 and minimum 1024×680 App Shell boundaries; the risk-to-test matrix is documented.
+- Visual regression теперь работает против одного статического Storybook, похожего на production, вместо того чтобы пересобирать stories через сервер разработки.
+- GitHub Отчёты о действиях и контролирует бюджеты времени для взаимодействия Storybook, Electron E2E и визуальных наборов, с защитой от зависаний на уровне задач.
+- Визуальный контракт теперь включает поддерживаемые границы оболочки приложения 1280×720 и минимальные 1024×680; матрица риск-тест задокументирована.
 
-### Added
+### Добавлено
 
 - безопасное восстановление пароля по email-коду с нейтральным ответом, отзывом всех сессий, security event/email notice и отдельным Storybook/visual состоянием;
 - opt-in capacity harness для API, WebSocket, PostgreSQL, Redis, S3 и control plane LiveKit с p95 budgets, JSON evidence и защитой от случайного production-запуска;
@@ -509,26 +508,26 @@ All notable changes to Vatrushka are documented here. The project follows semant
 - описание сервера отображается в основном server shell с пустым и ограниченным по высоте состояниями;
 - переименование канала доступно из контекстного меню и синхронизируется между клиентами через адресные WebSocket-события.
 
-### Changed
+### Изменено
 
 - оформление платформенного владельца приведено к компактному `CEO Founder`; отдельная жёлтая заливка его сообщений удалена.
 
 ## [0.6.2] - 2026-07-18
 
-### Fixed
+### Исправлено
 
-- Windows production packaging now requires and verifies the public API URL, preventing an installer from silently targeting `http://localhost:3000`;
-- release-candidate and production workflows explicitly build the desktop client for `https://api.myvatrushka.ru`.
+- Упаковка Windows production теперь требует и проверяет публичный API URL, предотвращая возможность для установщика тихо нацеливаться на `http://localhost:3000`;
+- workflow'ы release-candidate и production явно собирают клиент desktop для `https://api.myvatrushka.ru`.
 
 ## [0.6.1] - 2026-07-18
 
-### Added
+### Добавлено
 
 - публичное отображаемое имя участника внутри конкретного сервера и приватные псевдонимы других участников, видимые только назначившему их пользователю;
 - выбор качества демонстрации `1080p/60 FPS` по умолчанию или `1440p/60 FPS`, полноэкранный просмотр и локальное управление звуком демонстрации через контекстное меню;
 - полноэкранный просмотр изображений из сообщений и расширенный набор реакций.
 
-### Fixed
+### Исправлено
 
 - устранён PostgreSQL `42P18` при первой загрузке canonical message history без cursor, из-за которого текстовый канал и Home показывали внутреннюю ошибку;
 - повторный запуск и остановка демонстрации сериализованы, а разрыв LiveKit полностью сбрасывает зависшее состояние подключения;
@@ -537,185 +536,185 @@ All notable changes to Vatrushka are documented here. The project follows semant
 - presence синхронизируется между страницей настроек, карточками участников и нижней панелью; быстрый выбор статуса доступен по нажатию на собственный аватар;
 - удаление сообщения идемпотентно относительно realtime-события, а модалки, меню реакций и просмотр изображений корректно работают поверх layout.
 
-### Database
+### База данных
 
 - миграция `0024_server_member_aliases` добавляет приватное viewer-scoped хранилище псевдонимов без изменения существующих публичных имён сервера.
 
 ## [0.6.0] - 2026-07-18
 
-### Added
+### Добавлено
 
-- private S3-compatible storage for channel and direct-message attachments, with API-only credentials and authenticated downloads;
-- idempotent attachment backfill and a production canary that verifies bucket access, write, read and delete;
-- additive `storage_key` migration and temporary PostgreSQL dual-write fallback for rollback-safe rollout;
-- routed `SettingsShell` with typed hash routes, staged production flags, Storybook states and preserved modal fallbacks;
-- real notification, password/2FA, recovery-code, session and security-activity sections inside routed user settings, including `/settings/security/backup-codes`;
-- routed profile editing for the supported display-name contract, with validation, live preview, save progress and guarded navigation when changes are unsaved;
-- routed voice/audio settings backed by actual Windows `MediaDeviceInfo` input/output labels, persisted device IDs and live microphone readiness diagnostics.
-- Redis-backed multi-session presence with heartbeat TTL, automatic idle, invisible/offline privacy and durable status/custom-text preferences in PostgreSQL;
-- routed status and privacy settings backed by API contracts, including server-enforced direct-message and presence visibility rules;
-- DND delivery policy that suppresses message sounds, desktop notifications and future push delivery while preserving unread counters and notification history.
-- structured user mentions with keyboard/mouse autocomplete, Unicode-safe entities, rename-safe rendering, backend membership/permission validation and per-channel unread mention counters;
-- additive `message_mentions` migration with atomic create/edit persistence and repeated-mention deduplication at notification/count level.
-- canonical PostgreSQL conversations for server channels and direct messages, cursor history, idempotent optimistic retry, tombstones and virtualized upward pagination;
-- authenticated WebSocket delivery through Redis Pub/Sub and transactional outbox, including typing, multi-device read synchronization and reconnect reconciliation;
-- direct-message `sent`/`delivered`/`read` states, first-unread navigation and native Electron notifications that open both server channels and private dialogs;
-- notification center plus user/server/conversation delivery levels, mute windows, role/everyone suppression, quiet hours and strict DND;
-- Prometheus-compatible `/metrics` for message latency/errors, WebSocket, outbox, notifications, Redis and unread recalculation;
-- durable S3 object-deletion jobs with retry/backoff for unfinished uploads, deleted-message retention and previews;
-- complete routed server/user settings, profile/avatar/username/bio, privacy/blocking, email change, export and delayed account anonymization.
+- частное хранилище, совместимое с S3, для вложений канала и прямых сообщений, с учетными данными только для API и аутентифицированными загрузками;
+- идемпотентное присоединение backfill и production канарейка, которая проверяет доступ к бакету, запись, чтение и удаление;
+- аддитивная `storage_key` миграция и временный PostgreSQL dual-write откатный резерв для безопасного отката при развертывании;
+- Маршрутизировано `SettingsShell` с типизированными хэш-маршрутами, подготовлены флаги production, состояния Storybook и сохранены модальные резервные варианты;
+- реальные уведомления, пароль/2FA, код восстановления, сессия и разделы активности безопасности внутри маршрутизированных настроек пользователя, включая `/settings/security/backup-codes`;
+- маршрутизированное редактирование профиля для поддерживаемого контракта display-name, с проверкой, живым предварительным просмотром, сохранением прогресса и защищённой навигацией при несохранённых изменениях;
+- маршрутизированные настройки голоса/аудио с поддержкой фактических Windows `MediaDeviceInfo` меток ввода/вывода, сохранённых идентификаторов устройств и диагностики готовности микрофона в реальном времени.
+- Многоразовая сессия с поддержкой Redis с присутствием и отправкой сигналов сердца TTL, автоматическим бездействием, конфиденциальностью в режиме невидимости/офлайн и сохранением предпочтений статуса/пользовательского текста в PostgreSQL;
+- статус маршрутизации и настройки конфиденциальности, поддерживаемые контрактами API, включая правила видимости личных сообщений и присутствия, принудительно применяемые сервером;
+- политика доставки DND, которая отключает звуки сообщений, desktop уведомления и будущую отправку push, при этом сохраняются счетчики непрочитанных сообщений и история уведомлений.
+- структурированные упоминания пользователей с автозаполнением с клавиатуры/мыши, безопасные для Юникода сущности, безопасный для переименования рендеринг, проверка членства/разрешений backend и счетчики непрочитанных упоминаний по каналам;
+- аддитивная `message_mentions` миграция с атомарной сохранением/редактированием и дедупликацией повторных упоминаний на уровне уведомлений/подсчета.
+- канонические PostgreSQL разговоры для серверных каналов и личных сообщений, история курсора, идемпотентная оптимистичная повторная попытка, надгробия и виртуализированная пагинация вверх;
+- аутентифицированная WebSocket доставка через Redis Pub/Sub и транзакционную outbox, включая набор текста, синхронизацию чтения на нескольких устройствах и согласование при повторном подключении;
+- прямое сообщение `sent`/`delivered`/`read` говорит, навигация к первому непрочитанному и нативные Electron уведомления, которые открывают как серверные каналы, так и личные диалоги;
+- центр уведомлений плюс уровни доставки для пользователя/сервера/разговора, отключение windows, подавление по роли/для всех, тихие часы и строгий DND;
+- Prometheus-совместимый `/metrics` для задержки/ошибок сообщений, WebSocket, outbox, уведомлений, Redis и перерасчета непрочитанных;
+- надежные S3 задания по удалению объектов с повторной попыткой/задержкой для незавершенных загрузок, хранением удаленных сообщений и предварительным просмотром;
+- полные маршрутизированные настройки сервера/пользователя, профиль/аватар/имя пользователя/биография, конфиденциальность/блокировка, смена электронной почты, экспорт и отложенная анонимизация аккаунта.
 
-### Fixed
+### Исправлено
 
-- updater restart is deferred while a voice call is active, without showing a notification when no update exists;
-- revoked sessions are disconnected from realtime on the next WebSocket heartbeat;
-- role and `@everyone` mentions now use stable entities, backend permissions and rename-safe labels.
+- updater перезагрузка отложена, пока активен голосовой вызов, без отображения уведомления, если обновления нет;
+- отозванные сеансы отключаются от реального времени при следующем WebSocket сигнале сердца;
+- роль и `@everyone` упоминания теперь используют стабильные сущности, backend разрешения и безопасные для переименования метки.
 
-### Operations
+### Операции
 
-- documented Timeweb Cloud configuration, `/opt/vatrushka` as the canonical VPS checkout, Redis operations, the expand/backfill sequence and rollback procedure.
+- задокументированная конфигурация Timeweb Cloud, `/opt/vatrushka` как каноническая проверка VPS, операции Redis, последовательность расширения/backfill и процедура отката.
 
 ## [0.5.0] - 2026-07-17
 
-### Added
+### Добавлено
 
-- redesigned Home as a personal dashboard with Continue, Active Spaces, Recent Activity, audio readiness, onboarding, responsive profile rail and Storybook states;
-- `GET /api/v1/home`, persisted user activity, cached TanStack Query data and presence-driven invalidation for dashboard widgets;
-- live microphone permission/signal diagnostics using the selected Windows input without opening a duplicate capture stream during an active call;
-- live voice presence under every voice channel, backed by LiveKit participant identities;
-- drag-and-drop voice member moves gated by `MOVE_MEMBERS`: connected participants move natively between LiveKit rooms, while an online desktop not yet in voice receives a short-lived connect command;
-- independent Windows push and message-sound preferences in account settings;
-- a 30-item message reaction picker and inline previews for authenticated image attachments;
-- decoded screen-share resolution diagnostics and a centered grid containing every participant when no screen is shared.
+- переработанный Дом как личная панель с Continue, Active Spaces, Recent Activity, готовностью аудио, onboarding, адаптивной панелью профиля и состояниями Storybook;
+- `GET /api/v1/home`, сохраненная активность пользователя, кэшированные данные TanStack Query и инвалидация виджетов панели на основе присутствия;
+- разрешение/диагностика сигнала живого микрофона с использованием выбранного входа Windows без открытия дублирующего потока захвата во время активного вызова;
+- живое присутствие голоса под каждым голосовым каналом, поддерживаемое LiveKit идентификациями участников;
+- перетаскивание голосового участника ограничено `MOVE_MEMBERS`: подключенные участники перемещаются естественным образом между комнатами LiveKit, в то время как онлайн desktop, еще не находящийся в голосе, получает кратковременную команду подключения;
+- независимые Windows настройки уведомлений и звуков сообщений в настройках аккаунта;
+- выбор реакции на сообщение из 30 элементов и inline предварительных просмотр для защищённых вложений изображений;
+- декодированные диагностические данные разрешения совместного использования экрана и центрированная сетка, содержащая всех участников, когда экран не используется.
 
-### Fixed
+### Исправлено
 
-- server member counts, the right member panel, channel unread state and voice presence refresh without reopening the server;
-- attachment-only server and direct messages can be sent without placeholder text;
-- screen share no longer falls back to a low adaptive simulcast layer: it publishes one original high-quality layer and viewers request HIGH/30 FPS;
-- desktop message notifications are no longer silently discarded merely because the application window is focused.
+- подсчёт участников сервера, правильная панель участников, состояние непрочитанных сообщений канала и обновление присутствия в голосовом чате без повторного открытия сервера;
+- сервер только для вложений, и прямые сообщения можно отправлять без текста-заполнителя;
+- Совместное использование экрана больше не переходит на низкий адаптивный слой симулькаста: оно публикует один оригинальный высококачественный слой, а зрители запрашивают HIGH/30 FPS;
+- Уведомления сообщений desktop больше не игнорируются молча только потому, что окно приложения находится в фокусе.
 
-### Security and operations
+### Безопасность и операции
 
-- removed the legacy standalone-room, guest-session and standalone screen-share lease tables through an explicitly marked contract migration; persistent server channels and channel leases are unchanged;
-- image previews use authenticated blob downloads and the Electron CSP allows only local `blob:` images;
-- PostgreSQL remains bound to `127.0.0.1:5433`; administrative access is documented through an SSH tunnel instead of a public database port.
+- удалены устаревшие таблицы аренды отдельной комнаты, гостевой сессии и отдельного совместного использования экрана через явно отмеченную миграцию контракта; постоянные серверные каналы и аренды каналов остаются неизменными;
+- Предварительный просмотр изображений использует аутентифицированные загрузки блобов, и Electron CSP разрешает только локальные `blob:` изображения;
+- PostgreSQL остаётся связанным с `127.0.0.1:5433`; административный доступ документируется через туннель SSH, а не через публичный порт базы данных.
 
 ## [0.4.4] - 2026-07-17
 
-### Fixed
+### Исправлено
 
-- remote participant volume controls now remain mounted and visible when the participant becomes the active speaker;
-- participant and screen-share volume sliders use a stable compact layout with aligned values and controls;
-- settings popovers, server settings and the screen-source picker close on an outside click as well as their explicit close action;
-- screen publication is blocked while LiveKit is reconnecting, and the raw `publishing rejected as engine not connected within timeout` error is replaced with a recovery instruction;
-- duplicate voice-channel connection attempts are coalesced while a connection transition is already running.
+- Регуляторы громкости удаленного участника теперь остаются закрепленными и видимыми, когда участник становится активным оратором;
+- ползунки громкости участника и общего доступа к экрану используют стабильную компактную компоновку с выровненными значениями и элементами управления;
+- всплывающие окна настроек, настройки сервера и выбор источника экрана закрываются при клике вне их области, так же как и при явном действии закрытия;
+- публикация на экране заблокирована, пока LiveKit переподключается, а исходная ошибка `publishing rejected as engine not connected within timeout` заменяется инструкцией по восстановлению;
+- повторные попытки подключения к голосовому каналу объединяются, пока уже выполняется переход подключения.
 
-### Changed
+### Изменено
 
-- screen capture now preserves the selected source aspect ratio up to 2560×1440 at 30 FPS and publishes with an 8 Mbps ceiling and `maintain-resolution` degradation preference;
-- Windows system-audio sharing requires Chromium to apply `restrictOwnAudio` exactly. If the client cannot prove that Vatrushka voice output is excluded, it stops the unsafe share and asks the presenter to continue without audio;
-- viewers retain independent persistent mute and volume controls for the `ScreenShareAudio` track.
+- захват экрана теперь сохраняет выбранное соотношение сторон источника до 2560×1440 при 30 FPS и публикуется с потолком в 8 Мбит/с и предпочтением к деградации `maintain-resolution`;
+- Общий доступ к системному аудио Windows требует от Chromium точного применения `restrictOwnAudio`. Если клиент не может доказать, что вывод голоса Vatrushka исключен, он останавливает небезопасный общий доступ и просит ведущего продолжить без аудио;
+- зрители сохраняют независимые постоянные элементы управления отключением звука и громкостью для дорожки `ScreenShareAudio`.
 
-### Quality
+### Качество
 
-- added renderer coverage for active-speaker slider stability, safe screen-audio capture, LiveKit timeout messaging and outside-click dismissal;
-- added Storybook and Windows visual coverage for screen-share audio volume controls and updated the participant-volume baselines.
+- добавлено покрытие renderer для стабильности ползунка активного выступающего, безопасного захвата экрана и аудио, LiveKit сообщений о тайм-ауте и закрытия при клике вне области;
+- добавлено визуальное отображение Storybook и Windows для управления громкостью аудио при совместном использовании экрана и обновлены базовые уровни громкости участников.
 
 ## [0.4.3] - 2026-07-17
 
-### Changed
+### Изменено
 
-- server invitations are now short HTTPS links on `myvatrushka.ru`; the desktop client accepts them automatically after authentication;
-- the invite button opens a styled dialog with the link, copy progress, success confirmation and an explicit clipboard error;
-- opening an invite for a server the user already belongs to now opens that server instead of returning a conflict.
+- приглашения на сервер теперь являются короткими HTTPS ссылками на `myvatrushka.ru`; клиент desktop принимает их автоматически после аутентификации;
+- кнопка приглашения открывает стилизованное диалоговое окно с ссылкой, индикатором копирования, подтверждением успеха и явной ошибкой буфера обмена;
+- открытие приглашения на сервер, членом которого пользователь уже является, теперь открывает этот сервер вместо того, чтобы возвращать конфликт.
 
-### Removed
+### Удалено
 
 - manual invite-code fields and “Войти по коду” actions from Home, server and direct-message navigation;
-- the public `POST /api/v1/servers/join` contract and invite codes from server/voice responses;
-- the former `vatrushka://server/<code>` deep-link format.
+- публичный `POST /api/v1/servers/join` контракт и коды приглашений из серверных/голосовых ответов;
+- бывший формат глубоких ссылок `vatrushka://server/<code>`.
 
-### Operations
+### Операции
 
-- production requires `PUBLIC_INVITE_URL` for API link generation and `INVITE_DOMAIN` for the dedicated Caddy TLS site;
-- no database migration is required: existing opaque invite identifiers remain valid as link tokens.
+- production требует `PUBLIC_INVITE_URL` для генерации ссылки API и `INVITE_DOMAIN` для выделенного сайта Caddy TLS;
+- миграция базы данных не требуется: существующие непрозрачные идентификаторы приглашений остаются действительными в качестве токенов ссылок.
 
 ## [0.4.2] - 2026-07-17
 
-### Changed
+### Изменено
 
-- removed the redundant Home navigation column; server actions remain in the workspace rail while security and logout stay available in the top bar;
-- a voice channel can now be joined by double-clicking its name without hiding the server navigation;
-- added soft local join and leave cues for the current user and remote participants, routed through the selected output device.
+- удалена лишняя колонка навигации «Домой»; действия сервера остаются в боковой панели рабочего пространства, а функции безопасности и выхода остаются доступными в верхней панели;
+- теперь к голосовому каналу можно присоединиться, дважды щелкнув его название, не скрывая навигацию по серверу;
+- добавлены мягкие локальные сигналы присоединения и выхода для текущего пользователя и удалённых участников, направляемые через выбранное выходное устройство.
 
-### Quality
+### Качество
 
-- participant cue detection starts from a silent baseline, ignores the local LiveKit participant and coalesces simultaneous joins/leaves;
-- added renderer coverage for remote participant diffs, Home shell structure and double-click voice joining;
-- updated the Windows Home visual baseline for the simplified two-column shell.
+- Обнаружение сигналов участника начинается с тихого фона, игнорирует локального участника LiveKit и объединяет одновременные присоединения/выходы;
+- добавлено покрытие renderer для различий удалённых участников, структуры Home shell и присоединения по двойному щелчку голосом;
+- обновил визуальную базовую линию Windows Home для упрощённой двухколоночной оболочки.
 
 ## [0.4.1] - 2026-07-17
 
-### Fixed
+### Исправлено
 
-- Windows input/output device names are disclosed after an audio-only permission request; numbered placeholder devices were removed;
-- audio selectors use the Vatrushka design-system menu and no longer overlap in the voice control dock;
-- connecting to voice now keeps the workspace, server, channel and member navigation visible;
-- authentication, profile and home screens now use the current app shell, typography and design tokens;
-- the updater notification is hidden for idle, checking, current, unsupported and failed checks, appears only for a real update and can be dismissed.
+- Имена устройств ввода/вывода Windows раскрываются после запроса разрешения только для аудио; устройства с пронумерованными заплатками были удалены;
+- Аудиоселекторы используют меню системы дизайна Vatrushka и больше не перекрываются в доке голосового управления;
+- Подключение к голосу сейчас сохраняет видимыми рабочее пространство, сервер, канал и навигацию по участникам;
+- Экраны аутентификации, профиля и главного экрана теперь используют текущую оболочку приложения, типографику и дизайн-токены;
+- уведомление updater скрыто для бездействующих, проверяющих, текущих, неподдерживаемых и неудачных проверок, появляется только для реального обновления и может быть отклонено.
 
-### Quality
+### Качество
 
-- added Electron coverage for trusted audio permission and non-empty device labels;
-- added Storybook and Windows visual baselines for password login, real device controls and a connected voice channel inside the persistent server shell.
+- добавлено покрытие Electron для доверенного разрешения на аудио и непустых меток устройств;
+- Добавлены Storybook и Windows визуальные базовые линии для входа по паролю, управления реальным устройством и подключенного голосового канала внутри постоянной серверной оболочки.
 
 ## [0.4.0] - 2026-07-17
 
-### Added
+### Добавлено
 
-- in-app NSIS updates from the self-hosted generic feed, with background progress, explicit restart and install-on-quit;
-- Caddy `/updates` file endpoint and deployment procedure that publishes `latest.yml` only after its setup/blockmap artifacts;
-- regression coverage for retired endpoints, server invite deep links and updater UI states.
+- обновления в приложении NSIS с самохостируемого общего источника, с фоновым прогрессом, явной перезагрузкой и установкой при выходе;
+- Конечная точка файла Caddy `/updates` и процедура развертывания, которая публикует `latest.yml` только после его артефактов установки/карты блоков;
+- регрессионное покрытие для устаревших конечных точек, состояние серверного приглашения deep links и updater UI.
 
-### Changed
+### Изменено
 
-- servers and their text/voice channels are now the only collaboration model;
-- deep links now use `vatrushka://server/<8-character-invite>`;
-- all workspace packages and Windows artifacts now report version 0.4.0.
+- Серверы и их текстовые/голосовые каналы теперь являются единственной моделью сотрудничества;
+- deep links теперь используется `vatrushka://server/<8-character-invite>`;
+- все пакеты рабочей области и артефакты Windows теперь сообщают версию 0.4.0.
 
-### Removed
+### Удалено
 
-- passwordless `/auth/request-code` and `/auth/verify-code` login;
-- standalone room creation/join/moderation, guest access and their desktop flows;
-- legacy room screen-share endpoints; voice channels retain permission-enforced screen-share leases.
+- бессердечный `/auth/request-code` и `/auth/verify-code` вход;
+- создание/присоединение/модерация отдельной комнаты, доступ гостей и их desktop потоки;
+- устаревшие конечные точки совместного использования экрана в комнате; голосовые каналы сохраняют арендованные разрешения на совместное использование экрана.
 
-### Operations
+### Операции
 
-- 0.3.0 users must install 0.4.0 manually once; future installed NSIS releases can update in place;
-- historical standalone-room tables are retained but unreachable, avoiding a destructive database migration;
-- portable and unsigned installer limitations remain; public distribution still needs code signing.
+- Пользователи версии 0.3.0 должны один раз установить версию 0.4.0 вручную; будущие установленные версии NSIS могут обновляться на месте;
+- Исторические отдельные комнатные таблицы сохранены, но недоступны, что позволяет избежать разрушительной миграции базы данных;
+- Ограничения для переносимых и неподписанных установщиков остаются; для публичного распространения всё ещё требуется подпись кода.
 
 ## [0.3.0] - 2026-07-17
 
-### Added
+### Добавлено
 
-- cohesive desktop design system, Storybook catalog and responsive server shell;
-- replies, reactions, attachments, unread state, native notifications, direct messages and virtualized message feeds;
-- visible microphone/output selection, per-participant volume and local mute controls;
-- monitor/window source picker, presenter audio mode and independent viewer stream-audio mixer;
-- server role hierarchy, channel overrides, permission-enforced LiveKit grants and audit log;
-- password/email/TOTP/recovery authentication, trusted sessions, revocation and security events;
-- release gates for Storybook accessibility, Electron E2E, Windows visual regression, migrations and renderer bundle budgets.
+- согласованная система дизайна desktop, каталог Storybook и отзывчивая серверная оболочка;
+- ответы, реакции, вложения, непрочитанное состояние, нативные уведомления, прямые сообщения и виртуализированные потоки сообщений;
+- видимый выбор микрофона/выхода, регулировка громкости для каждого участника и локальное управление звуком;
+- выбор источника монитора/окна, режим аудио ведущего и независимый микшер потокового аудио для зрителя;
+- иерархия ролей сервера, переопределения каналов, предоставления LiveKit, контролируемые разрешениями, и журнал аудита;
+- пароль/электронная почта/TOTP/восстановление аутентификации, доверенные сессии, отзыв и события безопасности;
+- открыть ворота для доступности Storybook, Electron E2E, Windows visual regression, миграций и бюджетов пакетов renderer.
 
-### Changed
+### Изменено
 
-- desktop, API and shared packages now report version 0.3.0;
-- the migration runner resolves its Drizzle folder correctly on both Windows and Linux;
-- Windows packaging waits for the complete desktop regression suite in CI.
+- desktop, API и общие пакеты теперь показывают версию 0.3.0;
+- исполнитель миграции корректно определяет свою папку Drizzle как на Windows, так и на Linux;
+- Упаковка Windows ожидает полного набора регрессионных тестов desktop в CI.
 
-### Operations
+### Операции
 
-- migrations remain additive and must not be renumbered or squashed after deployment;
-- this release still requires a manually configured production API, SMTP and LiveKit deployment;
-- installers are not code-signed and automatic updates are not enabled yet.
+- миграции остаются накопительными и не должны перенумеровываться или объединяться после развертывания;
+- эта версия всё ещё требует вручную настроенного развертывания production API, SMTP и LiveKit;
+- установщики не подписаны кодом, а автоматические обновления еще не включены.

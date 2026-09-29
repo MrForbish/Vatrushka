@@ -1,26 +1,26 @@
-## Release
+## Релиз
 
-- version: vX.Y.Z
-- source: `develop`
-- target: `main`
-- commit SHA: `<sha>`
+- версия: vX.Y.Z
+- исходная ветка: `develop`
+- целевая ветка: `main`
+- SHA коммита: `<sha>`
 
-## Release evidence
+## Подтверждение релиза (release evidence)
 
-- [ ] full release MR CI passed
-- [ ] database upgrade and rollback reviewed
-- [ ] release notes and changelog updated
-- [ ] production publication is disabled in this MR
-- [ ] tag pipeline will deploy API, monitoring and then publish updater
+- [ ] полный CI релизного MR пройден
+- [ ] обновление базы данных и откат проверены
+- [ ] примечания к релизу и changelog обновлены
+- [ ] публикация в production отключена в этом MR
+- [ ] pipeline тега развернёт API и мониторинг, затем опубликует updater
 
-## Migrations and compatibility
+## Миграции и совместимость
 
-- PostgreSQL: none
-- Redis keys: none
-- S3 lifecycle: none
-- env/config: none
-- breaking changes: none
+- PostgreSQL: нет
+- ключи Redis: нет
+- жизненный цикл S3: нет
+- окружение и конфигурация: нет
+- несовместимые изменения: нет
 
-## Rollback
+## Откат (rollback)
 
-<!-- Exact rollback plan for the preceding production version. -->
+<!-- Точный план возврата к предыдущей production-версии. -->

@@ -1,4 +1,4 @@
-# Runbook observability Vatrushka
+# Runbook наблюдаемость Vatrushka
 
 ## Предварительные условия
 
@@ -23,7 +23,7 @@ chmod 600 .env.observability secrets/*
 
 Prometheus/Loki должны bindиться только к `OBSERVABILITY_PRIVATE_BIND_IP`. UFW разрешает 9090/3100 только WireGuard subnet; 9093, 9115, 3000 и 12345 наружу не публикуются.
 
-## Agents
+## Агенты
 
 Production:
 
@@ -52,26 +52,26 @@ curl -fsS "https://${GRAFANA_DOMAIN}/api/health"
 
 В Grafana должны присутствовать datasources Prometheus/Loki, базовые технические dashboards и `Service Health & SLO`. Базовый набор включает «Инфраструктура: обзор», «Контейнеры: обзор», «Приложение: обзор», «API: детали HTTP», «Prometheus: состояние», «Loki: состояние» и «Логи: обзор». Provisioning расширяемый: новые JSON не требуют ручного импорта.
 
-## Service Health and SLO
+## Состояние службы и SLO
 
 `Service Health & SLO` — стартовый экран владельца и on-call. Начальные 30-дневные цели:
 
-- public API availability: 99.9%;
+- публичная API доступность: 99.9%;
 - API requests без 5xx: 99.9%;
 - не менее 95% обычных JSON API requests быстрее 500 ms; upload/download/attachment routes исключены и анализируются отдельно;
-- outbox failed = 0, oldest age < 60 s.
+- outbox не удалось = 0, самый старый возраст < 60 с.
 
 Error budget показывает запас над 99.9% относительно допустимых 0.1% ошибок. Ноль означает исчерпание бюджета. Recording rules используют 30-дневное окно и 30-дневный Prometheus retention; после 7–14 дней baseline пороги пересматриваются документированным решением, но не снижаются только ради устранения alert.
 
 `vatrushka_build_info{version,commit}=1` и меняющийся без labels `vatrushka_deployment_timestamp_seconds` создают deployment/restart annotations. Если commit=`unknown`, API был собран без `BUILD_COMMIT`; production deployment должен экспортировать текущий git SHA перед Compose build.
 
-## Prometheus health
+## Prometheus здоровье
 
 Проверяйте не только число `up`, но `Targets up / total` и таблицу down targets. Scrape duration оценивается как доля timeout, rule duration — как доля evaluation interval. Series churn помогает обнаружить новый high-cardinality label. Remote-write pending должен возвращаться к нулю, failures всегда равны нулю. При config/rule failure сначала запустите `promtool check config/rules`, затем смотрите Prometheus logs; не перезапускайте TSDB и не удаляйте WAL вручную.
 
 `VatrushkaProductTelemetryMissing` означает, что за пять минут центральный Prometheus не получил ни одной product-метрики. Это отличается от `VatrushkaApiDown`: при разрыве WireGuard или Alloy remote write API может оставаться доступным, но его series вообще не попадают в Prometheus. Проверьте handshake WireGuard на обеих VPS, затем Alloy WAL и remote-write errors; после восстановления не пытайтесь вручную переигрывать устаревшие samples.
 
-## Infrastructure and containers
+## Инфраструктура и контейнеры
 
 Дашборды `Инфраструктура: обзор` и `Контейнеры: обзор` используют фильтры contour/region/host/role/container и сохраняют время при переходе в соседние dashboards. Контейнерный дашборд использует нативный label cAdvisor `name`: он стабильно присутствует на product-узле. `Нет данных` означает отсутствие series, а не нулевую нагрузку. `Наблюдаемые контейнеры` показывает только свежесть cAdvisor, не Docker health.
 
@@ -79,7 +79,7 @@ Error budget показывает запас над 99.9% относительн
 
 - CPU host: warning выше 85% в течение 15 минут;
 - RAM host: critical выше 90% в течение 10 минут;
-- filesystem: warning 80%, critical 90%; inode warning 85%;
+- файловая система: предупреждение 80%, критический 90%; иноуд предупреждение 85%;
 - clock skew: warning выше 5 секунд;
 - container restarts: warning, если `container_start_time_seconds` изменился более трёх раз за 15 минут;
 - container OOM: critical при любом событии за 15 минут.
@@ -110,7 +110,7 @@ Error budget показывает запас над 99.9% относительн
 
 При росте cardinality проверьте `labelValueCountByLabelName` в Prometheus и active streams/discarded lines Loki. Сначала остановите источник новых labels, затем уменьшайте retention/очищайте данные только по отдельному плану.
 
-## Logs and Loki
+## Журналы и Loki
 
 Alloy разбирает JSON `level` и нормализует только закрытый набор `trace/debug/info/warn/error/fatal/unknown`. Pino numeric levels 10–60 преобразуются в те же значения. `request_id`, `error_code`, `exception_type` и message остаются полями строки: ищите их через query-time `| json`, не превращайте в labels. Неструктурированные journald/Docker строки доступны в явно обозначенной fallback-панели.
 
@@ -133,23 +133,23 @@ Alloy разбирает JSON `level` и нормализует только з�
 - Grafana down: проверить SQLite/volume/provisioning; восстановить последний проверенный backup.
 - Alert delivery down: проверить `alertmanager_notifications_failed_total` и secret webhook file, отправить controlled test alert.
 
-## Realtime and messaging
+## В реальном времени и обмен сообщениями
 
 Откройте дашборд `Realtime и сообщения` (`vatrushka-realtime-messaging`). Для всплеска переподключений сначала проверьте разбивку `event/reason`, затем доступность Redis и логи API. При росте outbox сначала устраните зависимость или ошибку публикации; вручную удалять durable-события запрещено. Значение `chat_outbox_failed` выше нуля требует проверки последней ошибки worker и повторной доставки после устранения причины.
 
-## Voice and screen share
+## Голос и демонстрация экрана
 
 Откройте дашборд `Голос и демонстрация экрана` (`vatrushka-voice-screen-share`). Расхождение reconciliation или version gap проверяйте вместе с LiveKit webhook, Redis и WebSocket. Для конфликтов screen-share lease сравните `acquire`, `renew`, `release`, результат и доступность LiveKit; не очищайте lease напрямую до проверки фактического participant/track state.
 
 Панели `Участники в голосе` и `Активные демонстрации` обновляются каждым внутренним scrape API: первый gauge считается по текущей Redis projection, второй — по неистёкшим lease в PostgreSQL. API опрашивается каждые 5 секунд, а Alloy отправляет метрики не позднее чем через секунду, поэтому обычная задержка отображения — около 1–6 секунд. Для проверки подключите тестового пользователя к voice-каналу и сопоставьте значение с `GET /api/v1/servers/:serverId/voice-state`; при устойчивом расхождении сначала проверяйте Redis projection и LiveKit webhook, а не Grafana cache.
 
-## Dependencies and delivery
+## Зависимости и доставка
 
 Откройте дашборд `Зависимости и доставка` (`vatrushka-dependencies-delivery`). Для PostgreSQL проверьте подключения, rollback/deadlock и cache hit. Для Redis — число клиентов, занятые байты памяти, evictions и rejected connections. Ноль в панели ошибок Redis штатен; отсутствие всех Redis-панелей означает проблему Redis exporter, а не автоматически «нулевую нагрузку». Для S3 — операцию, result и p95; затем endpoint, DNS/TLS, credentials и bucket policy. Для почты и входа сопоставьте delivery result и login factor, не добавляя email или user ID в labels и логи.
 
 После развёртывания 0.8.0 накопите минимум семь дней production baseline. До этого пороги новых warning alerts считаются стартовыми и корректируются отдельным MR на основании фактических p95/p99 и частоты событий.
 
-## Backup, restore, update, rollback
+## Резервное копирование, восстановление, обновление, откат
 
 ```bash
 ./scripts/backup.sh --dry-run

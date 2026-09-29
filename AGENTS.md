@@ -1,37 +1,37 @@
-# Vatrushka repository rules
+# Правила репозитория Vatrushka
 
-These rules apply to every change in this repository.
+Эти правила применяются к каждому изменению в репозитории.
 
-## Canonical platform
+## Каноническая платформа
 
-- Use `git@gitlab.com:vatrushka-group/Vatrushka.git` for Git, Merge Requests, CI/CD, artifacts, and Releases.
-- Treat GitHub as read-only historical storage.
-- Follow `docs/release-process.md` and run `scripts/policy/merge-request-policy.mjs` through `npm run repo-policy:test`.
+- Используйте `git@gitlab.com:vatrushka-group/Vatrushka.git` для Git, Merge Request, CI/CD, артефактов и релизов.
+- Считайте GitHub историческим хранилищем только для чтения.
+- Следуйте `docs/release-process.md` и запускайте `scripts/policy/merge-request-policy.mjs` командой `npm run repo-policy:test`.
 
-## Branch and merge policy
+## Политика веток и слияний
 
-- Ticketed work: `feat/WEB-<number>-<description>` or `fix/WEB-<number>-<description>` → `develop`, squash.
-- Unticketed work: `chore/*`, `refactor/*`, `test/*`, or `docs/*` → `develop`, squash.
-- Release preparation: `chore/release-X.Y.Z-preparation` → `develop`, squash. This is the only `chore/*` format that permits SemVer dots.
-- Release: `develop` → `main` with `[RELEASE]` title, merge commit.
-- Hotfix: `hotfix/X.Y.Z-*` → `main`, merge commit.
-- Sync: `main` → `develop` only after a hotfix, merge commit.
-- Never create an unticketed `feat/*` or `fix/*`. Never merge a task branch directly to `main`.
-- Do not create a new branch/MR for a failed pre-merge pipeline; fix the existing source branch. Increment the patch version only after an immutable tag has already been pushed.
-- Immediately set and read back `squash=false` through the GitLab API for release, hotfix, and sync MRs. Never rely on the UI default. Merge with the full source SHA and verify `squash_commit_sha` is absent.
+- Работа по тикету: `feat/WEB-<number>-<description>` или `fix/WEB-<number>-<description>` → `develop`, squash.
+- Работа без тикета: `chore/*`, `refactor/*`, `test/*` или `docs/*` → `develop`, squash.
+- Подготовка релиза: `chore/release-X.Y.Z-preparation` → `develop`, squash. Это единственный формат `chore/*`, в котором допустимы точки SemVer.
+- Релиз: `develop` → `main` с заголовком `[RELEASE]`, merge commit.
+- Hotfix: `hotfix/X.Y.Z-*` → `main`, объединяющий коммит.
+- Синхронизация: `main` → `develop` только после hotfix, merge commit.
+- Никогда не создавайте `feat/*` или `fix/*` без тикета. Никогда не сливайте ветку задачи напрямую в `main`.
+- Не создавайте новую ветку или MR из-за упавшего pipeline до слияния: исправляйте существующую исходную ветку. Увеличивайте patch-версию только после публикации неизменяемого тега.
+- Для release, hotfix и sync MR немедленно задавайте `squash=false` через GitLab API и проверяйте сохранённое значение. Не полагайтесь на настройку интерфейса по умолчанию. Сливайте по полному SHA исходной ветки и проверяйте отсутствие `squash_commit_sha`.
 
-## GitLab delivery safety
+## Безопасность доставки через GitLab
 
-- Read the exact failed job trace before editing CI or credentials.
-- Use `GLAB_ENABLE_CI_AUTOLOGIN=true` for `glab` in CI. Never assign `CI_JOB_TOKEN` to `GITLAB_TOKEN`.
-- A merge request targeting `main` must pass `release-auth-smoke` before merge/tag creation.
-- Do not create PAT/project/group tokens unless the built-in job token cannot serve a documented endpoint and the user explicitly authorizes the additional secret.
-- Never print or commit secrets, runner tokens, CI variable values, credential-store data, production `.env`, or temporary auth files.
-- Validate `npm run version:check`, `npm run repo-policy:test`, lint, typecheck, GitLab CI lint, and `git diff --check` before merge.
-- Verify UTF-8 MR text, required migration/rollback/release evidence, target branch, title prefix, and squash setting.
-- Do not overwrite tags or Releases. After successful production publication, verify API readiness, monitoring health and updater assets. Perform `[SYNC] main → develop` only after a hotfix.
+- Перед изменением CI или учётных данных прочитайте точный trace упавшей job.
+- Используйте `GLAB_ENABLE_CI_AUTOLOGIN=true` для `glab` в CI. Никогда не присваивайте `CI_JOB_TOKEN` переменной `GITLAB_TOKEN`.
+- MR в `main` должен пройти `release-auth-smoke` до слияния и создания тега.
+- Не создавайте PAT, project token или group token, если встроенный job token поддерживает нужный документированный endpoint. Дополнительный секрет требует явного разрешения пользователя.
+- Никогда не выводите и не коммитьте секреты, токены runner, значения переменных CI, данные хранилища учётных данных, production-файл `.env` и временные файлы аутентификации.
+- Перед слиянием проверяйте `npm run version:check`, `npm run repo-policy:test`, lint, typecheck, GitLab CI lint и `git diff --check`.
+- Проверяйте кодировку UTF-8 в тексте MR, обязательные сведения о миграции, откате и подтверждении релиза, целевую ветку, префикс заголовка и настройку squash.
+- Не перезаписывайте теги и Releases. После успешной публикации в production проверяйте готовность API, состояние мониторинга и артефакты updater. Выполняйте `[SYNC] main → develop` только после hotfix.
 
-## Workspace safety
+## Безопасность рабочей области
 
-- Preserve user-owned untracked reference packs and build outputs unless explicitly asked to remove them.
-- Do not include temporary MR descriptions, generated installers, local caches, or secrets in commits.
+- Сохраняйте принадлежащие пользователю неотслеживаемые наборы справочных материалов и результаты сборки, если пользователь явно не попросил удалить их.
+- Не включайте в коммиты временные описания MR, сгенерированные установщики, локальные кэши и секреты.

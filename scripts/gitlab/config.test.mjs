@@ -209,7 +209,7 @@ test('runtime keeps local builds separate from immutable delivery images', async
   assert.match(compose, /api:[\s\S]*image: \$\{API_IMAGE:-vatrushka-api:local\}[\s\S]*build:/u);
   assert.match(runtimeGuide, /--no-build/u);
   assert.match(runtimeGuide, /@sha256/u);
-  assert.match(runtimeGuide, /must not contain registry credentials/u);
+  assert.match(runtimeGuide, /не должен содержать учетные данные реестра/u);
 });
 
 test('observability validation runs only for observability changes with pinned tools', async () => {
@@ -276,14 +276,14 @@ test('GitLab repository metadata replaces GitHub automation', async () => {
   const hotfixTemplate = await read('.gitlab/merge_request_templates/hotfix.md');
   assert.match(codeowners, /@MrForbish/u);
   assert.match(agentRules, /GLAB_ENABLE_CI_AUTOLOGIN=true/u);
-  assert.match(agentRules, /Do not create a new branch\/MR for a failed pre-merge pipeline/u);
-  assert.match(agentRules, /Immediately set and read back `squash=false`/u);
+  assert.match(agentRules, /Не создавайте новую ветку или MR из-за упавшего pipeline до слияния/u);
+  assert.match(agentRules, /немедленно задавайте `squash=false` через GitLab API и проверяйте сохранённое значение/u);
   assert.match(releaseProcess, /release-auth-smoke/u);
   assert.match(releaseProcess, /последним[\s\S]*latest\.yml/u);
   assert.match(releaseProcess, /assemble\/X\.Y\.Z/u);
   assert.match(releaseProcess, /Tag pipeline не пересобирает API или Windows installer/u);
-  assert.match(hotfixTemplate, /^## Release evidence$/mu);
-  assert.match(hotfixTemplate, /^## Rollback$/mu);
+  assert.match(hotfixTemplate, /^## Подтверждение релиза \(release evidence\)$/mu);
+  assert.match(hotfixTemplate, /^## Откат \(rollback\)$/mu);
   assert.match(hotfixTemplate, /^## Миграции и совместимость$/mu);
   for (const template of ['feature', 'release', 'hotfix', 'sync']) await access(rootFile(`.gitlab/merge_request_templates/${template}.md`));
   await assert.rejects(access(rootFile('.github/workflows/pr-checks.yml')));

@@ -1,59 +1,59 @@
-# Media and API stability incident — 2026-07-19
+# Инцидент с медиа и API стабильностью — 19.07.2026
 
-Status: fixes implemented in `WEB-29`; automated regression verification complete, long-running Windows smoke pending release candidate.
+Статус: исправления внедрены в `WEB-29`; автоматическая проверка регрессии завершена, длительное Windows тестирование ожидает кандидат на выпуск.
 
-## Impact
+## Влияние
 
-- A screen share could stop after a single transient lease-heartbeat `503`.
-- Remote participant audio could remain silent after an otherwise successful LiveKit ICE reconnect.
-- A voice-state read could return `500` when the LiveKit RoomService connection closed transiently.
-- Some Windows system-audio capture requests could fail because an ideal media constraint was expressed as an exact constraint.
+- Совместное использование экрана может прекратиться после одного одного мимолетного сигнала арендного сердца `503`.
+- Аудио удалённого участника могло оставаться без звука после, казалось бы, успешного повторного подключения LiveKit ICE.
+- Чтение состояния голоса могло вернуть `500`, когда соединение RoomService LiveKit временно закрылось.
+- Некоторые запросы на захват системного аудио Windows могут завершиться неудачей, потому что идеальное медиасоглашение было выражено как точное ограничение.
 
-## Evidence and root causes
+## Доказательства и основные причины
 
-All timestamps below are 19 July 2026. Sensitive headers, access tokens and message content are excluded.
+Все отметки времени ниже относятся к 19 июля 2026 года. Конфиденциальные заголовки, токены доступа и содержимое сообщений исключены.
 
-### Screen-share heartbeat
+### Сигнал живого соединения при демонстрации экрана
 
-- At 17:34:56 MSK request `f3f79a05-3ade-4a4c-ad19-3ff7f9f6804c` returned `503`; LiveKit reported `track_unpublished` 285 ms later.
-- At 18:47:19 MSK request `86e2543f-7713-41e0-9187-bc9972a4f939` returned `503`; LiveKit reported `track_unpublished` about 325 ms later.
-- The API heartbeat synchronously queried LiveKit on every renewal. The desktop client treated any failed heartbeat as confirmed lease loss and stopped publication immediately.
+- В 17:34:56 MSK запрос `f3f79a05-3ade-4a4c-ad19-3ff7f9f6804c` вернулся `503`; LiveKit сообщил `track_unpublished` через 285 мс.
+- В 18:47:19 MSK запрос `86e2543f-7713-41e0-9187-bc9972a4f939` вернул `503`; LiveKit сообщил `track_unpublished` примерно через 325 мс.
+- Синхронно передаваемый сигнал API опрашивал LiveKit при каждом обновлении. Клиент desktop рассматривал любой неудачный сигнал как подтвержденную потерю аренды и немедленно прекращал публикацию.
 
-The lease heartbeat now validates the authenticated participant and exact PostgreSQL lease owner without a synchronous RoomService request. Authoritative LiveKit leave/unpublish webhooks still release the lease. The client retries transient network/5xx failures inside a bounded grace period and stops immediately only for confirmed authorization, ownership or not-found responses.
+Текущий сигнал арендного соединения теперь подтверждает аутентифицированного участника и точного PostgreSQL владельца аренды без синхронного запроса к RoomService. Авторитетные вебхуки LiveKit leave/unpublish по-прежнему освобождают аренду. Клиент повторяет попытки при временных сетевых/5xx ошибках в пределах ограниченного льготного периода и прекращает сразу только при подтвержденных ответах об авторизации, владении или отсутствии.
 
-### Voice-state API
+### Голосовое состояние API
 
-- At 18:27:35 MSK request `e9a588cd-4563-439a-ae2d-b2a26003d28b` failed with `TypeError: terminated: other side closed` inside an undici TLS request to LiveKit.
-- `GET /api/v1/servers/:serverId/voice-state` ran full LiveKit reconciliation synchronously on every read.
+- В 18:27:35 запрос `e9a588cd-4563-439a-ae2d-b2a26003d28b` от MSK завершился неудачей с `TypeError: terminated: other side closed` внутри запроса undici TLS к LiveKit.
+- `GET /api/v1/servers/:serverId/voice-state` выполнял полную LiveKit сверку синхронно при каждом чтении.
 
-Voice-state reads now use the Redis projection. LiveKit reconciliation remains periodic/background, so a transient media-control-plane failure no longer converts an otherwise valid snapshot into API `500`.
+Чтение состояния голосовой связи теперь использует проекцию Redis. Согласование LiveKit остается периодическим/фоновым, поэтому временный сбой в медиапотоковой плоскости управления больше не превращает иначе валидный снимок в API `500`.
 
-### Remote audio reconnect
+### Повторное подключение удалённого звука
 
-- Between 16:06 and 16:07 MSK LiveKit logged RTC session resume followed by a successful ICE pair switch for participant `user_e9e25d32-..._NrtWR1xl`.
-- The renderer refreshed application state after reconnect but did not rebuild already-subscribed remote audio attachments.
+- Между 16:06 и 16:07 MSK LiveKit зафиксировал возобновление сессии RTC с последующей успешной сменой пары ICE для участника `user_e9e25d32-..._NrtWR1xl`.
+- renderer обновил состояние приложения после повторного подключения, но не перестроил уже подписанные удалённые аудиовложения.
 
-The media controller now detaches and reattaches existing remote audio tracks, reapplies participant and screen-share volume/mute preferences and calls `startAudio()` after `RoomEvent.Reconnected`.
+Теперь медиаконтроллер отсоединяет и повторно подключает существующие удалённые аудиотреки, повторно применяет настройки громкости/беззвучного режима участников и демонстрации экрана и вызывает `startAudio()` после `RoomEvent.Reconnected`.
 
-### Windows system audio
+### системный звук
 
-The Electron capture handler requests Windows loopback audio. The renderer used `restrictOwnAudio: { exact: true }`, which could overconstrain a valid source. It now requests the ideal boolean constraint and verifies the resulting track settings. If Chromium cannot exclude Vatrushka output, capture is rejected safely instead of starting a feedback-prone stream.
+Обработчик захвата Electron запрашивает обратную аудиосвязь Windows. renderer использовал `restrictOwnAudio: { exact: true }`, что могло чрезмерно ограничивать допустимый источник. Теперь он запрашивает идеальное булево ограничение и проверяет полученные настройки дорожки. Если Chromium не может исключить вывод Vatrushka, захват безопасно отклоняется вместо запуска потока с риском обратной связи.
 
-## Diagnostics and alerts
+## Диагностика и оповещения
 
-- `api_errors_total{code,route,status_class}` counts safe bounded server/dependency errors.
-- `screen_share_lease_heartbeat_total{result}` distinguishes `renewed`, `ownership_lost`, `rejected` and `dependency_error`.
-- Desktop media lifecycle diagnostics are sent through a validated IPC contract and contain event, timestamp, server/channel, optional voice session, reason and retry attempt only.
-- Prometheus alerts report API 5xx reasons and screen-share heartbeat ownership/dependency failures.
+- `api_errors_total{code,route,status_class}` учитывает ошибки безопасного ограниченного сервера/зависимости.
+- `screen_share_lease_heartbeat_total{result}` различает `renewed`, `ownership_lost`, `rejected` и `dependency_error`.
+- Диагностику жизненного цикла медиа Desktop отправляют через проверенный контракт IPC и она содержит только событие, временную метку, сервер/канал, необязательную голосовую сессию, причину и попытку повторной отправки.
+- Prometheus уведомления сообщают о причинах 5xx для API и о сбоях владельца/зависимостей функции совместного использования экрана.
 
-## Observability platform corrections
+## Исправления платформы наблюдаемости
 
-- Loki explicitly bypasses the egress proxy for internal gRPC and listens on `0.0.0.0`, preventing Tinyproxy `403 CONNECT` errors.
-- TURN is probed using TLS with the correct SNI rather than a raw TCP connect that generated handshake EOF noise.
-- The node-exporter systemd collector is disabled where AppArmor blocks its D-Bus handshake; the remaining host collectors continue to operate.
+- Loki явно обходит исходящий прокси для внутреннего gRPC и слушает на `0.0.0.0`, предотвращая ошибки Tinyproxy `403 CONNECT`.
+- TURN проверяется с помощью TLS с правильным SNI, а не с помощью прямого подключения TCP, которое создаёт шум рукопожатия EOF.
+- Сборщик systemd node-exporter отключен там, где AppArmor блокирует его D-Bus рукопожатие; оставшиеся сборщики на хосте продолжают работать.
 
-## Verification
+## Проверка
 
-- API regression tests cover heartbeat renewal during LiveKit unavailability and voice-state reads during the same outage.
-- Renderer tests cover transient heartbeat retry, confirmed lease-loss shutdown, remote-audio reattachment and support request IDs.
-- Remaining release evidence: a long-running two-participant Windows voice session, network reconnect and repeated screen-share start/stop/source replacement.
+- Регрессионные тесты API охватывают обновление heartbeat во время недоступности LiveKit и чтение состояния голоса во время той же аварии.
+- Тесты Renderer охватывают повторные попытки временного сигнала сердца, подтвержденное завершение работы при потере аренды, повторное подключение удаленного аудио и идентификаторы запросов поддержки.
+- Оставшиеся доказательства выпуска: длительная голосовая сессия с двумя участниками Windows, переподключение к сети и повторное начало/остановка/замена источника демонстрации экрана.

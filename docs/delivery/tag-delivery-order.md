@@ -1,13 +1,13 @@
-# Tag delivery order
+# Заказ на доставку тега
 
-Labels: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
+Метки: **факт**, **вывод**, **предположение**, **неизвестно**, **предложение**.
 
-- **fact:** the API image is built and pushed by the immutable image job on `develop` and on the protected production branch; it is addressed by the merge commit SHA.
-- **fact:** the protected tag pipeline only resolves that pre-existing image to a registry digest. It does not rebuild the API image.
-- **fact:** `windows-production-package` belongs to the `package` stage, before the manual production deployment gate, and depends only on tag verification.
-- **fact:** `deploy-production-runtime` uploads the checksum-bound source archive and candidate manifest to the production inbox, then invokes only the root-owned `vatrushka-preflight`, `vatrushka-deploy` and `vatrushka-runtime-status` wrappers through the least-privilege deploy account.
-- **fact:** `publish-production` waits for the package artifact, the manually approved product runtime deployment and direct Observer verification before publishing the stable updater manifest.
-- **fact:** the stable updater feed remains the exposure gate: package artifacts alone are not visible to installed clients.
-- **inference:** an installer can be inspected before any production runtime change while retaining the no-early-client-exposure behavior.
-- **unknown:** immutable Windows installer promotion is still tag-time packaging; it is intentionally kept separate from API-image promotion until the beta/RC channels are implemented.
-- **proposal:** before creating a protected stable tag, wait for the production-branch immutable image job for the same merge SHA to finish successfully. The tag resolver is fail-closed if that image is absent.
+- **факт:** образ API создается и отправляется задачей immutable image на `develop` и на защищенную ветку production; он упоминается в merge-коммите SHA.
+- **факт:** защищённый тег pipeline только разрешает существующее изображение до дайджеста реестра. Он не перестраивает изображение API.
+- **факт:** `windows-production-package` относится к стадии `package`, перед ручным этапом развертывания production, и зависит только от проверки тегов.
+- **факт:** `deploy-production-runtime` загружает связанный с контрольной суммой исходный архив и кандидатский манифест в почтовый ящик production, затем вызывает только root-правами принадлежащие `vatrushka-preflight`, `vatrushka-deploy` и `vatrushka-runtime-status` обертки через учетную запись развертывания с минимальными привилегиями.
+- **факт:** `publish-production` ожидает артефакт пакета, развертывание продукта runtime, одобренного вручную, и прямую проверку Observer перед публикацией стабильного манифеста updater.
+- **факт:** стабильная updater поставка остаётся шлюзом доступа: только артефакты пакета сами по себе не видны установленным клиентам.
+- **вывод:** установщик можно проверить до любого изменения production runtime, при этом сохраняя поведение без раннего воздействия на клиента.
+- **неизвестно:** неизменяемое продвижение установщика Windows по-прежнему упаковывается в тег; оно намеренно отделено от продвижения образа API до внедрения бета-/RC-каналов.
+- **предложение:** перед созданием защищённого стабильного тега дождитесь успешного завершения задачи immutable image для ветки production того же слияния SHA. Резолвер тегов — fail-closed, если этого образа нет.

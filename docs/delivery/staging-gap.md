@@ -1,11 +1,11 @@
-# Staging and client-channel gap
+# Staging и разрыв между клиентом и каналом
 
 Метки: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
 
-- **fact:** `npm run dev:desktop` exists and updater disables itself in development; its default is local Vite proxy, not staging.
-- **fact:** no active staging VPS, staging API, beta updater feed or prerelease package job exists. The manual staging candidate job and a root-owned runtime readiness check are wired, but cannot be run until the isolated host and CI variables are provisioned.
-- **fact:** stable package uses production API and protected SemVer tag flow.
+- **факт:** `npm run dev:desktop` существует, а updater отключается в разработке; его настройка по умолчанию — локальный прокси Vite, а не staging.
+- **факт:** нет активной staging VPS, staging API, бета updater подачи или задания предварительного выпуска. Ручное staging кандидатное задание и проверка готовности runtime, принадлежащая root, настроены, но не могут быть выполнены до тех пор, пока изолированный хост и переменные CI не будут предоставлены.
+- **факт:** стабильный пакет использует production API и защищенный SemVer поток тегов.
 - **inference:** current beta/RC separation required by the ТЗ is absent.
-- **assumption:** staging VPS will be available only after the current production VPS has been safely migrated, observed and then reinstalled.
-- **unknown:** staging DNS names and tester distribution policy.
-- **proposal:** explicit beta build from `develop` only for desktop/shared changes, only after staging readiness/smoke/Observer verification; RC only from `release/X.Y.Z`; stable only protected `vX.Y.Z`.
+- **предположение:** staging VPS будет доступен только после того, как текущий production VPS будет безопасно перенесен, проверен и затем переустановлен.
+- **неизвестно:** staging DNS имена и политика распределения тестеров.
+- **предложение:** явная бета-версия из `develop` только для изменений desktop/shared, только после готовности/прогона/проверки Observer staging; RC только из `release/X.Y.Z`; стабильная только защищенная `vX.Y.Z`.

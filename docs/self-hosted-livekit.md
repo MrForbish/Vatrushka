@@ -6,7 +6,7 @@ LiveKit рекомендует host networking для VM и предупрежд
 
 ## DNS и certificates
 
-- `api.example.com` → public IPv4 (Fastify/Caddy);
+- `api.example.com` → публичный IPv4 (Fastify/Caddy)
 - `livekit.example.com` → тот же IPv4 (WSS через Caddy → host:7880);
 - `turn.example.com` → тот же IPv4 (embedded TURN).
 
@@ -40,10 +40,7 @@ LiveKit рекомендует host networking для VM и предупрежд
    VATRUSHKA_APP_ENV_FILE=/etc/vatrushka/app.env docker compose --env-file /etc/vatrushka/app.env -f infra/livekit/docker-compose.self-hosted.yml up -d
    ```
 
-The root-owned runtime environment must set `LIVEKIT_WEBHOOK_URL` to
-`https://<api-domain>/api/v1/integrations/livekit/webhook`, `TURN_DOMAIN`, and
-`TURN_CERT_DIRECTORY`. Staging values must use staging domains only; do not
-reuse the production API, TURN domain or certificate path.
+Среда, принадлежащая root, runtime, должна установить `LIVEKIT_WEBHOOK_URL` в `https://<api-domain>/api/v1/integrations/livekit/webhook`, `TURN_DOMAIN` и `TURN_CERT_DIRECTORY`. Значения Staging должны использовать только домены staging; не используйте повторно production API, TURN домен или путь к сертификату.
 
 ## Диагностика
 

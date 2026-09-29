@@ -10,19 +10,19 @@
 
 - [ ] lint
 - [ ] typecheck
-- [ ] релевантные unit/integration
-- [ ] Storybook/Electron/visual для UI
-- [ ] screenshots приложены для UI
+- [ ] релевантные модульные и интеграционные тесты
+- [ ] Storybook, Electron и визуальные тесты для UI
+- [ ] для изменений UI приложены скриншоты
 
-## Риски и rollback
+## Риски и откат
 
-<!-- Auth, permissions, voice, screen share, messaging, updater, performance. -->
+<!-- Аутентификация, права, голос, демонстрация экрана, сообщения, updater, производительность. -->
 
 ## Миграции и совместимость
 
 - PostgreSQL: нет
-- Redis keys: нет
-- S3 lifecycle: нет
-- env/config: нет
+- ключи Redis: нет
+- жизненный цикл S3: нет
+- окружение и конфигурация: нет
 - feature flags: нет
-- breaking changes: нет
+- несовместимые изменения: нет

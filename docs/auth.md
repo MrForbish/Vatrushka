@@ -1,4 +1,4 @@
-# Authentication
+# Аутентификация
 
 Новый аккаунт создаётся с паролем и подтверждением email. Пароль хешируется `scrypt` с индивидуальной 16-байтной солью и никогда не хранится или не логируется открытым текстом. Passwordless endpoints `/auth/request-code` и `/auth/verify-code` удалены и возвращают 404; существующий аккаунт без password hash не может авторизоваться.
 
@@ -8,7 +8,7 @@
 
 ## OTP
 
-- email: `trim + lowercase`;
+- электронная почта: `trim + lowercase`;
 - шесть цифр, 10 минут, повтор через 60 секунд;
 - максимум пять проверок;
 - новый код помечает предыдущий consumed;
@@ -20,11 +20,11 @@ SMTP credentials, OTP и пароль не попадают в production logs. 
 
 OTP и security notices сохраняются в PostgreSQL outbox до отправки. Код в outbox зашифрован application credential key, SMTP выполняется фоновым worker с повторными попытками и дедупликацией. Создание auth session и ответ после 2FA больше не ждут SMTP; состояние доставки наблюдается через `auth_email_delivery_total`, `auth_email_delivery_duration_seconds` и структурированные outbox logs. Письма имеют отдельный текст по назначению кода, HTML/text версии и footer с allowlisted контактами поддержки.
 
-## Password reset
+## Сброс пароля
 
 `POST /auth/password/reset/request-code` всегда возвращает одинаковый ответ и проходит тот же SMTP-путь как для существующего, так и для неизвестного email, поэтому не раскрывает наличие аккаунта. Reset-код имеет отдельный purpose, HMAC hash, TTL, resend и attempt limits. `POST /auth/password/reset/complete` атомарно обновляет password hash и отзывает все session rows пользователя; активные access/refresh tokens после этого не проходят серверную проверку, presence очищается, а `PASSWORD_RESET` попадает в security feed и email notice. Настроенный TOTP не отключается.
 
-## Sessions
+## Сессии
 
 Access JWT: HS256, issuer/audience, 15 минут, только в renderer memory. Refresh: 48 random bytes/base64url, SHA-256 hash в PostgreSQL, 30 дней. Зашифрованный refresh читает только Electron main process: preload не имеет метода, возвращающего долгоживущий токен renderer-коду. Main самостоятельно выполняет startup refresh, rotation и logout и отдаёт renderer только новый access JWT и пользователя.
 

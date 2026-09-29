@@ -1,12 +1,12 @@
-# Cleanup risks and gates
+# Риски и контрольные этапы очистки
 
-| Risk | Classification | Gate |
+| Риск | Классификация | Ворота |
 | --- | --- | --- |
-| Delete compatibility messaging data/path | critical | Migration adoption, backup/rollback proof and explicit approval. |
-| Delete LiveKit/realtime/IPC/auth code | critical | Governing ADR, cross-process tests and explicit bounded plan. |
-| Delete user-owned local packs/artifacts | high | Never in a repository cleanup MR. |
-| Remove stale worktree | high | All conditions in `worktree-and-branch-inventory.md`. |
-| Remove dependency | medium | Dedicated package-manager MR and regenerated lockfile. |
-| Remove CSS/component/test | medium | Consumer search plus Storybook/visual/behavior verification. |
+| Удалить данные/путь сообщений о совместимости | критично | Принятие миграции, резервное копирование/откат и явное одобрение. |
+| Удалить LiveKit/realtime/IPC/код аутентификации | критический | Управляющий ADR, межпроцессные тесты и явный ограниченный план. |
+| Удалить локальные пакеты/артефакты, принадлежащие пользователю | высокий | Никогда не используется при очистке репозитория MR. |
+| Удалить устаревшее рабочее дерево | высокая | Все условия в `worktree-and-branch-inventory.md`. |
+| Удалить зависимость | средний | Специальный менеджер пакетов MR и сгенерированный заново lockfile. |
+| Удалить CSS/component/test | средний | Проверка поиска потребителя плюс Storybook/визуальная/поведенческая проверка. |
 
-The audit intentionally makes no production, staging, VPS, DNS, GitLab variable, S3, SSH, CI/CD, migration, branch or worktree mutations.
+Аудит намеренно не делает никаких изменений переменной production, staging, VPS, DNS, GitLab, S3, SSH, CI/CD, миграции, ветки или рабочего дерева.
