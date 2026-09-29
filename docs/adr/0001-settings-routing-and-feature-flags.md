@@ -2,7 +2,7 @@
 
 - Статус: `accepted`
 - Дата: `2026-07-17`
-- Scope: settings feature pack, Phase 1
+- Область применения: пакет функций настроек, Фаза 1
 
 ## Контекст
 
@@ -59,6 +59,6 @@ Renderer сейчас не использует router: `App.tsx` переклю
 ## Проверки следующего этапа
 
 - unit: route builders/parser и safe fallback;
-- component: desktop/compact shell, keyboard navigation, permission-denied, dirty-state blocker;
-- Storybook: user/server shell, loading/error/read-only states;
+- компонент: desktop/компактная оболочка, навигация с помощью клавиатуры, отказ в доступе, блокировщик грязного состояния;
+- Storybook: оболочка пользователя/сервера, состояния загрузки/ошибки/только для чтения;
 - E2E: открытие settings из существующей шестерёнки, deep link и возврат без потери server/voice context.

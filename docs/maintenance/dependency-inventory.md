@@ -1,13 +1,13 @@
-# Dependency inventory
+# Учёт зависимостей
 
-## Fact
+## Факт
 
-The root package is a private npm workspace with five workspace manifests. Root dependencies are development tooling; runtime dependency ownership resides in the API, desktop and shared workspace manifests.
+Корневой пакет является частным рабочим пространством npm с пятью манифестами рабочего пространства. Зависимости корня — это инструменты для разработки; владение зависимостями runtime находится в манифестах рабочих пространств API, desktop и общего рабочего пространства.
 
-## Status
+## Статус
 
-No dependency is `dead-confirmed`. `npm ls`, source imports, package scripts, CI jobs and packaging must all agree before a direct dependency can be removed. Transitive lockfile entries must never be edited manually.
+Никакая зависимость не является `dead-confirmed`. `npm ls`, импорты источников, скрипты пакетов, CI задания и упаковка должны все совпадать, прежде чем можно будет удалить прямую зависимость. Записи в транзитивном lockfile никогда не должны редактироваться вручную.
 
-## Future removal gate
+## Ворота будущего удаления
 
-Use the package manager to remove one direct dependency in a dedicated MR, regenerate the lockfile, run affected workspace build/typecheck/test and verify CI/package paths.
+Используйте менеджер пакетов, чтобы удалить одну прямую зависимость в выделенном MR, пересоздайте lockfile, выполните сборку/typecheck/тест для затронутого рабочего пространства и проверьте пути CI/package.

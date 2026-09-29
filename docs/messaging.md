@@ -21,7 +21,7 @@ PostgreSQL хранит conversations, members, messages, attachments metadata, 
 - `GET/PUT /servers/:id/notification-preferences`;
 - `GET/PUT /conversations/:id/notification-preferences`;
 - `GET /notifications`, mark read, dismiss и mark-all-read;
-- attachment intent/finalize/download/delete endpoints.
+- конечные точки для intent/финализации/скачивания/удаления вложений.
 
 Старые channel/direct endpoints сохраняются на один совместимый релиз. Новый UI читает canonical contracts; ручных room/join-code маршрутов нет.
 
@@ -31,13 +31,13 @@ Desktop получает `url` и краткоживущий access token чер
 
 Outbox worker публикует committed события в Redis Pub/Sub с at-least-once семантикой. Каждый backend-инстанс получает событие и доставляет его локальным сокетам. Client дедуплицирует `event.id`; после reconnect всегда повторно загружает conversation/history/unread по HTTP, поэтому потеря Pub/Sub не означает потерю сообщения. Отозванная session закрывается не позднее следующего 30-секундного heartbeat.
 
-## Read state
+## Чтение состояния
 
 Direct message проходит состояния `sending → sent → delivered → read`; ошибка optimistic request даёт `failed` и retry с тем же `clientMessageId`. Delivered фиксируется после получения истории устройством адресата. Read отправляется только когда нужный диалог видим, окно сфокусировано и состояние сохраняется 500 мс. Курсоры обновляются монотонно и хранятся на пользователя, а не на устройство.
 
 Для серверных каналов хранится только пользовательский cursor для unread; персональные delivery receipts для каждого участника не создаются. UI показывает separator и переход к первому непрочитанному, cursor pagination вверх сохраняет scroll position, удалённое сообщение остаётся tombstone.
 
-## Notification decision
+## Решение по уведомлению
 
 Перед Electron toast клиент и API учитывают access, автора, блокировку, активный conversation, mute, уровень `all/mentions/none`, подавление role/everyone, глобальные direct/mention switches, DND, quiet hours, возраст и dedupe события. Тихие часы задаются одним интервалом и на каждом устройстве считаются по его локальному времени — отдельный часовой пояс не хранится и не показывается. DND подавляет toast и звук, но не историю, internal notification и unread.
 

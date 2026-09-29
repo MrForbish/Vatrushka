@@ -99,7 +99,7 @@ Vatrushka должна восприниматься как «живое цифр
 
 ### 4.1. Основной набор
 
-#### Onest Variable
+#### Переменная Onest
 
 Используется для 90% интерфейса:
 
@@ -114,7 +114,7 @@ Vatrushka должна восприниматься как «живое цифр
 
 Начертания: 400, 500, 600, 700.
 
-#### Unbounded
+#### Безграничный
 
 Используется дозированно:
 
@@ -126,7 +126,7 @@ Vatrushka должна восприниматься как «живое цифр
 
 Начертания: 500 и 600. Не применять для длинного текста и списков.
 
-#### IBM Plex Mono
+#### IBM Плекс Моно
 
 Используется для:
 
@@ -134,10 +134,10 @@ Vatrushka должна восприниматься как «живое цифр
 - резервных кодов 2FA;
 - ID сессий;
 - технической диагностики;
-- ping, bitrate, FPS;
+- ping, битрейт, FPS;
 - служебных логов.
 
-### 4.2. Fallback
+### 4.2. Резервный вариант
 
 ```css
 --font-ui: "Onest", "Segoe UI", Arial, sans-serif;
@@ -226,11 +226,11 @@ Vatrushka должна восприниматься как «живое цифр
 
 ### 5.3. Состояния присутствия
 
-- online: `#2FD27A`;
-- idle: `#FFB020`;
-- do-not-disturb: `#FF5B6E`;
-- offline: `#647386`;
-- streaming: `#A66CFF`.
+- онлайн: `#2FD27A`;
+- бездействие: `#FFB020`;
+- не-беспокоить: `#FF5B6E`;
+- офлайн: `#647386`;
+- стриминг: `#A66CFF`.
 
 ### 5.4. Доступность
 
@@ -272,9 +272,9 @@ Vatrushka должна восприниматься как «живое цифр
 
 ### 6.4. Анимации
 
-- hover: 120–160 ms;
+- наведение курсора: 120–160 мс;
 - раскрытие панели: 180–220 ms;
-- modal: 220–260 ms;
+- модальный: 220–260 мс;
 - speaking ring: реакция на RMS-уровень аудио, сглаживание 100–180 ms;
 - не использовать бесконечное мерцание;
 - учитывать `prefers-reduced-motion`.
@@ -289,10 +289,10 @@ Storybook должен быть не набором красивых скрин�
 
 Рекомендуемый стек:
 
-- Storybook for React + Vite;
-- addon-essentials;
-- addon-interactions;
-- addon-a11y;
+- Storybook для React + Vite;
+- аддон-эссеншлс;
+- взаимодействия-дополнений;
+- дополнение-a11y;
 - visual regression через Chromatic или локальные screenshot-тесты Playwright;
 - MSW для мокирования API.
 
@@ -416,17 +416,17 @@ Pages/
 
 Для каждого интерактивного компонента:
 
-- Default;
-- Hover;
-- Active / Pressed;
-- Focus-visible;
-- Disabled;
-- Loading;
-- Error;
-- Long Russian text;
-- Empty content;
-- Reduced motion;
-- Keyboard interaction.
+- По умолчанию;
+- Нависать;
+- Активный / Нажатый;
+- Фокус-видимый;
+- Отключено;
+- Загрузка;
+- Ошибка;
+- Длинный русский текст;
+- Пустое содержимое;
+- Сниженное движение;
+- Взаимодействие с клавиатурой.
 
 Дополнительно:
 
@@ -442,47 +442,47 @@ Pages/
 
 ### ChannelRow
 
-- text;
-- voice;
-- private;
-- announcement;
-- temporary;
-- unread;
-- mention count;
-- full voice channel;
-- denied access;
-- drag state.
+- текст;
+- голос;
+- частный;
+- объявление
+- временный
+- непрочитанное;
+- количество упоминаний;
+- полный голосовой канал;
+- доступ запрещен;
+- состояние перетаскивания.
 
 ### VoiceParticipantTile
 
-- speaking;
-- muted by self;
-- muted by moderator;
-- deafened;
-- connection degraded;
-- sharing screen;
-- Founder / Developer;
-- overflow name.
+- говоря;
+- отключено самим пользователем;
+- приглушён модератором;
+- оглохший
+- соединение ухудшено;
+- демонстрация экрана
+- Основатель / Разработчик;
+- имя переполнения.
 
 ### ScreenSourceCard
 
-- screen;
-- window;
-- application;
-- selected;
-- source has audio;
-- source has no audio;
-- source closed;
-- preview unavailable.
+- экран;
+- окно;
+- заявление;
+- выбрано;
+- источник имеет аудио;
+- источник не имеет аудио;
+- источник закрыт;
+- превью недоступно.
 
 ### PermissionTriState
 
-- inherit;
-- allow;
-- deny;
-- disabled by hierarchy;
-- blocked by system rule;
-- dangerous permission warning.
+- наследовать;
+- позволять
+- отказывать
+- отключено по иерархии;
+- заблокировано правилом системы;
+- опасное предупреждение о разрешении.
 
 ## 10. Тестирование компонентов
 
@@ -528,8 +528,8 @@ Pages/
 - квадратный или скруглённый знак сервера;
 - название;
 - количество участников или краткий статус;
-- unread marker;
-- mention badge;
+- маркер непрочитанного
+- значок упоминания;
 - признак активного голосового события.
 
 В нижней части:
@@ -588,7 +588,7 @@ type ChannelType =
 - создание временного канала при входе пользователя и удаление после выхода последнего участника;
 - сохранение порядка каналов на сервере.
 
-### 12.3. Acceptance criteria
+### 12.3. Критерии приёмки
 
 - пользователь не видит канал без `VIEW_CHANNEL`;
 - пользователь не может подключиться к voice-каналу без `CONNECT_VOICE`;
@@ -605,7 +605,7 @@ type ChannelType =
 Поддержать:
 
 - группировку последовательных сообщений одного автора;
-- replies;
+- ответы;
 - редактирование;
 - удаление;
 - реакции;
@@ -614,19 +614,19 @@ type ChannelType =
 - закрепление;
 - вложения;
 - markdown;
-- code blocks;
+- блоки кода;
 - optimistic update с откатом при ошибке;
-- virtualized list.
+- виртуализированный список.
 
-### 13.2. Composer
+### 13.2. Композитор
 
 Composer содержит:
 
-- multiline input;
+- многострочный ввод;
 - кнопку вложения;
-- emoji/GIF entry point;
+- emoji/GIF точка входа;
 - push-to-talk/voice-message entry point как disabled placeholder до отдельного релиза;
-- reply/edit context;
+- ответить/редактировать контекст;
 - индикатор прав на отправку.
 
 ### 13.3. Системные карточки
@@ -646,8 +646,8 @@ Composer содержит:
 
 - список последних диалогов в библиотеке серверов;
 - unread и mention counters;
-- typing indicator;
-- presence;
+- индикатор набора текста
+- присутствие;
 - блокировка пользователя;
 - возможность запретить личные сообщения от участников конкретного сервера;
 - текстовые сообщения и вложения используют общий messaging-компонент.
@@ -677,16 +677,16 @@ Composer содержит:
 - полноэкранный режим;
 - режим «в отдельном окне» допускается как следующий этап, UI entry point можно предусмотреть.
 
-### 15.3. Control dock
+### 15.3. Понтон управления
 
 Плавающая нижняя панель:
 
-- microphone;
-- deafen/output mute;
-- quick device selector;
-- screen share;
-- invite;
-- leave channel.
+- микрофон
+- оглушить/выход отключить звук;
+- быстрый выбор устройства
+- демонстрация экрана
+- приглашать
+- покинуть канал.
 
 Каждая кнопка имеет tooltip и keyboard shortcut.
 
@@ -697,8 +697,8 @@ Composer содержит:
 - `voiceVolume` — голоса участников;
 - `streamVolume` — звук демонстрации;
 - `streamMuted`;
-- per-user volume;
-- output device.
+- громкость для каждого пользователя;
+- устройство вывода.
 
 Значения viewer-side хранятся локально и не влияют на других участников.
 
@@ -728,7 +728,7 @@ Composer содержит:
 
 Карточка источника:
 
-- live preview;
+- прямой просмотр
 - название;
 - тип;
 - разрешение для экрана;
@@ -762,33 +762,33 @@ Composer содержит:
 - source закрылся;
 - аудиозахват недоступен;
 - демонстрация уже активна;
-- LiveKit publish failed;
+- LiveKit не удалось опубликовать;
 - потеря source во время стрима.
 
 ---
 
 ## 17. Аудиоустройства и аудионастройки
 
-### 17.1. Input
+### 17.1. Ввод
 
 - выбор системного default или конкретного устройства;
-- live level meter;
+- индикатор уровня в реальном времени
 - mic test с локальным playback;
-- input gain;
-- noise suppression;
-- echo cancellation;
-- automatic gain control;
-- manual input sensitivity;
-- push-to-talk binding;
+- входной усиление;
+- подавление шума;
+- эхо-отмена;
+- автоматический контроль усиления
+- чувствительность ручного ввода;
+- привязка кнопки для разговора
 - уведомление при исчезновении устройства.
 
-### 17.2. Output
+### 17.2. Вывод
 
 - выбор output device;
-- test sound;
-- master volume;
-- voice volume;
-- stream volume;
+- тестовый звук;
+- главная громкость;
+- громкость голоса;
+- громкость потока;
 - automatic switch to newly connected headset как опция;
 - fallback на default device при отключении выбранного.
 
@@ -814,11 +814,11 @@ Composer содержит:
 - TOTP 2FA;
 - резервные коды;
 - восстановление пароля;
-- trusted device;
+- доверенное устройство
 - список активных сессий;
 - завершение отдельной или всех сессий;
 - уведомление о новом входе;
-- rate limiting;
+- ограничение скорости
 - блокировка brute-force без раскрытия существования email.
 
 В Electron refresh token хранится через `safeStorage` или HttpOnly-сессию, в зависимости от текущей архитектуры. Renderer не должен иметь прямого доступа к долгоживущему секрету.
@@ -852,12 +852,12 @@ Composer содержит:
 ## 20. Предустановленные роли
 
 - Owner — системный владелец сервера;
-- Administrator;
-- Moderator;
-- Curator;
-- Presenter;
-- Member;
-- Guest;
+- Администратор;
+- Модератор;
+- Куратор
+- Ведущий
+- Член;
+- Гость
 - Restricted.
 
 Owner нельзя удалить, переназначить без операции передачи владения или опустить ниже других ролей.
@@ -921,8 +921,8 @@ Owner нельзя удалить, переназначить без опера�
 
 В UI каждое channel override имеет три состояния:
 
-- inherit;
-- allow;
+- наследовать;
+- разрешать
 - deny.
 
 Глобальные права роли — обычный набор разрешений. Явные deny используются только в channel/member overwrite.
@@ -975,14 +975,14 @@ Backend обязан повторять все проверки, независ�
 - предупреждения для опасных разрешений;
 - индикатора несохранённых изменений или autosave state.
 
-Dangerous permissions:
+Опасные разрешения:
 
-- Administrator;
-- Manage Roles;
-- Manage Server;
-- Ban Members;
-- Manage 2FA Policy;
-- Export Server Data.
+- Администратор;
+- Управление ролями;
+- Управлять сервером;
+- Забанить участников;
+- Управление политикой двухфакторной аутентификации
+- Экспорт данных сервера.
 
 Перед назначением Administrator показывать confirm dialog с перечислением последствий.
 
@@ -993,58 +993,58 @@ Dangerous permissions:
 ## 25. Панель участников
 
 - группировка по platform badge и server role;
-- online / idle / DND / offline;
+- в сети / бездействует / DND / не в сети;
 - поиск;
 - контекстное меню;
 - быстрый local volume;
-- mute/block/report;
-- collapsed mode;
+- выключить звук/заблокировать/пожаловаться;
+- свернутый режим;
 - не показывать скрытых администраторов через недокументированные поля.
 
-## 26. Presence
+## 26. Присутствие
 
 Статусы:
 
-- online;
-- idle;
-- do-not-disturb;
-- offline;
+- онлайн;
+- бездействующий;
+- не-беспокоить;
+- офлайн;
 - streaming.
 
 Presence отправляется через realtime-канал с heartbeat. Offline не должен вычисляться только на клиенте.
 
 ## 27. Уведомления
 
-- unread dot;
-- mention counter;
-- desktop notification;
-- sound notification;
+- непрочитанная точка;
+- счётчик упоминаний;
+- desktop уведомление;
+- звуковое уведомление
 - per-server и per-channel настройки;
 - режим `all / mentions / none`;
 - DND выключает звук и desktop notification, но не меняет unread state.
 
-## 28. Audit log
+## 28. Журнал аудита
 
 Логировать:
 
 - изменение ролей и permissions;
 - создание/удаление каналов;
 - изменение server settings;
-- invite creation/revocation;
-- kick/ban/timeout;
+- приглашать к созданию/отзыву;
+- выгнать/забанить/тайм-аут;
 - принудительный stop stream;
 - изменение 2FA policy;
-- transfer ownership.
+- передать право собственности.
 
 Запись содержит:
 
-- actor;
-- action;
-- target;
-- timestamp;
-- before/after summary;
-- request/correlation id;
-- optional reason.
+- актёр
+- действие;
+- цель;
+- метка времени;
+- резюме до/после;
+- идентификатор запроса/корреляции;
+- необязательная причина.
 
 ---
 
@@ -1094,8 +1094,8 @@ src/renderer/
 
 - TanStack Query — server state и cache;
 - Zustand — локальное ephemeral state: открытые панели, выбранный source, состояние dock;
-- LiveKit SDK — media state;
-- WebSocket client — presence, messaging, server updates;
+- LiveKit SDK — состояние носителя;
+- WebSocket клиент — присутствие, обмен сообщениями, обновления сервера;
 - React Hook Form + Zod — формы.
 
 ## 31. Основные сущности backend
@@ -1127,7 +1127,7 @@ moderation_actions
 
 - unique `(server_id, role_name)` по необходимости;
 - unique ownership на сервер;
-- unique `(member_id, role_id)`;
+- уникальный `(member_id, role_id)`
 - foreign keys с продуманным delete policy;
 - messages удаляются soft-delete для модерационного аудита, если это соответствует политике хранения;
 - session tokens не хранятся в открытом виде.
@@ -1174,7 +1174,7 @@ GET    /servers/:serverId/audit-log
 
 Имена endpoints можно адаптировать к текущему API, но permission checks обязательны на backend.
 
-## 33. Realtime events
+## 33. События в реальном времени
 
 ```text
 MESSAGE_CREATED
@@ -1197,9 +1197,9 @@ AUDIT_EVENT_CREATED
 
 Каждое событие содержит version или updatedAt для защиты от out-of-order обновлений.
 
-## 34. LiveKit metadata
+## 34. LiveKit метаданные
 
-Server-generated token metadata:
+Метаданные токена, сгенерированные сервером:
 
 ```ts
 type VoiceParticipantMetadata = {
@@ -1216,7 +1216,7 @@ type VoiceParticipantMetadata = {
 
 Клиент не может сам повысить media permissions через metadata.
 
-## 35. Electron security
+## 35. Electron безопасность
 
 Сохранить:
 
@@ -1224,7 +1224,7 @@ type VoiceParticipantMetadata = {
 - `contextIsolation: true`;
 - `sandbox: true`;
 - typed preload API;
-- allowlist IPC channels;
+- разрешить список IPC каналов;
 - запрет произвольной навигации;
 - CSP;
 - подписанные обновления;
@@ -1269,33 +1269,33 @@ Screen capture и device enumeration выполняются через огра�
 
 ## 39. Тестирование
 
-### Unit
+### Единица
 
-- permission resolver;
-- role hierarchy;
-- audio settings reducers;
-- source selection;
-- auth validation;
-- formatting utilities.
+- разрешающий разрешения
+- иерархия ролей
+- редукторы аудионастроек;
+- выбор источника
+- проверка аутентификации;
+- утилиты форматирования.
 
-### Component
+### Компонент
 
-- Storybook interaction tests;
-- accessibility checks;
-- screenshot regression.
+- Storybook тесты взаимодействия;
+- проверки доступности;
+- screenshot регрессия.
 
-### Integration
+### Интеграция
 
-- API permission denials;
-- realtime updates;
-- role editor save;
-- screen share start/stop;
-- device fallback.
+- API отказы в разрешении;
+- обновления в реальном времени;
+- роль редактора сохранить;
+- начать/остановить совместное использование экрана;
+- аварийный режим устройства.
 
 ### E2E
 
 - регистрация → подтверждение → вход;
-- 2FA flow;
+- Процесс двухфакторной аутентификации
 - создание сервера и каналов;
 - назначение роли;
 - запрет доступа к приватному каналу;
@@ -1309,7 +1309,7 @@ Screen capture и device enumeration выполняются через огра�
 
 # Часть IX. Критерии готовности
 
-## 40. Design system DoD
+## 40. Система проектирования DoD
 
 - все основные экраны используют tokens;
 - Storybook содержит foundations, primitives и ключевые page stories;
@@ -1317,7 +1317,7 @@ Screen capture и device enumeration выполняются через огра�
 - visual regression настроен для критичных экранов;
 - тёмная тема выглядит целостно на 100%, 125% и 150% scaling.
 
-## 41. Voice and screen share DoD
+## 41. Голосовая связь и демонстрация экрана DoD
 
 - голос и stream audio регулируются независимо;
 - viewer mute не влияет на других;
@@ -1328,7 +1328,7 @@ Screen capture и device enumeration выполняются через огра�
 - при неподдерживаемом режиме есть честное предупреждение;
 - stop share освобождает tracks и системные resources.
 
-## 42. Roles DoD
+## 42. Роли DoD
 
 - вычисление прав соответствует алгоритму из раздела 23;
 - backend запрещает недоступные операции;
@@ -1338,7 +1338,7 @@ Screen capture и device enumeration выполняются через огра�
 - Founder badge не выдаётся через server roles;
 - audit log фиксирует изменения.
 
-## 43. Auth DoD
+## 43. Авторизация DoD
 
 - все заявленные login flows работают;
 - 2FA имеет recovery codes;
@@ -1360,68 +1360,68 @@ Screen capture и device enumeration выполняются через огра�
 
 ## Этап 1. Foundations + Storybook
 
-- tokens;
-- fonts;
-- primitives;
-- overlays;
-- interaction/a11y tests.
+- токены;
+- шрифты;
+- примитивы;
+- наложения;
+- взаимодействие/a11y тесты.
 
 ## Этап 2. App Shell
 
-- workspace library;
-- server context;
-- top bar;
-- member drawer;
-- profile dock;
-- responsive desktop behavior.
+- рабочее пространство библиотеки
+- контекст сервера;
+- верхняя панель
+- ящик участника
+- панель профиля
+- отзывчивое desktop поведение.
 
 ## Этап 3. Text and DM UX
 
-- message components;
-- composer;
-- reactions/replies/attachments;
-- unread and notifications;
+- компоненты сообщения;
+- композитор;
+- реакции/ответы/вложения;
+- непрочитанное и уведомления;
 - virtualization.
 
 ## Этап 4. Voice Stage
 
-- participant strip;
-- control dock;
-- active speaker;
-- per-user volume;
-- connection states.
+- участник стриптиз
+- панель управления;
+- активный диктор
+- громкость для каждого пользователя;
+- состояния соединения.
 
 ## Этап 5. Screen Share UX
 
-- source picker;
-- audio modes;
-- viewer audio mixer;
-- error states;
-- resource cleanup.
+- выбор источника
+- режимы аудио;
+- просмотрщик аудиомикшера;
+- состояния ошибок;
+- очистка ресурсов.
 
 ## Этап 6. Roles and Server Settings
 
-- permission resolver;
-- role hierarchy;
-- editor;
-- channel overwrites;
-- audit log.
+- разрешающий разрешения
+- иерархия ролей
+- редактор;
+- перезаписи канала;
+- журнал аудита.
 
 ## Этап 7. Auth hardening
 
-- trusted devices;
-- sessions;
-- recovery codes;
-- security notifications.
+- доверенные устройства;
+- сессии;
+- коды восстановления;
+- уведомления безопасности.
 
 ## Этап 8. Stabilization
 
 - E2E;
-- performance profiling;
-- accessibility;
+- профилирование производительности;
+- доступность
 - visual regression;
-- migration cleanup;
-- release notes.
+- очистка миграции
+- примечания к выпуску.
 
 ---
 

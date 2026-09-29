@@ -1,7 +1,7 @@
-# Delivery manifest contract
+# Договор накладной на доставку
 
-A candidate manifest is immutable JSON containing release SHA, source archive checksum, dependency-lock checksum, OCI image digests, migration metadata, desktop artifact checksums, updater channel and intended API environment. A rollback manifest references only a previously verified candidate manifest and compatible image digests.
+Манифест кандидата является неизменяемым JSON, содержащим релиз SHA, контрольную сумму архива исходного кода, контрольную сумму блокировки зависимостей, OCI дайджесты образов, метаданные миграции, desktop контрольные суммы артефактов, updater канал и предполагаемую API среду. Манифест отката ссылается только на ранее проверенный манифест кандидата и совместимые дайджесты образов.
 
-Manifest files contain no token, password, private key, S3 credential, full database URL or raw user data. The production promotion job must consume a manifest; it must not rebuild from a mutable branch.
+Файлы манифеста не содержат токенов, паролей, приватных ключей, учетных данных S3, полной базы данных URL или необработанных пользовательских данных. Задача продвижения production должна использовать манифест; она не должна пересобираться из изменяемой ветки.
 
-`scripts/delivery/create-candidate-manifest.mjs` is the only initial writer: it hashes a source archive and dependency-lock file locally, validates image digests and writes once with exclusive creation. The job wiring will be introduced only with the staging/promotion pipeline; this script never contacts a host, registry or updater feed.
+`scripts/delivery/create-candidate-manifest.mjs` является единственным первоначальным писателем: он хеширует локально исходный архив и файл блокировки зависимостей, проверяет дайджесты образов и записывает один раз с эксклюзивным созданием. Соединение задания будет введено только с staging/promotion pipeline; этот скрипт никогда не связывается с хостом, регистром или updater-каналом.

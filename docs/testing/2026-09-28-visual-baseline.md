@@ -1,12 +1,12 @@
-# Windows visual baseline recovery, 2026-09-28
+# Windows восстановление визуального базового уровня, 28.09.2026
 
-The resumed MR !215 pipeline [2889508841](https://gitlab.com/vatrushka-group/Vatrushka/-/pipelines/2889508841) passed policy, application verification and desktop behavior, but its visual job failed 42 of 47 scenarios.
+Возобновлённый MR !215 pipeline [2889508841](https://gitlab.com/vatrushka-group/Vatrushka/-/pipelines/2889508841) прошёл проверку политики, верификацию приложения и поведение desktop, но его визуальная проверка не прошла 42 из 47 сценариев.
 
-Evidence before updating snapshots:
+Доказательства перед обновлением снимков:
 
-- The renderer, Storybook configuration, visual scenarios, Playwright configuration and dependency lockfile are identical to released `v0.8.38` (`06e2c50`). The refresh change only affects Electron main IPC.
-- The same failures reproduce locally with the pinned dependencies: foundations has 1,983 differing pixels; app-shell desktop has 4,604. Layout dimensions remain 1440x900 in both expected and actual.
-- The foundations reference still contains the old `#07111b` canvas, whereas released `tokens.css` uses `#090a0f`. Other recent references have the current palette but differences around text rasterization on the resumed Windows runner. The precise system-level cause of rasterization changes is not established.
-- Actual renders were visually inspected across all failed scenarios, including full-size foundations, shell and Home. No renderer change or screenshot tolerance increase is included in this correction.
+- Конфигурация renderer, Storybook, визуальные сценарии, конфигурация Playwright и файл блокировки зависимостей идентичны выпущенной `v0.8.38` (`06e2c50`). Изменение обновления затрагивает только основной IPC Electron.
+- Те же ошибки воспроизводятся локально с закреплёнными зависимостями: у foundations 1 983 отличающихся пикселя; у app-shell desktop 4 604. Размеры макета остаются 1440x900 как в ожидаемом, так и в фактическом вариантах.
+- Справочник по фундаментам по-прежнему содержит старый холст `#07111b`, тогда как выпущенный `tokens.css` использует `#090a0f`. Другие недавние справочники имеют текущую палитру, но есть различия в растеризации текста на возобновлённом Windows раннере. Точная системная причина изменений растеризации не установлена.
+- Фактические визуализации были проверены во всех неудачных сценариях, включая полноразмерные фундаменты, оболочку и Дом. В этом исправлении не включено изменение renderer или увеличение допуска screenshot.
 
-Only changed references were regenerated through `playwright test --config=playwright.storybook.config.ts --update-snapshots=changed`. A separate run without snapshot updates passed all 47 scenarios. Existing assertions, viewport contracts and per-scenario tolerances remain unchanged; GitLab must repeat the full visual gate before merge.
+Были регенерированы только измененные ссылки через `playwright test --config=playwright.storybook.config.ts --update-snapshots=changed`. Отдельный запуск без обновления снимков прошел все 47 сценариев. Существующие утверждения, контракты области просмотра и допуски по каждому сценарию остаются без изменений; GitLab должен повторить полный визуальный контроль перед слиянием.

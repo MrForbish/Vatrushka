@@ -2,7 +2,7 @@
 
 GitLab `vatrushka-group/Vatrushka` — канонический источник Git, Merge Request, CI/CD и Releases. GitHub используется только как историческое read-only хранилище.
 
-## Release flow
+## Поток релиза
 
 ```text
 task branch → develop → assemble/X.Y.Z → release/X.Y.Z → main → annotated tag vX.Y.Z
@@ -25,7 +25,7 @@ Push в `release/X.Y.Z` создаёт и сохраняет:
 
 - OCI image API с digest;
 - исходный архив и checksums;
-- release candidate manifest;
+- манифест кандидата на выпуск;
 - production Windows installer и checksums, но не публикует updater feed.
 
 Все assets кладутся в GitLab Generic Package Registry по SHA release-кандидата. Protected tag `vX.Y.Z` обязан указывать на merge commit из `release/X.Y.Z`; pipeline извлекает второй parent merge-коммита и получает только этот заранее собранный кандидат. Tag pipeline не пересобирает API или Windows installer.
@@ -41,7 +41,7 @@ Push в `release/X.Y.Z` создаёт и сохраняет:
 | Local dev | `npm run dev:desktop` | staging | отсутствует |
 | Beta | `develop`, только desktop/shared client changes | staging | beta |
 | RC | `release/X.Y.Z` | staging | artifact, без feed на первом этапе |
-| Stable | protected tag `vX.Y.Z` | production | stable |
+| Стабильный | защищённый тег `vX.Y.Z` | production | стабильный |
 
 Staging должен быть подготовлен до включения auto-deploy и beta/RC jobs. Пока staging credentials и isolated runtime не готовы, эти jobs не включаются.
 

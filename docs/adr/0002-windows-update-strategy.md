@@ -2,7 +2,7 @@
 
 - Статус: `accepted`
 - Дата: `2026-07-17`
-- Scope: updater feature pack, Phase 1
+- Объем: пакет функций updater, Фаза 1
 
 ## Контекст
 
@@ -32,7 +32,7 @@
 
 ## Обязательные проверки updater-этапа
 
-- unit state-machine/race tests;
+- тесты состояний/гонки юнита;
 - IPC validation и sender allowlist tests;
 - component stories для всех состояний, retry и call blocker;
 - Electron E2E с fake updater events;

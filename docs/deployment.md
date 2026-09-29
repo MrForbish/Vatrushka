@@ -1,12 +1,12 @@
-# Deployment runbook
+# Развертывание runbook
 
 ## Каноническая рабочая копия
 
 Production Compose запускается из `/opt/vatrushka`: именно этот путь указан в labels активных контейнеров, принадлежит пользователю `codex` и используется для deploy. Вторую копию `/root/Vatrushka` нельзя обновлять или использовать параллельно. Перед её удалением root должен проверить `git status --short` и последний commit; уникальные изменения необходимо сохранить отдельной веткой либо patch-файлом.
 
-## LiveKit Cloud mode
+## Режим облака
 
-1. Ubuntu 22.04/24.04, Docker Engine, Compose v2, public IPv4.
+1. Ubuntu 22.04/24.04, Docker двигатель, Compose v2, публичный IPv4.
 2. DNS A/AAAA для `DOMAIN` и `INVITE_DOMAIN`; 80/443 разрешены в provider firewall и UFW.
 3. Скопировать `.env.example` в `.env`, установить `NODE_ENV=production`, `PUBLIC_API_URL`, `PUBLIC_INVITE_URL`, `PRESENCE_STORAGE_DRIVER=redis`, случайный `REDIS_PASSWORD` и остальные secrets (минимум 32 bytes). Для официального публичного сервера укажите его UUID в `FEATURED_SERVER_ID`; это server-only значение не попадает в desktop.
 4. Создать `updates/` рядом с `.env`, затем выполнить `docker compose --env-file .env -f infra/docker/docker-compose.yml config`.
@@ -14,7 +14,7 @@ Production Compose запускается из `/opt/vatrushka`: именно э
 6. `docker compose ... up -d postgres redis api caddy`.
 7. Проверить `https://$DOMAIN/health/live`, `/health/ready` и redirect `https://$INVITE_DOMAIN/i/<token>`.
 
-## Operations
+## Операции
 
 ```bash
 docker compose --env-file .env -f infra/docker/docker-compose.yml ps
@@ -80,7 +80,7 @@ curl -fsS https://api.myvatrushka.ru/updates/latest.yml
 
 Клиент проверяет обновления сразу после запуска, затем каждые 15 минут, при возврате фокуса в приложение и после выхода Windows из сна. Проверка ограничена 30-секундным timeout; после ошибки выполняется фоновая повторная попытка через минуту, поэтому недоступный feed не блокирует запуск. Доступное обновление загружается автоматически, обязательную плашку нельзя закрыть, а установка запускается единственной кнопкой «Перезапустить и обновить». Во время активного голосового соединения restart заблокирован до выхода из звонка. NSIS собирается в `oneClick`-режиме, main вызывает `quitAndInstall(true, true)`, поэтому штатный upgrade не показывает мастер с кнопкой «Далее». Portable-вариант явно помечается как не поддерживающий автоустановку.
 
-## Metrics
+## Метрики
 
 API отдаёт технические Prometheus-метрики на `GET /metrics`. Разрешите scrape только доверенному Prometheus либо ограничьте route на уровне Caddy/firewall. Минимальные alerts: `chat_outbox_failed_total > 0`, рост `chat_outbox_oldest_age_seconds`, `chat_redis_publish_errors_total`, длительное падение `chat_ws_connections_active` и рост `chat_message_create_errors_total`.
 
@@ -117,9 +117,9 @@ ssh -i C:\Users\Admin\.ssh\id_ed25519_vatrushka_server -N -L 15433:127.0.0.1:543
 - `caddy` — TLS, reverse proxy и статический desktop update feed;
 - LiveKit — отдельный Cloud-проект либо отдельный self-hosted media server;
 - Windows-клиент не запускается на VPS: это устанавливаемый артефакт для компьютеров пользователей.
-# Voice presence rollout
+# Внедрение голосового присутствия
 
-For the current self-hosted LiveKit deployment use:
+Для текущего локального развертывания LiveKit используйте:
 
 ```env
 VOICE_MOVE_STRATEGY=controlled-reconnect
@@ -129,4 +129,4 @@ VOICE_DND_ENABLED=true
 VOICE_MODERATOR_MOVE_ENABLED=true
 ```
 
-Configure LiveKit to send signed webhooks to `https://api.myvatrushka.ru/api/v1/integrations/livekit/webhook`. Keep the previous `/api/v1/webhooks/livekit` target only during a rolling migration; both paths validate the raw body with the LiveKit server SDK.
+Настройте LiveKit на отправку подписанных вебхуков в `https://api.myvatrushka.ru/api/v1/integrations/livekit/webhook`. Сохраняйте предыдущий целевой `/api/v1/webhooks/livekit` только во время постепенной миграции; оба пути проверяют исходное содержимое с помощью сервера LiveKit SDK.

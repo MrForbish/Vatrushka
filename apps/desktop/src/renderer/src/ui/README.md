@@ -1,12 +1,12 @@
-# Vatrushka UI foundations
+# Vatrushka UI фундаменты
 
-This directory is the shared production design system for Vatrushka. The routed settings migration extends the existing `AppShell` and lazy-loads its `SettingsShell`; auth, voice, screen sharing and LiveKit remain owned by the mounted top-level application controller.
+Этот каталог является общей системой проектирования production для Vatrushka. Миграция маршрутизированных настроек расширяет существующий `AppShell` и загружает по требованию его `SettingsShell`; аутентификация, голос, совместное использование экрана и LiveKit остаются под управлением смонтированного контроллера верхнего уровня приложения.
 
-## Commands
+## Команды
 
-- `npm run storybook` — local component catalog on port 6006;
-- `npm run test:storybook` — interaction and accessibility tests in Chromium;
-- `npm run build:storybook` — static catalog build;
-- `npm run test:visual` — compare the local Playwright screenshot baselines.
+- `npm run storybook` — локальный каталог компонентов на порту 6006;
+- `npm run test:storybook` — тесты взаимодействия и доступности в Chromium;
+- `npm run build:storybook` — статическая сборка каталога;
+- `npm run test:visual` — сравните местные Playwright screenshot эталонные значения.
 
-Colors, typography, spacing, radius, elevation and motion values must come from `foundations/tokens.css`. Components receive Electron, API and LiveKit integrations through props or adapters; Storybook uses the mocks in `testing/`.
+Цвета, типографика, отступы, радиус, показатели возвышения и движения должны исходить из `foundations/tokens.css`. Компоненты получают интеграции Electron, API и LiveKit через props или адаптеры; Storybook использует моки в `testing/`.
