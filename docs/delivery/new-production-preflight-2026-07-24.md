@@ -1,45 +1,45 @@
-# New production VPS — read-only preflight
+# Новый production VPS — только для чтения, предполетная проверка
 
 Дата: 2026-07-24. Первичная проверка выполнена без установки, удаления, запуска или остановки сервисов. После явного подтверждения владельца на хосте включён только ключевой SSH-доступ.
 
-## Fact
+## Факт
 
-- hostname: `vtr-prod-1`; Ubuntu 24.04.4 LTS, kernel `6.8.0-136-generic`.
-- capacity: 8 vCPU, 11 GiB RAM available to the guest, 100 GB disk (94 GB free on `/`).
-- Docker Engine `29.1.3` and Docker Compose `2.40.3` are installed for the future immutable runtime; Docker and containerd are active, but no containers or product services are running.
-- only SSH (`22/tcp`) and Zabbix Agent (`10050/tcp`) listen on non-loopback interfaces.
-- no product API, PostgreSQL, Redis, LiveKit, reverse proxy or observability platform service was found running.
-- SSH: root access is key-only (`PermitRootLogin prohibit-password`); password and keyboard-interactive authentication are disabled; public-key authentication is enabled.
-- `vatrushka_deploy` is an independent account with neither broad sudo permission nor Docker-group membership.
-- Root-owned runtime directories were prepared at `/opt/vatrushka`, `/var/lib/vatrushka/{manifests,runtime}` and `/usr/local/lib/vatrushka`; the deploy account can write only `/var/lib/vatrushka/inbox`.
-- **fact (2026-07-25):** a newly generated dedicated GitLab delivery key was verified in `vatrushka_deploy`'s `authorized_keys`; the prior CI key was revoked from this account. The account remains outside the Docker group.
-- **fact (2026-07-25):** the reviewed root-owned wrapper set and narrow `sudoers` allowlist were installed. The deploy account can invoke only preflight, deploy, rollback and runtime-status wrappers; it cannot invoke a shell or Docker directly.
-- **fact (2026-07-25):** the existing production application environment was transferred through an encrypted SSH stream to root-owned `/etc/vatrushka/app.env` on the new host. Its values were not inspected, printed or committed. Root-owned `/etc/vatrushka/runtime.env` now declares the production runtime paths and image repository.
-- **fact (2026-07-25):** no product containers, DNS records, LiveKit service, database, Redis instance or updater feed were changed on the new host during bootstrap.
-- **fact (2026-07-25):** UFW is inactive, no WireGuard interface is configured and the host currently exposes only SSH and the provider-managed Zabbix Agent on non-loopback interfaces. Docker has no application networks or containers.
-- **fact (2026-07-25):** SSH remains public-key only; root is key-only break-glass access, while `vatrushka_deploy` is the transport-only CI identity.
-- **fact (2026-07-25):** a project-scoped GitLab deploy token with only `read_registry` was created for this production host. Its Docker config is root-owned (`0600`) in `/etc/vatrushka/registry`; the token value was not recorded in Git or command output. The token expires on 2027-07-25.
-- **fact (2026-07-25):** the bootstrap verifier now succeeds for the production deploy account. Runtime status continues to fail closed because no immutable candidate has been deployed yet.
-- **fact (2026-07-25):** protected GitLab production variables now point to this host, its pinned host key and the dedicated delivery key. The variable set contains no root credential.
+- hostname: `vtr-prod-1`; Ubuntu 24.04.4 LTS, ядро `6.8.0-136-generic`.
+- вместимость: 8 vCPU, 11 GiB RAM доступно гостю, 100 ГБ диск (94 ГБ свободно на `/`)
+- Docker Двигатель `29.1.3` и Docker Compose `2.40.3` установлены для будущего неизменного runtime; Docker и containerd активны, но контейнеры или продуктовые сервисы не запущены.
+- только SSH (`22/tcp`) и Zabbix Agent (`10050/tcp`) слушают на не-липовых интерфейсах.
+- продукт API, PostgreSQL, Redis, LiveKit, обратный прокси или сервис платформы наблюдаемости не был найден запущенным.
+- SSH: доступ root только по ключу (`PermitRootLogin prohibit-password`); аутентификация по паролю и keyboard-interactive отключена; аутентификация по открытой клавише включена.
+- `vatrushka_deploy` является независимой учетной записью, не обладающей широкими правами sudo и не состоящей в группе Docker.
+- Каталоги, принадлежащие root, runtime, были подготовлены в `/opt/vatrushka`, `/var/lib/vatrushka/{manifests,runtime}` и `/usr/local/lib/vatrushka`; учетная запись deploy может записывать только в `/var/lib/vatrushka/inbox`.
+- **факт (2026-07-25):** вновь сгенерированный специальный ключ доставки GitLab был проверен в `vatrushka_deploy`'s `authorized_keys`; предыдущий ключ CI был отозван с этой учетной записи. Учетная запись остается вне группы Docker.
+- **факт (2026-07-25):** был установлен проверенный набор оберток, принадлежащих root, и узкий allowlist `sudoers`. Учётная запись развертывания может вызывать только обертки preflight, deploy, rollback и runtime-status; она не может вызывать shell или Docker напрямую.
+- **факт (2026-07-25):** существующая среда приложения production была передана через зашифрованный поток SSH в принадлежащий root `/etc/vatrushka/app.env` на новом хосте. Ее значения не проверялись, не выводились и не фиксировались. Принадлежащий root `/etc/vatrushka/runtime.env` теперь объявляет пути production runtime и репозиторий образов.
+- **факт (2026-07-25):** на новом хосте во время загрузки не были изменены контейнеры продуктов, DNS записи, LiveKit сервис, база данных, Redis экземпляр или updater поток.
+- **факт (2026-07-25):** UFW неактивен, интерфейс WireGuard не настроен, и хост в данный момент выставляет только SSH и управляемого провайдером агента Zabbix на не-loopback интерфейсах. Docker не имеет сетей приложений или контейнеров.
+- **факт (25.07.2026):** SSH остаётся только с открытым ключом; корень имеет доступ только по ключу для экстренного случая, в то время как `vatrushka_deploy` является транспортной только CI идентичностью.
+- **факт (2026-07-25):** был создан токен развертывания с областью проекта GitLab с только `read_registry` для этого хоста production. Его конфигурация Docker принадлежит root (`0600`) в `/etc/vatrushka/registry`; значение токена не было зафиксировано в Git или выводе команды. Токен истекает 2027-07-25.
+- **факт (25.07.2026):** проверка bootstrap теперь успешна для учетной записи развертывания production. Статус Runtime продолжает оставаться fail closed, так как неизменяемый кандидат еще не был развернут.
+- **факт (2026-07-25):** защищённые переменные GitLab production теперь указывают на этот хост, его закреплённый ключ хоста и выделенный ключ доставки. Набор переменных не содержит root-учётных данных.
 
-## Inference
+## Вывод
 
-- the host is suitable as a clean target for the production migration described in `docs/delivery/migration-plan.md`.
-- root key-only SSH and a publicly listening Zabbix Agent still require a dedicated non-root deploy path and an intentional firewall decision before production traffic.
+- хост подходит в качестве чистой цели для миграции production, описанной в `docs/delivery/migration-plan.md`.
+- ключ root только SSH и публично слушающий Zabbix Agent все еще требуют выделенного пути развертывания не от root и намеренного решения брандмауэра перед трафиком production.
 
-## Assumption
+## Предположение
 
-- the active Zabbix Agent is provider or operator managed; it must not be disabled until its ownership and allowed server addresses are confirmed.
+- Активный Zabbix Agent управляется поставщиком или оператором; его нельзя отключать, пока не будет подтверждена его принадлежность и разрешенные адреса сервера.
 
-## Unknown
+## Неизвестно
 
-- provider firewall rules, Zabbix server allowlist/configuration, private-network/WireGuard peers, DNS ownership, S3 credentials, backup destination and production traffic window.
-- **unknown:** provider firewall ownership/controls and approved peer addresses for Zabbix, SSH administration and the future private Observer path. No firewall policy was changed during this check.
+- правила брандмауэра провайдера, белый список/конфигурация сервера Zabbix, участники частной сети/WireGuard, владение DNS, учетные данные S3, место назначения резервного копирования и окно трафика production.
+- **неизвестно:** владение/контроль межсетевого экрана провайдера и утвержденные адреса пиров для Zabbix, администрирования SSH и будущего приватного пути Observer. Во время этой проверки политика межсетевого экрана не менялась.
 
-## Proposal
+## Предложение
 
-1. Install root-owned wrapper commands and narrow sudo only after the wrapper implementation is reviewed.
-3. Verify pinned SSH host key through GitLab protected file variable before CI access.
-4. Keep root as a key-only break-glass path until the non-root operational path is tested; then narrow root exposure further only with a documented recovery path.
-5. Apply firewall and Zabbix allowlist changes only after provider/network ownership is confirmed.
-6. Rotate the protected, read-only registry deploy credential before its expiry date; do not use a personal GitLab token as a durable production registry credential.
+1. Установите команды оболочки, принадлежащие root, и ограничьте sudo только после того, как реализация оболочки будет проверена.
+3. Проверьте закреплённый ключ хоста SSH через защищённую переменную файла GitLab перед доступом CI.
+4. Держите root только как путь аварийного доступа до тех пор, пока не будет протестирован рабочий путь без root; затем сокращайте использование root только при наличии документированного пути восстановления.
+5. Вносите изменения в файрвол и белый список Zabbix только после подтверждения владения провайдером/сетью.
+6. Поверните защищённые, доступные только для чтения учетные данные реестра перед их сроком окончания; не используйте личный токен GitLab в качестве долговечной учетной записи реестра production.

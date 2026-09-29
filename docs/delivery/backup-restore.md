@@ -1,34 +1,34 @@
-# Production PostgreSQL backup and restore
+# Production PostgreSQL резервное копирование и восстановление
 
-Labels: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
+Метки: **факт**, **вывод**, **предположение**, **неизвестно**, **предложение**.
 
-## Implemented boundary
+## Реализованная граница
 
-- **fact:** `vatrushka-postgresql-backup` is a root-owned, no-argument wrapper. The transport-only deploy account may invoke only this fixed sudo command; it receives neither a root shell nor backup credentials.
-- **fact:** the driver takes a custom-format, compressed `pg_dump` from the production Compose PostgreSQL service, encrypts it with the configured public `age` recipient, calculates SHA-256, then uploads the encrypted dump before its manifest.
-- **fact:** a root-only systemd timer schedules the backup daily at 03:17 UTC with a bounded random delay. Sunday backups are also copied to the weekly prefix.
-- **fact:** temporary plaintext and encrypted files are stored in a root-only workspace and removed on completion or failure.
-- **fact:** the wrapper is installed but not enabled automatically. It fails closed until `/etc/vatrushka/backup.env` and its local dependencies are present.
-- **fact (2026-07-25):** the wrapper, driver and disabled systemd timer are installed on `vtr-prod-1`; the host bootstrap verifier and systemd unit validation passed after installation. `age` and the Ubuntu system `python3-boto3` module are installed.
-- **fact (2026-07-25):** `/etc/vatrushka/backup.env` is present and was validated without reading or printing its values. The configured backup identity passed a `head bucket` plus write/read/delete probe against `backups-vatrushka`; the probe object was deleted immediately.
-- **fact (2026-07-25):** the bucket has two enabled lifecycle rules: `vatrushka/postgresql/daily/*` expires after 14 days and `vatrushka/postgresql/weekly/*` after 56 days.
+- **факт:** `vatrushka-postgresql-backup` является обёрткой, принадлежащей root, без аргументов. Аккаунт для развертывания только транспорта может вызывать только эту фиксированную команду sudo; он не получает ни root-оболочку, ни резервные учетные данные.
+- **факт:** драйвер получает с сервиса production Compose PostgreSQL пользовательский сжатый формат `pg_dump`, шифрует его с помощью настроенного публичного получателя `age`, вычисляет SHA-256, затем загружает зашифрованный дамп перед его манифестом.
+- **факт:** таймер systemd только для root планирует резервное копирование ежедневно в 03:17 UTC с ограниченной случайной задержкой. Резервные копии по воскресеньям также копируются с еженедельным префиксом.
+- **факт:** временные текстовые и зашифрованные файлы хранятся в рабочей области с доступом только для root и удаляются после завершения или при сбое.
+- **факт:** обертка установлена, но не включается автоматически. Она остаётся закрытой, пока не появятся `/etc/vatrushka/backup.env` и его локальные зависимости.
+- **факт (2026-07-25):** обёртка, драйвер и отключённый таймер systemd установлены на `vtr-prod-1`; проверка загрузчика хоста и проверка единиц systemd прошли после установки. `age` и модуль системы Ubuntu `python3-boto3` установлены.
+- **факт (2026-07-25):** `/etc/vatrushka/backup.env` присутствует и был проверен без чтения или печати его значений. Настроенная резервная идентичность прошла проверку `head bucket` плюс запись/чтение/удаление на `backups-vatrushka`; объект проверки был немедленно удалён.
+- **факт (2026-07-25):** у корзины есть два включенных правила жизненного цикла: `vatrushka/postgresql/daily/*` истекает через 14 дней, а `vatrushka/postgresql/weekly/*` через 56 дней.
 
-## Activation checklist
+## Чек-лист активации
 
-1. **fact:** the existing dedicated `backup-user` is assigned to the private `backups-vatrushka` bucket. Its key is the only S3 credential placed in the backup configuration.
-2. **fact:** the recovery key was generated offline. Only its public recipient is present in `/etc/vatrushka/backup.env`; the private key is outside the VPS and GitLab.
-3. **fact:** the supported Ubuntu `age` package and system `python3-boto3` module are used; an unpinned AWS CLI download is not required.
-4. **fact:** the configured lifecycle retains daily backups for 14 days and weekly backups for 56 days.
-5. **proposal:** after the immutable production runtime is active, perform one encrypted backup and a separate isolated restore drill. Enable the timer only after that evidence passes.
-5. **proposal:** run one manual backup and restore it in an isolated PostgreSQL instance. Record only the backup ID, checksum and restore outcome in the delivery evidence.
-6. **proposal:** after restore evidence is accepted, enable `vatrushka-postgresql-backup.timer`.
+1. **факт:** существующий выделенный `backup-user` назначен на частный бакет `backups-vatrushka`. Его ключ является единственным учетным данными S3, размещенными в конфигурации резервного копирования.
+2. **факт:** ключ восстановления был сгенерирован офлайн. В `/etc/vatrushka/backup.env` присутствует только его публичный получатель; приватный ключ находится вне VPS и GitLab.
+3. **факт:** используется поддерживаемый пакет Ubuntu `age` и системный модуль `python3-boto3`; незакреплённая загрузка AWS CLI не требуется.
+4. **факт:** настроенный жизненный цикл сохраняет ежедневные резервные копии в течение 14 дней и еженедельные резервные копии в течение 56 дней.
+5. **предложение:** после того как неизменяемый production runtime активен, выполните одно зашифрованное резервное копирование и отдельное изолированное восстановление. Включайте таймер только после того, как эти данные будут подтверждены.
+5. **предложение:** выполнить один ручной бэкап и восстановить его в изолированном экземпляре PostgreSQL. Записать только идентификатор бэкапа, контрольную сумму и результат восстановления в доказательства доставки.
+6. **предложение:** после того как доказательства будут приняты, включите `vatrushka-postgresql-backup.timer`.
 
-## Restore boundary
+## Восстановить границу
 
-- **fact:** restore is intentionally not an automated production wrapper: it is a destructive, operator-approved action and requires the offline `age` recovery key.
-- **proposal:** perform restore tests only in an isolated Docker PostgreSQL instance with a new volume. Do not automatically run a schema downgrade or replace a live production database.
+- **факт:** восстановление намеренно не является автоматизированной оболочкой production: это разрушительное действие, одобренное оператором, и требует автономного ключа восстановления `age`.
+- **предложение:** выполнять тесты восстановления только в изолированном экземпляре Docker PostgreSQL с новым томом. Не выполняйте автоматически понижение схемы или замену работающей базы данных production.
 
-## Remaining unknowns
+## Оставшиеся неизвестные
 
-- **unknown:** whether the backup identity is restricted from media and log prefixes; this must be reviewed in the S3 access policy without exposing credentials.
-- **unknown:** capacity metrics and alerting availability for the `backups-vatrushka` bucket through the selected provider/API.
+- **неизвестно:** ограничен ли резервный идентификатор от префиксов медиа и журналов; это должно быть проверено в политике доступа S3 без раскрытия учетных данных.
+- **неизвестно:** показатели ёмкости и доступность оповещений для корзины `backups-vatrushka` через выбранного поставщика/API.

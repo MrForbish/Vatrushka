@@ -1,39 +1,39 @@
-# Delivery implementation plan
+# План реализации доставки
 
-Labels: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
+Метки: **факт**, **вывод**, **предположение**, **неизвестно**, **предложение**.
 
-## Completed foundation
+## Завершённый фундамент
 
-- **fact:** immutable API image, candidate manifest, source archive provenance, root-owned deploy/preflight/status wrappers and bounded rollback manifests are implemented.
-- **fact:** the new production VPS has Docker/Compose, protected environment paths, registry pull configuration, root-owned delivery wrappers and the restricted `vatrushka_deploy` account. No Vatrushka workload or traffic has moved there.
-- **fact:** direct Observer verification has a separate restricted account and wrapper. Observer SSH allows only that account with public keys; root, password and keyboard-interactive authentication are disabled.
-- **fact:** protected `main` builds the stable Windows package once and stores it under the immutable commit SHA. A stable tag consumes that exact package before runtime deployment; stable updater publication is a checksum-bound root-owned operation and `latest.yml` remains the final exposure gate.
-- **fact:** tag delivery has one mandatory manual production deployment approval; Observer verification runs automatically afterward. An optional manual rollback job is separate from normal release promotion.
-- **fact (2026-07-25):** the immutable runtime driver validates and starts the self-hosted LiveKit Compose profile from the same verified source archive as API/Redis/PostgreSQL/Caddy. It waits for API liveness before LiveKit and accepts the release only after full API readiness.
-- **fact (2026-07-25):** after the manual immutable runtime deployment, the tag pipeline starts the product Alloy/exporter Compose project through a distinct root-owned, checksum-bound wrapper. The Observer then verifies the new production host's `alloy-agent` series, rather than treating only Observer-container readiness as delivery success.
-- **fact (2026-07-25):** the immutable deployment driver now validates the root-owned production application configuration before extracting a candidate or moving the active runtime symlink. It accepts only a complete HTTPS S3 media configuration and production-safe API, database, Redis, SMTP and LiveKit/TURN settings; validation output never contains configuration values.
-- **fact (2026-07-25):** a protected tag now invokes the fixed root-owned PostgreSQL backup wrapper before its one manual runtime deployment approval. With no active runtime it validates the protected backup boundary and returns `backup=not-required`; with an active runtime it creates the encrypted backup, so the pipeline cannot silently skip an existing database.
-- **fact (2026-07-25):** the production deployment preflight also requires the trusted TURN certificate pair under the root-owned Let’s Encrypt mount before it changes the active runtime path. A missing certificate now fails before the candidate source is extracted or a service is started.
-- **fact (2026-07-25):** protected tags run a fixed read-only production readiness wrapper before backup or manual deployment. It validates root ownership, production API/S3/LiveKit/TURN configuration and the TURN certificate without exposing values or starting containers.
+- **факт:** неизменяемое API изображение, манифест кандидата, источник архивного происхождения, оболочки развертывания/предварительной проверки/статуса, принадлежащие root, и ограниченные манифесты отката реализованы.
+- **факт:** новый production VPS имеет Docker/Compose, защищенные пути среды, конфигурацию извлечения реестра, обертки доставки, принадлежащие root, и ограниченную учетную запись `vatrushka_deploy`. Никакая рабочая нагрузка или трафик Vatrushka туда не перемещался.
+- **факт:** прямая проверка Наблюдателем имеет отдельную ограниченную учетную запись и оболочку. Наблюдатель SSH разрешает только этой учетной записи с открытыми ключами; root, пароль и аутентификация через клавиатуру отключены.
+- **факт:** защищённый `main` собирает стабильный пакет Windows один раз и сохраняет его под неизменяемым коммитом SHA. Стабильный тег использует именно этот пакет перед развертыванием runtime; публикация стабильного updater является операцией, связанной с контрольной суммой и принадлежащей владельцу корня, а `latest.yml` остаётся конечным шлюзом для доступа.
+- **факт:** доставка тега требует одного обязательного ручного утверждения развертывания production; проверка наблюдателем выполняется автоматически после этого. Необязательная ручная отмена развертывания отделена от обычного продвижения релиза.
+- **факт (2026-07-25):** неизменяемый драйвер runtime проверяет и запускает самостоятельно размещенный профиль LiveKit Compose из того же проверенного исходного архива, что и API/Redis/PostgreSQL/Caddy. Он ожидает живучесть API перед LiveKit и принимает выпуск только после полной готовности API.
+- **факт (25-07-2026):** после ручного развертывания неизменяемого runtime, тег pipeline запускает проект продукта Alloy/экспортера Compose через отдельный корневой, связанный с контрольной суммой контейнер-обёртку. Затем Наблюдатель проверяет серию `alloy-agent` нового хоста production, а не рассматривает готовность только контейнера Наблюдателя как успешную доставку.
+- **факт (2026-07-25):** неизменяемый драйвер развертывания теперь проверяет конфигурацию приложения production, принадлежащую root, перед извлечением кандидата или перемещением активной символической ссылки runtime. Он принимает только полную медиаконфигурацию HTTPS S3 и безопасные для production настройки API, базы данных, Redis, SMTP и LiveKit/TURN; вывод проверки никогда не содержит значений конфигурации.
+- **факт (25.07.2026):** защищённый тег теперь вызывает исправленную обёртку резервного копирования, принадлежащую root, PostgreSQL, перед одобрением его одной ручной развертки runtime. При отсутствии активного runtime он проверяет границу защищённого резервного копирования и возвращает `backup=not-required`; при наличии активного runtime он создаёт зашифрованную резервную копию, поэтому pipeline не может тихо пропустить существующую базу данных.
+- **факт (25.07.2026):** предварительная проверка развертывания production также требует доверенной пары сертификатов TURN на монтировании Let’s Encrypt, принадлежащем root, прежде чем будет изменён активный путь runtime. Отсутствующий сертификат теперь вызывает ошибку до того, как исходный кандидат будет извлечён или запущена служба.
+- **факт (25.07.2026):** защищённые теги выполняют фиксированную только для чтения оболочку готовности production перед резервным копированием или ручным развертыванием. Она проверяет права владельца root, конфигурацию production API/S3/LiveKit/TURN и сертификат TURN без раскрытия значений или запуска контейнеров.
 
-## Remaining implementation order
+## Оставшийся порядок реализации
 
-1. **proposal:** configure independent production PostgreSQL/Redis/LiveKit/TURN and production-only media S3 on the new production host. The root-only encrypted PostgreSQL backup boundary, offline recovery key, S3 credential probe and 14-day/56-day lifecycle are ready; activation still requires an immutable runtime and isolated restore evidence.
-2. **proposal:** use the established private production-to-Observer route to prove API, WebSocket, media, LiveKit, updater, metrics and logs before DNS cutover.
-3. **proposal:** switch production traffic in an approved window; retain the existing production host unchanged through an observation period.
-4. **proposal:** reimage the former production host only after that observation period. Configure it as isolated staging with its own database, Redis, LiveKit/TURN, S3 principal, deploy identity and beta feed.
-5. **proposal:** activate automatic `develop` staging candidate delivery, staging smoke/Observer verification, then changes-aware beta packaging and beta feed publication.
-6. **proposal:** retain RC as an immutable `release/X.Y.Z` artifact against staging. Add an RC feed only as a separately approved enhancement.
+1. **предложение:** настроить независимые production PostgreSQL/Redis/LiveKit/TURN и production-только медиа S3 на новом хосте production. Граница резервного копирования PostgreSQL, зашифрованная только для root, офлайн-ключ восстановления, проба учетных данных S3 и жизненный цикл 14/56 дней готовы; активация все еще требует неизменяемого runtime и изолированных доказательств восстановления.
+2. **предложение:** использовать установленный приватный маршрут production-к-Observer для проверки API, WebSocket, медиа, LiveKit, updater, метрик и журналов перед переключением DNS.
+3. **предложение:** переключить трафик production в утвержденном окне; оставить существующий хост production без изменений на протяжении периода наблюдения.
+4. **предложение:** переустановить прежний хост production только после этого периода наблюдения. Настроить его как изолированный staging с собственной базой данных, Redis, LiveKit/TURN, главный S3, развернуть идентификацию и бета-канал.
+5. **предложение:** активировать автоматическую доставку кандидата `develop` staging, проверку дым/Наблюдатель staging, затем упаковку бета-версии с учётом изменений и публикацию бета-канала.
+6. **предложение:** сохранить RC как неизменяемый `release/X.Y.Z` артефакт по сравнению с staging. Добавлять поток RC только как отдельно одобренное улучшение.
 
-## Current blockers
+## Текущие блокирующие факторы
 
-- **fact:** the new production host contains a transferred, root-owned application environment and the runtime policy points to production, but no product workload is running there yet.
-- **fact (2026-07-25):** the new production host has the root-only encrypted backup wrapper, `age`, system `python3-boto3`, a validated root-owned backup configuration, a disabled daily systemd timer and verified `backups-vatrushka` access. It correctly remains inactive until the immutable product runtime exists.
-- **fact (2026-07-25):** the root-owned application environment now has a `LIVEKIT_WEBHOOK_URL` derived and validated from its existing HTTPS public API URL. The host wrapper set validates the self-hosted LiveKit Compose configuration before a release can switch runtime, but no LiveKit container has been started.
-- **fact (2026-07-25):** the new production host has a dedicated WireGuard route to Observer. It was verified in both directions without altering the legacy production peer; the installed Alloy configuration is constrained to those private Observer endpoints and remains inactive until a matching runtime candidate is deployed.
-- **fact (2026-07-25):** a root-only, value-redacted configuration audit found the new production application's media S3 configuration incomplete. No runtime or traffic change was made as a result.
-- **fact (2026-07-25):** the same audit found public API and TURN DNS still point away from the new production host, and the new host has no TURN certificate. This is expected before the approved traffic/DNS cutover, but prevents the first LiveKit runtime activation.
-- **unknown:** independent production database/Redis/LiveKit/TURN validation, production media S3 principal mapping and isolated restore procedure.
-- **unknown:** DNS cutover control, private-network/WireGuard topology and migration window.
-- **unknown:** staging hostname and staging-only credentials; these intentionally do not exist until after production migration.
-- **proposal:** populate the existing root-owned production application environment with the dedicated production-media S3 principal before the first immutable runtime deployment. The new deployment preflight intentionally blocks until this is complete.
+- **факт:** новый хост production содержит перенесённую среду приложений, принадлежащую root, а политика runtime указывает на production, но пока никакая рабочая нагрузка продукта там не запущена.
+- **факт (2026-07-25):** новый хост production имеет шифрованный только для root резервный контейнер, `age`, систему `python3-boto3`, проверенную конфигурацию резервного копирования, принадлежащую root, отключённый ежедневный таймер systemd и проверенный доступ `backups-vatrushka`. Он корректно остаётся неактивным до тех пор, пока существует неизменяемый продукт runtime.
+- **факт (2026-07-25):** среда приложений, принадлежащая root, теперь имеет `LIVEKIT_WEBHOOK_URL`, полученный и проверенный на основе существующей HTTPS публичной API URL. Набор оберток хоста проверяет самохостинг-конфигурацию LiveKit Compose перед тем, как релиз сможет переключить runtime, но ни один контейнер LiveKit не был запущен.
+- **факт (25.07.2026):** новый хост production имеет выделенный маршрут WireGuard к Observer. Это было проверено в обоих направлениях без изменения устаревшего пиринга production; установленная конфигурация Alloy ограничена этими частными конечными точками Observer и остается неактивной до развертывания соответствующего кандидата runtime.
+- **факт (2026-07-25):** аудит конфигурации только с правами root с скрытой информацией о значениях выявил, что конфигурация медиа S3 нового приложения production неполная. В результате не было внесено изменений в runtime или трафик.
+- **факт (25.07.2026):** тот же аудит выявил, что публичные API и TURN DNS по-прежнему указывают не на нового production хоста, а новый хост не имеет TURN сертификата. Это ожидаемо до утвержденного переключения трафика/DNS, но препятствует первой активации LiveKit runtime.
+- **неизвестно:** независимая проверка базы данных/Redis/LiveKit/TURN, production медиа S3 основное сопоставление и процедура изолированного восстановления.
+- **неизвестно:** DNS управление переключением, топология частной сети/WireGuard и окно миграции.
+- **неизвестно:** staging имя хоста и учетные данные только для staging; их намеренно не существует до миграции production.
+- **предложение:** заполнить существующую среду приложения production, принадлежащую root, выделенным главным S3 для медиа production перед первой неизменяемой разверткой runtime. Новый предварительный запуск развертки намеренно блокируется до завершения этого процесса.

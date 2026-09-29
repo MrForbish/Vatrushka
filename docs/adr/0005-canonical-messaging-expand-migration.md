@@ -1,39 +1,39 @@
-# ADR 0005: Canonical messaging expand migration
+# ADR 0005: Расширение миграции канонических сообщений
 
-## Status
+## Статус
 
-Accepted for the 0.6 rollout.
+Принято для выпуска версии 0.6.
 
-## Context
+## Контекст
 
-Vatrushka currently persists server-channel messages and direct messages in separate UUID-based table families. That prevents one realtime contract, monotonic cursor pagination, reliable idempotency, shared read state, durable notifications, and transactional outbox delivery.
+Vatrushka в настоящее время сохраняет сообщения в каналах сервера и прямые сообщения в отдельных семействах таблиц на основе UUID. Это предотвращает наличие одного контракта в реальном времени, монотонной пагинации курсора, надежной идемпотентности, общего состояния чтения, долговечных уведомлений и транзакционной доставки outbox.
 
-The production API must remain compatible while desktop clients migrate. Existing S3 attachment rows may also still be waiting for the legacy database-to-S3 migration.
+production API должен оставаться совместимым, пока клиенты desktop мигрируют. Существующие строки вложений S3 также могут все еще ожидать миграции из устаревшей базы данных в S3.
 
-## Decision
+## Решение
 
-Migration `0017_canonical_messaging_expand` adds the canonical model without dropping or renaming a legacy table:
+Миграция `0017_canonical_messaging_expand` добавляет каноническую модель без удаления или переименования устаревшей таблицы:
 
-- one `conversations` table for server text channels, direct messages, and future feature-flagged group DMs;
-- monotonic `BIGINT` message IDs, serialized as strings at API boundaries;
-- client-generated idempotency IDs;
-- shared reactions, structured mentions, read states, notification preferences, notifications, and outbox tables;
-- attachment metadata containing S3 object keys only;
-- legacy UUID mapping columns used only for backfill and the compatibility window.
+- одна `conversations` таблица для текстовых каналов сервера, прямых сообщений и будущих групповых ЛС с включенной функцией-флагом;
+- монотонные идентификаторы сообщений `BIGINT`, сериализованные как строки на границах API;
+- идемпотентные идентификаторы, созданные клиентом;
+- общие реакции, структурированные упоминания, состояния прочтения, настройки уведомлений, уведомления и таблицы outbox;
+- метаданные вложения, содержащие только ключи объектов S3;
+- устаревшие UUID столбцы отображения, используемые только для backfill и окна совместимости.
 
-Existing channels, direct dialogs, messages, replies, S3-backed attachments, reactions, user mentions, and read positions are backfilled in the same migration. Database-backed legacy attachment bytes remain in their existing tables until the established S3 migration finalizes them; they are never copied into the canonical metadata table.
+Существующие каналы, прямые диалоги, сообщения, ответы, вложения с поддержкой S3, реакции, упоминания пользователей и позиции прочтения заполняются в процессе той же миграции. Байты устаревших вложений, хранящиеся в базе данных, остаются в своих существующих таблицах до завершения установленной миграции S3; они никогда не копируются в каноническую таблицу метаданных.
 
-Canonical attachment/reaction/mention tables use a `conversation_message_` prefix during the additive window because the legacy names are still occupied. A later explicit contract migration may rename them after all compatibility reads and dual-writes have been removed.
+Таблицы канонических вложений/реакций/упоминаний используют префикс `conversation_message_` во время окна добавления, потому что устаревшие имена всё ещё заняты. Позднее явная миграция контракта может переименовать их после того, как все операции чтения на совместимость и двойные записи будут удалены.
 
-## Rollout
+## Внедрение
 
-1. Expand and backfill with legacy API compatibility.
-2. Enable canonical dual-write and consistency metrics.
-3. Migrate desktop reads and writes to conversation APIs.
-4. Verify parity and complete outstanding attachment migration.
-5. Remove legacy API in a later release.
-6. Perform a separately reviewed destructive contract migration.
+1. Расширьте и backfill с поддержкой устаревшей совместимости API.
+2. Включите канонические dual-write и метрики согласованности.
+3. Перенесите desktop чтений и записей в API разговоров.
+4. Проверьте паритет и завершите перенос незавершенных вложений.
+5. Удалите устаревший API в более позднем выпуске.
+6. Выполните отдельно проверенную разрушительную миграцию контракта.
 
-## Consequences
+## Последствия
 
-The expand release temporarily stores compatible message metadata twice. This costs database space but permits rollback of application code. Redis remains ephemeral and is not involved in migration correctness. PostgreSQL stays the only durable source of truth.
+Расширенный релиз временно сохраняет совместимые метаданные сообщений дважды. Это требует места в базе данных, но позволяет откатить код приложения. Redis остаётся эфемерным и не участвует в правильности миграции. PostgreSQL остаётся единственным долговечным source of truth.

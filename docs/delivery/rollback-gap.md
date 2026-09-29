@@ -1,12 +1,12 @@
-# Rollback gap
+# Разрыв отката
 
-Labels: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
+Метки: **факт**, **вывод**, **предположение**, **неизвестно**, **предложение**.
 
-- **fact:** the runtime driver preserves a checksum-verified rollback manifest before replacing an active candidate. The rollback wrapper accepts only that root-owned manifest and redeploys its recorded image digest.
-- **fact:** `rollback-production-runtime` is an optional manual protected-tag job. It can run only after a production deployment has produced the corresponding rollback manifest, and it performs runtime status verification afterward.
-- **fact:** the rollback path does not execute a schema down migration.
-- **inference:** an application rollback is safe only for migrations declared `none` or `backward-compatible` in the candidate manifest.
-- **fact (2026-07-25):** a root-only encrypted PostgreSQL backup wrapper, offline `age` recovery key, checksum manifest, protected S3 destination and 14-day/56-day retention are in place. The timer is intentionally disabled until runtime and recovery evidence exist.
-- **fact (2026-07-25):** every protected tag invokes the fixed backup wrapper before the manual runtime deployment gate. The first deployment receives a distinct `backup=not-required` result only when no active runtime exists; a malformed active runtime or backup failure blocks promotion.
-- **unknown:** isolated restore drill evidence.
-- **proposal:** perform an isolated restore drill before the first traffic cutover. Abort production migration if a required migration is not backward compatible.
+- **факт:** драйвер runtime сохраняет проверенный контрольной суммой манифест отката перед заменой активного кандидата. Оболочка отката принимает только этот манифест, принадлежащий root, и повторно развертывает записанный в нём дайджест образа.
+- **факт:** `rollback-production-runtime` является необязательной задачей с ручной защитой тегов. Она может выполняться только после того, как развертывание production создало соответствующий манифест отката, и после этого выполняет проверку состояния runtime.
+- **факт:** путь отката не выполняет понижение схемы.
+- **вывод:** откат приложения безопасен только для миграций, объявленных как `none` или `backward-compatible` в кандидате манифеста.
+- **факт (2026-07-25):** защищённая только для root оболочка резервной копии PostgreSQL, автономный ключ восстановления `age`, манифест контрольных сумм, защищённое место назначения S3 и 14-дневное/56-дневное хранение предусмотрены. Таймер намеренно отключён до тех пор, пока не будут существовать runtime и доказательства восстановления.
+- **факт (25-07-2026):** каждый защищённый тег вызывает фиксированный резервный обёртку перед ручным runtime шлюзом развертывания. Первое развертывание получает уникальный результат `backup=not-required` только если не существует активного runtime; неправильно сформированный активный runtime или сбой резервного копирования блокируют продвижение.
+- **неизвестно:** изолированные доказательства восстановления учений.
+- **предложение:** выполнить тренировку по изолированному восстановлению до первого переключения трафика. Прекратить миграцию production, если необходимая миграция несовместима с предыдущей версией.

@@ -1,195 +1,161 @@
-# UI Kit migration plan
+# UI План миграции комплекта
 
-Status: in progress. The executable visual reference is
-`C:\Users\Admin\Desktop\Vatrushka_Home_V2\Vatrushka_React_UI_Kit`.
+Статус: в процессе. Исполняемая визуальная ссылка — `C:\Users\Admin\Desktop\Vatrushka_Home_V2\Vatrushka_React_UI_Kit`.
 
-## Evidence and boundaries
+## Доказательства и границы
 
-| Classification | Item |
+| Классификация | Предмет |
 | --- | --- |
-| Fact | The renderer already has reusable foundations, primitives, `AppShell`, portal-backed modal/drawer/select, and real feature callbacks in `App.tsx`. |
-| Fact | `HomePage`, `ServerView`, and `DirectMessagesView` currently each compose their own navigation/profile placement. This does not match the UI Kit global navigation hierarchy. |
-| Fact | `MediaSession`, LiveKit connection lifecycle, realtime client, API client, shared contracts, and Electron preload are owned outside the layout components. |
-| Assumption | Existing profile-cover API data can be read with the current `GET /users/me/profile` request without adding a contract. |
-| Unknown | System DPI 100/125/150% must still be verified on a Windows installed client; browser viewport tests cannot prove native-DPI behaviour. |
-| Proposal | Migrate presentation in bounded slices and delete superseded layout branches only after all consumers/tests/stories move. |
+| Факт | У renderer уже есть переиспользуемые основы, примитивы, `AppShell`, модальные окна/выдвижные панели/выпадающие списки с поддержкой порталов и реальные обратные вызовы функций в `App.tsx`. |
+| Факт | `HomePage`, `ServerView` и `DirectMessagesView` в настоящее время каждый compose свое собственное размещение навигации/профиля. Это не соответствует глобальной иерархии навигации комплекта UI. |
+| Факт | Жизненный цикл соединения `MediaSession`, LiveKit, клиент в реальном времени, клиент API, общие контракты и предварительная загрузка Electron управляются вне компонентов макета. |
+| Предположение | Существующие данные об обложке профиля API могут быть прочитаны с помощью текущего запроса `GET /users/me/profile` без добавления контракта. |
+| Неизвестно | Систему DPI с масштабированием 100/125/150% необходимо ещё проверить на установленном клиенте Windows; тесты с окном браузера не могут доказать нативное поведение DPI. |
+| Предложение | Мигрировать презентацию по ограниченным частям и удалять устаревшие ветки макета только после того, как все потребители/тесты/stories будут перемещены. |
 
-## Scenario mapping
+## Картирование сценариев
 
-| Current scenario | UI Kit block / screen | Existing hook, API, or action | Legacy layout being replaced |
+| Текущий сценарий | UI Блок / экран комплекта | Существующий хук, API, или действие | Заменяется устаревшая компоновка |
 | --- | --- | --- | --- |
-| Auth password, registration, OTP, reset | `AuthScreen`: centred auth card | `AuthPanel` and auth lifecycle in `App.tsx` | Current auth panel composition; slice 2 |
-| Home dashboard and server library | `HomeScreen`: global sidebar + content workspace | `useHomeDashboard`, `HomePage` callbacks | `HomeNavigation` standalone left panel; slice 2 |
-| Server text channel | `ServerScreen`: global sidebar, community context, conversation and member rail | `ServerView`, message/realtime actions in `App.tsx` | Current grid ancestry in `AppShell`; content reconstruction slice 3 |
-| Direct message | `DMScreen`: global sidebar, DM list, conversation, inspector | `DirectMessagesView`, conversation mutations | Current profile inside DM list; slice 3 |
-| Notification centre | `AppShell` notification overlay | `NotificationCenter`, updater IPC state | Existing top-level placement is retained but attached to the rebuilt toolbar; slice 3 |
-| Voice | `VoiceScreen`: participant canvas and compact dock | `RoomView`, `MediaSession` | Deferred: high-risk media presentation slice |
-| Source picker | `ScreenShareScreen`: portal modal grid | `SourcePicker`, desktop IPC | Deferred: high-risk media presentation slice |
-| User settings | `UserSettingsScreen`: internal nav plus expanded cards | hash routes and `SettingsRoutePage` | Slice 5 |
-| Server settings | `ServerSettingsScreen`: internal nav, central cards, right rail | optimistic settings mutations | Slice 5 |
-| Auxiliary/loading/error/denied states | nearest UI Kit workspace/card/overlay pattern | Existing feature state and error callbacks | No legacy fallback layout; each is addressed with its owning slice |
+| Пароль аутентификации, регистрация, OTP, сброс | `AuthScreen`: центрированная карта аутентификации | `AuthPanel` и жизненный цикл аутентификации в `App.tsx` | Текущий состав панели аутентификации; срез 2 |
+| Домашняя панель и библиотека серверов | `HomeScreen`: глобальная боковая панель + рабочее пространство контента | `useHomeDashboard`, `HomePage` обратные вызовы | `HomeNavigation` отдельная левая панель; срез 2 |
+| Текстовый канал сервера | `ServerScreen`: глобальная боковая панель, контекст сообщества, поток беседы и участников | `ServerView`, действия с сообщениями/в реальном времени в `App.tsx` | Текущее происхождение сетки в `AppShell`; сегмент восстановления контента 3 |
+| Личное сообщение | `DMScreen`: глобальная боковая панель, список личных сообщений, беседа, инспектор | `DirectMessagesView`, изменения беседы | Текущий профиль в списке личных сообщений; срез 3 |
+| Центр уведомлений | `AppShell` наложение уведомлений | состояние `NotificationCenter`, updater IPC | Существующее верхнеуровневое расположение сохраняется, но прикреплено к перестроенной панели инструментов; срез 3 |
+| Голос | `VoiceScreen`: холст участника и компактная панель | `RoomView`, `MediaSession` | Отложено: сегмент презентации медиа высокого риска |
+| Выбор источника | `ScreenShareScreen`: модальное окно портала | `SourcePicker`, desktop IPC | Отложено: срез высокорисковой медиапрезентации |
+| Настройки пользователя | `UserSettingsScreen`: внутренняя навигация плюс расширенные карточки | хеш-маршруты и `SettingsRoutePage` | Срез 5 |
+| Настройки сервера | `ServerSettingsScreen`: внутренняя навигация, центральные карты, правая панель | оптимистичные изменения настроек | Срез 5 |
+| Вспомогательные/загрузка/ошибка/отклонено состояния | ближайший UI рабочее пространство/карта/наложение шаблона | Существующее состояние функции и обратные вызовы ошибок | Устаревшей схемы резервного копирования нет; каждый обрабатывается своим собственным сегментом |
 
-## Slice 1 — foundations and common shell
+## Срез 1 — основы и общая оболочка
 
-1. Rebuild `AppShell` DOM as global navigation + optional context + workspace column + optional inspector, preserving its public rendering slots.
-2. Rework `WorkspaceLibrary` and `UserProfileDock` into the UI Kit global sidebar and bottom profile card. The profile card receives its existing avatar/status/logout/settings callbacks and existing device callbacks; it does not create media state.
-3. Add a portalled, keyboard-operable device menu and make the generic primitive popover portal-safe.
-4. Read existing profile cover through the already available profile endpoint; no schema or API change.
-5. Update stories, interaction coverage, visual baselines, and produce same-viewport reference/product screenshots.
+1. Перестроить `AppShell` DOM как глобальную навигацию + необязательный контекст + колонку рабочего пространства + необязательный инспектор, сохраняя его публичные слоты отображения.
+2. Переработайте `WorkspaceLibrary` и `UserProfileDock` в глобальную боковую панель и нижнюю карточку профиля комплекта UI. Карточка профиля получает свои существующие обратные вызовы аватара/статуса/выхода/настроек и существующие обратные вызовы устройства; она не создает состояние медиа.
+3. Добавьте прокачиваемое меню устройства, управляемое с клавиатуры, и сделайте общую примитивную всплывающую панель безопасной для порталов.
+4. Прочитайте существующую обложку профиля через уже доступный конечный точку профиля; без изменений схемы или API.
+5. Обновите stories, охват взаимодействия, визуальные базовые линии и создайте эталон/продукт screenshots для того же вида.
 
-Removal criterion: `ServerContext` and DM conversation list must no longer render their own `UserProfileDock`; search must show no remaining `profile=` prop on `ServerContext` after consumers and stories move.
+Критерий удаления: `ServerContext` и список бесед DM больше не должны отображать собственные `UserProfileDock`; поиск не должен показывать оставшийся проп `profile=` на `ServerContext` после перемещения потребителей и stories.
 
-## Slice 1 screenshot evidence
+## Слайс 1 screenshot доказательство
 
-Reference review used the executable UI Kit shell at
-`C:\Users\Admin\Desktop\Vatrushka_Home_V2\Vatrushka_React_UI_Kit`, specifically
-`src/components/AppShell.tsx` and its global-sidebar rules in `src/styles.css`.
-The product review used the same 1440 x 900 viewport and the Storybook visual
-baselines below:
+Обзор справки использовал исполняемый файл UI Kit shell на `C:\Users\Admin\Desktop\Vatrushka_Home_V2\Vatrushka_React_UI_Kit`, конкретно `src/components/AppShell.tsx` и его правила глобальной боковой панели в `src/styles.css`. Обзор продукта использовал тот же видовой экран 1440 x 900 и визуальные эталоны Storybook ниже:
 
-| Product scenario | Baseline | Review result |
+| Сценарий продукта | Базовый уровень | Результат обзора |
 | --- | --- | --- |
-| Home workspace | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/home-dashboard-win32.png` | Wide global navigation, workspace hierarchy, toolbar and bottom profile card match the UI Kit composition. |
-| Direct message | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/direct-messages-active-win32.png` | The profile dock is global, not embedded in the DM list; conversation and participant rails remain separate. |
-| User settings | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/settings-shell-user-profile-win32.png` | Existing settings navigation remains visible while the central area uses the rebuilt shell columns. |
+| Домашнее рабочее пространство | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/home-dashboard-win32.png` | Широкая глобальная навигация, иерархия рабочего пространства, панель инструментов и нижняя карточка профиля соответствуют составу набора UI. |
+| Личное сообщение | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/direct-messages-active-win32.png` | Панель профиля глобальная, она не встроена в список личных сообщений; список разговоров и участников остаются отдельными. |
+| Настройки пользователя | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/settings-shell-user-profile-win32.png` | Существующая навигация по настройкам остается видимой, пока центральная область использует перестроенные колонки оболочки. |
 
-The reference and product intentionally contain different real data. This review
-therefore compares column hierarchy, spacing, action placement and overlay
-behaviour rather than text or fixture content.
+Справочный материал и продукт намеренно содержат разные реальные данные. Поэтому в этом обзоре сравниваются иерархия колонок, расстояние между элементами, расположение действий и поведение наложений, а не текст или содержимое элементов.
 
-## Follow-up slices
+## Последующие срезы
 
-1. Auth + Home — rebuild page composition around the common shell and `AuthScreen` / `HomeScreen` references.
-2. Server + DM + Notifications — reconstruct the three-column conversation flows and notification centre placement.
-3. Voice + screen share — bounded high-risk presentation-only plan with a two-Windows verification matrix before release.
-4. User + server settings — preserve internal route navigation and mutations while replacing central layout and rails.
-## Slice 2 — Auth + Home
+1. Auth + Home — перестроить композицию страницы вокруг общего каркаса и ссылок `AuthScreen` / `HomeScreen`.
+2. Сервер + ЛС + Уведомления — восстановите потоки беседы в три колонки и размещение центра уведомлений.
+3. Голос + демонстрация экрана — ограниченный высокорисковый план только для презентаций с двух-Windows проверочной матрицей перед выпуском.
+4. Настройки пользователя + сервера — сохранять внутреннюю навигацию по маршрутам и изменения, одновременно заменяя центральный макет и рельсы.
+## Слайс 2 — Аутентификация + Главная
 
-Status: completed locally in this change set. The old split auth hero was removed in favour of the UI Kit's centred card. Home now has a main feed and its own friends rail; the existing version and support actions moved into that rail, so the legacy AppShell inspector is not rendered on Home.
+Статус: локально завершено в этом наборе изменений. Старый разделённый герой аутентификации был удалён в пользу центрированной карточки комплекта UI. На главной теперь есть основной лент и собственная панель друзей; существующая версия и действия поддержки были перемещены в эту панель, поэтому устаревший инспектор AppShell не отображается на главной.
 
-| Current scenario | UI Kit composition | Preserved source/action | Removed legacy layout |
+| Текущий сценарий | UI Состав комплекта | Сохраненный источник/действие | Удалена устаревшая разметка |
 | --- | --- | --- | --- |
-| Password login, registration, OTP, recovery and password reset | `AuthScreen` centred card, branded header and segmented auth mode | Existing `AuthPanel` state and callbacks from `App.tsx` | Split hero/art panel and its CSS branch |
-| Personal Home with quick return, active spaces, audio readiness and friends | `HomeScreen` main feed plus friends rail | Existing `useHomeDashboard` data and `HomePage` join/message/open callbacks | AppShell Home inspector support column; support/version now live in the Home rail |
-| Loading, error and empty Home states | UI Kit card/feed hierarchy | Existing skeleton/error components and retry action | No old fallback screen retained |
+| Вход с паролем, регистрация, OTP, восстановление и сброс пароля | Карточка, центрированная по `AuthScreen`, фирменный заголовок и сегментированный режим аутентификации | Существующее состояние `AuthPanel` и обратные вызовы от `App.tsx` | Разделённая панель hero/art и её ветка CSS |
+| Личный дом с быстрым возвратом, активными пространствами, готовностью к аудио и друзьями | `HomeScreen` основной поток плюс панель друзей | Существующие данные `useHomeDashboard` и обратные вызовы присоединения/сообщения/открытия `HomePage` | Инспектор Home в AppShell; поддержка/версия теперь доступна в панели Home |
+| Загрузка, ошибка и пустые состояния главной страницы | Иерархия карточек/ленты набора UI | Существующие компоненты-заглушки/ошибки и действие повторной попытки | Старый экран-резерв не сохраняется |
 
-### Slice 2 screenshot evidence
+### Нарезать 2 screenshot доказательства
 
-The reference review used `src/screens/AuthScreen.tsx`, `src/screens/HomeScreen.tsx` and `src/styles.css` from the executable UI Kit at `C:\Users\Admin\Desktop\Vatrushka_Home_V2\Vatrushka_React_UI_Kit`.
+Обзор справки использовал `src/screens/AuthScreen.tsx`, `src/screens/HomeScreen.tsx` и `src/styles.css` из выполняемого комплекта UI в `C:\Users\Admin\Desktop\Vatrushka_Home_V2\Vatrushka_React_UI_Kit`.
 
-| Viewport / scenario | Product baseline | Review result |
+| Видовая область / сценарий | Базовый уровень продукта | Результат обзора |
 | --- | --- | --- |
-| Auth, 1440 × 900 | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/password-login-win32.png` | One centred card, brand/header hierarchy, segmented entry mode and primary action match the UI Kit composition. |
-| Auth minimum | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/password-login-minimum-win32.png` | Card remains fully actionable at the documented minimum viewport. |
-| Home, 1440 × 900 | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/home-dashboard-win32.png` | Global sidebar, main feed, featured return card and friends rail match the UI Kit column hierarchy; real dashboard data replaces kit fixtures. |
-| Home compact | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/home-dashboard-compact-win32.png` | The rail folds with the AppShell responsive behaviour without clipping actions. |
+| Auth, 1440 × 900 | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/password-login-win32.png` | Одна центрированная карточка, иерархия бренда/заголовка, сегментированный режим ввода и основное действие соответствуют составу набора UI. |
+| Минимальная авторизация | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/password-login-minimum-win32.png` | Карточка остаётся полностью функциональной при задокументированном минимальном размере окна просмотра. |
+| Домашняя страница, 1440 × 900 | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/home-dashboard-win32.png` | Глобальная боковая панель, основная лента, выделенная карточка возврата и панель друзей соответствуют иерархии колонок комплекта UI; реальные данные панели управления заменяют данные комплекта.
+| Домашний компакт | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/home-dashboard-compact-win32.png` | Панель сворачивается с адаптивным поведением AppShell без обрезки действий. |
 
-Automated browser checks cover layout viewports, keyboard/aria behaviour and portal interactions. Native Windows scaling at 100/125/150% remains a manual release gate because browser viewport emulation cannot validate Electron DPI.
+Автоматизированные проверки браузера охватывают области просмотра макета, поведение клавиатуры/ARIA и взаимодействие с порталами. Нативное масштабирование Windows на 100/125/150% остается ручным контрольным этапом выпуска, поскольку эмуляция области просмотра браузера не может проверить Electron DPI.
 
-## Slice 3 — Server, direct messages and notifications
+## Слайс 3 — Сервер, личные сообщения и уведомления
 
-Status: completed locally in this change set. `ServerView` and
-`DirectMessagesView` now follow the UI Kit's distinct context, conversation and
-inspector columns. The notification centre remains a portalled toolbar overlay;
-all message, notification, reconnect and updater callbacks remain the existing
-ones.
+Статус: выполнено локально в этом наборе изменений. `ServerView` и `DirectMessagesView` теперь следуют отдельным колонкам контекста, беседы и инспектора набора UI. Центр уведомлений остается поверхностной панелью инструментов через портал; все обратные вызовы сообщений, уведомлений, переподключения и updater остаются прежними.
 
-| Current scenario | UI Kit analogue | Existing renderer source and preserved action |
+| Текущий сценарий | Аналог комплекта UI | Существующий источник renderer и сохраненное действие |
 | --- | --- | --- |
-| Server text channel and member list | `ServerScreen`: community context, channel tree, conversation stage and member rail | `ServerView`, `ServerStage`, `MessageList`, existing channel/message/realtime callbacks |
-| Direct messages | `DMScreen`: conversation list, active thread and participant inspector | `DirectMessagesView`, existing message mutations, typing and block state |
-| Notification centre | UI Kit top-toolbar overlay pattern | `NotificationCenter`, existing updater and notification actions |
+| Текстовый канал сервера и список участников | `ServerScreen`: контекст сообщества, структура каналов, стадия разговора и поток участников | `ServerView`, `ServerStage`, `MessageList`, существующие каналы/сообщения/обратные вызовы в реальном времени |
+| Личные сообщения | `DMScreen`: список разговоров, активная тема и инспектор участников | `DirectMessagesView`, существующие изменения сообщений, индикатор набора текста и состояние блокировки |
+| Центр уведомлений | UI Шаблон наложения верхней панели набора инструментов | `NotificationCenter`, существующие updater и действия уведомлений |
 
-Legacy replacement target: the slice will replace the current feature-local column compositions rather than re-skinning them. It will not modify messaging contracts, permission checks, reconnect/reconciliation, updater IPC, or notification payload handling.
+Цель замены наследия: срез заменит текущие композиции столбцов на уровне функции, а не просто изменит их оформление. Он не будет изменять контракты сообщений, проверки разрешений, восстановление соединения/сверку, updater IPC или обработку полезной нагрузки уведомлений.
 
-## Slice 4 — Voice + screen share presentation
+## Слайс 4 — голос + презентация с демонстрацией экрана
 
-Status: presentation implementation completed locally in this change set. This is a presentation-only slice governed by
-`docs/media.md`, `docs/adr/0004-redis-presence-store.md` and
-`docs/adr/0006-livekit-confirmed-voice-presence.md`.
+Статус: реализация презентации завершена локально в этом наборе изменений. Это только презентационный срез, управляемый `docs/media.md`, `docs/adr/0004-redis-presence-store.md` и `docs/adr/0006-livekit-confirmed-voice-presence.md`.
 
-| Classification | Finding / decision |
+| Классификация | Находка / решение |
 | --- | --- |
-| Fact | `RoomView` receives a `MediaSnapshot` from the existing `MediaSession`; it does not own LiveKit connection, capture, token, device, reconnect or screen-audio logic. |
-| Fact | `SourcePicker` receives an already serialised `DesktopSourceInfo[]` and calls existing `onSelect` / `onCancel` callbacks. Electron main remains the authority for source availability. |
-| Fact | The accepted media model keeps LiveKit authoritative for media presence and Redis additive for voice projection. |
-| Proposal | Replace only `RoomView` / `SourcePicker` DOM hierarchy and CSS with the `VoiceScreen` / `ScreenShareScreen` composition: channel heading, connection-quality block, participant canvas and compact dock. |
-| Explicitly excluded | `MediaSession`, `getDisplayMedia`, desktop IPC, LiveKit grants, quality/profile selection, system-audio policy, reconnect, voice presence, WebSocket and permissions. |
-| Required release evidence | Two Windows clients: join/leave, mute/deafen, device switch, share start/stop/repeat, screen audio, reconnect and source disappearance. Browser/Storybook checks do not replace this manual matrix. |
+| Факт | `RoomView` получает `MediaSnapshot` от существующего `MediaSession`; он не владеет логикой подключения, захвата, токена, устройства, повторного подключения или экранно-аудиальной логикой LiveKit. |
+| Факт | `SourcePicker` получает уже сериализованный `DesktopSourceInfo[]` и вызывает существующие `onSelect` / `onCancel` обратные вызовы. Главным источником доступности остается Electron. |
+| Факт | Принятая модель СМИ считает LiveKit авторитетным для присутствия в СМИ и Redis добавочным для проекции голоса. |
+| Предложение | Заменить только иерархию `RoomView` / `SourcePicker` DOM и CSS на композицию `VoiceScreen` / `ScreenShareScreen`: заголовок канала, блок качества соединения, холст участника и компактная панель. |
+| Явно исключено | `MediaSession`, `getDisplayMedia`, desktop IPC, LiveKit гранты, выбор качества/профиля, политика системного аудио, переподключение, присутствие голоса, WebSocket и разрешения. |
+| Необходимые доказательства выпуска | Два клиента Windows: подключение/отключение, отключение/выключение звука, переключение устройства, начало/остановка/повтор совместного использования, аудио экрана, переподключение и исчезновение источника. Проверки Browser/Storybook не заменяют эту ручную матрицу. |
 
-### Current Voice / screen-share evidence
+### Текущие доказательства голоса / демонстрации экрана
 
-The reference review used the executable UI Kit's `VoiceScreen.tsx`,
-`ScreenShareScreen.tsx`, and their `voice-grid` / `source-grid` rules in
-`src/styles.css` at the same 1440 x 900 viewport.
+Обзор ссылок использовал исполняемый файл UI набора `VoiceScreen.tsx`, `ScreenShareScreen.tsx` и их правила `voice-grid` / `source-grid` в `src/styles.css` при том же размере окна просмотра 1440 x 900.
 
-| Product scenario | Product baseline | Result |
+| Сценарий продукта | Базовый уровень продукта | Результат |
 | --- | --- | --- |
-| Voice room | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/voice-room-devices-win32.png` | The room uses the reference's channel header, compact in-header connection indicator, responsive participant canvas, centred avatar/name/state hierarchy, speaking outline, and compact dock: split microphone/output-device controls plus screen-share and leave actions. Existing `MediaSnapshot` and media actions are unchanged. |
-| One participant in voice | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/voice-room-single-participant-win32.png` | The sole participant spans the responsive grid and is centred; no left-aligned incomplete row remains. |
-| Server text channel | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-text-channel-win32.png` | The central server workspace now has the reference's community hero, compact server metrics, channel context and conversation stage; the global sidebar is unchanged. |
-| Screen-share source picker | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/screen-share-picker-win32.png` | The portalled picker follows the reference's modal hierarchy: source type tabs, visual source cards, quality/system-audio controls, and explicit primary/secondary actions. Existing source-selection and safety callbacks are unchanged. |
+| Голосовая комната | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/voice-room-devices-win32.png` | Комната использует заголовок канала из референса, компактный индикатор соединения в заголовке, адаптивную панель участников, центрированную иерархию аватар/имя/состояние, контур говорящего и компактную панель действий: разделённые элементы управления микрофоном/выходным устройством, а также действия для демонстрации экрана и выхода. Существующие `MediaSnapshot` и медиа-действия остаются без изменений. |
+| Один участник в голосе | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/voice-room-single-participant-win32.png` | Единственный участник занимает всю адаптивную сетку и выровнен по центру; не остаётся незавершённой строки, выровненной по левому краю. |
+| Текстовый канал сервера | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-text-channel-win32.png` | В центральном рабочем пространстве сервера теперь есть герой сообщества ссылки, компактные метрики сервера, контекст канала и стадия разговора; глобальная боковая панель осталась без изменений. |
+| Выбор источника для демонстрации экрана | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/screen-share-picker-win32.png` | Перенесённый выбор источника следует модальной иерархии ссылки: вкладки типов источников, визуальные карточки источников, элементы управления качеством/системным звуком и явные основные/второстепенные действия. Существующие колбэки выбора источника и безопасности остаются без изменений. |
 
-Remaining acceptance work for this slice is the installed-Windows two-client
-matrix from `docs/testing.md`; it is deliberately not claimed by browser or
-Storybook evidence.
+Оставшаяся работа по приёмке для этого фрагмента — установленная Windows матрица для двух клиентов от `docs/testing.md`; она намеренно не заявляется браузером или свидетельством Storybook.
 
-## Slice 5 — User + Server Settings
+## Срез 5 — Настройки пользователя и сервера
 
-Status: completed locally in this change set. The closest UI Kit analogue is `UserSettingsScreen` for
-personal pages and `ServerSettingsScreen` for administration. Existing
-`SettingsShell` already owns the required three-zone composition: global
-sidebar, internal settings navigation, and a scrollable central workspace.
+Статус: выполнено локально в этом наборе изменений. Ближайший аналог комплекта UI — `UserSettingsScreen` для личных страниц и `ServerSettingsScreen` для администрирования. Существующий `SettingsShell` уже обладает требуемой трехзонной композицией: глобальная боковая панель, навигация по внутренним настройкам и прокручиваемое центральное рабочее пространство.
 
-| Current scenario | UI Kit analogue | Preserved implementation | Legacy replacement |
+| Текущий сценарий | UI аналог комплекта | Сохраненная реализация | Устаревшая замена |
 | --- | --- | --- | --- |
-| User profile, presence, notification, audio, privacy, account and security | `UserSettingsScreen` cards within its settings workspace | Existing hash routes, profile/security callbacks and local device preferences | Obsolete onboarding footer in settings navigation; no fallback page layout remains |
-| Server overview, appearance, members, roles, channels, invites, moderation, audit and danger area | `ServerSettingsScreen` administration workspace | Existing optimistic settings requests, permission-gated navigation and reauthentication | Feature-local page spacing and card compositions, incrementally within each section |
+| Профиль пользователя, присутствие, уведомления, аудио, конфиденциальность, учетная запись и безопасность | `UserSettingsScreen` карточек в рабочем пространстве настроек | Существующие маршруты хэширования, обратные вызовы профиля/безопасности и локальные настройки устройства | Устаревший нижний колонтитул ознакомления в навигации настроек; макет запасной страницы отсутствует |
+| Обзор сервера, внешний вид, участники, роли, каналы, приглашения, модерация, аудит и зона риска | `ServerSettingsScreen` рабочее пространство администрации | Существующие запросы на оптимистичные настройки, навигация с ограничением по разрешениям и повторная аутентификация | Локальные отступы страниц и композиции карточек, поэтапно в каждом разделе |
 
-Constraint: settings remain internal route navigation. The migration must not
-collapse, hide or replace sections with UI Kit mock actions, and must not alter
-security reauthentication or server permission checks.
+Ограничение: настройки остаются внутренней навигацией маршрута. Миграция не должна сворачивать, скрывать или заменять разделы с мок-действиями набора UI, и не должна изменять повторную аутентификацию безопасности или проверки разрешений сервера.
 
-### Completed settings workspace composition
+### Завершённая композиция рабочего пространства настроек
 
-`Overview` now has the UI Kit server identity card before the live settings
-form. It renders the existing `ServerDetail`/overview data only: cover, icon,
-name, description, member count, owner and visibility. `Appearance` uses the
-same `CommunityLogo` primitive in its live preview. Upload, reset and save
-continue to use their existing API actions and optimistic version.
+`Overview` теперь имеет удостоверение личности сервера комплекта UI перед формой настроек в реальном времени. Он отображает только существующие данные `ServerDetail`/overview: обложку, значок, название, описание, количество участников, владельца и видимость. `Appearance` использует тот же примитив `CommunityLogo` в своем режиме предварительного просмотра в реальном времени. Загрузка, сброс и сохранение продолжают использовать свои существующие действия API и оптимистичную версию.
 
-| Product scenario | Screenshot evidence | Result |
+| Сценарий продукта | Screenshot доказательство | Результат |
 | --- | --- | --- |
-| Server overview | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-overview-win32.png` | UI Kit identity hierarchy precedes the existing editable controls. |
-| Server appearance | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-appearance-win32.png` | Unified logo/cover preview and real file-picker controls remain keyboard reachable. |
-| Server members | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-members-win32.png` | Member identity, own/server alias, role assignment and moderation actions use a responsive four-zone card without changing permission checks. |
-| Server channels | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-channels-win32.png` | Text and voice channel controls have distinct responsive grids; the voice limits and archive action no longer compete for one row. |
-| Server invites | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-invites-win32.png` | Existing short-link creation and revocation are arranged as distinct creation and active-link cards. |
-| Server moderation | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-moderation-win32.png` | Existing member-entry limits and ban management are separated into readable administration cards. |
-| Server audit log | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-audit-log-win32.png` | The existing filter and immutable event list now use a distinct filter card and activity rows. |
-| Server danger zone | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-danger-zone-win32.png` | Existing reauthentication and destructive-action gates remain unchanged inside a clearer confirmation card. |
-| User account | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/user-settings-account-win32.png` | Email, export and deactivation actions retain their current lifecycle while following the common settings workspace. |
+| Обзор сервера | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-overview-win32.png` | UI Иерархия идентичности набора предшествует существующим редактируемым элементам управления. |
+| Внешний вид сервера | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-appearance-win32.png` | Унифицированный логотип/обзор обложки и элементы управления выбором файлов остаются доступными с клавиатуры. |
+| Участники сервера | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-members-win32.png` | Идентификация участника, собственный/серверный псевдоним, назначение ролей и действия модерации используют адаптивную карточку с четырьмя зонами без изменения проверок разрешений. |
+| Каналы сервера | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-channels-win32.png` | Управление текстовыми и голосовыми каналами имеет отдельные адаптивные сетки; ограничения голосового канала и действие архивации больше не конкурируют за одну строку. |
+| Приглашения на сервер | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-invites-win32.png` | Создание и отмена существующих коротких ссылок организованы как отдельные карточки создания и активной ссылки. |
+| Модерация сервера | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-moderation-win32.png` | Существующие ограничения на вход участников и управление банами разделены на читаемые административные карточки. |
+| Журнал аудита сервера | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-audit-log-win32.png` | Существующий фильтр и список неизменяемых событий теперь используют отдельную карту фильтра и строки активности. |
+| Зона опасности сервера | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/server-settings-danger-zone-win32.png` | Существующие процессы повторной аутентификации и действия с разрушительными последствиями остаются без изменений внутри более четкой карты подтверждения. |
+| Учетная запись пользователя | `apps/desktop/storybook-e2e/visual.spec.ts-snapshots/user-settings-account-win32.png` | Действия с электронной почтой, экспортом и деактивацией сохраняют свой текущий жизненный цикл при следовании общим настройкам рабочего пространства. |
 
-## Final verification and removal audit
+## Окончательная проверка и аудит удаления
 
-The complete renderer/UI migration has no permanent `Old`, `Legacy` or `V2`
-component branches. The old settings-navigation footer was removed after its
-consumers moved. The remaining `legacy` identifiers in `App.tsx` are direct
-message compatibility reads required by `docs/technical-specification.md` until
-the separately approved canonical-messaging contract phase; they are not UI
-layouts and must not be deleted as part of this migration.
+Полная миграция renderer/UI не имеет постоянных `Old`, `Legacy` или `V2` компонентных веток. Старый футер навигации настроек был удалён после того, как его потребители переместились. Остаточные идентификаторы `legacy` в `App.tsx` являются прямыми чтениями совместимости сообщений, необходимыми для `docs/technical-specification.md` до отдельно одобренной фазы контракта канонических сообщений; они не являются макетами UI и не должны удаляться в рамках этой миграции.
 
-Automated evidence for this change set:
+Автоматизированные доказательства для этого набора изменений:
 
-| Check | Result |
+| Проверка | Результат |
 | --- | --- |
-| Desktop typecheck | passed |
-| Renderer unit tests | 99 passed |
-| Storybook interaction and a11y tests | 87 passed |
-| Storybook visual baselines | 46 passed |
-| Electron Playwright | 8 passed |
+| Desktop typecheck | прошло |
+| Renderer модульные тесты | 99 выполнено успешно |
+| Storybook взаимодействие и a11y тесты | пройдено 87 |
+| Storybook визуальные базовые линии | 46 пройдено |
+| Electron Playwright | 8 пройдено |
 
-Manual release evidence remains required on a Windows installed client at
-100%, 125% and 150% scaling, plus the two-client voice/screen-share matrix
-defined in `docs/testing.md`. These native checks cannot be substituted by
-browser screenshots.
+Доказательства ручного выпуска остаются необходимыми на установленном клиенте Windows при масштабировании 100%, 125% и 150%, а также на двухклиентной матрице голос/демонстрация экрана, определённой в `docs/testing.md`. Эти нативные проверки не могут быть заменены браузерным screenshots.

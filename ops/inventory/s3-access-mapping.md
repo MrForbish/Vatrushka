@@ -1,15 +1,15 @@
-# S3 access mapping
+# S3 отображение доступа
 
 Метки: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
 
-| Credential role | Allowed bucket | Writer | Forbidden access |
+| Роль учетных данных | Разрешенный бакет | Писатель | Запрещенный доступ |
 | --- | --- | --- | --- |
-| `media-prod-key` | `media-vatrushka` | production API | staging media, logs, backups |
-| `media-staging-key` | `media-staging-vatrushka` | staging API | production media, logs, backups |
-| `loki-logs-key` | `logs-vatrushka` | Observer Loki only | both media buckets, backups |
-| `backup-prod-key` | `backups` | root-owned production backup wrapper | application, staging, Loki |
+| `media-prod-key` | `media-vatrushka` | production API | staging медиа, журналы, резервные копии |
+| `media-staging-key` | `media-staging-vatrushka` | staging API | production медиа, журналы, резервные копии |
+| `loki-logs-key` | `logs-vatrushka` | Только наблюдатель Loki | оба медиа-бакета, резервные копии |
+| `backup-prod-key` | `backups` | создаваемый от имени root production обертка резервного копирования | приложение, staging, Loki |
 
-- **fact:** current documentation identifies production media and Loki log storage, but the live policies were not read.
-- **assumption:** separate service credentials can be issued by the object-storage provider.
-- **unknown:** encryption, lifecycle, versioning, capacity and recovery policy of every bucket.
-- **proposal:** configure credentials only as protected, environment-scoped file variables or host secrets; never add credentials or bucket URLs with embedded credentials to a manifest, artifact or repository file.
+- **факт:** текущая документация идентифицирует хранилище медиа production и хранилище логов Loki, но активные политики не были прочитаны.
+- **предположение:** отдельные учетные данные службы могут быть выданы поставщиком объектного хранилища.
+- **неизвестно:** шифрование, жизненный цикл, версионирование, емкость и политика восстановления каждого хранилища.
+- **предложение:** настраивать учетные данные только как защищенные переменные файлов с областью действия среды или как секреты хоста; никогда не добавлять учетные данные или URL-адреса хранилищ с встроенными учетными данными в манифест, артефакт или файл репозитория.
