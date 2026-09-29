@@ -1,29 +1,29 @@
-# Security notes
+# Примечания по безопасности
 
-## Desktop
+## Настольный клиент
 
-- `nodeIntegration=false`, `contextIsolation=true`, `sandbox=true`, `webSecurity=true`, webview disabled;
-- local renderer only; CSP denies objects/base/frame ancestors and restricts scripts;
-- unknown navigation/windows denied;
-- main-frame sender validation and fixed IPC channels; no generic invoke;
-- source ID is one-shot and revalidated immediately before display capture;
-- refresh encrypted by OS `safeStorage`; no plaintext fallback and no preload getter that could return it to arbitrary renderer code;
-- startup refresh, token rotation and logout run in Electron main; renderer receives only the short-lived access JWT;
-- access/LiveKit tokens only in memory; no localStorage;
-- logs rotate at 5 MiB and never intentionally include tokens.
+- `nodeIntegration=false`, `contextIsolation=true`, `sandbox=true`, `webSecurity=true`, веб-просмотр отключен;
+- локальный renderer только; CSP отказывает объектам/базам/предкам фреймов и ограничивает скрипты;
+- неизвестная навигация/windows запрещена;
+- основная проверка отправителя и исправлены каналы IPC; без универсального вызова;
+- идентификатор источника используется однократно и повторно проверяется непосредственно перед захватом отображения;
+- обновить, зашифровано ОС `safeStorage`; нет аварийного варианта с открытым текстом и нет предзагрузочного получателя, который мог бы вернуть его произвольному коду renderer;
+- обновление запуска, ротация токена и выход выполняются в Electron главном; renderer получает только краткоживущий доступ JWT;
+- доступ к/LiveKit токенам только в памяти; localStorage отсутствует;
+- журналы вращаются при 5 МиБ и никогда не включают токены намеренно.
 
-Windows DPAPI protects against other OS users but not every process already running as the same Windows user. This matches Electron `safeStorage` semantics; full hardware-backed secret isolation is out of MVP scope.
+Windows защищает от других пользователей ОС, но не от каждого процесса, уже запущенного от того же пользователя Windows. Это соответствует семантике Electron `safeStorage`; полная изоляция секретов с поддержкой оборудования выходит за рамки MVP.
 
 ## API
 
-- strict Zod validation and unified non-stacktrace errors;
-- OTP HMAC pepper, refresh SHA-256 hashes, JWT issuer/audience/expiry;
-- route rate limits covered by integration tests, attempt limits, immediate access-token checks and session family revocation;
-- password reset does not disclose account existence at request time and atomically revokes every active session after successful email-code verification;
-- single-use hashed 2FA recovery codes, active-session management and an append-only security event feed;
+- строгая проверка Zod и единообразные ошибки без трассировки стека;
+- OTP HMAC перец, обновить SHA-256 хеши, JWT эмитент/аудитория/срок действия;
+- лимиты маршрута, покрытые интеграционными тестами, лимиты попыток, немедленные проверки токена доступа и аннулирование семейства сессий;
+- сброс пароля не раскрывает существование аккаунта в момент запроса и атомарно отзывает все активные сеансы после успешной проверки кода с электронной почты;
+- одноразовые хэшированные коды восстановления 2FA, управление активными сессиями и журнал безопасности только для добавления;
 - least-privilege channel tokens: microphone, camera and screen sources are issued independently from effective channel permissions; камера требует `STREAM_VIDEO`;
 - server membership, effective permissions and moderation checks выполняются server-side; гостевой media-доступ отсутствует;
-- webhook signature and body checksum validation;
-- Pino redaction for auth headers/code/refresh/secrets.
+- проверка подписи вебхука и контрольной суммы тела;
+- Редактирование Pino для заголовков аутентификации/кода/обновления/секретов.
 
-Secrets live only in `.env`/deployment secret management. `.env` is ignored and is never copied to the Docker image or desktop bundle.
+Секреты живут только в `.env`/управлении секретами развертывания. `.env` игнорируется и никогда не копируется в образ Docker или пакет desktop.

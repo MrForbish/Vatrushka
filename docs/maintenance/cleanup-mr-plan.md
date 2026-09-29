@@ -1,8 +1,8 @@
-# Repository cleanup MR plan
+# План очистки репозитория MR
 
-1. **Audit (this MR):** add inventories only; no deletion.
-2. **Worktree cleanup:** one reviewed batch of individually qualified clean stale worktrees, using Git worktree commands only.
-3. **Documentation hygiene:** mark historical material or consolidate proven duplicates; preserve ADR/release/audit evidence.
-4. **Code/dependency cleanup:** one bounded candidate per MR with all consumers migrated and targeted verification.
+1. **Аудит (этот MR):** добавляйте только инвентаризации; удаление не производится.
+2. **Очистка рабочей ветки:** один проверенный пакет индивидуально квалифицированных устаревших рабочих веток, с использованием только команд Git worktree.
+3. **Гигиена документации:** помечайте исторические материалы или объединяйте проверенные дубликаты; сохраняйте ADR/release/доказательства аудита.
+4. **Очистка кода/зависимостей:** один ограниченный кандидат на MR с переносом всех потребителей и целевой проверкой.
 
-Each implementation MR must include: classification, evidence, affected contracts/ADRs, rollback, pre/post removal checks and explicit statement of whether Maxim approval is required.
+Каждая реализация MR должна включать: классификацию, доказательства, затронутые контракты/ADR, откат, проверки до и после удаления и явное указание того, требуется ли одобрение Maxim.

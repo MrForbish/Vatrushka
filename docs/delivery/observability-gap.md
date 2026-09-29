@@ -1,11 +1,11 @@
-# Observability gap
+# Пробел в наблюдаемости
 
-Labels: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
+Метки: **факт**, **вывод**, **предположение**, **неизвестно**, **предложение**.
 
-- **fact:** the Observer runs Grafana, Prometheus, Loki, Alertmanager, Blackbox and Alloy. Its health endpoints for Grafana, Prometheus and Loki passed through the fixed read-only verification wrapper.
-- **fact:** production tag delivery runs Observer verification automatically after the single manual production deployment approval and before stable updater publication.
-- **fact:** product and runner Alloy configurations exist; labels include the environment where configuration provides it.
-- **fact (2026-07-25):** the private production-to-Observer route is reachable in both directions. A root-only, checksum-bound product agent configuration is installed; its first live ingestion evidence is intentionally deferred until the immutable runtime exists.
-- **unknown:** first live ingestion from the new production runtime, staging probe address, alert receiver and retention capacity.
-- **fact (2026-07-25):** the new production host has a verified private WireGuard route to Observer. Product telemetry is not expected until its runtime and Alloy agent are activated.
-- **proposal:** verify ingestion with `environment=production|staging`, and make staging alerting dashboard-only before adding external routing.
+- **факт:** Observer запускает Grafana, Prometheus, Loki, Alertmanager, Blackbox и Alloy. Его контрольные точки здоровья для Grafana, Prometheus и Loki прошли через фиксированную обертку только для чтения.
+- **факт:** доставка тега production автоматически запускает проверку Observer после единственного ручного утверждения развертывания production и перед стабильной публикацией updater.
+- **факт:** существуют конфигурации продукта и исполнителя Alloy; метки включают среду, для которой предоставляется конфигурация.
+- **факт (2026-07-25):** частный маршрут production-к-Наблюдателю доступен в обоих направлениях. Установлена конфигурация агент-продукта только с корневым доступом и привязкой к контрольной сумме; первые свидетельства его живого поглощения намеренно отложены до существования неизменяемого runtime.
+- **неизвестно:** первое прямое получение данных с нового адреса зонда production runtime, staging, приёмника уведомлений и ёмкости хранения.
+- **факт (2026-07-25):** новый production хост имеет проверенный приватный маршрут WireGuard к Observer. Ожидается, что телеметрия продукта не будет доступна до активации его runtime и Alloy агента.
+- **предложение:** проверить поглощение с `environment=production|staging`, и сделать staging только панелью оповещений перед добавлением внешней маршрутизации.

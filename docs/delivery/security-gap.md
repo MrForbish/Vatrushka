@@ -1,13 +1,13 @@
-# Security gap
+# Пробел в безопасности
 
-Labels: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
+Метки: **факт**, **вывод**, **предположение**, **неизвестно**, **предложение**.
 
-- **fact:** candidate manifests are redacted, checksum-bound and validated before root imports them. Source archives and updater files are allowlisted, ownership-checked and checksum-checked.
-- **fact:** runtime deployment uses immutable registry digests and `docker compose --no-build`; the deploy user cannot run Docker or an arbitrary shell.
-- **fact:** updater assets are imported into a root-owned feed directory. The wrapper validates an exact manifest and publishes `latest.yml` only after all referenced files are in place.
-- **fact:** direct Observer verification uses a separate account and fixed read-only wrapper.
-- **fact (2026-07-25):** Observer SSH now has one allowlisted account, `vatrushka_observer_deploy`; root, password and keyboard-interactive SSH authentication are disabled. The account's limited wrapper was verified after the change.
-- **fact (2026-07-25):** the root-owned runtime deploy driver validates production configuration before it changes the active application path. The validation is fail-closed and reports only generic invalid/incomplete states, so database, media S3, SMTP and LiveKit values are not disclosed in CI or remote output.
-- **fact (2026-07-25):** the same preflight requires the trusted TURN certificate files through the fixed `/etc/letsencrypt` mount; arbitrary certificate directories and a late LiveKit startup failure are rejected before runtime activation.
-- **unknown:** production S3 IAM boundaries, backup encryption and retention, provider firewall policy, LiveKit/TURN secrets and private-network/WireGuard controls.
-- **proposal:** create separate least-privilege S3 principals for production media, staging media, Loki and backups; retain the token-rotation audit trail outside Git and periodically verify that no expired integration token remains accepted.
+- **факт:** манифесты кандидатов редактируются, проверяются с помощью контрольной суммы и утверждаются до того, как корень их импортирует. Исходные архивы и файлы updater находятся в белом списке, проверяются на принадлежность и контрольную сумму.
+- **факт:** развертывание runtime использует неизменяемые дайджесты реестра и `docker compose --no-build`; пользователь развертывания не может запускать Docker или произвольную оболочку.
+- **факт:** updater ресурсы импортируются в директорию канала, принадлежащую root. Оболочка проверяет точный манифест и публикует `latest.yml` только после того, как все указанные файлы находятся на месте.
+- **факт:** прямая проверка Observer использует отдельную учетную запись и фиксированную оболочку только для чтения.
+- **факт (25.07.2026):** У наблюдателя SSH теперь есть один разрешённый аккаунт, `vatrushka_observer_deploy`; корневой доступ, пароль и аутентификация через интерактивную клавиатуру SSH отключены. Ограниченная оболочка аккаунта была проверена после изменения.
+- **факт (25.07.2026):** драйвер развертывания, принадлежащий root, проверяет конфигурацию production перед изменением активного пути приложения. Проверка является fail-closed и сообщает только общие состояния недопустимости/неполноты, поэтому значения базы данных, медиа S3, SMTP и LiveKit не раскрываются в CI или удаленном выводе.
+- **факт (2026-07-25):** та же проверка перед выполнением требует доверенные файлы сертификатов TURN через фиксированный монтируемый `/etc/letsencrypt`; произвольные каталоги сертификатов и поздний сбой запуска LiveKit отклоняются до активации runtime.
+- **неизвестно:** production S3 IAM границы, шифрование и хранение резервных копий, политика брандмауэра провайдера, LiveKit/TURN секреты и управление приватной сетью/WireGuard.
+- **предложение:** создать отдельных принципалов с минимальными привилегиями S3 для production медиа, staging медиа, Loki и резервных копий; хранить журнал аудита ротации токенов вне Git и периодически проверять, что ни один просроченный токен интеграции не принимается.

@@ -1,10 +1,10 @@
-# Runtime image contract
+# контракт на изображение
 
-`docker-compose.yml` supports two intentionally separate modes:
+`docker-compose.yml` поддерживает два намеренно разделённых режима:
 
-- local development: `API_IMAGE` is unset, so Compose builds the API from the checked-out source;
-- controlled delivery: a root-owned wrapper supplies `API_IMAGE` as a fully qualified OCI image reference with an immutable `@sha256:...` digest and runs Compose with `--no-build`.
+- локальная разработка: `API_IMAGE` не установлен, поэтому Compose собирает API из проверенного исходного кода;
+- контролируемая доставка: оболочка с правами root предоставляет `API_IMAGE` как полностью квалифицированную ссылку на образ OCI с неизменяемым дайджестом `@sha256:...` и запускает Compose с `--no-build`.
 
-The runtime `.env` must not contain registry credentials. The future deployment driver will read the registry repository and environment policy from a root-owned configuration file, authenticate Docker through an operator-provisioned read-only credential, validate the candidate manifest, and then provide the digest through a transient process environment.
+runtime `.env` не должен содержать учетные данные реестра. Будущий драйвер развертывания будет читать репозиторий реестра и политику среды из конфигурационного файла, принадлежащего root, аутентифицироваться Docker с помощью предоставленных оператором учетных данных только для чтения, проверять кандидатский манифест и затем предоставлять дайджест через временную среду процесса.
 
-This compatibility layer does not enable deployments by itself. The wrapper remains fail-closed until the driver, registry credential provisioning, backup/rollback evidence and staging preflight are implemented.
+Этот слой совместимости сам по себе не обеспечивает развертывания. Обертка остается fail-closed, пока не будут реализованы драйвер, предоставление учетных данных реестра, доказательства резервного копирования/отката и staging проверка готовности.

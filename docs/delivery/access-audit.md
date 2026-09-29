@@ -1,12 +1,12 @@
-# Access audit
+# Аудит доступа
 
-Labels: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
+Метки: **факт**, **вывод**, **предположение**, **неизвестно**, **предложение**.
 
-- **fact:** the new production host uses a key-only root break-glass account and a separate `vatrushka_deploy` account for CI transport.
-- **fact:** `vatrushka_deploy` is not in the Docker group and has no shell-level sudo authority. Its sudoers entry allows only root-owned Vatrushka wrappers for preflight, deploy, rollback, runtime status and updater publication.
-- **fact (2026-07-25):** the Observer accepts SSH only for `vatrushka_observer_deploy` using public keys. Password authentication, keyboard-interactive authentication and root SSH login are disabled; legacy `codex` was removed after the restricted account and wrapper were verified.
-- **fact:** `vatrushka_observer_deploy` may invoke only `vatrushka-observability-verify production` through sudo. It has no Docker group membership or general shell-level sudo authority.
-- **fact:** CI pins host keys through protected file variables. Runtime `ssh-keyscan` and disabled host-key checks are not used.
-- **inference:** production and Observer CI authority are now separated and limited to their intended control planes.
-- **unknown:** provider firewall allowlists, WireGuard peer list and the complete legacy-host user inventory.
-- **proposal:** after traffic migration, audit and reduce legacy-host users before reimaging it as staging; do not reuse either production deploy key for staging.
+- **факт:** новый хост production использует учетную запись root с доступом только по ключу для аварийного доступа и отдельную учетную запись `vatrushka_deploy` для транспорта CI.
+- **факт:** `vatrushka_deploy` не входит в группу Docker и не имеет полномочий sudo на уровне оболочки. Его запись в файле sudoers позволяет использовать только принадлежащие root Vatrushka обертки для preflight, deploy, rollback, runtime status и updater publication.
+- **факт (25.07.2026):** Observer принимает SSH только для `vatrushka_observer_deploy` с использованием публичных ключей. Аутентификация по паролю, аутентификация с использованием клавиатуры и вход root SSH отключены; устаревший `codex` был удалён после проверки ограничённой учётной записи и обёртки.
+- **факт:** `vatrushka_observer_deploy` может вызывать только `vatrushka-observability-verify production` через sudo. У него нет членства в группе Docker и общей sudo-авторизации на уровне оболочки.
+- **факт:** CI закрепляет ключи хоста через защищённые переменные файла. Runtime `ssh-keyscan` и отключенные проверки ключей хоста не используются.
+- **вывод:** полномочия production и наблюдателя CI теперь разделены и ограничены их целевыми управляющими плоскостями.
+- **неизвестно:** белые списки брандмауэра провайдера, список пиров WireGuard и полный список пользователей устаревшего хоста.
+- **предложение:** после миграции трафика провести аудит и сократить количество пользователей на старом хосте перед его переустановкой как staging; не использовать повторно ключ развертывания production для staging.

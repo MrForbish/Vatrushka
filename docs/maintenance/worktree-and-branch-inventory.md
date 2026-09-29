@@ -1,15 +1,15 @@
-# Worktree and branch inventory
+# Инвентарь рабочей области и веток
 
-## Fact
+## Факт
 
-The repository currently has 69 registered worktrees. The canonical working checkout is dirty and contains user-owned reference packs and generated artifacts. This audit worktree is clean and isolated on `chore/repository-cleanup-audit`.
+В репозитории в настоящее время зарегистрировано 69 рабочих деревьев. Каноническая рабочая копия грязная и содержит референс-паки, принадлежащие пользователю, и сгенерированные артефакты. Это аудиторское рабочее дерево чистое и изолированное на `chore/repository-cleanup-audit`.
 
-## Classification
+## Классификация
 
-- `develop`, `main`, active `release/*` and `hotfix/*`: `active`; never remove here.
-- Worktrees with an open MR, unpushed commit, lock, untracked content, or activity within 14 days: `unknown`; preserve.
-- Worktrees whose upstream is gone are only `dead-candidate`; a gone upstream alone is not removal proof.
+- `develop`, `main`, активные `release/*` и `hotfix/*`: `active`; никогда не удаляйте здесь.
+- Рабочие деревья с открытым MR, неотправленным коммитом, блокировкой, неотслеживаемым содержимым или активностью в течение 14 дней: `unknown`; сохранить.
+- Рабочие деревья, у которых отсутствует upstream, являются только `dead-candidate`; отсутствие одного upstream не делает их защищёнными от удаления.
 
-## Cleanup procedure
+## Процедура очистки
 
-For each candidate: confirm not locked, clean, no untracked/user-owned files, no unpushed commits, no open MR/release/hotfix owner, merged/gone branch, no runtime dependency, and activity older than 14 days. Then use `git worktree remove` followed by `git worktree prune`; never delete directories directly.
+Для каждого кандидата: подтвердите, что он не заблокирован, чистый, без незарегистрированных/принадлежащих пользователю файлов, без непушенных коммитов, без открытого владельца MR/release/hotfix, слитая/удалённая ветка, без зависимости runtime и активность старше 14 дней. Затем используйте `git worktree remove`, а затем `git worktree prune`; никогда не удаляйте директории напрямую.

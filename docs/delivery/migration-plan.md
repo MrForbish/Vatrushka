@@ -1,36 +1,36 @@
-# Production migration plan
+# план миграции Production
 
 Метки: **fact**, **inference**, **assumption**, **unknown**, **proposal**.
 
-## Preconditions
+## Предусловия
 
-- **fact:** the target production VPS (`vtr-prod-1`) has key-only bootstrap access, a separate no-sudo/no-Docker deploy account, Docker Engine and Compose, and no product workload.
-- **fact:** the current production VPS runs the application and is the future staging host only after production migration.
-- **fact:** Maxim explicitly accepted loss of the current application's non-critical database data during this infrastructure migration; this does not remove the need for a clean target configuration and verification evidence.
-- **unknown:** the exact production configuration values, S3 media credential, DNS switch control, LiveKit/TURN configuration and migration window are not stored in the repository.
-- **proposal:** do not repurpose, stop, erase or reinstall this VPS until the new production runtime has passed migration verification and its agreed observation window.
+- **факт:** целевой production VPS (`vtr-prod-1`) имеет доступ к загрузке только по ключу, отдельную учетную запись для развертывания без sudo/без Docker, Docker Engine и Compose, и не имеет рабочей нагрузки продукта.
+- **факт:** текущий production VPS запускает приложение и станет будущим staging хостом только после production миграции.
+- **факт:** Максим явно согласился на потерю некритичных данных текущего приложения во время этой миграции инфраструктуры; это не снимает необходимости в чистой конфигурации целевой системы и доказательствах проверки.
+- **неизвестно:** точные значения конфигурации production, учетные данные медиа S3, управление коммутатором DNS, конфигурация LiveKit/TURN и окно миграции не сохраняются в репозитории.
+- **предложение:** не перепрофилируйте, не останавливайте, не стирайте и не переустанавливайте этот VPS до тех пор, пока новый production runtime не пройдет проверку миграции и согласованное окно наблюдения.
 
-## Ordered migration
+## Упорядоченная миграция
 
-1. **proposal:** inventory all hosts, public DNS, pinned SSH host keys, deploy accounts, firewall and WireGuard peers without recording secrets in Git.
-2. **proposal:** install the reviewed root-owned wrapper set, create the manifest/driver runtime and provision the new host with independent PostgreSQL, Redis, LiveKit/TURN and production-only media credentials.
-3. **proposal:** create an encrypted, checksummed configuration and database backup before cutover whenever source access is available. If data loss remains explicitly accepted, record the waived restore scope while still retaining a rollbackable runtime configuration.
-4. **proposal:** verify API, WebSocket, LiveKit, media storage, updater, metrics and logs against the private target.
-5. **proposal:** schedule the DNS/traffic switch, retain the former production untouched for the agreed observation window, and use one release manifest/digest for deployment.
-6. **proposal:** after that window, reinstall the former production host and create the isolated staging runtime with staging-only S3, LiveKit, database and updater feed.
+1. **предложение:** инвентаризировать все хосты, общедоступные DNS, закрепленные SSH ключи хостов, развернуть аккаунты, фаервол и пиры WireGuard без сохранения секретов в Git.
+2. **предложение:** установить пересмотренный набор оболочек с правами root, создать манифест/драйвер runtime и обеспечить новый хост независимыми учетными данными медиа только для PostgreSQL, Redis, LiveKit/TURN и production.
+3. **предложение:** создавать зашифрованную резервную копию конфигурации и базы данных с контрольной суммой перед переключением всякий раз, когда доступ к источнику данных доступен. Если потеря данных остается явно принятой, зафиксировать объем отмененной возможности восстановления, при этом сохранив откатываемую конфигурацию runtime.
+4. **предложение:** проверьте API, WebSocket, LiveKit, хранилище медиа, updater, метрики и журналы по сравнению с частной целью.
+5. **предложение:** запланировать переключение DNS/трафика, оставить прежний production без изменений на согласованный период наблюдения и использовать один манифест/дайджест для развертывания.
+6. **предложение:** после этого окна переустановите прежний хост production и создайте изолированный staging runtime с staging-только S3, LiveKit, базой данных и updater фидом.
 
-## Migration execution record
+## Запись выполнения миграции
 
-- **fact (2026-07-25):** the new production host has the reviewed wrapper set, transport-only `vatrushka_deploy` account, root-owned runtime/app environment paths and no application workload.
-- **fact (2026-07-25):** the Observer has a separate `vatrushka_observer_deploy` account with a dedicated delivery key and exactly one root-owned `vatrushka-observability-verify production` sudo command. Its direct readiness check passed against the existing Grafana, Prometheus and Loki runtime without changing services.
-- **fact (2026-07-25):** the Observer's legacy `codex` account was removed only after the restricted deploy account was independently verified. Root, password and keyboard-interactive SSH authentication are disabled, so no general-purpose remote shell remains exposed.
-- **fact (2026-07-25):** the current production host remains online and unchanged; it has not been repurposed, stopped, erased or reinstalled.
-- **fact (2026-07-25):** a value-redacted audit of the new production root-owned application environment found incomplete media S3 settings. The immutable runtime wrapper now rejects a production deployment before source extraction or symlink replacement when any required production setting is absent or malformed.
-- **unknown:** registry pull credential, private-network topology, production DNS/cutover window and independent backup destination.
-- **proposal:** complete the registry bootstrap and private runtime validation before any DNS, updater, LiveKit or database traffic cutover.
-- **proposal:** before the cutover window, issue the trusted TURN certificate after the agreed DNS strategy is in place, then use the read-only tag preflight result as the final configuration gate. Do not rely on LiveKit startup to discover a missing certificate.
+- **факт (2026-07-25):** новый хост production имеет проверенный набор оболочек, только транспортный аккаунт `vatrushka_deploy`, пути окружения runtime/app принадлежат root и нет рабочей нагрузки приложения.
+- **факт (25.07.2026):** у Наблюдателя есть отдельная учетная запись `vatrushka_observer_deploy` с выделенным ключом доставки и ровно одной командой sudo `vatrushka-observability-verify production`, принадлежащей root. Его прямая проверка готовности прошла относительно существующих Grafana, Prometheus и Loki runtime без изменения сервисов.
+- **факт (2026-07-25):** учетная запись наследия Observer `codex` была удалена только после того, как ограниченная учетная запись развертывания была независимо проверена. Аутентификация Root, пароль и клавиатурно-интерактивная SSH аутентификация отключены, поэтому никакая универсальная удаленная оболочка больше не остается открытой.
+- **факт (2026-07-25):** текущий хост production остается в сети и без изменений; его не перепрофилировали, не остановили, не стерли и не переустанавливали.
+- **факт (25.07.2026):** аудиторская проверка нового корневого приложения production с цензурированной информацией выявила неполные настройки медиумов S3. Неизменяемый обертка runtime теперь отклоняет развертывание production до извлечения источника или замены символьной ссылки, если любое требуемое значение production отсутствует или имеет неправильный формат.
+- **неизвестно:** учетные данные для извлечения из реестра, топология частной сети, production DNS/окно переключения и независимое место резервного копирования.
+- **предложение:** завершить начальную загрузку реестра и приватную проверку runtime до любого переключения DNS, updater, LiveKit или базы данных.
+- **предложение:** до окна переключения выдайте доверенный сертификат TURN после того, как будет реализована согласованная стратегия DNS, затем используйте результат проверки только для чтения как окончательный контроль конфигурации. Не полагайтесь на запуск LiveKit для обнаружения отсутствующего сертификата.
 
-## Stop conditions
+## Условия остановки
 
-- **proposal:** abort traffic switching on failed readiness, smoke, media, WebSocket, LiveKit, logging or metrics verification.
-- **proposal:** do not erase the former production host or any bucket without a separate explicit approval.
+- **предложение:** прервать переключение трафика при неудачной проверке готовности, smoke-тестировании, медиа, WebSocket, LiveKit, проверке логов или метрик.
+- **предложение:** не удаляйте предыдущий хост production или любой бакет без отдельного явного одобрения.

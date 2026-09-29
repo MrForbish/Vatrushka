@@ -1,36 +1,36 @@
-# Performance baseline
+# Базовый уровень производительности
 
-Stage 8 introduces a reproducible renderer bundle profile. Run it after a desktop build:
+Этап 8 вводит воспроизводимый профиль пакета renderer. Запустите его после сборки desktop:
 
 ```powershell
 npm run perf:bundle
 ```
 
-`npm run perf:check` only evaluates an existing `apps/desktop/out/renderer` build and is used by CI after `npm run build`.
+`npm run perf:check` оценивает только существующую сборку `apps/desktop/out/renderer` и используется CI после `npm run build`.
 
-## Release budgets
+## Бюджеты выпуска
 
-The JavaScript ceiling is 2.8 MB and remains a blocking regression gate.
+Потолок JavaScript составляет 2,8 МБ и остаётся блокирующим регрессионным порогом.
 
-| Asset | vNext measured baseline | Blocking budget |
+| Актив | Измеренная базовая линия vNext | Блокирующий бюджет |
 |---|---:|---:|
-| Renderer JavaScript, raw total | 2,465.7 KiB | 2,600,000 bytes |
-| Largest JavaScript chunk | 2,212.2 KiB | 2,350,000 bytes |
-| Renderer CSS, raw total | 170.9 KiB | 190,000 bytes |
-| Local fonts, raw total | 431.8 KiB | 500,000 bytes |
+| Renderer JavaScript, общий размер в сыром виде | 2,465.7 КиБ | 2,600,000 байт |
+| Самый большой фрагмент JavaScript | 2,212.2 КиБ | 2,350,000 байт |
+| Renderer CSS, общий необработанный размер | 170,9 КиБ | 190 000 байт |
+| Локальные шрифты, общий объём | 431,8 КиБ | 500 000 байт |
 
-The script also prints gzip sizes for comparison. Raw sizes are the blocking metric because Electron loads local assets from the packaged application rather than transferring them over HTTP with content encoding. Budgets intentionally leave a small margin for fixes while still detecting an accidental large dependency, font family or stylesheet.
+Скрипт также выводит размеры gzip для сравнения. Исходные размеры являются ключевым показателем, потому что Electron загружает локальные ресурсы из упакованного приложения, а не передает их по HTTP с кодированием содержимого. Бюджеты намеренно оставляют небольшой запас для исправлений, при этом всё ещё выявляя случайно большой зависимый файл, шрифт или таблицу стилей.
 
-The vNext baseline includes the canonical messaging client, notification center and complete lazy-loaded settings route. The route emits a separate JavaScript/CSS asset; the budget counts all packaged assets so a deferred feature cannot hide accidental growth. Future work must stay inside these measured ceilings or document another intentional baseline change.
+Базовая версия vNext включает канонический клиент для обмена сообщениями, центр уведомлений и полную лениво загружаемую маршрутизацию настроек. Маршрут создаёт отдельный ресурс JavaScript/CSS; бюджет учитывает все упакованные ресурсы, поэтому отложенная функция не может скрыть случайный рост. Будущая работа должна оставаться в этих измеренных пределах или документировать другое намеренное изменение базовой линии.
 
-## Runtime profile before a public release
+## Runtime профиль перед публичным релизом
 
-Bundle size does not measure WebRTC quality. Use the two-machine Windows matrix from [testing.md](testing.md) and record these Chrome DevTools/Electron metrics:
+Размер пакета не измеряет качество WebRTC. Используйте двухмашинную Windows матрицу из [testing.md](testing.md) и запишите эти метрики Chrome DevTools/Electron:
 
-1. cold start until the authentication or home screen becomes interactive;
-2. renderer main-thread long tasks while opening a server with at least 1,000 messages;
-3. renderer memory before joining voice, after ten minutes in voice and after leaving;
-4. CPU while receiving 1080p screen share and while presenting it with system audio;
-5. retained `MediaStreamTrack`, audio and video elements after stopping share and leaving the room.
+1. холодный запуск до тех пор, пока экран аутентификации или главный экран не станет интерактивным;
+2. renderer длительные задачи основного потока при открытии сервера с как минимум 1 000 сообщений;
+3. память перед присоединением к голосовому чату, через десять минут в голосе и после выхода;
+4. CPU при получении трансляции экрана в 1080p и при её демонстрации с системным звуком;
+5. сохранил `MediaStreamTrack`, аудио и видео элементы после прекращения совместного использования и выхода из комнаты.
 
-The release is blocked by growing memory after two join/leave cycles, retained capture tracks, sustained renderer long tasks over 200 ms during message scrolling, or failure of the automated bundle budget.
+Выпуск блокируется из-за растущего потребления памяти после двух циклов присоединения/выхода, сохраненных захваченных треков, продолжительных renderer долгих задач длительностью более 200 мс во время прокрутки сообщений или сбоя автоматического бюджета пакета.

@@ -1,16 +1,15 @@
-# Wrapper invocation contract
+# Контракт вызова обёртки
 
-Each runtime wrapper accepts exactly one absolute manifest path below
-`/var/lib/vatrushka/manifests/` and no arbitrary shell fragment.
+Каждый обертка runtime принимает ровно один абсолютный путь манифеста ниже `/var/lib/vatrushka/manifests/` и никакой произвольный фрагмент оболочки.
 
-| Wrapper | Accepts | Must verify | Must not do |
+| Обёртка | Принимает | Должен проверить | Не должен делать |
 | --- | --- | --- | --- |
-| `vatrushka-preflight` | candidate manifest | checksum, image digest availability, disk/network prerequisites | mutate runtime |
-| `vatrushka-deploy` | candidate manifest | signed/verified manifest, allowed environment, compatible migration metadata | build from source, use branch names |
-| `vatrushka-rollback` | rollback manifest | previous root-owned candidate reference, manifest checksums and migration compatibility | run destructive schema down migration |
-| `vatrushka-runtime-status` | no arguments | readiness and expected release identity | disclose credentials |
-| `vatrushka-production-readiness` | no arguments | root-owned production environment, dedicated media S3 contract and trusted TURN certificate | accept paths, shell fragments or configuration values; start containers |
-| `vatrushka-postgresql-backup` | no arguments | root-owned runtime and backup configuration, encrypted artifact checksum before upload; `runtime-inactive` reference result before first deploy | accept paths, shell fragments or CI arguments; expose backup credentials |
-| `vatrushka-observability-deploy` | observer manifest | configuration checksum and environment | deploy product workload |
+| `vatrushka-preflight` | манифест кандидата | контрольная сумма, доступность дигеста изображения, требования к диску/сети | изменить runtime |
+| `vatrushka-deploy` | манифест кандидата | подписанный/проверенный манифест, разрешённая среда, совместимые метаданные миграции | сборка из исходников, использование имён веток |
+| `vatrushka-rollback` | откат манифеста | предыдущая ссылка на кандидата с правами root, контрольные суммы манифеста и совместимость миграции | выполнить деструктивную миграцию схемы вниз |
+| `vatrushka-runtime-status` | без аргументов | готовность и ожидаемая идентификация выпуска | раскрыть учетные данные |
+| `vatrushka-production-readiness` | без аргументов | среда production, принадлежащая root, договор о выделенных медиа S3 и доверенный сертификат TURN | принимать пути, фрагменты оболочки или значения конфигурации; запускать контейнеры |
+| `vatrushka-postgresql-backup` | без аргументов | конфигурация runtime, принадлежащая root, и резервная конфигурация, контрольная сумма зашифрованного артефакта перед загрузкой; результат ссылки `runtime-inactive` перед первой разверткой | принимать пути, фрагменты оболочки или аргументы CI; раскрывать учетные данные резервного копирования |
+| `vatrushka-observability-deploy` | проявление наблюдателя | контрольная сумма конфигурации и среда | развертывание рабочей нагрузки продукта |
 
-**proposal:** wrappers must be root-owned (`0750`), deploy users cannot edit their directory, and audit records contain only timestamp, wrapper name, release ID, commit SHA, outcome and exit code.
+**предложение:** обёртки должны быть принадлежащими root (`0750`), пользователи развертывания не могут редактировать свой каталог, а аудиторские записи содержат только временную метку, имя обёртки, идентификатор релиза, коммит SHA, результат и код завершения.

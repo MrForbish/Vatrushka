@@ -1,6 +1,6 @@
-# Testing
+# Тестирование
 
-## Commands
+## Команды
 
 ```bash
 npm run lint
@@ -21,19 +21,19 @@ npm run version:check
 npm run capacity:check
 ```
 
-Shared tests cover validation, errors, permissions, expiration and lease logic. API tests use Fastify inject with `MemoryStore`, `MemoryPresenceStore`, `FakeMailer`, `FakeMediaService` and cover password registration, email/TOTP/recovery second factor, refresh rotation/reuse, retired auth/room routes, the Gaming Home aggregate and its Redis/LiveKit voice projection, Redis-compatible multi-session presence semantics, DND/privacy enforcement, servers, text/voice channels, messages, attachment-only creation, LiveKit presence, permission-enforced member moves, channel lease concurrency/expiry and signed/unsigned webhooks.
+Общие тесты охватывают проверку, ошибки, разрешения, истечение срока и логику аренды. Тесты API используют Fastify с `MemoryStore`, `MemoryPresenceStore`, `FakeMailer`, `FakeMediaService` и охватывают регистрацию пароля, электронную почту/TOTP/вторичный фактор восстановления, обновление/повторное использование токенов, устаревшие маршруты аутентификации/комнат, агрегат Gaming Home и его Redis/LiveKit голосовую проекцию, семантику присутствия с поддержкой нескольких сессий, совместимую с Redis, DND/обеспечение конфиденциальности, серверы, текстовые/голосовые каналы, сообщения, создание только с вложениями, LiveKit присутствие, перемещения участников с проверкой разрешений, конкуренцию/истечение срока аренды канала и подписанные/неподписанные вебхуки.
 
-Renderer tests cover password auth/OTP, real remember-session control, Gaming Home loading/empty/no-code states, current-voice Quick Return and server accents, shared-shell fullscreen state, typed settings route parsing, SettingsShell navigation/states, avatar crop cancellation, the shared round avatar mask and Home status dismissal, persistent server/voice navigation, short-link invitation UI, chronological messages and below-viewport delivery, clipboard images, safe external links, emoji insertion/shortcodes, current avatars, canonical unread acknowledgement, roles, participants, stable active-speaker volume controls, device normalization/switching, mute, reconnect/publish timeout handling, safe screen-audio constraints, screen busy/error, outside-click dismissal, Notification Center update actions and accessible labels. Storybook interaction tests enforce axe accessibility checks for every story. Electron Playwright launches the compiled app, verifies keyboard-only auth and visible focus, trusted audio permission with labeled Chromium devices, session revocation, hash-based settings navigation, absence of Node globals, the exact fullscreen-aware preload allowlist, automatic invite acceptance after authentication and clean close. Windows visual regression covers foundations and critical auth at the normal and minimum 1100×680 viewport, the routed settings shell, Gaming Home at 1600×1000 and compact 1100×760, invitation, messaging, custom device controls, connected voice inside the full server shell, participant and screen-share volume controls, screen-share and permissions states.
+Renderer тесты охватывают аутентификацию по паролю/OTP, управление реальной сессией-памятью, загрузку Gaming Home/пустые/без-кода состояния, текущий голос Быстрое Возврат и акценты сервера, полноэкранное состояние общего интерфейса, анализ маршрута набранных настроек, навигацию/состояния SettingsShell, отмену обрезки аватара, общую круговую маску аватара и отклонение статуса Home, постоянную навигацию по серверу/голосу, приглашение по короткой ссылке UI, хронологические сообщения и доставку ниже области просмотра, изображения из буфера обмена, безопасные внешние ссылки, вставку эмодзи/шорткоды, текущие аватары, каноническое подтверждение непрочитанных сообщений, роли, участников, стабильное управление громкостью активного оратора, нормализацию/переключение устройств, отключение звука, обработку таймаута переподключения/публикации, безопасные ограничения экрана-аудио, занятость/ошибка экрана, отклонение при клике вне области, действия обновления Центра уведомлений и доступность ярлыки. Storybook тесты взаимодействия обеспечивают проверку доступности Axe для каждого story. Electron Playwright запускает скомпилированное приложение, проверяет аутентификацию только с клавиатуры и видимый фокус, доверенное аудиоразрешение с помеченными устройствами Chromium, отзыв сеанса, навигацию по настройкам на основе хэшей, отсутствие глобальных переменных Node, точный список разрешений для предварительной загрузки с поддержкой полноэкранного режима, автоматическое принятие приглашения после аутентификации и корректное закрытие. Windows visual regression охватывает основы и критическую аутентификацию на нормальном и минимальном разрешении 1100×680, маршрутный интерфейс настроек, Gaming Home при 1600×1000 и компактном 1100×760, приглашения, сообщения, пользовательское управление устройствами, подключенный голос внутри полного серверного интерфейса, управление громкостью участников и совместного использования экрана, состояния совместного использования экрана и разрешений.
 
 Renderer performance gate допускает суммарно 2,65 МБ JavaScript и 195 КБ CSS для полнофункциональных messaging, notification и media-editing компонентов. Отчёт по-прежнему показывает raw и gzip-размеры, а лимит крупнейшего JS chunk остаётся отдельным и неизменным.
 
 Electron E2E создаёт отдельный профиль через `mkdtemp` в системном temp для каждого запуска и удаляет его в `afterEach`, включая падающие сценарии. Cleanup разрешён только для canonical path с префиксом `vatrushka-e2e-`; настоящий Electron user-data каталог не используется и не может попасть под удаление. Старые локальные `.e2e-user-data*` остаются в `.gitignore` и могут удаляться вручную только при остановленных тестовых процессах.
 
-`npm run db:check` verifies that every journal entry has exactly one SQL migration and one chained Drizzle snapshot. It rejects accidental destructive SQL; a deliberate contract step is accepted only when both the migration name ends in `_contract` and the SQL starts with `-- vatrushka: destructive-contract`. Production schema changes must use an expand/migrate/contract rollout. Do not squash or renumber migrations that may already exist on a server.
+`npm run db:check` проверяет, что каждая запись в журнале имеет ровно одну миграцию SQL и один связанный снимок Drizzle. Он отклоняет случайно деструктивные SQL; преднамеренный шаг контракта принимается только, если имя миграции заканчивается на `_contract` и SQL начинается с `-- vatrushka: destructive-contract`. Изменения схемы Production должны использовать развёртывание expand/migrate/contract. Не объединяйте и не перенумеровывайте миграции, которые могут уже существовать на сервере.
 
-## Production adapter integration tests
+## интеграционные тесты адаптера Production
 
-The integration suite exercises the real PostgreSQL and Redis adapters. It resets the `public` schema of the configured database, so always use a dedicated test database.
+Набор интеграции использует реальные адаптеры PostgreSQL и Redis. Он сбрасывает схему `public` настроенной базы данных, поэтому всегда используйте отдельную тестовую базу данных.
 
 ```powershell
 $env:INTEGRATION_DATABASE_URL = 'postgresql://vatrushka:password@127.0.0.1:5432/vatrushka_test'
@@ -41,7 +41,7 @@ $env:INTEGRATION_REDIS_URL = 'redis://127.0.0.1:6379/15'
 npm run test:integration
 ```
 
-CI starts isolated PostgreSQL 17 and Redis 8 services, applies the complete Drizzle migration chain, and verifies persistence/idempotency, atomic password-reset session revocation, monotonic read state, notification preferences, durable S3 cleanup jobs, outbox publish/deduplication and multi-session presence semantics.
+CI запускает изолированные PostgreSQL 17 и Redis 8 сервисов, применяет полную цепочку миграции Drizzle и проверяет сохранность/идемпотентность, атомарное аннулирование сессий сброса пароля, монотонное состояние чтения, предпочтения уведомлений, надежные задания очистки S3, outbox публикацию/устранение дублирования и семантику присутствия в нескольких сессиях.
 
 ## CI и release gates
 
@@ -62,24 +62,24 @@ Release-candidate jobs в `.gitlab-ci.yml` повторно используют
 
 `release-evidence` требует full quality evidence, rollback/release notes и запрещает dev URLs. Production jobs доступны только immutable SemVer tag, повторяют quality gate, собирают stable artifacts и атомарно публикуют feed и GitLab Release. MR pipeline не получает protected signing/SSH secrets. `merge-request-policy` разрешает обратную синхронизацию только при наличии production tag.
 
-Unit/CI intentionally does not send SMTP, contact LiveKit or capture microphone/loopback/screen. Before release, execute a two-machine manual matrix on Windows with real SMTP and production LiveKit:
+Блок/CI умышленно не отправляет SMTP, не контактирует с LiveKit и не захватывает микрофон/обратную связь/экран. Перед выпуском выполните ручную двухмашинную матрицу на Windows с реальными SMTP и production LiveKit:
 
-1. new/existing account and restart refresh;
-2. server owner/member join and reconnect to a persistent voice channel;
-3. input/output switch and reconnect;
-4. monitor/window share with and without system audio; while sharing audio, play remote participant speech through Vatrushka and verify it is not present in the received `ScreenShareAudio` track;
-5. simultaneous claim from two clients;
-6. moderation, permissions and `https://<INVITE_DOMAIN>/i/<token>` → `vatrushka://invite/<token>` flow;
-7. leave/window close while microphone/share active;
-8. password login with email factor, TOTP enable/login/disable and recovery login; verify retired passwordless endpoints remain 404;
-9. create/join server, role assignment, denied/allowed text and voice actions, WebSocket delivery plus HTTP reconnect reconciliation;
-10. inspect the desktop shell and critical dialogs at Windows scaling 100%, 125% and 150%; keyboard focus must remain visible and no primary action may be clipped;
-11. publish a higher test version to a staging feed, verify background download, progress, explicit restart and preserved session/settings.
-12. interrupt the presenter network during voice use, wait for reconnect and verify that screen publication is disabled while reconnecting and succeeds after `Connected` without exposing a raw LiveKit engine timeout.
-13. send a DM between two installed clients and verify `sent → delivered → read`, retry without duplication, first-unread navigation and tombstone after deletion;
-14. verify user/server/channel mute, strict DND, quiet hours, native direct/server notification click and no stale toast after reconnect;
-15. upload/finalize an S3 attachment, abandon a second upload, then verify the cleanup worker completes its durable deletion job after the configured retention.
+1. новый/существующий аккаунт и перезапустить обновление;
+2. владелец сервера/участник присоединяется и переподключается к постоянному голосовому каналу;
+3. переключатель ввода/вывода и повторное подключение;
+4. настройка общего доступа к монитору/окну с системным звуком и без него; при совместном использовании звука воспроизведите речь удаленного участника через Vatrushka и проверьте, что она отсутствует в полученной дорожке `ScreenShareAudio`;
+5. одновременное требование от двух клиентов;
+6. модерация, разрешения и `https://<INVITE_DOMAIN>/i/<token>` → `vatrushka://invite/<token>` поток;
+7. покинуть/закрыть окно, пока микрофон/доступ к экрану активен;
+8. вход по паролю с фактором электронной почты, TOTP включение/вход/отключение и восстановление входа; проверить, что устаревшие точки безпарольного входа остаются 404;
+9. создать/присоединиться к серверу, назначение ролей, запрещённые/разрешённые текстовые и голосовые действия, доставка WebSocket плюс согласование переподключения HTTP;
+10. проверьте оболочку desktop и критические диалоги на Windows с масштабированием 100%, 125% и 150%; фокус клавиатуры должен оставаться видимым, а никакое основное действие не должно быть обрезано;
+11. опубликовать более высокую тестовую версию в канал staging, проверить фоновую загрузку, прогресс, явный перезапуск и сохранённые сеансы/настройки.
+12. прервать сеть ведущего во время использования голосовой связи, дождаться повторного подключения и проверить, что публикация экрана отключена во время повторного подключения и успешно выполняется после `Connected` без возникновения необработанного таймаута движка LiveKit.
+13. отправьте личное сообщение между двумя установленными клиентами и проверьте `sent → delivered → read`, повторите без дублирования, навигацию к первому непрочитанному и «надгробие» после удаления;
+14. проверить отключение звука пользователя/сервера/канала, строгий DND, тихие часы, нативное прямое/серверное уведомление по клику и отсутствие устаревшего тоста после переподключения;
+15. загрузить/завершить S3 вложение, отказаться от второй загрузки, затем убедиться, что рабочий процесс очистки завершает задание по надежному удалению после настроенного времени хранения.
 
-# Voice presence
+# Наличие голоса
 
-Voice projection unit tests cover versioning, late-leave protection, move idempotency/conflicts, webhook deduplication, and renderer event reduction. `npm run test:integration` additionally executes the Redis atomic-projection scenario when `INTEGRATION_REDIS_URL` is available in GitLab CI.
+Юнит-тесты проекции голоса охватывают версионирование, защиту от позднего выхода, идемпотентность/конфликты перемещений, дедупликацию вебхуков и сокращение событий renderer. `npm run test:integration` дополнительно выполняет сценарий атомарной проекции Redis, когда `INTEGRATION_REDIS_URL` доступен в GitLab CI.
